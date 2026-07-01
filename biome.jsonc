@@ -26,6 +26,13 @@
     // and every future app CSS — fails lint/pre-push. Shared frontend-infra setting (edison, vivian).
     "parser": { "tailwindDirectives": true }
   },
+  "javascript": {
+    // NestJS DI uses TS parameter decorators (`constructor(@Inject(TOKEN) private x)`). Biome's
+    // default parser rejects them ("Decorators are not valid here") and mis-reports the param as
+    // unused, wedging lint/pre-push for services/api and every future NestJS service. This opt-in
+    // enables parsing them. Shared backend-infra setting (newton). Analogous to css.tailwindDirectives.
+    "parser": { "unsafeParameterDecoratorsEnabled": true }
+  },
   "files": {
     "ignoreUnknown": true,
     "includes": [

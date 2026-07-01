@@ -5,13 +5,14 @@
 packages:
   - "packages/*" # shared libraries (db, types, config, fe-auth, ui, ...)
   - "services/*" # deployable backend apps (api, workers, admin-api) — added in B4
-  - "apps/*" # deployable Next.js surfaces (admin-console, dev-portal, dashboard) — PI-2 build;
-             # dir reserved now so FE topology is on rails (2 auth realms, separate apps).
-             # See team/frontend/PROPOSAL-fe-auth-bff-seam.md §1.
+  - "apps/*"
+    # deployable Next.js surfaces (admin-console, dev-portal, dashboard) — PI-2 build;
+    # dir reserved now so FE topology is on rails (2 auth realms, separate apps).
+    # See team/frontend/PROPOSAL-fe-auth-bff-seam.md §1.
 # Build-script approval (pnpm 11: `allowBuilds` replaces `onlyBuiltDependencies`). pnpm blocks
 # lifecycle scripts by default (supply-chain hygiene) and lists unapproved ones here for review.
 # Listing a package (true OR false) clears ERR_PNPM_IGNORED_BUILDS; unlisted ones re-trigger it.
 allowBuilds:
   esbuild: true # required — esbuild's postinstall fetches its platform binary; without it, builds fail
   '@infisical/cli': false # deferred: build/bin linking is broken on Windows and we don't use the CLI yet
-
+  '@nestjs/core': false # NestJS core's postinstall is a support/telemetry banner — not needed for the build
