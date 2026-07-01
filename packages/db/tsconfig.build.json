@@ -1,0 +1,11 @@
+{
+  // Emit build (prod path): compiles ONLY src → dist (+ .d.ts) for the `default` export condition
+  // (`node dist/main.js`). The base config is noEmit-by-flag (typecheck); this one emits. Excludes
+  // test/, drizzle.config.ts, and the vitest configs so they never land in the shipped dist.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

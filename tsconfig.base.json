@@ -6,22 +6,27 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    // Resolve the "development" export condition → a package's SOURCE (.ts) when typechecking, so a
+    // consumer typechecks against source with NO prior build (avoids the build-before-typecheck trap).
+    // No-op for packages whose "." export is a plain string. Prod `node dist/main.js` (no development
+    // condition) resolves each package's "default" → its built dist. See packages/db/package.json.
+    "customConditions": ["development"],
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
 
     // ---- strictness (the part that matters most) ----
-    "strict": true,                    // master switch
-    "noUnusedLocals": true,            // dead locals fail the build
-    "noUnusedParameters": true,        // dead params fail the build
+    "strict": true, // master switch
+    "noUnusedLocals": true, // dead locals fail the build
+    "noUnusedParameters": true, // dead params fail the build
     "noUncheckedIndexedAccess": true, // arr[i] is T | undefined
     "exactOptionalPropertyTypes": true,
     "noFallthroughCasesInSwitch": true,
     "useDefineForClassFields": true,
 
     // ---- emit / DX ----
-    "declaration": true,               // emit .d.ts so packages expose types to each other
+    "declaration": true, // emit .d.ts so packages expose types to each other
     "sourceMap": true,
     "skipLibCheck": true,
     "isolatedModules": true

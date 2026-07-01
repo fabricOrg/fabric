@@ -1,7 +1,7 @@
 {
-  // No rootDir/outDir: this package is typecheck-only (`tsc --noEmit`) and consumed as raw TS via
-  // exports "./src/index.ts". Setting rootDir=src while including drizzle.config.ts (outside src)
-  // raised TS6059. Dropping both clears it without affecting the (never-run) emit.
+  // Typecheck config (`tsc --noEmit`) covering src + test + the drizzle/vitest configs. No
+  // rootDir/outDir here (including drizzle.config.ts outside a src rootDir raised TS6059). The
+  // emit/prod build is a separate src-only config → tsconfig.build.json (drives the `dist` export).
   "extends": "../../tsconfig.base.json",
   "include": [
     "src",
