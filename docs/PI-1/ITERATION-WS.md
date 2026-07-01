@@ -75,7 +75,8 @@ adams:   B3 gate ↑        gates each lane      FakeProvider ┘ (with pascal) 
 
 ## Process (unchanged — it worked)
 Per-lane git worktree off `dev`; linear history; branch `<type>/<ticket>-<slug>` (e.g.
-`feat/f2-3-api-key-auth`); commit small; rebase onto `dev`; post "ready to merge @ sha" → PM reviews
+`feature/f2-3-api-key-auth` — prefix is `feature`, NOT `feat`, per the branch-name hook); commit small;
+rebase onto `dev`; post "ready to merge @ sha" → PM reviews
 the diff (money/tenant/security paths scrutinized) → ff-merge. QA gates green **with reproducible
 evidence** before a lane closes — verify-don't-trust.
 
