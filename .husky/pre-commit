@@ -1,3 +1,6 @@
 pnpm enforce:branch-name
 pnpm guard
-pnpm lint
+# Lint ONLY staged files (fast; gates each commit on its own changes, not the whole repo's WIP —
+# essential with several people committing to a shared tree). Full-repo `biome check .` runs in
+# pre-push via `pnpm verify`. See biome.dev "Check Git Staged Files".
+pnpm lint:staged

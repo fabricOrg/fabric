@@ -13,6 +13,7 @@
     "db:migrate": "pnpm --filter @app/db migrate",
 
     "lint": "biome check .",
+    "lint:staged": "biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true",
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
