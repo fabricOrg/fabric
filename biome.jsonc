@@ -20,6 +20,12 @@
       }
     }
   },
+  "css": {
+    // Tailwind v4 uses non-standard at-rules (@theme, @custom-variant, @utility, @apply, @plugin).
+    // Without this opt-in (biome 2.3+), biome's CSS parser rejects them and `@app/ui`'s theme.css —
+    // and every future app CSS — fails lint/pre-push. Shared frontend-infra setting (edison, vivian).
+    "parser": { "tailwindDirectives": true }
+  },
   "files": {
     "ignoreUnknown": true,
     "includes": [
