@@ -68,6 +68,18 @@ export interface AppDb {
     keyHash: string,
     fn: (tx: TenantTx) => Promise<T>,
   ): Promise<T>;
+  /**
+   * Run `fn` inside a transaction with `app.provider_ref` set (transaction-scoped + parameterized),
+   * so the `dlr_provider_ref_lookup` RLS policy on `messages` exposes ONLY the row whose provider_ref
+   * was presented — the pre-tenant resolve a DLR webhook needs (it arrives with just provider_ref, no
+   * tenant). The webhook is authenticated by the provider signature (verifyWebhook); this lookup just
+   * scopes WHICH message to the presented ref (no cross-tenant scan). Everything after runs via
+   * {@link withTenant}. Zero SECURITY DEFINER / BYPASSRLS — same SET-LOCAL discipline as withApiKeyLookup.
+   */
+  withProviderRefLookup<T>(
+    providerRef: string,
+    fn: (tx: TenantTx) => Promise<T>,
+  ): Promise<T>;
   /** Close the pool (tests / graceful shutdown). */
   end(): Promise<void>;
 }
@@ -120,6 +132,26 @@ export function createAppDb(
         // api_key_auth_lookup policy (FOR SELECT) then exposes only the matching row.
         await tx.unsafe("SELECT set_config('app.api_key_hash', $1, true)", [
           keyHash,
+        ]);
+        return fn(tx as unknown as TenantTx);
+      }) as Promise<T>;
+    },
+    withProviderRefLookup<T>(
+      providerRef: string,
+      fn: (tx: TenantTx) => Promise<T>,
+    ): Promise<T> {
+      if (typeof providerRef !== "string" || providerRef.length === 0) {
+        return Promise.reject(
+          new Error(
+            "withProviderRefLookup: providerRef must be a non-empty string",
+          ),
+        );
+      }
+      return sql.begin(async (tx) => {
+        // FIRST statement: bind the presented provider_ref, transaction-scoped + parameterized. The
+        // dlr_provider_ref_lookup policy (FOR SELECT) then exposes only the matching message row.
+        await tx.unsafe("SELECT set_config('app.provider_ref', $1, true)", [
+          providerRef,
         ]);
         return fn(tx as unknown as TenantTx);
       }) as Promise<T>;
