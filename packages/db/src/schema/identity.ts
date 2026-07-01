@@ -1,5 +1,17 @@
-import { pgEnum, pgTable, text, uuid, jsonb, unique } from "drizzle-orm/pg-core";
-import { timestamps, tenantIdCol, type TenantId, type UserId } from "./_shared.js";
+import {
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
+import {
+  type TenantId,
+  tenantIdCol,
+  timestamps,
+  type UserId,
+} from "./_shared.js";
 
 /**
  * IDENTITY domain (B2 of the build). The root of tenancy.
@@ -10,9 +22,21 @@ import { timestamps, tenantIdCol, type TenantId, type UserId } from "./_shared.j
  *                so the user↔tenant link lives here, not on `users`.
  */
 
-export const accountStatus = pgEnum("account_status", ["active", "suspended", "closed"]);
-export const membershipRole = pgEnum("membership_role", ["owner", "admin", "member"]);
-export const userStatus = pgEnum("user_status", ["active", "invited", "disabled"]);
+export const accountStatus = pgEnum("account_status", [
+  "active",
+  "suspended",
+  "closed",
+]);
+export const membershipRole = pgEnum("membership_role", [
+  "owner",
+  "admin",
+  "member",
+]);
+export const userStatus = pgEnum("user_status", [
+  "active",
+  "invited",
+  "disabled",
+]);
 
 // A tenant / organization. `id` is the tenant_id used everywhere else.
 export const accounts = pgTable("accounts", {
@@ -42,15 +66,21 @@ export const memberships = pgTable(
   "memberships",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    tenantId: tenantIdCol().references(() => accounts.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).$type<UserId>(),
+    tenantId: tenantIdCol().references(() => accounts.id, {
+      onDelete: "cascade",
+    }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" })
+      .$type<UserId>(),
     role: membershipRole("role").notNull().default("member"),
     ...timestamps,
   },
-  (t) => ({
+  // drizzle 0.45: the 3rd pgTable arg returns an ARRAY (the object form is deprecated).
+  (t) => [
     // a user has at most one membership row per tenant
-    uniqMembership: unique("uniq_membership_tenant_user").on(t.tenantId, t.userId),
-  }),
+    unique("uniq_membership_tenant_user").on(t.tenantId, t.userId),
+  ],
 );
 
 // Drizzle INFERS these types from the schema above — one source of truth, no drift.

@@ -119,15 +119,16 @@ export const ledgerAccounts = pgTable(
     status: ledgerAccountStatus("status").notNull().default("active"),
     ...timestamps,
   },
-  (t) => ({
+  // drizzle 0.45: the 3rd pgTable arg returns an ARRAY (the object form is deprecated).
+  (t) => [
     // exactly one account per (tenant, currency, kind) — the reserve/commit/refund paths rely on
     // this to locate THE account for each leg. Replaces the old uniq_wallet_tenant_currency.
-    uniqAccount: unique("uniq_ledger_account_tenant_currency_kind").on(
+    unique("uniq_ledger_account_tenant_currency_kind").on(
       t.tenantId,
       t.currency,
       t.kind,
     ),
-  }),
+  ],
 );
 
 // The transaction envelope: groups the 2+ legs of one money movement and carries the idempotency
@@ -155,14 +156,12 @@ export const ledgerTransactions = pgTable(
     referenceId: uuid("reference_id"),
     ...timestamps,
   },
-  (t) => ({
+  // drizzle 0.45: the 3rd pgTable arg returns an ARRAY (the object form is deprecated).
+  (t) => [
     // exactly-once for money: a retried request with the same key cannot open a second transaction.
-    uniqIdempotency: unique("uniq_ledger_txn_idempotency").on(
-      t.tenantId,
-      t.idempotencyKey,
-    ),
+    unique("uniq_ledger_txn_idempotency").on(t.tenantId, t.idempotencyKey),
     // B8: reject an empty-string key at the DB — NOT NULL alone would let '' through as a wildcard.
-    idempotencyKeyNonEmpty: check(
+    check(
       "ledger_txn_idempotency_key_non_empty",
       sql`length(${t.idempotencyKey}) > 0`,
     ),
@@ -175,16 +174,11 @@ export const ledgerTransactions = pgTable(
     // + FOR UPDATE in both the DLR handler and the sweeper, F5 lane. Holds under either txn model:
     // exactly one terminal-status txn exists per message whether commit transitions the reserve
     // txn or opens its own.) NULL reference_id (topups) is excluded by the type predicate.
-    uniqResolutionPerMessage: uniqueIndex(
-      "uniq_ledger_txn_resolution_per_message",
-    )
+    uniqueIndex("uniq_ledger_txn_resolution_per_message")
       .on(t.tenantId, t.referenceId)
       .where(sql`type = 'sms_charge' AND status IN ('committed', 'refunded')`),
-    byTenantCreated: index("idx_ledger_txn_tenant_created").on(
-      t.tenantId,
-      t.createdAt,
-    ),
-  }),
+    index("idx_ledger_txn_tenant_created").on(t.tenantId, t.createdAt),
+  ],
 );
 
 // The append-only truth. NEVER updated or deleted — corrections are new `adjustment` legs. Each row
@@ -216,15 +210,13 @@ export const ledgerEntries = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => ({
-    positiveAmount: check(
-      "ledger_entry_amount_positive",
-      sql`${t.amountMinor} > 0`,
-    ),
+  // drizzle 0.45: the 3rd pgTable arg returns an ARRAY (the object form is deprecated).
+  (t) => [
+    check("ledger_entry_amount_positive", sql`${t.amountMinor} > 0`),
     // the invariant check + balance projection scan by account; keeps that O(rows-per-account).
-    byAccount: index("idx_ledger_entries_account").on(t.accountId),
-    byTxn: index("idx_ledger_entries_txn").on(t.txnId),
-  }),
+    index("idx_ledger_entries_account").on(t.accountId),
+    index("idx_ledger_entries_txn").on(t.txnId),
+  ],
 );
 
 // Drizzle infers these from the schema above — one source of truth, no drift (matches identity.ts).
