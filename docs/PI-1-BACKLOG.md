@@ -99,7 +99,7 @@ are the relief valve and drop first.
   - *Evidence/Value:* `INTEGRATIONS §3`; FakeProvider powers test mode (F8.5). Anti-lock-in seam.
 - **F5.2 Send pipeline + segmentation** `[MUST]` — normalize E.164 → encode (GSM-7 **153**/UCS-2 **67** concatenated) → rate → reserve → send → commit/refund.
   - *Evidence/How:* Twilio segment math; one non-GSM char flips whole msg to UCS-2 (152+1 → 3 segments). *Value: revenue correctness.*
-- **F5.3 Normalized message-status enum** `[MUST]` — **`queued→sending→accepted→sent→delivered/undelivered/failed`** (+ error codes); every provider maps onto it; unmapped raw status → explicit error, never a silent default.
+- **F5.3 Normalized message-status enum** `[MUST]` — **`queued→sending→accepted→sent→delivered/undelivered/failed/expired`** (+ error codes; terminal set = {delivered, undelivered, failed, expired}, `expired` = reservation-sweeper on no-DLR-in-TTL per F5.3/F3.3); every provider maps onto it; unmapped raw status → explicit error, never a silent default. Canonical enum lives in `@app/contracts` (browser-safe, merged).
   - *Commit-point (ratified, PRE-IMPL B1):* `accepted` = provider acknowledged submission (the new state). COMMIT fires on transition into the **first canonical status in the provider's `billableStatuses` set — default `{accepted}`**; a platform-fault-exempt status (F3.5) → REFUND. Guarded by the B6 message-row terminal SM + deterministic `commit:{msgId}`/`refund:{msgId}`.
   - *Evidence/Value:* Twilio statuses. The provider-abstraction contract; billing+SLA observability.
 - **F5.4 DLR ingestion + reconciliation** `[MUST]` — terminal statuses persisted; cost reconciled; error codes mapped; out-of-order tolerant.
