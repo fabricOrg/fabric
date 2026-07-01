@@ -67,6 +67,12 @@ importers:
         specifier: ^7.0.0
         version: 7.82.0
 
+  packages/integrations:
+    dependencies:
+      '@app/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/ui:
     dependencies:
       clsx:
