@@ -26,3 +26,6 @@ a2a-cli.js
 
 # ephemeral review artifacts (screenshots, etc.)
 _review_shots/
+
+# docker-compose local overrides (per-machine port remaps etc.) — auto-loaded, never shared
+docker-compose.override.yml
