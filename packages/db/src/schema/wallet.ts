@@ -1,22 +1,23 @@
 import { sql } from "drizzle-orm";
 import {
-	bigint,
-	char,
-	check,
-	index,
-	jsonb,
-	pgEnum,
-	pgTable,
-	text,
-	timestamp,
-	unique,
-	uuid,
+  bigint,
+  char,
+  check,
+  index,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 import {
-	type MinorUnits,
-	moneyMinor,
-	tenantIdCol,
-	timestamps,
+  type MinorUnits,
+  moneyMinor,
+  tenantIdCol,
+  timestamps,
 } from "./_shared.js";
 import { accounts } from "./identity.js";
 
@@ -58,18 +59,18 @@ const ZERO_MINOR = 0n as MinorUnits;
 // The kind of money movement a transaction represents (groups its legs). Typed so the reserve/
 // commit/refund state machine and reporting can't drift onto an unknown string.
 export const ledgerTxnType = pgEnum("ledger_txn_type", [
-	"topup", // external funds credited in (payment provider)
-	"sms_charge", // a send: reserve → commit lifecycle
-	"adjustment", // reconciliation delta (actual segments ≠ estimate)
-	"refund", // reservation released back (provider rejected the send)
+  "topup", // external funds credited in (payment provider)
+  "sms_charge", // a send: reserve → commit lifecycle
+  "adjustment", // reconciliation delta (actual segments ≠ estimate)
+  "refund", // reservation released back (provider rejected the send)
 ]);
 
 // A transaction's lifecycle. A reserve opens `pending`; commit/refund closes it.
 export const ledgerTxnStatus = pgEnum("ledger_txn_status", [
-	"pending",
-	"committed",
-	"refunded",
-	"reconciled",
+  "pending",
+  "committed",
+  "refunded",
+  "reconciled",
 ]);
 
 // A single leg's direction. credit = money in, debit = money out. amount is ALWAYS positive; the
@@ -79,19 +80,19 @@ export const ledgerDirection = pgEnum("ledger_direction", ["credit", "debit"]);
 // WHY a typed reason (not free text): the balance/billing logic branches on it, so an unknown value
 // is a bug we want the compiler + DB to reject. Mirrors the spend lifecycle in ARCHITECTURE §5.
 export const ledgerReason = pgEnum("ledger_reason", [
-	"topup",
-	"sms_reserve",
-	"sms_commit",
-	"sms_refund",
-	"adjustment",
+  "topup",
+  "sms_reserve",
+  "sms_commit",
+  "sms_refund",
+  "adjustment",
 ]);
 
 // Soft-close only — accounts are never hard-deleted (F4); status is the source of truth the BFF
 // checks on session refresh (a 'frozen'/'closed' account fails closed at login).
 export const ledgerAccountStatus = pgEnum("ledger_account_status", [
-	"active",
-	"frozen",
-	"closed",
+  "active",
+  "frozen",
+  "closed",
 ]);
 
 // The KIND of ledger account (F1 double-entry). 'customer' is the tenant's prepaid balance (exposed
@@ -101,11 +102,11 @@ export const ledgerAccountStatus = pgEnum("ledger_account_status", [
 //   gateway_clearing  — contra for external top-ups (cash received; ↔ PSP settlement recon = fast-follow)
 //   writeoff          — goodwill / manual maker-checker adjustment contra
 export const ledgerAccountKind = pgEnum("ledger_account_kind", [
-	"customer",
-	"reserved_clearing",
-	"revenue",
-	"gateway_clearing",
-	"writeoff",
+  "customer",
+  "reserved_clearing",
+  "revenue",
+  "gateway_clearing",
+  "writeoff",
 ]);
 
 // One account per (tenant, currency, kind) — MULTI-CURRENCY from day one (decision #10). No default
@@ -113,29 +114,29 @@ export const ledgerAccountKind = pgEnum("ledger_account_kind", [
 // `version` is optimistic-concurrency guard so two concurrent spends can't race the same balance.
 // System-account rows (non-customer kinds) are auto-provisioned LAZILY on first use, in-tenant-txn.
 export const ledgerAccounts = pgTable(
-	"ledger_accounts",
-	{
-		id: uuid("id").primaryKey().defaultRandom(),
-		// F4: RESTRICT — an account delete must never cascade-shred ledger history. Accounts soft-close.
-		tenantId: tenantIdCol().references(() => accounts.id, {
-			onDelete: "restrict",
-		}),
-		kind: ledgerAccountKind("kind").notNull(),
-		currency: char("currency", { length: 3 }).notNull(), // ISO 4217, e.g. 'GHS'
-		balanceMinor: moneyMinor("balance_minor").notNull().default(ZERO_MINOR),
-		version: bigint("version", { mode: "bigint" }).notNull().default(0n),
-		status: ledgerAccountStatus("status").notNull().default("active"),
-		...timestamps,
-	},
-	(t) => ({
-		// exactly one account per (tenant, currency, kind) — the reserve/commit/refund paths rely on
-		// this to locate THE account for each leg. Replaces the old uniq_wallet_tenant_currency.
-		uniqAccount: unique("uniq_ledger_account_tenant_currency_kind").on(
-			t.tenantId,
-			t.currency,
-			t.kind,
-		),
-	}),
+  "ledger_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // F4: RESTRICT — an account delete must never cascade-shred ledger history. Accounts soft-close.
+    tenantId: tenantIdCol().references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    kind: ledgerAccountKind("kind").notNull(),
+    currency: char("currency", { length: 3 }).notNull(), // ISO 4217, e.g. 'GHS'
+    balanceMinor: moneyMinor("balance_minor").notNull().default(ZERO_MINOR),
+    version: bigint("version", { mode: "bigint" }).notNull().default(0n),
+    status: ledgerAccountStatus("status").notNull().default("active"),
+    ...timestamps,
+  },
+  (t) => ({
+    // exactly one account per (tenant, currency, kind) — the reserve/commit/refund paths rely on
+    // this to locate THE account for each leg. Replaces the old uniq_wallet_tenant_currency.
+    uniqAccount: unique("uniq_ledger_account_tenant_currency_kind").on(
+      t.tenantId,
+      t.currency,
+      t.kind,
+    ),
+  }),
 );
 
 // The transaction envelope: groups the 2+ legs of one money movement and carries the idempotency
@@ -143,39 +144,56 @@ export const ledgerAccounts = pgTable(
 // TRANSACTION level. UNIQUE(tenant_id, idempotency_key) → a replay hits the constraint and we
 // return the stored result instead of moving money twice.
 export const ledgerTransactions = pgTable(
-	"ledger_transactions",
-	{
-		id: uuid("id").primaryKey().defaultRandom(),
-		// F4: RESTRICT — never cascade-delete money history when an account is removed.
-		tenantId: tenantIdCol().references(() => accounts.id, {
-			onDelete: "restrict",
-		}),
-		type: ledgerTxnType("type").notNull(),
-		status: ledgerTxnStatus("status").notNull().default("pending"),
-		// B8: NOT NULL — every money movement MUST carry a deterministic idempotency key so dedupe is
-		// always enforced by the DB, never a read-then-write race. Keys are derived server-side:
-		// topup:{topupId}, reserve:{msgId}, commit:{msgId}, refund:{msgId}, adjust:{...}.
-		idempotencyKey: text("idempotency_key").notNull(),
-		// manual maker-checker adjustments store {reason_code, contra_kind} here (see contract §3).
-		metadata: jsonb("metadata").notNull().default({}),
-		...timestamps,
-	},
-	(t) => ({
-		// exactly-once for money: a retried request with the same key cannot open a second transaction.
-		uniqIdempotency: unique("uniq_ledger_txn_idempotency").on(
-			t.tenantId,
-			t.idempotencyKey,
-		),
-		// B8: reject an empty-string key at the DB — NOT NULL alone would let '' through as a wildcard.
-		idempotencyKeyNonEmpty: check(
-			"ledger_txn_idempotency_key_non_empty",
-			sql`length(${t.idempotencyKey}) > 0`,
-		),
-		byTenantCreated: index("idx_ledger_txn_tenant_created").on(
-			t.tenantId,
-			t.createdAt,
-		),
-	}),
+  "ledger_transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // F4: RESTRICT — never cascade-delete money history when an account is removed.
+    tenantId: tenantIdCol().references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    type: ledgerTxnType("type").notNull(),
+    status: ledgerTxnStatus("status").notNull().default("pending"),
+    // B8: NOT NULL — every money movement MUST carry a deterministic idempotency key so dedupe is
+    // always enforced by the DB, never a read-then-write race. Keys are derived server-side:
+    // topup:{topupId}, reserve:{msgId}, commit:{msgId}, refund:{msgId}, adjust:{...}.
+    idempotencyKey: text("idempotency_key").notNull(),
+    // manual maker-checker adjustments store {reason_code, contra_kind} here (see contract §3).
+    metadata: jsonb("metadata").notNull().default({}),
+    // what this txn is ABOUT (e.g. the message being resolved). Drives the B6 backstop below.
+    referenceType: text("reference_type"), // 'message' | 'payment' | ...
+    referenceId: uuid("reference_id"),
+    ...timestamps,
+  },
+  (t) => ({
+    // exactly-once for money: a retried request with the same key cannot open a second transaction.
+    uniqIdempotency: unique("uniq_ledger_txn_idempotency").on(
+      t.tenantId,
+      t.idempotencyKey,
+    ),
+    // B8: reject an empty-string key at the DB — NOT NULL alone would let '' through as a wildcard.
+    idempotencyKeyNonEmpty: check(
+      "ledger_txn_idempotency_key_non_empty",
+      sql`length(${t.idempotencyKey}) > 0`,
+    ),
+    // B6 DB BACKSTOP (commit-XOR-refund): at most ONE terminal-resolution txn per message. The
+    // deterministic keys commit:{msgId}/refund:{msgId} are DIFFERENT, so uniqIdempotency alone
+    // does NOT stop a concurrent DLR-commit and sweeper-refund both landing → reserved_clearing
+    // goes negative, invariant breaks. This partial unique index closes that at the DB level:
+    // a message can have at most one committed|refunded sms_charge txn — the second collides.
+    // (Belt-and-suspenders: the PRIMARY guard is the engine's message-row terminal state machine
+    // + FOR UPDATE in both the DLR handler and the sweeper, F5 lane. Holds under either txn model:
+    // exactly one terminal-status txn exists per message whether commit transitions the reserve
+    // txn or opens its own.) NULL reference_id (topups) is excluded by the type predicate.
+    uniqResolutionPerMessage: uniqueIndex(
+      "uniq_ledger_txn_resolution_per_message",
+    )
+      .on(t.tenantId, t.referenceId)
+      .where(sql`type = 'sms_charge' AND status IN ('committed', 'refunded')`),
+    byTenantCreated: index("idx_ledger_txn_tenant_created").on(
+      t.tenantId,
+      t.createdAt,
+    ),
+  }),
 );
 
 // The append-only truth. NEVER updated or deleted — corrections are new `adjustment` legs. Each row
@@ -183,39 +201,39 @@ export const ledgerTransactions = pgTable(
 // the cached balance. `amount_minor > 0` is enforced at the DB (a leg is a magnitude; direction
 // carries the sign).
 export const ledgerEntries = pgTable(
-	"ledger_entries",
-	{
-		id: uuid("id").primaryKey().defaultRandom(),
-		// F4: RESTRICT — the append-only ledger must never be cascade-deleted with an account.
-		tenantId: tenantIdCol().references(() => accounts.id, {
-			onDelete: "restrict",
-		}),
-		txnId: uuid("txn_id")
-			.notNull()
-			.references(() => ledgerTransactions.id, { onDelete: "restrict" }),
-		// each leg posts against ONE account (customer or a system contra account, per F1).
-		accountId: uuid("account_id")
-			.notNull()
-			.references(() => ledgerAccounts.id, { onDelete: "restrict" }),
-		direction: ledgerDirection("direction").notNull(),
-		amountMinor: moneyMinor("amount_minor").notNull(),
-		reason: ledgerReason("reason").notNull(),
-		referenceType: text("reference_type"), // 'message' | 'payment' | ...
-		referenceId: uuid("reference_id"),
-		// append-only: creation time only, no updated_at (rows are immutable by design).
-		createdAt: timestamp("created_at", { withTimezone: true })
-			.notNull()
-			.defaultNow(),
-	},
-	(t) => ({
-		positiveAmount: check(
-			"ledger_entry_amount_positive",
-			sql`${t.amountMinor} > 0`,
-		),
-		// the invariant check + balance projection scan by account; keeps that O(rows-per-account).
-		byAccount: index("idx_ledger_entries_account").on(t.accountId),
-		byTxn: index("idx_ledger_entries_txn").on(t.txnId),
-	}),
+  "ledger_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // F4: RESTRICT — the append-only ledger must never be cascade-deleted with an account.
+    tenantId: tenantIdCol().references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    txnId: uuid("txn_id")
+      .notNull()
+      .references(() => ledgerTransactions.id, { onDelete: "restrict" }),
+    // each leg posts against ONE account (customer or a system contra account, per F1).
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    direction: ledgerDirection("direction").notNull(),
+    amountMinor: moneyMinor("amount_minor").notNull(),
+    reason: ledgerReason("reason").notNull(),
+    referenceType: text("reference_type"), // 'message' | 'payment' | ...
+    referenceId: uuid("reference_id"),
+    // append-only: creation time only, no updated_at (rows are immutable by design).
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    positiveAmount: check(
+      "ledger_entry_amount_positive",
+      sql`${t.amountMinor} > 0`,
+    ),
+    // the invariant check + balance projection scan by account; keeps that O(rows-per-account).
+    byAccount: index("idx_ledger_entries_account").on(t.accountId),
+    byTxn: index("idx_ledger_entries_txn").on(t.txnId),
+  }),
 );
 
 // Drizzle infers these from the schema above — one source of truth, no drift (matches identity.ts).

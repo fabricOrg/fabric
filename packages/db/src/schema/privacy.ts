@@ -1,12 +1,12 @@
 import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { accounts } from "./identity.js";
 import {
   bytea,
-  tenantIdCol,
-  timestamps,
   type DekId,
   type SubjectId,
+  tenantIdCol,
+  timestamps,
 } from "./_shared.js";
+import { accounts } from "./identity.js";
 
 /**
  * PRIVACY domain — PII tokenization + crypto-shred erasure (pre-impl review B7; COMPLIANCE §5).
@@ -31,7 +31,9 @@ export const dekStatus = pgEnum("dek_status", ["active", "destroyed"]);
 // `subject_id` is what the rest of the platform references instead of a raw phone number.
 export const dataSubjects = pgTable("data_subjects", {
   subjectId: uuid("subject_id").primaryKey().defaultRandom().$type<SubjectId>(),
-  tenantId: tenantIdCol().references(() => accounts.id, { onDelete: "cascade" }),
+  tenantId: tenantIdCol().references(() => accounts.id, {
+    onDelete: "cascade",
+  }),
   ...timestamps,
 });
 
@@ -39,7 +41,9 @@ export const dataSubjects = pgTable("data_subjects", {
 // key — "envelope encryption"). Destroying it (status=destroyed, wrapped_dek=NULL) is erasure.
 export const dekKeys = pgTable("dek_keys", {
   dekId: uuid("dek_id").primaryKey().defaultRandom().$type<DekId>(),
-  tenantId: tenantIdCol().references(() => accounts.id, { onDelete: "cascade" }),
+  tenantId: tenantIdCol().references(() => accounts.id, {
+    onDelete: "cascade",
+  }),
   subjectId: uuid("subject_id")
     .notNull()
     .references(() => dataSubjects.subjectId, { onDelete: "cascade" })
@@ -54,7 +58,9 @@ export const dekKeys = pgTable("dek_keys", {
 // The only place raw PII lives — as ciphertext encrypted with the subject's DEK. One row per piece.
 export const piiVault = pgTable("pii_vault", {
   id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: tenantIdCol().references(() => accounts.id, { onDelete: "cascade" }),
+  tenantId: tenantIdCol().references(() => accounts.id, {
+    onDelete: "cascade",
+  }),
   subjectId: uuid("subject_id")
     .notNull()
     .references(() => dataSubjects.subjectId, { onDelete: "cascade" })
@@ -74,11 +80,15 @@ export const erasureLog = pgTable("erasure_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   // F4: RESTRICT — erasure evidence is retained ~5yr and must survive an account removal; a cascade
   // here would destroy the very compliance proof this table exists to keep.
-  tenantId: tenantIdCol().references(() => accounts.id, { onDelete: "restrict" }),
+  tenantId: tenantIdCol().references(() => accounts.id, {
+    onDelete: "restrict",
+  }),
   subjectId: uuid("subject_id").notNull().$type<SubjectId>(), // not FK: subject row may be gone
   requestedBy: text("requested_by").notNull(), // staff/operator id (DSR — F7.7)
   basis: text("basis").notNull(), // legal basis / reason
-  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  requestedAt: timestamp("requested_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });
 
