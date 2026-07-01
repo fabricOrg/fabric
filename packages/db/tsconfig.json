@@ -3,5 +3,11 @@
   // exports "./src/index.ts". Setting rootDir=src while including drizzle.config.ts (outside src)
   // raised TS6059. Dropping both clears it without affecting the (never-run) emit.
   "extends": "../../tsconfig.base.json",
-  "include": ["src", "drizzle.config.ts"]
+  "include": [
+    "src",
+    "test",
+    "drizzle.config.ts",
+    "vitest.config.ts",
+    "vitest.integration.config.ts"
+  ]
 }
