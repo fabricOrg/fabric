@@ -1,0 +1,13 @@
+# pnpm workspaces = a monorepo: many packages, one install, shared tooling.
+# WHY a monorepo: the platform is ONE codebase with clear internal modules (see
+# MODULE-DECOMPOSITION.md). Workspaces let `packages/*` depend on each other with full
+# type-safety and no publishing, while keeping boundaries explicit — maintainability.
+packages:
+  - "packages/*" # shared libraries (db, types, config, fe-auth, ui, ...)
+  - "services/*" # deployable backend apps (api, workers, admin-api) — added in B4
+  - "apps/*" # deployable Next.js surfaces (admin-console, dev-portal, dashboard) — PI-2 build;
+             # dir reserved now so FE topology is on rails (2 auth realms, separate apps).
+             # See team/frontend/PROPOSAL-fe-auth-bff-seam.md §1.
+allowBuilds:
+  '@infisical/cli': set this to true or false
+  esbuild: set this to true or false

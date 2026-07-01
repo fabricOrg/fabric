@@ -1,0 +1,28 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# secrets & local env — NEVER commit (security)
+.env
+.env.*
+!.env.example
+
+# terraform — never commit state (may contain secrets) or local provider binaries
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# A2A doorbell client — downloaded tooling, not project code
+a2a-cli.js
+**/a2a-cli.js
+
+# ephemeral review artifacts (screenshots, etc.)
+_review_shots/

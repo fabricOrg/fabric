@@ -1,0 +1,44 @@
+# Local development environment — your laptop "cloud".
+# WHY: lets us build & test the schema, RLS isolation, and money logic with zero AWS cost/latency.
+# The same Postgres SQL later runs on RDS unchanged; the two Redis tiers mirror the prod split
+# (a DURABLE queue + an evictable cache) so local behaviour matches production.
+#
+# Run:  docker compose up -d
+# Psql: docker compose exec postgres psql -U app_owner -d app
+# Stop: docker compose down       (add -v to also wipe data volumes)
+
+services:
+  postgres:
+    image: postgres:16            # pinned to 16 — matches our RDS engine choice
+    environment:
+      POSTGRES_USER: app_owner   # the migration/owner role (creates tables). NOT used by the app at runtime.
+      POSTGRES_PASSWORD: localdev # local only — real creds come from Secrets Manager in cloud
+      POSTGRES_DB: app
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:                  # so dependents can wait for "ready", not just "started"
+      test: ["CMD-SHELL", "pg_isready -U app_owner -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # QUEUE Redis (BullMQ): MUST NOT evict — evicting a job = a lost SMS/payment task.
+  # noeviction + appendonly(AOF) = durable; a restart replays the log instead of dropping jobs.
+  redis-queue:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports: ["6379:6379"]
+    volumes:
+      - redisqueue:/data
+
+  # CACHE / rate-limit Redis: eviction is FINE here (it's a cache). LRU drops least-recently-used keys
+  # under memory pressure. Kept SEPARATE from the queue so cache churn can never evict a job (pre-impl B-review).
+  redis-cache:
+    image: redis:7
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports: ["6380:6379"]
+
+volumes:
+  pgdata:
+  redisqueue:

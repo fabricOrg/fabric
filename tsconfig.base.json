@@ -1,0 +1,29 @@
+{
+  // Shared TypeScript config every package extends. The BACKBONE of "strong type safety".
+  // Flags aligned with the team's existing shop-app-v2 conventions for consistency, plus a few
+  // package-emit options (declaration/sourceMap) since app ships internal libraries.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // ---- strictness (the part that matters most) ----
+    "strict": true,                    // master switch
+    "noUnusedLocals": true,            // dead locals fail the build
+    "noUnusedParameters": true,        // dead params fail the build
+    "noUncheckedIndexedAccess": true, // arr[i] is T | undefined
+    "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "useDefineForClassFields": true,
+
+    // ---- emit / DX ----
+    "declaration": true,               // emit .d.ts so packages expose types to each other
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "isolatedModules": true
+  }
+}

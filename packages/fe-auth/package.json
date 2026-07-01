@@ -1,0 +1,15 @@
+{
+  "name": "@app/fe-auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@app/contracts": "workspace:*",
+    "@workos-inc/node": "^7.0.0"
+  }
+}

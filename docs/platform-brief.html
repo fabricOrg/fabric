@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Platform Blueprint — CPaaS · Payments · Identity</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --line:#e7eaf1; --soft:#f4f6fb; --soft2:#fafbfe;
+    --brand:#4f46e5; --brand-d:#4338ca; --accent:#0ea5e9;
+    --sidebar:#0d1124; --sidebar-2:#151a35; --sidebar-ink:#aeb6d4;
+    --green:#16a34a; --amber:#b45309; --red:#dc2626;
+    --r:14px; --r-s:10px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;
+       color:var(--ink);background:var(--soft);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+
+  /* ---- header ---- */
+  .topbar{background:linear-gradient(115deg,#0d1124 0%,#241b54 55%,#3b2f8f 100%);color:#fff;
+          padding:26px 30px;display:flex;align-items:center;gap:18px}
+  .logo{width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#a855f7);
+        display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;color:#fff;flex:0 0 auto;
+        box-shadow:0 6px 18px rgba(99,102,241,.45)}
+  .topbar h1{margin:0;font-size:20px;letter-spacing:.2px}
+  .topbar .sub{margin:3px 0 0;color:#c3cae8;font-size:13.5px}
+  .topbar .meta{margin-left:auto;text-align:right;color:#9aa3c7;font-size:12px}
+
+  /* ---- shell ---- */
+  .shell{display:flex;align-items:flex-start;min-height:calc(100vh - 98px)}
+  aside{position:sticky;top:0;align-self:flex-start;width:248px;flex:0 0 248px;background:var(--sidebar);
+        min-height:100vh;padding:18px 14px;color:var(--sidebar-ink)}
+  aside .grp{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#646e98;
+             margin:16px 10px 6px}
+  aside button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;cursor:pointer;
+        background:transparent;color:var(--sidebar-ink);font-size:14px;font-weight:600;padding:9px 12px;
+        border-radius:9px;margin:1px 0;transition:.15s}
+  aside button:hover{background:var(--sidebar-2);color:#fff}
+  aside button:focus-visible{outline:2px solid #818cf8;outline-offset:2px}
+  aside button.active{background:linear-gradient(90deg,rgba(99,102,241,.22),transparent);color:#fff;
+        box-shadow:inset 3px 0 0 #6366f1}
+  aside button .dot{width:7px;height:7px;border-radius:50%;background:#475089;flex:0 0 auto}
+  aside button.active .dot{background:#818cf8}
+
+  main{flex:1;min-width:0;padding:26px 34px 70px;max-width:960px}
+  .panel{display:none}
+  .panel.active{display:block;animation:f .22s ease}
+  @keyframes f{from{opacity:0;transform:translateY(5px)}to{opacity:1}}
+
+  h2{font-size:24px;margin:0 0 2px;letter-spacing:-.2px}
+  .lead{color:var(--muted);font-size:15px;margin:0 0 18px}
+  h3{font-size:15px;margin:26px 0 9px;color:var(--brand-d);font-weight:700;
+     display:flex;align-items:center;gap:8px}
+  h3::before{content:"";width:14px;height:2px;background:var(--brand);border-radius:2px}
+  h4{font-size:13.5px;margin:0 0 6px}
+  p{margin:9px 0}
+  ul,ol{margin:9px 0;padding-left:22px}li{margin:5px 0}
+  code{background:#eef0f7;padding:1px 6px;border-radius:6px;font-size:12.5px;color:#6d28d9;
+       font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
+  table{border-collapse:separate;border-spacing:0;width:100%;margin:14px 0;font-size:13.5px;
+        border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden}
+  th,td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+  th{background:var(--soft);font-weight:700;font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:#475569}
+  tr:last-child td{border-bottom:0}
+  tbody tr:hover td{background:var(--soft2)}
+
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:30px;white-space:nowrap}
+  .b-must{background:#dcfce7;color:#15803d}.b-stretch{background:#fef3c7;color:#a16207}
+  .b-pi2{background:#eef1f6;color:#475569}.b-ok{background:#dbeafe;color:#1d4ed8}.b-hard{background:#fee2e2;color:#b91c1c}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:13px;margin:14px 0}
+  .card{border:1px solid var(--line);border-radius:var(--r-s);padding:15px 16px;background:#fff;
+        box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .card h4{color:var(--brand-d);margin:0 0 6px;font-size:13.5px}
+  .card p{margin:0;font-size:13px;color:#475569}
+
+  .callout{border:1px solid var(--line);border-left:4px solid var(--accent);background:#f0f9ff;
+           padding:12px 15px;border-radius:var(--r-s);margin:14px 0;font-size:14px}
+  .callout.warn{border-left-color:var(--amber);background:#fffbeb}
+  .callout.good{border-left-color:var(--green);background:#f0fdf4}
+  .callout b{color:var(--ink)}
+
+  .kpis{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
+  .kpi{flex:1;min-width:140px;border:1px solid var(--line);border-radius:var(--r-s);padding:14px 16px;
+       background:linear-gradient(180deg,#fff,#fafbff)}
+  .kpi .n{font-size:21px;font-weight:800;color:var(--brand);letter-spacing:-.5px}
+  .kpi .l{font-size:12px;color:var(--muted);margin-top:2px}
+
+  .pills{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+  .pill{font-size:12px;background:#fff;border:1px solid var(--line);border-radius:30px;padding:4px 11px;color:#475569;font-weight:600}
+
+  figure{margin:16px 0}
+  figure svg{width:100%;height:auto;display:block;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:14px}
+  figcaption{font-size:12px;color:var(--muted);text-align:center;margin-top:7px}
+  .svg-txt{font-family:inherit;font-size:12px;font-weight:600}
+  .svg-sm{font-size:10.5px}
+  .muted{color:var(--muted)}
+
+  footer{color:var(--muted);font-size:12px;text-align:center;padding:22px;border-top:1px solid var(--line)}
+
+  @media (max-width:900px){
+    .shell{flex-direction:column}
+    aside{position:sticky;top:0;width:100%;flex:none;min-height:0;display:flex;gap:4px;overflow-x:auto;
+          padding:8px;z-index:30}
+    aside .grp{display:none}
+    aside button{width:auto;white-space:nowrap;padding:8px 12px}
+    aside button .dot{display:none}
+    main{padding:20px 18px 60px}
+  }
+  @media print{aside{display:none}.panel{display:block!important;page-break-after:always}main{max-width:none}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">◈</div>
+  <div>
+    <h1>Platform Blueprint</h1>
+    <div class="sub">Developer infrastructure for Africa — CPaaS · Payments · Identity</div>
+  </div>
+  <div class="meta">Design v1 · 2026‑06‑04<br>Internal / stakeholder</div>
+</div>
+
+<div class="shell">
+  <aside id="nav">
+    <div class="grp">Start</div>
+    <button class="active" data-t="overview"><span class="dot"></span>Overview</button>
+    <div class="grp">Design</div>
+    <button data-t="architecture"><span class="dot"></span>Architecture</button>
+    <button data-t="identity"><span class="dot"></span>Identity &amp; SSO</button>
+    <button data-t="integrations"><span class="dot"></span>Integrations</button>
+    <button data-t="control"><span class="dot"></span>Control Plane</button>
+    <button data-t="compliance"><span class="dot"></span>Compliance</button>
+    <div class="grp">Product &amp; Delivery</div>
+    <button data-t="features"><span class="dot"></span>Features &amp; Positioning</button>
+    <button data-t="pi1"><span class="dot"></span>PI‑1 Backlog</button>
+    <button data-t="devops"><span class="dot"></span>Deployment &amp; DevOps</button>
+    <div class="grp">Reference</div>
+    <button data-t="decisions"><span class="dot"></span>Decisions Log</button>
+    <button data-t="glossary"><span class="dot"></span>Glossary</button>
+  </aside>
+
+  <main>
+
+  <!-- ============ OVERVIEW ============ -->
+  <section class="panel active" id="overview">
+    <h2>Overview</h2>
+    <p class="lead">A multi‑tenant platform: build once, use internally, sell externally. SMS is the first product; Payments, Email &amp; Notifications plug into the same core.</p>
+
+    <div class="callout"><b>The one‑line pitch.</b> “One login, one wallet, one backend — SMS today, more products tomorrow — with swappable vendors and automatic failover so messages actually arrive, all run from a single admin console.”</div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="n">3</div><div class="l">planes · control / self‑service / data</div></div>
+      <div class="kpi"><div class="n">9</div><div class="l">PI‑1 epics · 48 stories</div></div>
+      <div class="kpi"><div class="n">1</div><div class="l">shared core, many products</div></div>
+      <div class="kpi"><div class="n">AWS</div><div class="l">Cape Town (af‑south‑1)</div></div>
+    </div>
+
+    <h3>How the pieces fit</h3>
+    <figure>
+      <svg viewBox="0 0 760 470" role="img" aria-label="System overview diagram">
+        <defs><marker id="a1" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#94a3b8"/></marker></defs>
+        <!-- main column -->
+        <rect x="140" y="20" width="230" height="44" rx="9" fill="#ede9fe" stroke="#7c3aed"/>
+        <text class="svg-txt" x="255" y="46" text-anchor="middle" fill="#4c1d95">Customers — developers + business</text>
+
+        <rect x="140" y="92" width="230" height="44" rx="9" fill="#ede9fe" stroke="#7c3aed"/>
+        <text class="svg-txt" x="255" y="118" text-anchor="middle" fill="#4c1d95">SSO (WorkOS) · API Gateway</text>
+
+        <rect x="70" y="164" width="170" height="44" rx="9" fill="#fff" stroke="#cbd5e1"/>
+        <text class="svg-txt" x="155" y="190" text-anchor="middle" fill="#334155">Public API + SDK</text>
+        <rect x="260" y="164" width="170" height="44" rx="9" fill="#fff" stroke="#cbd5e1"/>
+        <text class="svg-txt" x="345" y="190" text-anchor="middle" fill="#334155">Dashboard (BFF)</text>
+
+        <rect x="120" y="240" width="310" height="48" rx="9" fill="#dcfce7" stroke="#16a34a"/>
+        <text class="svg-txt" x="275" y="261" text-anchor="middle" fill="#14532d">SMS — first product</text>
+        <text class="svg-txt svg-sm" x="275" y="277" text-anchor="middle" fill="#3f6b4e">engine · OTP · campaigns · DLR</text>
+
+        <rect x="120" y="316" width="310" height="44" rx="9" fill="#e0f2fe" stroke="#0284c7"/>
+        <text class="svg-txt" x="275" y="343" text-anchor="middle" fill="#075985">Integrations — routing · failover · health</text>
+
+        <rect x="120" y="392" width="310" height="44" rx="9" fill="#f1f5f9" stroke="#64748b"/>
+        <text class="svg-txt" x="275" y="419" text-anchor="middle" fill="#334155">External vendors · Hubtel · Twilio · Paystack</text>
+
+        <!-- side: shared core -->
+        <rect x="470" y="150" width="240" height="130" rx="11" fill="#f8faff" stroke="#2563eb" stroke-dasharray="0"/>
+        <text class="svg-txt svg-sm" x="590" y="168" text-anchor="middle" fill="#1e3a8a">SHARED CORE (reused by every product)</text>
+        <rect x="486" y="180" width="208" height="28" rx="7" fill="#dbeafe" stroke="#2563eb"/>
+        <text class="svg-txt svg-sm" x="590" y="198" text-anchor="middle" fill="#1e3a8a">Identity &amp; Tenants</text>
+        <rect x="486" y="214" width="208" height="28" rx="7" fill="#dbeafe" stroke="#2563eb"/>
+        <text class="svg-txt svg-sm" x="590" y="232" text-anchor="middle" fill="#1e3a8a">Wallet &amp; Ledger (multi‑currency)</text>
+        <rect x="486" y="248" width="208" height="24" rx="7" fill="#dbeafe" stroke="#2563eb"/>
+        <text class="svg-txt svg-sm" x="590" y="265" text-anchor="middle" fill="#1e3a8a">Billing &amp; Pricing</text>
+
+        <!-- side: control plane -->
+        <rect x="470" y="300" width="240" height="60" rx="11" fill="#fef3c7" stroke="#d97706"/>
+        <text class="svg-txt svg-sm" x="590" y="324" text-anchor="middle" fill="#92400e">CONTROL PLANE (admin)</text>
+        <text class="svg-txt svg-sm" x="590" y="342" text-anchor="middle" fill="#a16207">configures · monitors (out of hot path)</text>
+
+        <!-- future -->
+        <rect x="470" y="392" width="240" height="44" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-dasharray="5 4"/>
+        <text class="svg-txt svg-sm" x="590" y="418" text-anchor="middle" fill="#14532d">Payments · Email — future (plug in)</text>
+
+        <!-- arrows main -->
+        <line x1="255" y1="64" x2="255" y2="90" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a1)"/>
+        <line x1="230" y1="136" x2="170" y2="162" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a1)"/>
+        <line x1="280" y1="136" x2="335" y2="162" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a1)"/>
+        <line x1="160" y1="208" x2="240" y2="239" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a1)"/>
+        <line x1="345" y1="208" x2="300" y2="239" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a1)"/>
+        <line x1="275" y1="288" x2="275" y2="315" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a1)"/>
+        <line x1="275" y1="360" x2="275" y2="391" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a1)"/>
+        <!-- SMS uses core (dashed) -->
+        <line x1="430" y1="250" x2="486" y2="220" stroke="#2563eb" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a1)"/>
+        <!-- control plane governs (dashed) -->
+        <line x1="470" y1="330" x2="430" y2="334" stroke="#d97706" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a1)"/>
+      </svg>
+      <figcaption>Customers and staff enter through one SSO. One shared core powers SMS today and future products. Vendors are reached only through the integrations layer; the admin control plane governs everything but stays out of the live path.</figcaption>
+    </figure>
+
+    <div class="callout good"><b>Status:</b> design complete &amp; internally consistent (12 design docs + 48 PI‑1 story files); no code yet. <b>Gating before build:</b> launch market + first SMS/payment vendor · DPO appointment · NDPA safeguard mechanism (counsel).</div>
+  </section>
+
+  <!-- ============ ARCHITECTURE ============ -->
+  <section class="panel" id="architecture">
+    <h2>Architecture</h2>
+    <p class="lead">Modular monolith first; earn the shared core; two day‑one exceptions.</p>
+
+    <h3>Guiding principles</h3>
+    <div class="grid">
+      <div class="card"><h4>Modular monolith first</h4><p>Extract services only when scale demands. Exceptions centralized day one: identity/SSO &amp; the control plane.</p></div>
+      <div class="card"><h4>The wallet is the product</h4><p>Money correctness under concurrency is the hardest, most valuable part.</p></div>
+      <div class="card"><h4>One engine, two interfaces</h4><p>Dashboard &amp; API are thin clients over the same services.</p></div>
+      <div class="card"><h4>Multi‑tenant from line one</h4><p>Every business row carries <code>tenant_id</code>; RLS backstop.</p></div>
+      <div class="card"><h4>Idempotent &amp; observable</h4><p>Every money/PII write is idempotent &amp; traceable.</p></div>
+      <div class="card"><h4>Three planes, not one</h4><p>Control plane is never in the data plane's hot path.</p></div>
+    </div>
+
+    <h3>Confirmed stack</h3>
+    <div class="pills">
+      <span class="pill">Node.js + TypeScript</span><span class="pill">NestJS (Fastify)</span>
+      <span class="pill">PostgreSQL 16</span><span class="pill">Drizzle ORM</span>
+      <span class="pill">Redis + BullMQ</span><span class="pill">Next.js (BFF)</span>
+    </div>
+
+    <h3>Tenancy model <span class="badge b-hard">hard to reverse</span></h3>
+    <p>Shared DB, shared schema, <code>tenant_id</code> on every row, with <b>Postgres Row‑Level Security</b> as the backstop — cheap, easy cross‑tenant billing/analytics. A dedicated single‑tenant deployment is the escape hatch for regulated clients.</p>
+
+    <h3>Module structure</h3>
+    <div class="grid">
+      <div class="card"><h4>platform/ — shared core</h4><p>identity · api‑keys · wallet · billing · idempotency · events‑bus · integrations · <b>privacy (PII vault)</b> · <b>control‑plane</b></p></div>
+      <div class="card"><h4>products/sms/</h4><p>engine · dlr · campaigns · otp · sender‑IDs</p></div>
+      <div class="card"><h4>interfaces/</h4><p>public‑api · dashboard‑api (BFF) · <b>admin (isolated)</b> · webhooks‑ingress</p></div>
+    </div>
+    <p class="muted"><b>Dependency rule:</b> products → platform (never reverse). Control‑plane governs but is read at runtime via cached config — never in the hot path.</p>
+
+    <h3>The wallet &amp; double‑entry ledger <span class="badge b-ok">crown jewel</span></h3>
+    <ul>
+      <li>Balance is a <b>derived projection</b> of an append‑only ledger — never a mutable counter.</li>
+      <li><b>Reserve → commit / refund</b> lifecycle; idempotency keys; <code>FOR UPDATE</code> concurrency.</li>
+      <li>Money in <b>bigint minor units</b>; CI invariant: <code>Σcredits − Σdebits = balance</code>.</li>
+      <li><b>Multi‑currency</b> machinery; enabled set is control‑plane config; FX deferred.</li>
+    </ul>
+  </section>
+
+  <!-- ============ IDENTITY ============ -->
+  <section class="panel" id="identity">
+    <h2>Identity &amp; SSO</h2>
+    <p class="lead">One login for all apps — centralized day one because SSO can't be retrofitted.</p>
+    <div class="callout good"><b>Decision — WorkOS AuthKit (managed).</b> Self‑serve sign‑up · hosted login · MFA mandatory for admin/owner. Chosen over Auth0 on cost at scale + B2B/enterprise‑SSO fit.</div>
+
+    <h3>How “one for all” works</h3>
+    <p>Every app is an OIDC client of one WorkOS environment sharing one user pool. A second app redirects to the same session → <b>silent SSO, no re‑login</b>. Tokens stay <b>server‑side in the BFF</b>; the browser gets only an httpOnly cookie (no JWT in JS → no XSS token theft).</p>
+
+    <table>
+      <thead><tr><th>Our concept</th><th>WorkOS primitive</th></tr></thead>
+      <tbody>
+        <tr><td>Tenant / account</td><td>Organization (<code>org_id</code>)</td></tr>
+        <tr><td>User (linked by sub)</td><td>WorkOS User → <code>users.external_subject_id</code></td></tr>
+        <tr><td>Active‑org + role claim</td><td><code>org_id</code> / <code>role</code> / <code>permissions</code></td></tr>
+        <tr><td>Per‑app session</td><td>Sealed <code>wos-session</code> httpOnly cookie</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Staff identity — separate from customers</h3>
+    <ul>
+      <li>Dedicated <b>staff org</b>; MFA mandatory for <i>all</i> staff.</li>
+      <li>Admin RBAC: <code>super_admin · platform_ops · finance · support · compliance · read_only</code>.</li>
+      <li><b>Step‑up auth</b> + <b>maker‑checker</b> for money/destructive actions; time‑boxed, audited impersonation.</li>
+    </ul>
+    <p class="muted">Two auth modes: humans → SSO; developer integrations → <code>sk_live_</code>/<code>sk_test_</code> API keys.</p>
+  </section>
+
+  <!-- ============ INTEGRATIONS ============ -->
+  <section class="panel" id="integrations">
+    <h2>Integrations — the vendor plugin framework</h2>
+    <p class="lead">Vendor‑agnostic. Share the <i>mechanism</i> (registry · selection · failover · health), not the <i>contract</i>.</p>
+
+    <h3>Plugin type vs instance</h3>
+    <p>A <b>plugin type</b> = the adapter code (“Hubtel SMS”). A <b>plugin instance</b> = a configured, credentialed activation. Enable/disable, default + fallback, and bring‑your‑own‑credentials all operate on instances. Adding a vendor = ship a type + create an instance. <b>Zero core changes.</b></p>
+    <div class="callout"><b>The app never calls a vendor directly</b> — sends &amp; top‑ups go through <code>platform/integrations</code>; only the provider <b>plugin adapter</b> makes the outbound call. That indirection is what enables failover, no‑lock‑in, and per‑provider billing.</div>
+
+    <h3>SMS send flow</h3>
+    <figure>
+      <svg viewBox="0 0 760 150" role="img" aria-label="SMS send pipeline">
+        <defs><marker id="a2" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#94a3b8"/></marker></defs>
+        <!-- row 1 -->
+        <g>
+          <rect x="6"   y="20" width="104" height="40" rx="8" fill="#fff" stroke="#cbd5e1"/><text class="svg-txt svg-sm" x="58"  y="44" text-anchor="middle" fill="#334155">normalize (E.164)</text>
+          <rect x="134" y="20" width="104" height="40" rx="8" fill="#fff" stroke="#cbd5e1"/><text class="svg-txt svg-sm" x="186" y="40" text-anchor="middle" fill="#334155">encode /</text><text class="svg-txt svg-sm" x="186" y="52" text-anchor="middle" fill="#334155">segment</text>
+          <rect x="262" y="20" width="92"  height="40" rx="8" fill="#fff" stroke="#cbd5e1"/><text class="svg-txt svg-sm" x="308" y="44" text-anchor="middle" fill="#334155">rate (cost)</text>
+          <rect x="378" y="20" width="104" height="40" rx="8" fill="#dbeafe" stroke="#2563eb"/><text class="svg-txt svg-sm" x="430" y="40" text-anchor="middle" fill="#1e3a8a">reserve $</text><text class="svg-txt svg-sm" x="430" y="52" text-anchor="middle" fill="#1e3a8a">(FOR UPDATE)</text>
+          <rect x="506" y="20" width="92"  height="40" rx="8" fill="#fff" stroke="#cbd5e1"/><text class="svg-txt svg-sm" x="552" y="44" text-anchor="middle" fill="#334155">route plugin</text>
+          <rect x="622" y="20" width="92"  height="40" rx="8" fill="#dcfce7" stroke="#16a34a"/><text class="svg-txt svg-sm" x="668" y="44" text-anchor="middle" fill="#14532d">send → provider</text>
+        </g>
+        <line x1="110" y1="40" x2="132" y2="40" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a2)"/>
+        <line x1="238" y1="40" x2="260" y2="40" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a2)"/>
+        <line x1="354" y1="40" x2="376" y2="40" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a2)"/>
+        <line x1="482" y1="40" x2="504" y2="40" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a2)"/>
+        <line x1="598" y1="40" x2="620" y2="40" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a2)"/>
+        <!-- row 2 async -->
+        <line x1="668" y1="60" x2="668" y2="92" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a2)"/>
+        <rect x="470" y="92" width="244" height="40" rx="8" fill="#fef3c7" stroke="#d97706"/>
+        <text class="svg-txt svg-sm" x="592" y="112" text-anchor="middle" fill="#92400e">DLR arrives (async) → reconcile</text>
+        <text class="svg-txt svg-sm" x="592" y="125" text-anchor="middle" fill="#a16207">→ commit (billable) / refund (our fault)</text>
+      </svg>
+      <figcaption>Funds are reserved before sending; the asynchronous delivery report finalizes the charge — commit if billable, refund if the failure was on our side.</figcaption>
+    </figure>
+
+    <h3>Failover semantics <span class="badge b-hard">the subtlety</span></h3>
+    <table>
+      <thead><tr><th></th><th>SMS</th><th>Payment</th></tr></thead>
+      <tbody>
+        <tr><td>Policy</td><td><code>TRANSPARENT_RETRY</code></td><td><code>INITIATION_ONLY</code></td></tr>
+        <tr><td>Mid‑flight retry?</td><td>Yes — on hard failure only</td><td><b>Never</b> after a charge exists</td></tr>
+        <tr><td>On ambiguity</td><td>Mark unknown, reconcile via DLR</td><td>Customer re‑initiates → re‑routes</td></tr>
+      </tbody>
+    </table>
+    <p class="muted">Treating payments like SMS would double‑charge customers — so failover policy is per‑capability.</p>
+
+    <h3>Honest billing model</h3>
+    <p>Each provider declares a <b>billable‑status set</b> + a <b>platform‑fault exemption list</b>. Bill the customer on the <i>same basis the provider bills us</i>; <b>never charge for failures the platform caused</b> (internal error, suspension, fraud/geo block → auto‑refund). Always show reconciled DLR + cost‑per‑delivered.</p>
+
+    <h3>Strategic endgame</h3>
+    <p class="muted">At volume, our <b>own SMS gateway / payment rails</b> become just new platform‑scoped plugin instances — a <i>migration, not a rewrite</i> (canary via routing weights; keep vendors as fallback).</p>
+  </section>
+
+  <!-- ============ CONTROL PLANE ============ -->
+  <section class="panel" id="control">
+    <h2>Control Plane (Admin)</h2>
+    <p class="lead">The privileged system that configures, monitors &amp; governs every product — current and future.</p>
+    <div class="callout warn"><b>Core rule:</b> the control plane configures &amp; observes the data plane but is <b>never in its hot path</b>. The data plane reads cached last‑known‑good config and keeps serving if admin is down.</div>
+
+    <figure>
+      <svg viewBox="0 0 760 240" role="img" aria-label="Three planes diagram">
+        <defs><marker id="a3" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#d97706"/></marker></defs>
+        <rect x="40" y="18" width="680" height="56" rx="10" fill="#fef3c7" stroke="#d97706"/>
+        <text class="svg-txt" x="380" y="42" text-anchor="middle" fill="#92400e">CONTROL PLANE — configure · monitor · govern (internal staff)</text>
+        <text class="svg-txt svg-sm" x="380" y="60" text-anchor="middle" fill="#a16207">providers · pricing · currencies · feature flags · audit · DSR · kill‑switches</text>
+
+        <line x1="380" y1="74" x2="380" y2="120" stroke="#d97706" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a3)"/>
+        <text class="svg-txt svg-sm" x="392" y="100" text-anchor="start" fill="#a16207">config (cached) — out of hot path</text>
+
+        <rect x="40" y="124" width="680" height="56" rx="10" fill="#dbeafe" stroke="#2563eb"/>
+        <text class="svg-txt" x="380" y="148" text-anchor="middle" fill="#1e3a8a">DATA PLANE — serve traffic (API · SMS engine · wallet · workers)</text>
+        <text class="svg-txt svg-sm" x="380" y="166" text-anchor="middle" fill="#1d4ed8">high‑throughput · the live path</text>
+
+        <rect x="40" y="194" width="680" height="34" rx="10" fill="#ede9fe" stroke="#7c3aed"/>
+        <text class="svg-txt svg-sm" x="380" y="215" text-anchor="middle" fill="#4c1d95">SELF‑SERVICE PLANE — customers configure their own tenant, within entitlements</text>
+      </svg>
+      <figcaption>Three planes. Operators (god‑mode) configure from the top; customers self‑serve within limits; the data plane serves traffic and keeps running even if the control plane is unavailable.</figcaption>
+    </figure>
+
+    <h3>Four jobs</h3>
+    <div class="grid">
+      <div class="card"><h4>Configure</h4><p>provider instances · routing · pricing · feature flags · rate limits · enabled currencies · product registry</p></div>
+      <div class="card"><h4>Monitor</h4><p>health · SLOs · usage/spend · fraud · ledger invariant · DLR‑trust · revenue</p></div>
+      <div class="card"><h4>Govern</h4><p>tenant lifecycle · sender‑ID approvals · KYC/compliance · DSR/erasure · sub‑processor list</p></div>
+      <div class="card"><h4>Operate</h4><p>kill‑switches · impersonation · money ops (maker‑checker) · breach response · replay</p></div>
+    </div>
+
+    <h3>Future products plug in</h3>
+    <p>Each product registers a <b>ProductManifest</b> (config schema · metrics · health · admin actions) → instantly configurable/monitorable with <b>zero console changes</b> — the same “share the mechanism” pattern as vendor plugins, one level up.</p>
+  </section>
+
+  <!-- ============ COMPLIANCE ============ -->
+  <section class="panel" id="compliance">
+    <h2>Compliance &amp; Data Protection</h2>
+    <p class="lead">GDPR‑grade baseline (the African laws mirror it). Researched vs Twilio / Infobip / Bird + Ghana DPA / Nigeria NDPA.</p>
+
+    <h3>Controller vs Processor</h3>
+    <table>
+      <thead><tr><th>Data</th><th>Our role &amp; duties</th></tr></thead>
+      <tbody>
+        <tr><td>Tenants' recipients' data (phone, body, contacts)</td><td><b>Processor</b> — offer DPA, disclose sub‑processors, assist DSRs</td></tr>
+        <tr><td>Tenant users + billing data</td><td><b>Controller</b> — lawful basis, retention, honor DSRs</td></tr>
+      </tbody>
+    </table>
+
+    <h3>PII tokenization &amp; erasure <span class="badge b-ok">schema‑shaping</span></h3>
+    <ul>
+      <li>Raw PII lives <b>only</b> in an encrypted <code>pii_vault</code> (per‑subject DEK, envelope‑encrypted in KMS).</li>
+      <li>Everything else references a stable <code>subject_id</code> surrogate — never a raw phone column.</li>
+      <li><b>Right‑to‑erasure = crypto‑shred the DEK</b> → PII unreadable in one op; ledger/audit rows stay intact.</li>
+    </ul>
+
+    <h3>Data residency <span class="badge b-ok">re‑scoped per research</span></h3>
+    <p>Residency is <b>per‑data‑class</b>, not per‑tenant. Only BVN/NIN/NIBSS &amp; domestic card‑switching are legally in‑country — <b>we don't ingest those</b>, so our data needs only <b>NDPA safeguards</b> (Transfer Impact Assessment + SCCs + consent), hosted in AWS Cape Town. Per‑data‑class hybrid is the real‑world model (Moniepoint).</p>
+    <div class="callout warn"><b>Enforcement is real:</b> MultiChoice fined ₦766m for unconsented cross‑border transfer. Consent + lawful‑basis design at onboarding is the priority.</div>
+
+    <div class="callout good"><b>Differentiator:</b> African rivals largely lack ISO 27001 / SOC 2. We <b>design to be certifiable</b> and adopt Bird‑style <b>DSR‑by‑API</b> — compliance as a selling point, not just a cost.</div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section class="panel" id="features">
+    <h2>Features &amp; Positioning</h2>
+    <p class="lead">Where we win — grounded in competitor research &amp; market pain points.</p>
+
+    <h3>Competitor matrix (excerpt)</h3>
+    <table>
+      <thead><tr><th>Capability</th><th>Twilio</th><th>Africa's Talking</th><th>Termii</th><th>Hubtel</th><th>Us (target)</th></tr></thead>
+      <tbody>
+        <tr><td>API + dashboard (dual‑mode)</td><td>API‑led</td><td>partial</td><td>✅</td><td>dash‑led</td><td><b>✅ both</b></td></tr>
+        <tr><td>Multi‑provider failover / LCR</td><td>within Twilio</td><td>—</td><td>partial</td><td>partial</td><td><b>✅</b></td></tr>
+        <tr><td>Integrated wallet + payments</td><td>—</td><td>partial</td><td>—</td><td>✅</td><td><b>✅</b></td></tr>
+        <tr><td>Transparent cost‑per‑delivered</td><td>—</td><td>—</td><td>—</td><td>—</td><td><b>✅ open territory</b></td></tr>
+        <tr><td>Bring‑your‑own‑provider</td><td>—</td><td>—</td><td>—</td><td>—</td><td><b>✅ open territory</b></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Market pain points = our opening</h3>
+    <p><b>#1 fake delivery reports</b> (routes report “delivered” for dropped traffic) · <b>hidden fees</b> · cost‑per‑<i>delivered</i> ≫ cost‑per‑sent · single‑provider fragility · weak developer experience.</p>
+
+    <h3>Competitive advantages <span class="muted" style="font-weight:400">— each backed by an architecture decision</span></h3>
+    <div class="grid">
+      <div class="card"><h4>A · “Delivered, not sent”</h4><p>Reconciled DLRs + cost‑per‑delivered + DLR‑trust probing. Attacks the #1 trust complaint.</p></div>
+      <div class="card"><h4>B · Multi‑provider reliability</h4><p>Automatic failover + least‑cost routing + BYO provider. No single point of failure.</p></div>
+      <div class="card"><h4>C · Transparent pricing</h4><p>Bill the way the network bills us; never for our own faults.</p></div>
+      <div class="card"><h4>D · One platform, two UXes</h4><p>Developer API + business dashboard, same wallet/logs.</p></div>
+      <div class="card"><h4>E · Unified ecosystem</h4><p>SMS + payments + identity, one account/wallet/login → cross‑sell moat.</p></div>
+      <div class="card"><h4>F · Developer experience</h4><p>Test mode, SDK, signed/retried webhooks, great docs — the wedge rivals left open.</p></div>
+    </div>
+    <p class="muted"><b>Don't fight (yet):</b> Infobip enterprise omnichannel · Twilio global coverage · RCS/WhatsApp omnichannel (PI‑3).</p>
+  </section>
+
+  <!-- ============ PI-1 ============ -->
+  <section class="panel" id="pi1">
+    <h2>PI‑1 Backlog</h2>
+    <p class="lead">The walking skeleton — prove the riskiest things end‑to‑end. 9 epics · 48 story files.</p>
+
+    <h3>Objectives</h3>
+    <ol>
+      <li>Self‑signup → keys → fund wallet → send SMS that reconciles to an accurate charge (<b>ledger invariant green under load</b>).</li>
+      <li>OTP send + verify (bodies redacted).</li>
+      <li>Opt‑out/STOP &amp; sender‑ID rules enforced <i>before</i> send.</li>
+      <li>Money provably correct (no double‑charge, no locked/lost funds, no charge for platform‑caused failures).</li>
+      <li>Operators configure currencies/pricing/providers &amp; inspect/repair.</li>
+    </ol>
+
+    <h3>Epics</h3>
+    <table>
+      <thead><tr><th>Epic</th><th>Headline features</th><th>Iter</th></tr></thead>
+      <tbody>
+        <tr><td>E1 Foundations</td><td>tenancy+RLS · events‑bus · idempotency · audit · observability · notifications</td><td>1</td></tr>
+        <tr><td>E2 Identity</td><td>WorkOS SSO · staff RBAC · API keys</td><td>1–2</td></tr>
+        <tr><td>E3 Wallet/Billing</td><td>ledger · two‑phase debit · sweeper · rating · billable‑status · currency config</td><td>2</td></tr>
+        <tr><td>E4 Payments</td><td>provider integration · top‑up (verify‑on‑server) · reconciliation &amp; reversals</td><td>4</td></tr>
+        <tr><td>E5 SMS</td><td>plugin contract · pipeline+segmentation · statuses · DLR · inbound (MO)</td><td>3</td></tr>
+        <tr><td>E6 Verify</td><td>managed OTP · body redaction · pumping protection</td><td>4</td></tr>
+        <tr><td>E7 Compliance</td><td>PII vault · opt‑out engine · sender‑ID · DLR‑trust · governance · DSR</td><td>1,3</td></tr>
+        <tr><td>E8 Developer Exp.</td><td>versioning · idempotency · errors · webhooks · test mode · SDK · rate‑limits</td><td>5</td></tr>
+        <tr><td>E9 Control Plane</td><td>config · inspection · sender‑ID approvals · wallet adjust (maker‑checker) · health</td><td>5</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn"><b>Scope realism — the thin thread:</b> PI‑1 lists more than one team‑PI can finish. Protect a complete vertical thread (identity → wallet/ledger → one provider send + DLR → one top‑up, with PII vault + opt‑out + Verify); the rest slips to <b>PI‑1.5</b>, not the thread.</div>
+
+    <h3>Demo = done</h3>
+    <p class="muted">Signup → key → fund → send → DLR reconciles → STOP‑blocked send → OTP verify → sweeper frees a stuck reservation → operator posts an audited adjustment → ledger invariant green under concurrent load.</p>
+  </section>
+
+  <!-- ============ DEVOPS ============ -->
+  <section class="panel" id="devops">
+    <h2>Deployment &amp; DevOps</h2>
+    <p class="lead">Validated against real adopters of the same choices.</p>
+    <div class="pills">
+      <span class="pill">AWS Cape Town (af‑south‑1)</span><span class="pill">ECS Fargate</span>
+      <span class="pill">RDS Postgres (Multi‑AZ, PITR)</span><span class="pill">ElastiCache Redis</span>
+      <span class="pill">KMS</span><span class="pill">Grafana Cloud + Sentry</span>
+      <span class="pill">Terraform</span><span class="pill">GitHub Actions</span>
+    </div>
+    <div class="callout good"><b>Validated:</b> TymeBank (licensed bank, ECS/EKS), Luno/Ozow/JUMO, and Africa's Talking (a CPaaS) all run on AWS — af‑south‑1 is production‑proven for our shape.</div>
+
+    <h3>Topology</h3>
+    <figure>
+      <svg viewBox="0 0 760 320" role="img" aria-label="Deployment topology">
+        <defs><marker id="a4" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#94a3b8"/></marker></defs>
+        <!-- external left -->
+        <rect x="16" y="58" width="150" height="40" rx="9" fill="#ede9fe" stroke="#7c3aed"/><text class="svg-txt svg-sm" x="91" y="82" text-anchor="middle" fill="#4c1d95">CloudFront + WAF + Shield</text>
+        <rect x="16" y="210" width="150" height="36" rx="9" fill="#fef3c7" stroke="#d97706"/><text class="svg-txt svg-sm" x="91" y="232" text-anchor="middle" fill="#92400e">Operators (VPN/SSO)</text>
+
+        <!-- VPC -->
+        <rect x="200" y="30" width="360" height="272" rx="12" fill="#f8faff" stroke="#2563eb"/>
+        <text class="svg-txt svg-sm" x="380" y="48" text-anchor="middle" fill="#1e3a8a">AWS VPC — af‑south‑1 (3 AZs)</text>
+
+        <!-- compute column -->
+        <rect x="224" y="62" width="150" height="36" rx="8" fill="#fff" stroke="#cbd5e1"/><text class="svg-txt svg-sm" x="299" y="84" text-anchor="middle" fill="#334155">ECS: api + ingress</text>
+        <rect x="224" y="120" width="150" height="36" rx="8" fill="#fff" stroke="#cbd5e1"/><text class="svg-txt svg-sm" x="299" y="142" text-anchor="middle" fill="#334155">ECS: workers</text>
+        <rect x="224" y="210" width="150" height="36" rx="8" fill="#fff" stroke="#cbd5e1"/><text class="svg-txt svg-sm" x="299" y="232" text-anchor="middle" fill="#334155">ECS: admin (isolated)</text>
+
+        <!-- data column -->
+        <rect x="386" y="62" width="150" height="32" rx="8" fill="#dbeafe" stroke="#2563eb"/><text class="svg-txt svg-sm" x="461" y="82" text-anchor="middle" fill="#1e3a8a">RDS Postgres (Multi‑AZ)</text>
+        <rect x="386" y="102" width="150" height="30" rx="8" fill="#dcfce7" stroke="#16a34a"/><text class="svg-txt svg-sm" x="461" y="121" text-anchor="middle" fill="#14532d">Redis QUEUE (noeviction)</text>
+        <rect x="386" y="140" width="150" height="30" rx="8" fill="#dcfce7" stroke="#16a34a"/><text class="svg-txt svg-sm" x="461" y="159" text-anchor="middle" fill="#14532d">Redis CACHE (LRU)</text>
+        <rect x="386" y="178" width="150" height="28" rx="8" fill="#ede9fe" stroke="#7c3aed"/><text class="svg-txt svg-sm" x="461" y="196" text-anchor="middle" fill="#4c1d95">KMS (DEK envelope)</text>
+        <rect x="386" y="214" width="150" height="40" rx="8" fill="#f1f5f9" stroke="#64748b"/><text class="svg-txt svg-sm" x="461" y="231" text-anchor="middle" fill="#334155">Secrets Manager</text><text class="svg-txt svg-sm" x="461" y="246" text-anchor="middle" fill="#334155">· CloudTrail</text>
+
+        <!-- external right -->
+        <rect x="600" y="60" width="148" height="40" rx="9" fill="#f1f5f9" stroke="#64748b"/><text class="svg-txt svg-sm" x="674" y="84" text-anchor="middle" fill="#334155">SMS / payment providers</text>
+        <rect x="600" y="178" width="148" height="44" rx="9" fill="#fff" stroke="#cbd5e1"/><text class="svg-txt svg-sm" x="674" y="196" text-anchor="middle" fill="#334155">Grafana Cloud</text><text class="svg-txt svg-sm" x="674" y="211" text-anchor="middle" fill="#334155">+ Sentry</text>
+
+        <!-- arrows (none cross a box) -->
+        <line x1="166" y1="78"  x2="222" y2="80"  stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a4)"/>
+        <line x1="166" y1="228" x2="222" y2="228" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a4)"/>
+        <line x1="299" y1="98"  x2="299" y2="118" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a4)"/>
+        <line x1="374" y1="78"  x2="384" y2="78"  stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a4)"/>
+        <line x1="374" y1="132" x2="384" y2="119" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a4)"/>
+        <line x1="374" y1="146" x2="384" y2="190" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a4)"/>
+        <!-- workers -> providers: down the left gutter, along the bottom, up the gutter between data col and external boxes -->
+        <path d="M224,138 L210,138 L210,288 L585,288 L585,80 L598,80" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a4)"/>
+        <text class="svg-txt svg-sm" x="395" y="282" text-anchor="middle" fill="#64748b">send / pay</text>
+        <!-- telemetry -> grafana -->
+        <line x1="538" y1="200" x2="598" y2="200" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a4)"/>
+        <text class="svg-txt svg-sm" x="568" y="193" text-anchor="middle" fill="#64748b">telemetry</text>
+      </svg>
+      <figcaption>Public traffic enters via CloudFront/WAF; operators reach the isolated admin via VPN/SSO. Compute (left) talks to the data tier (right) — note the two separate Redis tiers (durable queue + LRU cache). Workers send to providers and ship scrubbed telemetry to Grafana/Sentry.</figcaption>
+    </figure>
+
+    <h3>Realities to budget (researched)</h3>
+    <div class="kpis">
+      <div class="kpi"><div class="n">+20–32%</div><div class="l">compute premium vs us‑east‑1 / Ireland</div></div>
+      <div class="kpi"><div class="n">~70%</div><div class="l">higher egress cost</div></div>
+      <div class="kpi"><div class="n">~80–120ms</div><div class="l">Lagos ↔ Cape Town → Local Zone day‑one</div></div>
+    </div>
+
+    <h3>Hardening highlights</h3>
+    <ul>
+      <li><b>Redis:</b> dedicated node‑based queue (<code>noeviction</code>+AOF+Multi‑AZ) — <i>not</i> ElastiCache Serverless; separate cache.</li>
+      <li><b>Idempotent payment consumers</b> (at‑least‑once + stalled jobs = duplicates).</li>
+      <li><b>Fargate subnets /20+</b> (no ENI trunking caps autoscaling); PID‑1/tini SIGTERM draining.</li>
+      <li><b>RLS:</b> app uses a non‑owner role (owner bypasses RLS); <code>tenant_id</code> leading index; pgTAP cross‑tenant tests gate CI.</li>
+      <li><b>Migrations:</b> expand‑contract + <code>lock_timeout</code> + advisory lock + <code>CREATE INDEX CONCURRENTLY</code>.</li>
+      <li><b>Config ≠ deploy;</b> blue/green; CI→AWS via GitHub OIDC; break‑glass prod access (certifiability).</li>
+    </ul>
+  </section>
+
+  <!-- ============ DECISIONS ============ -->
+  <section class="panel" id="decisions">
+    <h2>Decisions Log</h2>
+    <p class="lead">The key architectural decisions and why.</p>
+    <table>
+      <thead><tr><th>#</th><th>Decision</th><th>Rationale</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Modular monolith, not microservices</td><td>Small team, one product today</td></tr>
+        <tr><td>2</td><td>Shared‑DB row‑level tenancy + RLS</td><td>Many small tenants; easy billing/analytics</td></tr>
+        <tr><td>3</td><td>Double‑entry append‑only ledger (minor units)</td><td>Money correctness, auditability</td></tr>
+        <tr><td>4</td><td><b>Node/TS + NestJS + Postgres + Drizzle + Redis</b></td><td>Team fit, unified TS stack, ACID</td></tr>
+        <tr><td>5</td><td>Charge on accepted, reconcile on DLR</td><td>Industry‑correct revenue capture</td></tr>
+        <tr><td>6</td><td>Earn the shared core (extract on product #2)</td><td>Avoid premature abstraction</td></tr>
+        <tr><td>7</td><td>Identity/SSO centralized day one — WorkOS</td><td>Cross‑product SSO can't be retrofitted</td></tr>
+        <tr><td>8</td><td>Vendor‑agnostic plugin framework</td><td>No lock‑in across SMS/payments/future</td></tr>
+        <tr><td>9</td><td>Per‑capability failover (SMS retry / payment initiation‑only)</td><td>Prevents double‑charge</td></tr>
+        <tr><td>10</td><td>Multi‑currency from day one; FX deferred</td><td>Team requirement; additive</td></tr>
+        <tr><td>11</td><td>Store message bodies default, encrypted, opt‑in redaction</td><td>Matches Twilio/Plivo/Bird</td></tr>
+        <tr><td>12</td><td><b>Control plane day one; never in hot path</b></td><td>Cross‑product governance; availability isolation</td></tr>
+        <tr><td>13</td><td>Separate staff identity + audit + maker‑checker</td><td>Blast‑radius isolation, compliance</td></tr>
+        <tr><td>14</td><td>Processor/controller split; DPA auto‑incorporated</td><td>GDPR/NDPA/Ghana‑DPA dual role</td></tr>
+        <tr><td>15</td><td><b>PII tokenization + crypto‑shred erasure</b></td><td>Erasure vs immutable ledger</td></tr>
+        <tr><td>16</td><td>Currency = control‑plane config</td><td>Add a market = config, not migration</td></tr>
+        <tr><td>17</td><td>Billing on provider basis; never charge platform‑caused failures</td><td>Honest + margin‑safe wedge</td></tr>
+        <tr><td>18</td><td><b>AWS Cape Town · ECS Fargate · Grafana Cloud · Terraform</b></td><td>Residency + low‑ops + cost‑aware; peer‑proven</td></tr>
+        <tr><td>19</td><td>Residency per‑data‑class (not per‑tenant)</td><td>Only CNII is in‑country; we don't ingest it</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============ GLOSSARY ============ -->
+  <section class="panel" id="glossary">
+    <h2>Glossary</h2>
+    <p class="lead">Recurring terms, plain‑English.</p>
+    <table>
+      <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><b>CPaaS</b></td><td>Communications Platform as a Service (SMS/voice/messaging via APIs + dashboards).</td></tr>
+        <tr><td><b>BFF</b></td><td>Backend‑for‑Frontend — a frontend's own backend; holds auth tokens server‑side so they never reach browser JS.</td></tr>
+        <tr><td><b>DLR</b></td><td>Delivery Report — the async confirmation from the carrier of what actually happened to a message.</td></tr>
+        <tr><td><b>Tenancy</b></td><td>One shared app serving many isolated customers (tenants), separated by <code>tenant_id</code> + RLS.</td></tr>
+        <tr><td><b>Double‑entry ledger</b></td><td>Append‑only record of money movements; balance is a derived projection, never edited.</td></tr>
+        <tr><td><b>Reserve → commit/refund</b></td><td>Wallet lifecycle: hold funds on send, finalize on success, return on failure.</td></tr>
+        <tr><td><b>Plugin type vs instance</b></td><td>Adapter code vs a configured, credentialed activation of it.</td></tr>
+        <tr><td><b>Control vs Data plane</b></td><td>Admin (configure/monitor, never in hot path) vs the traffic‑serving runtime.</td></tr>
+        <tr><td><b>PII vault / crypto‑shred</b></td><td>Raw PII isolated &amp; per‑subject encrypted; erasure = destroy the key.</td></tr>
+        <tr><td><b>Controller / Processor</b></td><td>Who decides why data is processed vs who acts on instructions (us, for recipients' data).</td></tr>
+        <tr><td><b>DSR</b></td><td>Data‑Subject Request (access, rectification, erasure, portability).</td></tr>
+        <tr><td><b>NDPA / Ghana DPA</b></td><td>Nigeria Data Protection Act 2023 / Ghana DPA 2012 — GDPR‑aligned regimes.</td></tr>
+        <tr><td><b>Segment</b></td><td>One SMS unit (160 GSM‑7 / 70 UCS‑2 chars); more segments = higher cost.</td></tr>
+        <tr><td><b>Idempotency</b></td><td>A repeated request yields the same result once — safe retries.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>Platform Blueprint · synthesized from the design corpus · 2026‑06‑04 · self‑contained (no external dependencies).</footer>
+  </main>
+</div>
+
+<script>
+  const nav = document.querySelectorAll('#nav button');
+  const panels = document.querySelectorAll('.panel');
+  nav.forEach(b => b.addEventListener('click', () => {
+    nav.forEach(x => { x.classList.remove('active'); x.removeAttribute('aria-current'); });
+    panels.forEach(p => p.classList.remove('active'));
+    b.classList.add('active');
+    b.setAttribute('aria-current','page');
+    document.getElementById(b.dataset.t).classList.add('active');
+    document.querySelector('main').scrollIntoView({block:'start', behavior:'smooth'});
+  }));
+</script>
+</body>
+</html>

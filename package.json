@@ -1,0 +1,39 @@
+{
+  "name": "app-platform",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.1.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @app/db generate",
+    "db:migrate": "pnpm --filter @app/db migrate",
+
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "build": "turbo run build",
+
+    "enforce:branch-name": "node ./scripts/git/validate-branch-name.mjs",
+    "enforce:commit-message": "node ./scripts/git/validate-commit-message.mjs",
+    "guard:file-length": "node ./scripts/architecture/guard-file-length.mjs",
+    "guard:browser-safe": "node ./scripts/architecture/guard-browser-safe.mjs",
+    "guard": "pnpm guard:file-length && pnpm guard:browser-safe",
+
+    "validate": "pnpm guard && pnpm lint && pnpm typecheck && pnpm test",
+    "verify": "pnpm validate && pnpm build",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.5",
+    "@infisical/cli": "^0.43.0",
+    "husky": "^9.1.7",
+    "turbo": "^2.5.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

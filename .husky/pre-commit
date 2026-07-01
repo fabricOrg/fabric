@@ -1,0 +1,3 @@
+pnpm enforce:branch-name
+pnpm guard
+pnpm lint
