@@ -30,7 +30,10 @@ $$;
 
 -- Least privilege: the app may connect + use the schema + CRUD rows, but does NOT own tables
 -- (ownership would bypass RLS) and cannot create/drop schema objects.
-GRANT CONNECT ON DATABASE app TO app_runtime;
+-- CONNECT on the CURRENT database (not a hardcoded name) so migrating into ANY db — prod `app`, a
+-- local throwaway, or a CI ephemeral db — grants connect with no manual step. Plain
+-- `GRANT CONNECT ON DATABASE app` was hardcoded and silently locked out every non-`app` database.
+DO $$ BEGIN EXECUTE format('GRANT CONNECT ON DATABASE %I TO app_runtime', current_database()); END $$;
 GRANT USAGE ON SCHEMA public TO app_runtime;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_runtime;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_runtime;
