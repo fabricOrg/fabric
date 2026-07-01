@@ -50,6 +50,13 @@
       "when": 1782941292447,
       "tag": "0006_api_keys_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782942269245,
+      "tag": "0007_ledger_write_time_enforcement",
+      "breakpoints": true
     }
   ]
 }

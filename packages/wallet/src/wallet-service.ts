@@ -2,7 +2,6 @@ import type { TenantTx } from "@app/db";
 import { InsufficientFundsError } from "./errors.js";
 import {
   accountId,
-  moveBalance,
   openIdempotentTxn,
   openTerminalTxn,
   postLegs,
@@ -13,9 +12,10 @@ import {
 /**
  * WALLET SERVICE (L3) — reserve / commit / refund / credit over the append-only double-entry ledger
  * (ledger-double-entry v1.0.0). PRIMITIVES: each takes an in-context `TenantTx` (from @app/db
- * `withTenant`, so RLS is scoped + `app.tenant_id` is set), posts a BALANCED 2-leg movement, and
- * moves the cached projection in the SAME transaction (S5). L5 (send pipeline) orchestrates them
- * (reserve → send → commit-on-`accepted` | sweeper-refund-on-never-billable-TTL).
+ * `withTenant`, so RLS is scoped + `app.tenant_id` is set) and posts a BALANCED 2-leg movement. The
+ * cached `balance_minor` projection is maintained WRITE-TIME by the ledger_apply_entry trigger (E3) —
+ * the primitives no longer touch it — so it can't drift from the legs. L5 (send pipeline) orchestrates
+ * them (reserve → send → commit-on-`accepted` | sweeper-refund-on-never-billable-TTL).
  *
  * Guarantees: exactly-once with a body-fingerprint compare — same key + same body → replay the
  * stored txn; same key + different body → IdempotencyConflictError (B8/F8.2). No overdraw — reserve
@@ -72,8 +72,7 @@ export async function credit(
     debit: gateway,
     credit: customer,
   });
-  await moveBalance(tx, gateway, -p.amountMinor);
-  await moveBalance(tx, customer, p.amountMinor);
+  // balance_minor is maintained by the ledger_apply_entry trigger (write-time enforcement, E3).
   return { txnId, amountMinor: p.amountMinor, replayed: false };
 }
 
@@ -111,8 +110,7 @@ export async function reserve(
     debit: customer,
     credit: reserved,
   });
-  await moveBalance(tx, customer, -p.amountMinor);
-  await moveBalance(tx, reserved, p.amountMinor);
+  // balance_minor maintained by the trigger; the FOR UPDATE + overdraw check above still gates spend.
   return { txnId, amountMinor: p.amountMinor, replayed: false };
 }
 
@@ -139,8 +137,7 @@ export async function commit(
     debit: reserved,
     credit: revenue,
   });
-  await moveBalance(tx, reserved, -amountMinor);
-  await moveBalance(tx, revenue, amountMinor);
+  // balance_minor maintained by the ledger_apply_entry trigger (E3).
   return { txnId, amountMinor, replayed: false };
 }
 
@@ -168,7 +165,6 @@ export async function refund(
     debit: reserved,
     credit: customer,
   });
-  await moveBalance(tx, reserved, -amountMinor);
-  await moveBalance(tx, customer, amountMinor);
+  // balance_minor maintained by the ledger_apply_entry trigger (E3).
   return { txnId, amountMinor, replayed: false };
 }

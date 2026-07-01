@@ -77,17 +77,6 @@ export async function postLegs(
       (current_setting('app.tenant_id')::uuid, ${txnId}, ${legs.credit}, 'credit', ${amt}::bigint, ${reason}, ${refType}, ${referenceId})`;
 }
 
-/** Move a cached projection in the same txn as its legs (S5: never async/outbox). */
-export async function moveBalance(
-  tx: TenantTx,
-  accountIdValue: string,
-  deltaMinor: bigint,
-): Promise<void> {
-  await tx`
-    UPDATE ledger_accounts SET balance_minor = balance_minor + ${deltaMinor.toString()}::bigint, version = version + 1
-    WHERE id = ${accountIdValue}`;
-}
-
 /**
  * Insert a transaction envelope IDEMPOTENTLY (B8/F8.2). Stores `fingerprint` in metadata. On a
  * same-key conflict: identical fingerprint → { replayed:true } (return the stored txn, move no
