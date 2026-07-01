@@ -56,6 +56,18 @@ export interface AppDb {
    * is not a uuid. The transaction commits when `fn` resolves and rolls back if it throws.
    */
   withTenant<T>(tenantId: string, fn: (tx: TenantTx) => Promise<T>): Promise<T>;
+  /**
+   * Run `fn` inside a transaction with `app.api_key_hash` set (transaction-scoped + parameterized),
+   * so the `api_key_auth_lookup` RLS policy exposes ONLY the api_keys row whose hash was presented —
+   * possession-scoped (you can read a key row iff you hold the raw key). This is the ONE pre-tenant
+   * lookup the api-key guard makes (there's no tenant context yet); everything AFTER auth runs via
+   * {@link withTenant}. NO SECURITY DEFINER / BYPASSRLS — zero RLS-bypass surface (L2 / F2.3). Same
+   * SET-LOCAL discipline as withTenant: transaction-scoped so a pooled connection can't leak the hash.
+   */
+  withApiKeyLookup<T>(
+    keyHash: string,
+    fn: (tx: TenantTx) => Promise<T>,
+  ): Promise<T>;
   /** Close the pool (tests / graceful shutdown). */
   end(): Promise<void>;
 }
@@ -87,6 +99,27 @@ export function createAppDb(
         // the ::uuid cast in the policies matches exactly.
         await tx.unsafe("SELECT set_config('app.tenant_id', $1, true)", [
           tenantId,
+        ]);
+        return fn(tx as unknown as TenantTx);
+      }) as Promise<T>;
+    },
+    withApiKeyLookup<T>(
+      keyHash: string,
+      fn: (tx: TenantTx) => Promise<T>,
+    ): Promise<T> {
+      // Non-empty guard (parity with withTenant's validate-first). Even an empty/garbage hash is
+      // fail-closed at the policy (no key has that hash → 0 rows), but reject early to avoid a
+      // pointless round-trip. The hash is never interpolated — set_config is parameterized.
+      if (typeof keyHash !== "string" || keyHash.length === 0) {
+        return Promise.reject(
+          new Error("withApiKeyLookup: keyHash must be a non-empty string"),
+        );
+      }
+      return sql.begin(async (tx) => {
+        // FIRST statement: bind the presented hash, transaction-scoped + parameterized. The
+        // api_key_auth_lookup policy (FOR SELECT) then exposes only the matching row.
+        await tx.unsafe("SELECT set_config('app.api_key_hash', $1, true)", [
+          keyHash,
         ]);
         return fn(tx as unknown as TenantTx);
       }) as Promise<T>;
