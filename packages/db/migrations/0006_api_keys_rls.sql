@@ -21,12 +21,14 @@ ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE api_keys FORCE  ROW LEVEL SECURITY;
 
 -- ---- Policy 1: tenant management (list / revoke / create) --------------------------------------
--- Classic tenant scoping — the same shape as 0001/0002. Used when the request runs inside
--- withTenant (app.tenant_id set): a tenant sees/edits only its own keys.
+-- Classic tenant scoping. Used when the request runs inside withTenant (app.tenant_id set): a tenant
+-- sees/edits only its own keys. NULLIF(...,'') → a reused pooled connection with a stale-BLANK GUC
+-- ('' rather than unset) becomes NULL → 0 rows instead of `''::uuid` RAISING a 500 (adams' B3 case
+-- #4f). newton's follow-up will retrofit this NULLIF wrapper onto 0001/0002 too.
 CREATE POLICY tenant_isolation ON api_keys
   FOR ALL
-  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 -- ---- Policy 2: possession-scoped auth lookup (the pre-tenant resolve) --------------------------
 -- SELECT-only. The api-key guard opens a tiny tx, sets `app.api_key_hash` (transaction-scoped,

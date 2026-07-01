@@ -36,6 +36,20 @@
       "when": 1782926013401,
       "tag": "0004_sms_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782941289546,
+      "tag": "0005_api_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782941292447,
+      "tag": "0006_api_keys_rls",
+      "breakpoints": true
     }
   ]
 }
