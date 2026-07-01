@@ -15,12 +15,14 @@ never a shared/prod DB.
 | Tier | Runner | Needs Postgres? | Turbo task | When |
 |---|---|---|---|---|
 | **Unit** — pure `@app/domain` fns | Vitest | no | `test` | every push (fast) |
-| **Integration** — RLS, ledger, concurrency | Vitest + real `pg` (docker-compose) | **yes** | `test:integration` (new) | CI + pre-push |
+| **Integration** — RLS, ledger, concurrency | Vitest + **postgres.js** (the shipped driver; docker-compose) | **yes** | `test:integration` (new) | CI + pre-push |
 | **E2E** — 9-step walking-skeleton script | script + FakeProvider + sandbox `sk_test_*` | yes | `test:e2e` (new) | CI (main + release) |
 
-**B3 approach:** Vitest + a **real pooled `pg` client**, not pgTAP — pgTAP can't model app-side
-transaction pooling (PgBouncer/RDS Proxy), which is the actual leak surface. Optional thin pgTAP
-check for policy presence only.
+**B3 approach:** Vitest + a **real pooled postgres.js client** (the driver we ship), not pgTAP — pgTAP
+can't model app-side transaction pooling (PgBouncer/RDS Proxy), which is the actual leak surface.
+Optional thin pgTAP check for policy presence only. **Two connections:** `DATABASE_URL_OWNER`
+(BYPASSRLS) for setup/`TRUNCATE`/global invariant sweeps; `DATABASE_URL_APP` (`app_runtime`, no bypass)
++ `SET LOCAL app.tenant_id` for the tenant-scoped runtime path.
 
 ## 2. FakeProvider — first-class test fixture (enabler for B2/B6/DLR/sweeper/load)
 
@@ -42,14 +44,19 @@ before real vendors (pascal #5).
 - `app_runtime` has **no `BYPASSRLS`** (`rolbypassrls = false`).
 - `FORCE ROW LEVEL SECURITY` on every tenant table (`pg_class.relforcerowsecurity`).
 
-### "Security-layer-applied" assertion (closes the RLS-not-wired gap)
-CI fails if migrations don't produce `app_runtime` (no BYPASSRLS) + FORCE RLS + `tenant_isolation`
-policy on **all** tenant tables (identity, privacy, ledger_accounts, ledger_transactions, ledger_entries).
-Query `pg_policies` + `pg_class`.
+### "Security-layer-applied" assertion (closes the #1 P0: RLS-not-wired gap)
+Runs against a **freshly-migrated** DB (canonical `pnpm db:generate && db:migrate`, not hand-applied SQL).
+CI fails unless: `app_runtime` exists with **no BYPASSRLS**; **every** tenant table has FORCE RLS **and**
+≥1 RLS policy; `app_runtime` **lacks UPDATE/DELETE** on `ledger_entries` (append-only). Artifact staged:
+`team/qa-engineer/proposals/security-layer.check.ts` (SqlExecutor pattern; imported by the Vitest test
+**and** a `db:assert:security` CI step). Table list is a maintained constant — extend as domains land.
 
-### Migration-drift guard
-CI fails if a hand-written `packages/db/sql/*.sql` is not reflected in the drizzle journal
-(`migrations/meta/_journal.json`). Prevents the inert-RLS state recurring (newton is wiring 0001+0002).
+### Migration-drift guard ("journal reproduces the applied schema")
+Two halves: **(a) DB-state** = the security-layer check above; **(b) journal↔schema drift** = a CI
+*process* step (co-owned with pascal's `feature/db-tooling`): after migrate, run `drizzle-kit generate`
+and **assert it emits an EMPTY diff** (a non-empty diff = the typed schema / hand-written `sql/*.sql`
+drifted from the journal). This is only meaningful once the drizzle-kit NodeNext-`.js` blocker is fixed
+(Option (a) bump, consensus) so `generate` works at all — that fix is the precondition for both gates.
 
 ### B5 — idempotency fingerprint (pure, `@app/domain`)
 - byte-identical retry (same key + same raw body) → **must NOT conflict**.
@@ -65,13 +72,15 @@ CI fails if a hand-written `packages/db/sql/*.sql` is not reflected in the drizz
    - *Message-row terminal state machine* (`reserved → committed | refunded`, `SELECT … FOR UPDATE` +
      compare-and-set in both DLR handler and sweeper): prevents **commit AND refund** on one message.
      Lands with the SMS engine; the deterministic key alone does **not** cover this.
-3. **Schema assertion (REQUIRED, not optional — pascal AC-fit):**
-   `UNIQUE(tenant_id, reference_id) WHERE reason IN ('sms_commit','sms_refund')` on `ledger_entries`.
-   This is the **only DB-level backstop** against commit+refund *both* landing per message. It must not
-   fall through the **ledger↔engine lane seam**: either the engine's message-row terminal SM owns the
-   guard *or* this index does — **one owner must be explicitly assigned** (see risk in session log).
-   **Commit-XOR-refund test** (engine spec, Iter-3): concurrent DLR-commit + sweeper-refund on one
-   msgId → at most one terminal resolution; `reserved_clearing` never goes negative; invariant intact.
+3. **Schema assertion (REQUIRED) — corrected location (newton, verified live):**
+   `UNIQUE(tenant_id, reference_id) WHERE type='sms_charge' AND status IN ('committed','refunded')` on
+   **`ledger_transactions`** — **not** `ledger_entries` by `reason` (both commit legs share
+   `reason=sms_commit` + `reference_id`, so an entries-level index would collide the legitimate 2nd leg).
+   One terminal-resolution txn per message → a concurrent commit+refund collides (`unique_violation`).
+   Model-agnostic. **Ownership resolved:** newton owns this DB backstop (landed); the engine's message-row
+   terminal SM + `FOR UPDATE` in DLR-handler *and* sweeper is the primary guard (F5/Iter-3).
+   **Commit-XOR-refund test now runs at Iter-2** against this DB guard (post a committed resolution for a
+   msgId → a racing refund must raise `unique_violation`); the SM-level concurrent test is added at Iter-3.
 
 ### B8 — top-up double-credit
 - Concurrent **callback + webhook** with the same `topup_id` → wallet credited **exactly once**.
@@ -106,9 +115,21 @@ The standing invariant job + integration test assert:
   `adjustment` reconcile leg — the send/reserve path always gates `balance_minor >= cost` (S5) and
   **rejects rather than overdraws**. Explicit test pins this separation.
 
+**Test isolation (REQUIRED — learned from live verification 2026-07-01):** the invariant job MUST run
+against a **freshly-migrated, isolated DB**, seeded **only through the real posting path** (never manual
+`balance_minor` UPDATEs or partial seeds), with **truncate-or-transaction-rollback isolation per test**.
+Running it against the *shared dev DB* produces false reds: an independent read-only check of the shared
+local DB found projection integrity RED purely from verify-harness residue (top-up legs + a
+`gateway_clearing` account never committed; a bare NGN customer balance left from the 2-tenant RLS test)
+— trial-balance was green throughout. This confirms **projection integrity is the strictly stronger of
+the two invariants** (it catches "balance set without a matching entry"; trial-balance alone does not).
+
 Runnable artifact staged: `team/qa-engineer/proposals/ledger-invariant.check.ts` (+ `.spec.ts`) — the SQL
-assertions both the Vitest integration test and the standing CI job import. Target location in
-`packages/db/test/` to be finalized with newton against his migration.
+assertions both the Vitest integration test and the standing CI job import. **Landing plan (agreed with
+newton):** co-locate in `packages/db/test/` inside his `feature/ledger-double-entry` worktree so the
+invariant gate **ships with the schema it guards** (no cross-package drift window). The checker imports
+the typed `@app/db` schema directly, so it's unblocked regardless of the (still-pending) journal/generate
+fix; the CI *apply* step wires in once the drizzle-kit bump lands.
 
 ## 5. Billing / canonical status (B1) — target fixed by pascal's reconciliation §5
 
@@ -131,9 +152,9 @@ Tests (pure `@app/domain`, no I/O — the first tests to write):
 - **Billable-basis parity:** the customer is billed on the same basis the provider bills us
   (pass-through); never billed for a platform-caused failure (auto-refund) — table-driven per provider.
 
-> **Dependency:** the commit-point *assertion* inherits from newton confirming his COMMIT leg fires
-> exactly on `enter(billableStatuses[0])`. Spec frozen; I pin the transition test the moment he confirms
-> (his reply to pascal's §5 question).
+> **CONFIRMED (newton, 2026-07-01):** COMMIT (`debit reserved_clearing / credit revenue`) fires exactly
+> on `enter(billableStatuses[0])`, default `accepted`; the **domain decides**, the **wallet service posts**.
+> Assertion **un-frozen** — the commit-point transition test is pinned.
 
 ## 6. Coverage policy
 Money/PII/tenant paths **require** tests (CONVENTIONS DoD) — enforced per-path (critical-path checklist),
@@ -141,8 +162,9 @@ Money/PII/tenant paths **require** tests (CONVENTIONS DoD) — enforced per-path
 
 ## 7. Iteration → gate-green map
 - **Iter-2 (ledger_accounts):** §3 B4/B5/B8-CHECK + single-connection concurrent-spend + §4 invariant
-  (trial-balance form) go green.
-- **Iter-2/3 boundary (FakeProvider + engine):** B6 concurrent, DLR-reconcile, sweeper, and the
-  **flagship** invariant-under-send-load gate become reachable.
+  (trial-balance + projection integrity, synchronous in-txn — newton confirmed) + **B6 no-double-commit
+  (idempotency key) AND commit-XOR-refund (txn partial-unique-index backstop)** all go green.
+- **Iter-2/3 boundary (FakeProvider + engine):** B6 message-row-SM concurrent test (DLR + sweeper race),
+  DLR-reconcile, sweeper, and the **flagship** invariant-under-send-load gate become reachable.
 - **Iter-3+:** B3 pool-leak once runtime tx-wrapper exists; billing tests once status enum canonical.
 - **Iter-5:** full 9-step E2E.
