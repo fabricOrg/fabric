@@ -44,3 +44,23 @@ export function apiError(init: ApiErrorInit): HttpException {
 export function unauthorized(code: string, message: string): HttpException {
   return apiError({ type: "auth_error", code, message, status: 401 });
 }
+
+/** 400 in the F8.3 envelope (`type: "invalid_request_error"`) — `param` pinpoints the bad field. */
+export function invalidRequest(
+  code: string,
+  message: string,
+  param?: string,
+): HttpException {
+  return apiError({
+    type: "invalid_request_error",
+    code,
+    message,
+    status: 400,
+    ...(param !== undefined ? { param } : {}),
+  });
+}
+
+/** 404 in the F8.3 envelope (`type: "not_found_error"`). */
+export function notFound(code: string, message: string): HttpException {
+  return apiError({ type: "not_found_error", code, message, status: 404 });
+}

@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ApiKeyGuard } from "./api-key.guard.js";
+import { ApiKeysController } from "./api-keys.controller.js";
 import { ApiKeyService } from "./api-keys.service.js";
 
 /**
@@ -9,6 +10,7 @@ import { ApiKeyService } from "./api-keys.service.js";
  * session/operator-gated separately (F2.1 lands later).
  */
 @Module({
+  controllers: [ApiKeysController],
   providers: [ApiKeyService, ApiKeyGuard],
   exports: [ApiKeyService, ApiKeyGuard],
 })
