@@ -34,6 +34,14 @@ const app = postgres(APP_URL, { max: 4 });
 type Row = Record<string, unknown>;
 type Querier = (sql: string, args?: unknown[]) => Promise<Row[]>;
 
+// The first row of a result that must be non-empty (RETURNING / count(*) always yield one). Keeps
+// `noUncheckedIndexedAccess` happy without non-null assertions, and fails loudly if the query returns none.
+function first<T>(rows: readonly T[]): T {
+  const row = rows[0];
+  if (row === undefined) throw new Error("expected at least one row, got none");
+  return row;
+}
+
 // Run a tenant-scoped transaction the way the runtime must: SET LOCAL first, then the work.
 function inTenantTxn<T>(
   tenantId: string,
@@ -62,7 +70,7 @@ async function accountId(
      RETURNING id`,
     [tenantId, kind, ccy],
   );
-  return String(rows[0].id);
+  return String(first(rows).id);
 }
 
 // Post a balanced 2-leg transaction and update both accounts' cached projections in the same txn.
@@ -84,7 +92,7 @@ async function post(
      VALUES ($1, $2, 'pending', $3) RETURNING id`,
     [tenantId, opts.type, opts.idemKey],
   );
-  const txnId = txn[0].id;
+  const txnId = first(txn).id;
   for (const [accId, dir] of [
     [opts.debit, "debit"],
     [opts.credit, "credit"],
@@ -227,7 +235,7 @@ describe("ledger invariants (trial balance + projection integrity)", () => {
     const rows = await owner.unsafe(
       "SELECT balance_minor::text AS b FROM ledger_accounts WHERE kind='customer'",
     );
-    expect(rows[0].b).toBe("1000"); // fully restored, not double-credited
+    expect(first(rows).b).toBe("1000"); // fully restored, not double-credited
   });
 
   it("RATIFIED GUARD: negative customer balance is reachable ONLY via adjustment, never via reserve/send", async () => {
@@ -257,7 +265,7 @@ describe("ledger invariants (trial balance + projection integrity)", () => {
     const neg = await owner.unsafe(
       "SELECT balance_minor::text AS b FROM ledger_accounts WHERE kind='customer'",
     );
-    expect(neg[0].b).toBe("-150");
+    expect(first(neg).b).toBe("-150");
 
     // The send/reserve path MUST gate on balance >= cost (S5): a `sms_reserve` debit leg must never
     // exist against a negative customer balance.
@@ -335,7 +343,7 @@ describe("ledger invariants (trial balance + projection integrity)", () => {
       [MSG3],
     );
     expect(
-      commits[0].n,
+      first(commits).n,
       "exactly one commit txn despite two concurrent DLRs (the other collides on the idempotency key)",
     ).toBe(1);
     await assertHealthy(); // revenue = 300 once, not 600; reserved back to 0
@@ -371,7 +379,7 @@ describe("ledger invariants (trial balance + projection integrity)", () => {
       [MSG4],
     );
     expect(
-      terminal[0].n,
+      first(terminal).n,
       "at most one terminal-resolution txn per message",
     ).toBe(1);
   });
