@@ -1,0 +1,5 @@
+{
+  // Typecheck-only (consumed as raw TS via exports "./src/index.ts"); no rootDir/outDir (see @app/db).
+  "extends": "../../tsconfig.base.json",
+  "include": ["src", "test", "vitest.config.ts", "vitest.integration.config.ts"]
+}

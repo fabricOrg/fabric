@@ -7,4 +7,6 @@
 // Examples that will live here: encodeAndSegment(body), rateSegments(...), resolveBilling(status, provider).
 // No I/O, no NestJS, no Drizzle — just types (from @app/contracts) in, decisions out.
 
-export {};
+export * from "./billing.js";
+export * from "./rating.js";
+export * from "./segmentation.js";

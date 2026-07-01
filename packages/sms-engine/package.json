@@ -1,0 +1,27 @@
+{
+  "name": "@app/sms-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@app/contracts": "workspace:*",
+    "@app/db": "workspace:*",
+    "@app/domain": "workspace:*",
+    "@app/integrations": "workspace:*",
+    "@app/wallet": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "postgres": "^3.4.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -73,6 +73,37 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/sms-engine:
+    dependencies:
+      '@app/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@app/db':
+        specifier: workspace:*
+        version: link:../db
+      '@app/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@app/integrations':
+        specifier: workspace:*
+        version: link:../integrations
+      '@app/wallet':
+        specifier: workspace:*
+        version: link:../wallet
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.0
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.20.0)
+
   packages/ui:
     dependencies:
       clsx:

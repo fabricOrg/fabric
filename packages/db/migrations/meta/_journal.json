@@ -22,6 +22,20 @@
       "when": 1782901248159,
       "tag": "0002_wallet_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782925983738,
+      "tag": "0003_sms_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782926013401,
+      "tag": "0004_sms_rls",
+      "breakpoints": true
     }
   ]
 }
