@@ -13,17 +13,8 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import {
-  type MinorUnits,
-  moneyMinor,
-  tenantIdCol,
-  timestamps,
-} from "./_shared.js";
+import { moneyMinor, tenantIdCol, timestamps } from "./_shared.js";
 import { accounts } from "./identity.js";
-
-// Zero, branded. The `MinorUnits` brand is compile-time only, so a literal 0n needs the tag to be
-// accepted as a money default (a raw bigint is deliberately rejected — see _shared.ts).
-const ZERO_MINOR = 0n as MinorUnits;
 
 /**
  * WALLET / LEDGER domain (B3 of the build) — the crown jewel. See ARCHITECTURE.md §5,
@@ -123,8 +114,8 @@ export const ledgerAccounts = pgTable(
     }),
     kind: ledgerAccountKind("kind").notNull(),
     currency: char("currency", { length: 3 }).notNull(), // ISO 4217, e.g. 'GHS'
-    balanceMinor: moneyMinor("balance_minor").notNull().default(ZERO_MINOR),
-    version: bigint("version", { mode: "bigint" }).notNull().default(0n),
+    balanceMinor: moneyMinor("balance_minor").notNull().default(sql`0`),
+    version: bigint("version", { mode: "bigint" }).notNull().default(sql`0`),
     status: ledgerAccountStatus("status").notNull().default("active"),
     ...timestamps,
   },
