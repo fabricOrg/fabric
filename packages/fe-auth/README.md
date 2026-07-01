@@ -71,9 +71,34 @@ step-up · maker-checker · impersonation banner · kill-switch · drill-down.
 
 ## White-label (integration point with `@app/ui`)
 
-The BFF resolves the tenant's brand at session validation and emits a `data-brand` anchor
-**server-side** (SSR attribute on `<html>`) so `@app/ui`'s runtime `[data-brand]` theme override
-lands with **zero JS and no flash**. Wired when `@app/ui`'s `theme.css` lands (PI-2).
+The BFF resolves the tenant's brand at session validation and drives `@app/ui`'s runtime
+`[data-brand]` theme override **server-side**, so it lands with **zero JS and no flash**. Wired
+when `@app/ui`'s `theme.css` lands (PI-2).
+
+The contract is **two server-side steps**, both at SSR from the validated session:
+
+1. **Set the attribute.** Emit `data-brand="<tenant-slug>"` on `<html>`. (Orthogonal to the `.dark`
+   class — a tenant can be dark *and* branded; the two compose.)
+2. **Inject the values.** Emit a per-tenant `<style>` block that overrides only the brand *anchors*
+   for that slug — the semantic tokens + components inherit:
+
+   ```html
+   <style>
+     [data-brand="acme"] {
+       --primary: oklch(0.55 0.20 145);
+       --primary-foreground: oklch(0.985 0 0);
+       --ring: oklch(0.65 0.16 145);
+       --sidebar-primary: oklch(0.55 0.20 145);
+     }
+   </style>
+   ```
+
+> **Do NOT precompile a `[data-brand="…"]` rule per tenant into `theme.css`** — a platform has
+> thousands of tenants; that doesn't scale. `theme.css` ships the default palette + the
+> *mechanism*; the BFF supplies each tenant's anchor **values** at request time. Step 1 without
+> step 2 gives you the attribute but no override → the default brand. Per-tenant anchor values are
+> a small config record (a handful of OKLCH values), not the full token set.
+> (Confirmed with `@app/ui` in the arch reassessment; mirrored in that package's README.)
 
 ## Errors
 
