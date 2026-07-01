@@ -40,9 +40,13 @@ then gets it. Admin-console additionally sets `class="dark"` on `<html>` for the
 ## Themes
 - **Light** — `:root` (customer surfaces, default).
 - **Dark** — `.dark` on `<html>` (operator/admin-console).
-- **White-label** — per-tenant `[data-brand]` override of the brand anchors, injected server-side by
-  the BFF at session-validation (SSR `data-brand` on `<html>`, no flash). See the example block at the
-  bottom of `theme.css`.
+- **White-label** — per-tenant override of the brand *anchors* only (`--primary`/`--primary-foreground`/
+  `--ring`/`--sidebar-primary`), orthogonal to `.dark` (a tenant can be dark *and* branded — they compose).
+  **Runtime path (two steps, BFF-driven at SSR):** (1) set `data-brand="<slug>"` on `<html>`; (2) inject a
+  per-tenant `<style>` block `[data-brand="<slug>"]{ --primary: …; … }` at request time. **Do NOT precompile
+  a rule per tenant into `theme.css`** — a platform has thousands of tenants; the `[data-brand="acme"]{…}`
+  block at the bottom of `theme.css` is an **illustrative example only**, not shipped per tenant. Canonical
+  runtime contract: `packages/fe-auth/README.md` §White-label (kept in sync with this note).
 
 ## Cross-lane integration points
 - **fe-auth / BFF (vivian):** serves the tenant brand → sets `data-brand` on `<html>` server-side.
