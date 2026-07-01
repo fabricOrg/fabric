@@ -96,10 +96,29 @@ flowchart TB
 
 ## 3. Environments & promotion
 
-- **Start with local + staging + prod** (each prod/staging an **isolated AWS account** for blast-radius + certifiability); add **dev account** and **ephemeral preview envs** per PR as a fast-follow. *(Reconciles §14 phasing — staging+prod first.)*
-- **Test mode is app-level, not infra:** `sk_test_` keys + `FakeProvider` (F8.5) run on the *same* prod infra — not a separate environment.
-- **Staging must NEVER contain production PII** (NDPA + our tokenization model). Staging uses **synthetic/anonymized seed data**; a PITR **restore drill** (§10) goes into an **isolated, access-controlled** target, not shared staging.
-- Promotion = same immutable image artifact moved across envs (build once, deploy many).
+**Four tiers, "define now, provision later"** — the topology lives in `infra/` (one dir per env +
+shared `modules/`, each env its own state), but only what has something to run is applied. Full
+layout + provisioning steps: [`infra/README.md`](../infra/README.md).
+
+| Tier | Purpose | Account / region | Status today |
+|------|---------|------------------|--------------|
+| **test / CI** | Automated tests + ephemeral PR checks. No standing infra — DB via Testcontainers/local Postgres, torn down per run. | CI runner | provisioned by CI, not Terraform |
+| **dev** | Where the `dev` branch deploys; shared team integration. | dev account · `eu-west-1` | **live** (ECR so far) |
+| **staging** | Prod-like gate before release; UAT + smoke on the promoted image. | prod org (own account) · `af-south-1` | 🔒 defined, not provisioned |
+| **prod** | Production. | prod org · `af-south-1` + residency | 🔒 defined, not provisioned |
+
+- **Build once, promote — never rebuild per env.** One image built on merge to `dev`; that exact
+  artifact is promoted dev → staging → prod. Environments differ by **config only** (Terraform vars +
+  secrets), never by code. This is what keeps a 4-tier setup lean.
+- **Test mode is app-level, not infra:** `sk_test_` keys + `FakeProvider` (F8.5) run on the *same*
+  infra as live — not a separate environment. (The **test/CI tier** above is about running the test
+  *suite*; **test mode** is a runtime toggle for adopters.)
+- **Staging must NEVER contain production PII** (NDPA + our tokenization model). Staging uses
+  **synthetic/anonymized seed data**; a PITR **restore drill** (§10) goes into an **isolated,
+  access-controlled** target, not shared staging.
+- **Provision order:** dev (done) → test/CI (with first code) → staging + prod (at first-release
+  readiness, in the new prod account). Standing up always-on staging/prod before there is a
+  deployable service is wasted cost — hence the inert scaffolds.
 
 ---
 
@@ -229,6 +248,11 @@ Managed-but-lean: Fargate (no idle servers), **Graviton M7g/M8g/T4g (GA in af-so
 ---
 
 ## 14. Phasing — stand up before / during PI-1
+
+> **Superseded by §3 (ratified):** we start on the **dev account** (live now), add the **test/CI**
+> tier with the first code, and **provision staging + prod later** (define-now/provision-later) — not
+> staging+prod up front. The list below is the eventual Iteration-0 target *for the prod org*, kept
+> for reference; sequence per §3.
 
 **Iteration 0 (infra enablers — before feature work):**
 - Terraform baseline (state in S3 + DynamoDB lock), **staging + prod AWS accounts**, VPC, RDS, **two ElastiCache Redis (queue + cache)**, KMS, Secrets Manager, ECR, CloudTrail.
