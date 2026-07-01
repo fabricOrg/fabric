@@ -52,6 +52,7 @@ are the relief valve and drop first.
 | 1.3 | **Idempotency** store/service | MUST | Stripe model (see F8.2). *Value: safe retries on the money path.* |
 | 1.4 | **Immutable audit log** (actor/action/before→after/reason) | MUST | Twilio Trust / compliance. *Value: forensics + compliance evidence.* |
 | 1.5 | Observability: structured logs (`tenant_id`+`request_id`), traces, metrics, **ledger-invariant job** | MUST | OTel. *Value: the invariant job is the money-correctness alarm.* |
+| 1.6 | **Platform notifications** (transactional: low-balance, sender-ID approved, DSR receipts) | MUST *(post-thread → PI-1.5)* | Underpins F3.7 low-balance alert. *Value: operational + customer comms on the money/compliance path.* |
 
 ## E2 — Identity, SSO & API keys
 - **F2.1 Customer SSO (WorkOS AuthKit)** `[MUST]` — self-serve signup → JIT create org+owner; MFA mandatory admin/owner; BFF httpOnly session.
@@ -72,6 +73,7 @@ are the relief valve and drop first.
   - *AC:* concurrent sends can't spend same balance; retried send debits once.
   - *Evidence/Value:* Stripe idempotency + best-practice two-phase. Correct money under concurrency.
 - **F3.3 Reservation-TTL sweeper** `[MUST]` — reservation with no resolving DLR auto-resolves (default refund) after N min, audited.
+  - *TTL:* **~60 min default, config-tunable per-tenant** (not hardcoded). Since commit fires on `accepted` (submission, seconds) not delivery, at 60 min only *never-acknowledged* reservations are swept — safely generous. Final tuning → F3.3 story with newton+adams against observed provider-ack latencies.
   - *Value:* no customer funds locked forever (gap C4).
 - **F3.4 Rating + usage records** `[MUST]` — each debit carries quantity, unit, unit price, currency, category; queryable per tenant.
   - *Evidence/How:* Twilio UsageRecords (`usage/usage_unit/price/price_unit`). *Value: customer-facing billing transparency.*
@@ -88,27 +90,36 @@ are the relief valve and drop first.
 - **F4.2 Top-up flow (correct)** `[MUST]` — `initialize → redirect → verify server-side → webhook = source of truth → credit wallet only after verification` (idempotent handler).
   - *AC:* browser redirect alone never credits; duplicate webhook credits once.
   - *Evidence/How:* Paystack/Flutterwave both state explicitly: never trust redirect, verify server-side, webhook is source of truth. *Value: no fraudulent/duplicate credits.*
+- **F4.3 Payment reconciliation & reversals** `[MUST]` — reconcile PSP settlement vs credited top-ups; handle chargebacks/reversals as **compensating ledger entries** (never edit history).
+  - *AC:* a reversed/failed-after-credit top-up posts a compensating debit; ledger + trial-balance stay balanced.
+  - *Evidence/How:* Paystack/Flutterwave webhooks incl. reversal/chargeback events; ties to the `gateway_clearing` account (`ledger-double-entry` v1.0.0). *Value: no orphaned credits; money-in stays correct.*
 
 ## E5 — SMS engine & delivery
 - **F5.1 `SmsSenderPlugin` contract + ONE provider adapter + `FakeProvider`** `[MUST]` — contract carries `send/parseDlr/verifyWebhook/supports/healthCheck/billingBasis`.
   - *Evidence/Value:* `INTEGRATIONS §3`; FakeProvider powers test mode (F8.5). Anti-lock-in seam.
 - **F5.2 Send pipeline + segmentation** `[MUST]` — normalize E.164 → encode (GSM-7 **153**/UCS-2 **67** concatenated) → rate → reserve → send → commit/refund.
   - *Evidence/How:* Twilio segment math; one non-GSM char flips whole msg to UCS-2 (152+1 → 3 segments). *Value: revenue correctness.*
-- **F5.3 Normalized message-status enum** `[MUST]` — `queued→sending→sent→delivered/undelivered/failed` (+ error codes); every provider maps onto it.
+- **F5.3 Normalized message-status enum** `[MUST]` — **`queued→sending→accepted→sent→delivered/undelivered/failed`** (+ error codes); every provider maps onto it; unmapped raw status → explicit error, never a silent default.
+  - *Commit-point (ratified, PRE-IMPL B1):* `accepted` = provider acknowledged submission (the new state). COMMIT fires on transition into the **first canonical status in the provider's `billableStatuses` set — default `{accepted}`**; a platform-fault-exempt status (F3.5) → REFUND. Guarded by the B6 message-row terminal SM + deterministic `commit:{msgId}`/`refund:{msgId}`.
   - *Evidence/Value:* Twilio statuses. The provider-abstraction contract; billing+SLA observability.
 - **F5.4 DLR ingestion + reconciliation** `[MUST]` — terminal statuses persisted; cost reconciled; error codes mapped; out-of-order tolerant.
   - *Evidence/Value:* Twilio StatusCallback (`MessageStatus`,`ErrorCode`,`RawDlrDoneDate`).
 - **F5.5 Smart-encoding warning / segment quote at send** `[MUST]` — surface segment count + encoding before/at send.
 - **F5.6 Basic bulk/batch send** `[STRETCH]` — fan-out a list; per-recipient status. *(Throughput/backpressure hardening = `[PI-2]`, gap C1.)*
+- **F5.7 Inbound message ingestion (MO)** `[MUST]` — receive inbound SMS (incl. STOP/START/HELP); normalize → resolve `subject_id` → route to the opt-out engine (F7.2) + tenant inbound webhook.
+  - *AC:* an inbound STOP reaches F7.2 and suppresses future sends. *Value:* prerequisite for STOP handling. **In the thin thread.**
 
 ## E6 — OTP / Verify *(managed, high-margin)*
 - **F6.1 Managed Verify** `[MUST]` — `start`(send) + `check`(verify); configurable code length (4–10), **~10-min expiry** (re-request returns same token in window), **attempt limit (~5/10min)**; auto-redact bodies.
   - *Evidence/How:* Twilio Verify + Vonage Verify + Termii Token (`pin_length/pin_time_to_live/pin_attempts/pin_type`). *Value: customer writes ~no code.*
-- **F6.2 Success-based pricing for Verify** `[MUST]` — bill per successful verification (+ channel cost), not just per SMS.
-  - *Evidence/How:* Twilio ($0.05/verify + SMS); Vonage "Verify Success" charges only on conversion. *Value: 5–7× a raw SMS — the margin SKU.*
-- **F6.3 SMS-pumping / Fraud-Guard-style protection** `[MUST-basic]` — block destination-prefix anomalies; on by default.
+- **F6.2 OTP body redaction** `[MUST]` — auto-redact the verification code in stored message bodies (never persist a live OTP in cleartext).
+  - *Evidence/Value:* Twilio/Vonage Verify redact codes. Privacy + limits credential-theft blast radius.
+- **F6.3 SMS-pumping / Fraud-Guard-style protection** `[MUST-basic]` — block destination-prefix anomalies; on by default (full traffic analytics → PI-2).
   - *Evidence/How:* Twilio Fraud Guard (analyzes traffic, blocks AIT prefixes, free). *Value: protects Verify margin + customer spend.*
-- **F6.4 Channel fallback (SMS→voice→WhatsApp)** `[PI-2]` — Vonage workflow / Termii channels.
+- **F6.4 Verify success-based pricing** `[Seam in PI-1 · full billing PI-1.5]` — bill per successful verification (+ channel cost), not just per SMS.
+  - *PI-1 seam (MUST):* a Verify charge records with its own **usage-category (`verify`) in F3.4 `usage_records` + txn `metadata`**, distinct from a raw SMS charge, and captures the verification outcome — even though PI-1 bills per-SMS. **No new `ledger_txn_type`/`reason` values** (ledger enums stay SMS-clean). PI-1.5 flips the rate to per-successful-verification with **zero schema/enum migration**.
+  - *Evidence/How:* Twilio ($0.05/verify + SMS); Vonage "Verify Success" charges only on conversion. *Value: 5–7× a raw SMS — the margin SKU; seam protects it without over-scoping PI-1.*
+- **F6.5 Channel fallback (SMS→voice→WhatsApp)** `[PI-2]` — Vonage workflow / Termii channels.
 
 ## E7 — Compliance & data protection *(legally gating)*
 - **F7.1 PII tokenization** `[MUST — schema-shaping, build first]` — `data_subjects` surrogate + encrypted `pii_vault` + per-subject DEK; **erasure = crypto-shred DEK**; all tables reference `subject_id`.
@@ -138,6 +149,8 @@ are the relief valve and drop first.
   - *Evidence/How:* Stripe magic cards; Twilio magic numbers + test creds. *Value: full happy+failure paths in CI before real spend.*
 - **F8.6 TypeScript SDK + docs/dev portal** `[MUST-basic]` — key mgmt, usage logs, webhook tester; interactive docs. **More SDKs + CLI (`listen/forward/trigger/replay`)** `[PI-2]`.
   - *Evidence/Value:* Stripe/Twilio docs+CLI = the moat; AT/Termii lack CLI, idempotency, signed/retried webhooks, interactive docs → **DX is our wedge.**
+- **F8.7 Rate limiting & quotas** `[MUST — post-thread → PI-1.5]` — per-key/per-tenant token-bucket limits; `429` + `Retry-After`; **atomic** (single Redis Lua script / `CL.THROTTLE`, PRE-IMPL S7) so bursts can't bypass fraud controls.
+  - *Evidence/Value:* abuse/cost protection; prerequisite for public exposure — **not needed for the 9-step demo**, so it lands after the thin thread.
 
 ## E9 — Control plane / admin console *(minimal)*
 | F | Feature | Pri |
@@ -159,6 +172,8 @@ are the relief valve and drop first.
 - **Iter 4 — Money-in + Verify:** E4 top-up + E6 Verify (+ Fraud Guard) + F3.7 low-balance + F7.5 DLR-trust basic.
 - **Iter 5 — Surfaces + harden:** E8 (versioning, idempotency, errors, webhooks, test mode, TS SDK, docs) + E9 admin console + PI System Demo + invariant load test.
 - **IP iteration:** hardening, the demo, stretch items.
+
+> **Post-thin-thread (MUST in PI-1 but slip-first → PI-1.5, not on the 9-step demo path):** F8.7 (rate limiting), F1.6 (platform notifications), F6.4-full (Verify success-based *billing*; the PI-1 seam still lands). These are committed but ship after the thin thread walks end-to-end. See `PI-1/README.md` "Scope realism".
 
 ## Out of scope for PI 1 (→ PI 2+)
 Business dashboard (campaigns/contacts/templates), the **generic** failover/selection engine + payment **plugin framework** (one of each, directly, in PI-1), multi-channel OTP fallback, Lookup/line-type/SIM-swap risk, CLI + multi-language SDKs, auto-recharge/spend caps, DSR-by-API, sub-processor notifications, Messaging-Service sender pools, white-label/reseller, ISO/SOC certification, omnichannel (WhatsApp/RCS/voice/email).

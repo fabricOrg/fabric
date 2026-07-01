@@ -19,12 +19,14 @@ F3.2 lands first with the decision wired when F5.3/F3.5 arrive. Sequence accordi
 ## ⚠️ Scope realism — the THIN THREAD (ship this end-to-end first)
 This PI lists more MUST work than one team-PI can finish. Protect a complete vertical thread; if
 capacity runs out, the rest slips to **PI-1.5**, not the thread. **Thin thread (must ship E2E):**
-> F1.1 · F1.2 · F1.3 · F1.4 · F1.5 · **F7.1** · F2.1 · F2.3 · **F3.1 · F3.2 · F3.3 · F3.4 · F3.5** ·
+> F1.1 · F1.2 · F1.3 · F1.4 · F1.5 · **F7.1** · F2.1 · **F2.2** (minimal: staff org + maker/checker roles, seeded — for F9.4) · F2.3 · **F3.1 · F3.2 · F3.3 · F3.4 · F3.5** ·
 > **F5.1 · F5.2 · F5.3 · F5.4** · **F7.2 · F5.7** (opt-out + inbound) · **F7.3** (sender-ID) ·
-> **F4.1 · F4.2 · F4.3** (top-up + reversals) · F8.2 · F8.3 · F8.5 · **F6.1** (Verify) ·
+> **F4.1 · F4.2 · F4.3** (top-up + reversals) · F8.2 · F8.3 · F8.5 · **F6.1** (Verify; basic body-redaction rides F6.1) ·
 > F9.1 · F9.4 (config + maker-checker).
 
-**Slip-first if needed (PI-1.5):** F5.5, F5.6, F6.2/F6.3, F7.4 fine-tuning, F7.5 (DLR-trust),
+> **F2.2 is the MINIMAL cut** (fifi, 2026-07-01): staff org + `maker`/`checker` roles + the role-gate F9.4 needs, with staff **seeded** (NO self-serve staff onboarding this PI). The `memberships`+`membershipRole` model already exists in `identity.ts`. Full staff RBAC (6 roles, step-up) stays PI-1. Added because F9.4 maker-checker needs ≥2 distinct staff roles.
+
+**Slip-first if needed (PI-1.5):** F5.5, F5.6, F6.2 (standalone body-redaction), F6.3, **F6.4-full** (Verify success-based *billing*; the PI-1 seam still lands via F3.4 usage-category), F7.4 fine-tuning, F7.5 (DLR-trust),
 F7.6 tooling, F7.7, F8.1, F8.4, F8.6, F8.7, F1.6, F3.6 (beyond one currency), F3.7, F9.2/F9.3/F9.5.
 *(The thin thread = the 9-step PI System Demo. Everything else hardens or broadens it.)*
 
@@ -75,7 +77,9 @@ secrets-manager + backups/PITR + observability-stack setup (enablers) · imperso
 ### E6 — OTP / Verify *(Iter 4)*
 - [F6.1 Managed Verify](E6-otp-verify/F6.1-managed-verify.md) · MUST
 - [F6.2 OTP body redaction](E6-otp-verify/F6.2-otp-body-redaction.md) · MUST
-- [F6.3 SMS-pumping / fraud protection](E6-otp-verify/F6.3-pumping-fraud-protection.md) · MUST
+- [F6.3 SMS-pumping / fraud protection](E6-otp-verify/F6.3-pumping-fraud-protection.md) · MUST-basic
+- F6.4 Verify success-based pricing · **seam in PI-1 / full billing PI-1.5** *(seam AC rides F3.4 usage-category + F6.1; no separate story file until PI-1.5)*
+- F6.5 Channel fallback (SMS→voice→WhatsApp) · PI-2
 
 ### E7 — Compliance & data protection *(Iter 1, 3)*
 - [F7.1 PII tokenization (vault + crypto-shred)](E7-compliance/F7.1-pii-tokenization.md) · MUST
@@ -105,7 +109,7 @@ secrets-manager + backups/PITR + observability-stack setup (enablers) · imperso
 ---
 
 ## Deferred to PI 2 (no story files yet)
-Key rotation w/ overlap (F2.4) · auto-recharge + spend caps (F3.7b) · channel-fallback OTP (F6.4) ·
+Key rotation w/ overlap (F2.4) · auto-recharge + spend caps (F3.7b) · channel-fallback OTP (F6.5) ·
 DSR-by-API (F7.7b) · webhook replay UI + CLI + multi-lang SDKs (F8.4b/F8.6b) · DSR/sub-processor/
 breach console (F9.6) · business dashboard · generic failover engine · payment plugin framework ·
 Lookup/line-type · Messaging-Service sender pools · omnichannel.
