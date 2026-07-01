@@ -11,16 +11,18 @@ import { createAppDb, InvalidTenantIdError } from "@app/db";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const OWNER_URL = process.env.DATABASE_URL_OWNER;
+// Prod-faithful owner model (653b45d): app_migrator (migration owner) is NON-super → subject to FORCE
+// RLS, so cross-tenant seeds/cleanup need the superuser (DATABASE_URL_SUPER = app_owner, test-only).
+const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
-if (!OWNER_URL || !APP_URL) {
+if (!SUPER_URL || !APP_URL) {
   throw new Error(
-    "B3 gate requires DATABASE_URL_OWNER + DATABASE_URL_APP (fresh isolated DB)",
+    "B3 gate requires DATABASE_URL_SUPER + DATABASE_URL_APP (fresh isolated DB)",
   );
 }
 
-// owner (BYPASSRLS) seeds; db is L1's RLS-enforced runtime seam, capped at ONE connection.
-const owner = postgres(OWNER_URL, { max: 2 });
+// owner = superuser (bypasses FORCE RLS) for cross-tenant seeds/cleanup; db is L1's RLS-enforced seam.
+const owner = postgres(SUPER_URL, { max: 2 });
 const db = createAppDb(APP_URL, { max: 1 });
 
 const TENANT_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";

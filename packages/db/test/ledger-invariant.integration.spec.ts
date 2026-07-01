@@ -19,15 +19,21 @@ import {
   formatViolations,
 } from "./ledger-invariant.check.js";
 
-const OWNER_URL = process.env.DATABASE_URL_OWNER;
+// Prod-faithful owner model (653b45d): the migration owner `app_migrator` is NON-super, so it's
+// subject to FORCE RLS like prod — it CANNOT seed cross-tenant rows or run a global (all-tenant)
+// invariant sweep. Those need the superuser (DATABASE_URL_SUPER = app_owner, test-only). Tenant-scoped
+// work stays on DATABASE_URL_APP (app_runtime). Migrations run as app_migrator (the test runner sets
+// DATABASE_URL_OWNER); this spec only needs SUPER (seed/sweep) + APP (runtime).
+const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
-if (!OWNER_URL || !APP_URL) {
+if (!SUPER_URL || !APP_URL) {
   throw new Error(
-    "test:integration requires DATABASE_URL_OWNER + DATABASE_URL_APP (fresh/isolated migrated DB)",
+    "test:integration requires DATABASE_URL_SUPER + DATABASE_URL_APP (fresh/isolated migrated DB)",
   );
 }
 
-const owner = postgres(OWNER_URL, { max: 4 });
+// `owner` = the superuser connection (bypasses FORCE RLS) for seeds + the global cross-tenant sweep.
+const owner = postgres(SUPER_URL, { max: 4 });
 const app = postgres(APP_URL, { max: 4 });
 
 // A DB row is a bag of dynamically-typed columns; narrow at each use site (never `any`, per CONVENTIONS).

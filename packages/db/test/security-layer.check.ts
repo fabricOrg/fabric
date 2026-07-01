@@ -32,7 +32,16 @@ export const TENANT_TABLES = [
   "ledger_accounts",
   "ledger_transactions",
   "ledger_entries",
+  "api_keys",
 ] as const;
+
+// The prod-faithful role model (653b45d): app_migrator OWNS the schema (non-super → FORCE RLS bites it
+// like prod); app_owner is the test-only superuser (the ONLY role allowed to hold BYPASSRLS locally).
+const MIGRATION_OWNER = "app_migrator";
+const SUPER_ROLE = "app_owner";
+// (B-policy) — there is NO sanctioned SECURITY DEFINER at all (possession-scoped policy instead).
+// A future sanctioned one is a deliberate, reviewed addition here; empty = zero RLS-bypass functions.
+const ALLOWED_SECURITY_DEFINERS: readonly string[] = [];
 
 export interface SecurityLayerResult {
   ok: boolean;
@@ -103,6 +112,54 @@ export async function checkSecurityLayerApplied(
   for (const r of priv.rows) {
     violations.push(
       `'${RUNTIME_ROLE}' holds ${r.privilege_type} on ledger_entries — append-only ledger is not enforced`,
+    );
+  }
+
+  // 4. (B4/L2) ZERO SECURITY DEFINER functions in public — the (B-policy) invariant: no privileged
+  // RLS-bypass path. Any prosecdef function not on the (empty) allowlist is a rogue bypass.
+  const defs = await db.query(
+    "SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname='public' AND p.prosecdef = true",
+  );
+  for (const r of defs.rows) {
+    const name = String(r.proname);
+    if (!ALLOWED_SECURITY_DEFINERS.includes(name))
+      violations.push(
+        `SECURITY DEFINER function '${name}' exists — a non-allowlisted RLS-bypass path (B-policy requires zero)`,
+      );
+  }
+
+  // 5. No role OTHER than the test-only superuser may hold BYPASSRLS (app_runtime + app_migrator must not).
+  const bypass = await db.query(
+    "SELECT rolname FROM pg_roles WHERE rolbypassrls = true",
+  );
+  for (const r of bypass.rows) {
+    const name = String(r.rolname);
+    if (name !== SUPER_ROLE)
+      violations.push(
+        `role '${name}' has BYPASSRLS but is not the test-only superuser '${SUPER_ROLE}' — unexpected RLS-bypass`,
+      );
+  }
+
+  // 6. GATE #5 (prod fidelity) — the migration owner must be NON-super and OWN the tenant tables, so
+  // FORCE RLS applies to the owner exactly as prod (a superuser owner would mask owner-vs-FORCE breaks).
+  const owner = await db.query(
+    `SELECT rolsuper FROM pg_roles WHERE rolname = '${MIGRATION_OWNER}'`,
+  );
+  if (owner.rows.length === 0)
+    violations.push(`migration owner '${MIGRATION_OWNER}' does not exist`);
+  else if (owner.rows[0]?.rolsuper === true)
+    violations.push(
+      `migration owner '${MIGRATION_OWNER}' is a SUPERUSER — it bypasses RLS and masks prod-only FORCE-RLS-vs-owner breaks`,
+    );
+  const misowned = await db.query(`
+    SELECT c.relname FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_roles o ON o.oid = c.relowner
+    WHERE n.nspname='public' AND c.relkind='r' AND c.relname IN (${list}) AND o.rolname <> '${MIGRATION_OWNER}'
+  `);
+  for (const r of misowned.rows) {
+    violations.push(
+      `tenant table '${String(r.relname)}' is not owned by '${MIGRATION_OWNER}' — FORCE RLS may not apply to the owner as in prod`,
     );
   }
 

@@ -17,11 +17,13 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAppDb, InvalidTenantIdError } from "../src/client.js";
 
-const OWNER_URL = process.env.DATABASE_URL_OWNER;
+// Prod-faithful owner (653b45d): app_migrator (migration owner) is NON-super → subject to FORCE RLS,
+// so cross-tenant seeds need the superuser (DATABASE_URL_SUPER = app_owner, test-only). [harness repoint, adams]
+const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
-if (!OWNER_URL || !APP_URL) {
+if (!SUPER_URL || !APP_URL) {
   throw new Error(
-    "with-tenant.integration requires DATABASE_URL_OWNER + DATABASE_URL_APP (fresh/isolated migrated DB)",
+    "with-tenant.integration requires DATABASE_URL_SUPER + DATABASE_URL_APP (fresh/isolated migrated DB)",
   );
 }
 
@@ -29,7 +31,7 @@ if (!OWNER_URL || !APP_URL) {
 const TA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const TB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
-const owner = postgres(OWNER_URL, { max: 2 });
+const owner = postgres(SUPER_URL, { max: 2 });
 // max:1 on the app pool FORCES both tenant transactions onto the SAME physical connection — the exact
 // transaction-pooling scenario where a non-transaction-scoped `SET` would leak. If isolation holds
 // here, it holds under any pool size.
