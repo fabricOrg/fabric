@@ -62,6 +62,10 @@ our five standards: maintainability, scalability, quality, strong type safety, s
   id like `f5-2`, epic `e3`, or `ops`). Enforced by `enforce:branch-name`.
 - **Conventional Commits** with the ticket as scope: `feat(f5-2): add send pipeline`. Enforced by `enforce:commit-message`.
 - Hooks (`.husky/`): pre-commit = branch-name + guard + lint; commit-msg = conventional; pre-push = verify. **Don't skip hooks.**
+- **Linear history — no merge commits.** `main` = release, `dev` = integration; feature branches off `dev`.
+  Integrate by **rebasing the feature branch onto latest `dev`, then fast-forward** (repo enforces
+  `merge.ff=only` + `pull.rebase=true`, so a merge commit is refused). PRs use **Rebase-and-merge** or
+  **Squash-and-merge** only — never "Create a merge commit." Rebase your branch before it merges.
 
 ## What differs from shop-app-v2 (deliberately)
 - **Framework:** jojo keeps **NestJS** (shop-app-v2 is plain Fastify). We port its *conventions*, not its framework.
