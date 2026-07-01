@@ -13,6 +13,7 @@ export const errorType = z.enum([
   "api_error", // 5xx / unexpected server fault
   "auth_error", // 401/403 — bad/missing credentials or insufficient permission
   "invalid_request_error", // 400/422 — malformed or failing validation (see `param`)
+  "not_found_error", // 404 — no such resource (e.g. GET /v1/sms/:id unknown id)
   "idempotency_error", // 409 — idempotency-key conflict
   "rate_limit_error", // 429 — quota/rate exceeded
   "insufficient_funds_error", // 402 — wallet balance too low to reserve

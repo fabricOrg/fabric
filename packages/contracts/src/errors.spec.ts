@@ -46,6 +46,19 @@ describe("parseApiError", () => {
     expect(result.message.length).toBeGreaterThan(0);
   });
 
+  it("accepts the not_found_error type (404, e.g. GET /v1/sms/:id unknown id)", () => {
+    const result = parseApiError({
+      error: {
+        type: "not_found_error",
+        code: "resource_missing",
+        message: "No such message.",
+      },
+      request_id: "req_404",
+    });
+    expect(result.type).toBe("not_found_error");
+    expect(result.requestId).toBe("req_404");
+  });
+
   it("uses the request-id fallback (e.g. from a response header) when the body omits it", () => {
     const result = parseApiError({ garbage: true }, "req_from_header");
     expect(result.requestId).toBe("req_from_header");
