@@ -131,28 +131,20 @@ describe("B3 — runtime tenant isolation (L1 withTenant + SET LOCAL)", () => {
     expect(first(leaked).n).toBe(0);
   });
 
-  // CASE 5 — reused pooled connection, context-less → fail-closed (PHASED, per fifi/newton F6).
-  // After a committed tenant tx, `SET LOCAL` has reverted, so a context-less query on the reused
-  // connection is fail-closed = 0 rows TODAY. A seam-bypass that left `''` would throw `''::uuid`
-  // (loud, still NO leak); newton's `NULLIF(current_setting('app.tenant_id',true),'')::uuid` policy
-  // hardening (his F6 follow-up, after L3) makes even that path a clean 0. Assert fail-closed either
-  // way (0 rows, tolerating a loud throw) — NOT a regression; tightens to strict 0-rows post-hardening.
-  it("reused pooled connection, no context → fail-closed (0 rows today; clean 0 post-NULLIF hardening)", async () => {
-    await db.withTenant(TENANT_A, async (tx) => {
-      await tx`SELECT 1`;
+  // CASE 5 — empty-string context → CLEAN 0 rows (NULLIF hardening, F6; UN-PHASED).
+  // `withTenant` rejects `''` before SET LOCAL, so this simulates a seam-bypass that left
+  // `app.tenant_id = ''` on the connection (defense-in-depth). The policies now read
+  // `NULLIF(current_setting('app.tenant_id', true), '')::uuid` → `NULLIF('','')` = NULL → 0 rows,
+  // clean fail-closed. PRE-hardening the bare `''::uuid` cast RAISED (loud, still no leak). No
+  // try/catch — assert a clean 0 (this test RED-flags any regression of the hardening).
+  it("empty-string app.tenant_id → clean 0 rows (NULLIF hardening; previously a loud ''::uuid throw)", async () => {
+    const rows = await db.sql.begin(async (tx) => {
+      await tx`SELECT set_config('app.tenant_id', '', true)`;
+      return tx<{ id: string }[]>`SELECT id FROM ledger_accounts`;
     });
-    let leaked = -1;
-    try {
-      const rows = await db.sql<
-        { id: string }[]
-      >`SELECT id FROM ledger_accounts`;
-      leaked = rows.length;
-    } catch {
-      leaked = 0; // loud fail-closed (''::uuid) — no leak; NULLIF hardening turns this into a clean 0
-    }
     expect(
-      leaked,
-      "reused connection must never leak another tenant's rows",
+      rows.length,
+      "empty-string context must fail closed as a CLEAN 0 rows (no throw) post-NULLIF",
     ).toBe(0);
   });
 });

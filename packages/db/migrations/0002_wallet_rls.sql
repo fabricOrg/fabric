@@ -32,16 +32,16 @@ ALTER TABLE ledger_entries       ENABLE ROW LEVEL SECURITY;  ALTER TABLE ledger_
 -- another tenant's id. current_setting(..., true) = missing_ok → returns NULL when app.tenant_id is
 -- unset, and `tenant_id = NULL` matches nothing (fail-closed).
 CREATE POLICY tenant_isolation ON ledger_accounts FOR ALL
-  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 CREATE POLICY tenant_isolation ON ledger_transactions FOR ALL
-  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 CREATE POLICY tenant_isolation ON ledger_entries FOR ALL
-  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 -- ================================================================================================
 -- APPEND-ONLY ENFORCEMENT (defense in depth for the ledger's core promise):

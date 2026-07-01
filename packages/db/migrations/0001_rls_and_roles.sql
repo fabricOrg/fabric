@@ -61,15 +61,15 @@ ALTER TABLE users       FORCE  ROW LEVEL SECURITY;
 -- accounts: a tenant sees only its own row (accounts.id IS the tenant id).
 CREATE POLICY tenant_isolation ON accounts
   FOR ALL
-  USING (id = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK (id = current_setting('app.tenant_id', true)::uuid);
+  USING (id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 -- memberships: classic tenant_id scoping. USING gates reads/updates/deletes; WITH CHECK gates writes
 -- so a tenant can't INSERT a row tagged with someone else's tenant_id.
 CREATE POLICY tenant_isolation ON memberships
   FOR ALL
-  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 -- users: NUANCE — a user has no tenant_id (they can belong to many tenants via memberships). So a
 -- user row is visible to the current tenant only if a membership links them. This is the
@@ -80,7 +80,7 @@ CREATE POLICY tenant_visibility ON users
     EXISTS (
       SELECT 1 FROM memberships m
       WHERE m.user_id = users.id
-        AND m.tenant_id = current_setting('app.tenant_id', true)::uuid
+        AND m.tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid
     )
   );
 
@@ -93,17 +93,17 @@ ALTER TABLE pii_vault     ENABLE ROW LEVEL SECURITY;  ALTER TABLE pii_vault     
 ALTER TABLE erasure_log   ENABLE ROW LEVEL SECURITY;  ALTER TABLE erasure_log   FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY tenant_isolation ON data_subjects FOR ALL
-  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 CREATE POLICY tenant_isolation ON dek_keys FOR ALL
-  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 CREATE POLICY tenant_isolation ON pii_vault FOR ALL
-  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 CREATE POLICY tenant_isolation ON erasure_log FOR ALL
-  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 -- ================================================================================================
 -- Runtime pattern (enforced in the app's data layer, see F1.1):
