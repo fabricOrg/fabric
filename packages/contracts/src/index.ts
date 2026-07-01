@@ -12,3 +12,7 @@
 // F8.3 error model — shared error envelope + browser-safe parser (produced by services, consumed
 // by the frontend). Keep this package zod-only / browser-safe; a CI guard enforces it.
 export * from "./errors.js";
+
+// F5.3 canonical message-status enum — public API value on responses/webhooks; @app/integrations
+// (raw→canonical mapping) and the L5 send pipeline import it from here (one source of truth).
+export * from "./message-status.js";
