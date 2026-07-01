@@ -24,11 +24,15 @@
     "ignoreUnknown": true,
     "includes": [
       "**",
-      "!**/dist/**",
-      "!**/.next/**",
-      "!**/coverage/**",
-      "!**/node_modules/**",
-      "!**/migrations/**"
+      "!**/dist",
+      "!**/.next",
+      "!**/coverage",
+      "!**/node_modules",
+      "!**/migrations",
+      // Generated single-file stakeholder brief (hand-exported HTML, not source). Biome lints HTML,
+      // and this artifact trips ~13 rules (noImportantStyles, useButtonType…) that would wedge
+      // everyone's pre-push `biome check .`. It isn't anyone's lane — exclude it.
+      "!docs/platform-brief.html"
     ]
   }
 }
