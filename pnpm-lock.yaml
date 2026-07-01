@@ -140,6 +140,9 @@ importers:
 
   services/api:
     dependencies:
+      '@app/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@app/db':
         specifier: workspace:*
         version: link:../../packages/db
