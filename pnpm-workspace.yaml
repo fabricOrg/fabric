@@ -14,5 +14,6 @@ packages:
 # Listing a package (true OR false) clears ERR_PNPM_IGNORED_BUILDS; unlisted ones re-trigger it.
 allowBuilds:
   esbuild: true # required — esbuild's postinstall fetches its platform binary; without it, builds fail
+  sharp: true # Next.js image optimizer native binary; without it `next build` deps-check fails
   '@infisical/cli': false # deferred: build/bin linking is broken on Windows and we don't use the CLI yet
   '@nestjs/core': false # NestJS core's postinstall is a support/telemetry banner — not needed for the build

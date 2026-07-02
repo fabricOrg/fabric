@@ -5,68 +5,80 @@
  * Components read SEMANTIC tokens only (never raw palette / hex), so light / dark-operator /
  * white-label are a CSS-variable swap — not a component edit. See README.md for the contract.
  *
- * Stack: Tailwind v4 + shadcn (new-york) + OKLCH. Tokens exposed to utilities via `@theme inline`
- * (no tailwind.config.js). Ratified in app-arch-reassessment (2026-07-01).
+ * Stack: Tailwind v4 + shadcn (new-york). Tokens exposed to utilities via `@theme inline`
+ * (no tailwind.config.js).
+ *
+ * PALETTE — "Indigo Dye & Raw Cotton" (Direction A, ratified 2026-07-02). The brand anchor is a
+ * deep West-African indigo dye on an undyed-cotton canvas, dye-pot ochre as the sparing accent.
+ * Values are hex (the approved source of truth); green/amber/red stay reserved for delivery status
+ * so a status colour never doubles as the brand. Fonts: Clash Display (display) · Inter (body) ·
+ * JetBrains Mono (keys/IDs/money) — supplied by each app via next/font (the --font-* vars below).
  */
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* dark = a class on <html>; white-label = a [data-brand] override layer (see bottom of file). */
+/* dark = a class on <html> (operator default for admin-console; optional customer toggle).
+ * white-label = a [data-brand] override layer (see bottom of file). */
 @custom-variant dark (&:is(.dark *));
 
 /* ─────────────────────────────────────────────────────────────────────────
  * LIGHT — default (customer dashboard + dev-portal)
- * Values are the Tailwind v4 OKLCH equivalents of the platform brief's palette
- * (slate neutrals · indigo brand · sky accent · emerald/amber/red semantics).
  * ───────────────────────────────────────────────────────────────────────── */
 :root {
-  --radius: 0.625rem; /* brief --r-s (10px); cards use --radius-lg (~14px, brief --r) */
+  --radius: 0.5rem; /* 8px base → inputs/buttons 8, cards 12 (lg), modals 16 (xl) */
 
-  --background: oklch(0.99 0.004 275); /* #fafbfe */
-  --foreground: oklch(0.208 0.042 265.8); /* slate-900 #0f172a */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.208 0.042 265.8);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.208 0.042 265.8);
+  --background: #edeae3; /* raw cotton — warm canvas */
+  --foreground: #1a1b2e; /* indigo-ink */
+  --card: #fbfaf6; /* surface */
+  --card-foreground: #1a1b2e;
+  --popover: #fbfaf6;
+  --popover-foreground: #1a1b2e;
 
-  --primary: oklch(0.511 0.262 276.9); /* indigo-600 #4f46e5 */
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.968 0.007 248); /* slate-100 / #f4f6fb */
-  --secondary-foreground: oklch(0.208 0.042 265.8);
-  --muted: oklch(0.968 0.007 248);
-  --muted-foreground: oklch(0.554 0.046 257.4); /* slate-500 #64748b */
-  --accent: oklch(0.968 0.007 248);
-  --accent-foreground: oklch(0.457 0.24 277); /* indigo-700 #4338ca */
+  --primary: #383a96; /* indigo dye — the brand anchor */
+  --primary-foreground: #f4f3fb;
+  --secondary: #e9e5da; /* warm muted surface */
+  --secondary-foreground: #2a2b72;
+  --muted: #e9e5da;
+  --muted-foreground: #6b6759; /* warm greige — secondary text */
+  --accent: #e9e5da; /* neutral hover/selected surface */
+  --accent-foreground: #2a2b72; /* brand-ink on hover/active */
 
-  --destructive: oklch(0.577 0.245 27.3); /* red-600 #dc2626 */
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.627 0.194 149.2); /* green-600 #16a34a */
-  --success-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.555 0.163 49); /* amber-700 #b45309 */
-  --warning-foreground: oklch(0.985 0 0);
+  --destructive: #a63b34; /* failed — warm brick red (harmonises with cotton) */
+  --destructive-foreground: #f7ece9;
+  --success: #256a47; /* delivered — green, reserved for status */
+  --success-foreground: #f1f7f3;
+  --warning: #9a6a12; /* undelivered / warn — ochre-brown */
+  --warning-foreground: #fff8ec;
 
-  --border: oklch(0.929 0.013 255.5); /* #e7eaf1 */
-  --input: oklch(0.929 0.013 255.5);
-  --ring: oklch(0.673 0.146 277); /* indigo-400 #818cf8 — visible focus ring */
+  --border: #ded8cb; /* warm greige hairline */
+  --input: #ded8cb;
+  --ring: #383a96; /* visible AA focus ring = brand */
 
-  /* categorical chart palette (usage/analytics dashboards) — brand-agnostic hues */
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  /* dye-pot ochre — the sparing warm accent (auto-reload, celebration, highlights). NOT a status. */
+  --gold: #c98a2e;
+  --gold-foreground: #ffffff;
+  --gold-subtle: #f3e6ce;
+  --gold-ink: #8a5a16;
 
-  /* operator sidebar (admin-console navy chrome — brief --sidebar #0d1124) */
-  --sidebar: oklch(0.16 0.04 273);
-  --sidebar-foreground: oklch(0.76 0.04 276); /* #aeb6d4 */
-  --sidebar-primary: oklch(0.673 0.146 277);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.21 0.045 274); /* #151a35 */
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.21 0.045 274);
-  --sidebar-ring: oklch(0.673 0.146 277);
+  /* categorical chart palette (usage/analytics) — brand-agnostic hues */
+  --chart-1: #383a96;
+  --chart-2: #256a47;
+  --chart-3: #c98a2e;
+  --chart-4: #5b6bd6;
+  --chart-5: #a63b34;
 
-  /* domain aliases — enforce the "radical transparency" brand in the token layer, not per screen */
+  /* sidebar — CUSTOMER default is LIGHT (surface chrome). admin-console overrides to navy in its
+   * own layer (data-app/dark). */
+  --sidebar: #fbfaf6;
+  --sidebar-foreground: #565469;
+  --sidebar-primary: #383a96;
+  --sidebar-primary-foreground: #f4f3fb;
+  --sidebar-accent: #e7e7f4; /* active nav bg = brand tint */
+  --sidebar-accent-foreground: #2a2b72;
+  --sidebar-border: #ded8cb;
+  --sidebar-ring: #383a96;
+
+  /* domain aliases — enforce the transparency brand in the token layer, not per screen */
   --status-delivered: var(--success);
   --status-pending: var(--warning);
   --status-failed: var(--destructive);
@@ -81,54 +93,64 @@
  * DARK — operator default (admin-console) · optional customer toggle
  * ───────────────────────────────────────────────────────────────────────── */
 .dark {
-  --background: oklch(0.145 0.02 270);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.185 0.02 270);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.185 0.02 270);
-  --popover-foreground: oklch(0.985 0 0);
+  --background: #141420;
+  --foreground: #ecebf3;
+  --card: #1d1d2b;
+  --card-foreground: #ecebf3;
+  --popover: #1d1d2b;
+  --popover-foreground: #ecebf3;
 
-  --primary: oklch(0.673 0.146 277); /* lift indigo for contrast on dark */
-  --primary-foreground: oklch(0.145 0.02 270);
-  --secondary: oklch(0.27 0.02 270);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.27 0.02 270);
-  --muted-foreground: oklch(0.708 0.03 270);
-  --accent: oklch(0.27 0.02 270);
-  --accent-foreground: oklch(0.985 0 0);
+  --primary: #8e8fe4; /* lift indigo for contrast on dark */
+  --primary-foreground: #14141f;
+  --secondary: #262634;
+  --secondary-foreground: #ecebf3;
+  --muted: #262634;
+  --muted-foreground: #a6a4bc;
+  --accent: #262634;
+  --accent-foreground: #c7c8f2;
 
-  --destructive: oklch(0.704 0.191 22.2);
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.696 0.17 162.5);
-  --success-foreground: oklch(0.145 0.02 270);
-  --warning: oklch(0.769 0.188 70.08);
-  --warning-foreground: oklch(0.145 0.02 270);
+  --destructive: #e58a82;
+  --destructive-foreground: #14141f;
+  --success: #7fd3a0;
+  --success-foreground: #14141f;
+  --warning: #e4b25a;
+  --warning-foreground: #14141f;
 
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.673 0.146 277);
+  --border: #2c2c3e;
+  --input: #2c2c3e;
+  --ring: #8e8fe4;
 
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
+  --gold: #e0a94a;
+  --gold-foreground: #14141f;
+  --gold-subtle: #3a2e17;
+  --gold-ink: #e6b45c;
 
-  /* sidebar stays dark by design; tokens carried for completeness */
-  --sidebar: oklch(0.16 0.04 273);
-  --sidebar-foreground: oklch(0.76 0.04 276);
-  --sidebar-primary: oklch(0.673 0.146 277);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.21 0.045 274);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.673 0.146 277);
+  --chart-1: #8e8fe4;
+  --chart-2: #7fd3a0;
+  --chart-3: #e0a94a;
+  --chart-4: #a9abec;
+  --chart-5: #e58a82;
+
+  --sidebar: #1d1d2b;
+  --sidebar-foreground: #a6a4bc;
+  --sidebar-primary: #8e8fe4;
+  --sidebar-primary-foreground: #14141f;
+  --sidebar-accent: #28294a;
+  --sidebar-accent-foreground: #c7c8f2;
+  --sidebar-border: #2c2c3e;
+  --sidebar-ring: #8e8fe4;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Map tokens → Tailwind v4 utilities (bg-background, text-primary, rounded-lg, …)
+ * Map tokens → Tailwind v4 utilities (bg-background, text-primary, font-display, rounded-lg, …)
  * ───────────────────────────────────────────────────────────────────────── */
 @theme inline {
+  /* type — the --font-* vars are provided per app by next/font/local (see app layout) */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display:
+    var(--font-clash), var(--font-inter), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-jbm), ui-monospace, "SF Mono", Menlo, monospace;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -149,6 +171,10 @@
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
+  --color-gold-subtle: var(--gold-subtle);
+  --color-gold-ink: var(--gold-ink);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -177,23 +203,21 @@
   --color-audit-added: var(--audit-added);
   --color-audit-removed: var(--audit-removed);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 4px); /* brief --r 14px = card radius */
-  --radius-xl: calc(var(--radius) + 8px);
+  --radius-sm: calc(var(--radius) - 4px); /* 4  — chips inner */
+  --radius-md: var(--radius); /* 8  — inputs / buttons */
+  --radius-lg: calc(var(--radius) + 4px); /* 12 — cards */
+  --radius-xl: calc(var(--radius) + 8px); /* 16 — modals / drawers */
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * WHITE-LABEL (reseller advantage H) — runtime brand override, zero rebuild.
- * The BFF resolves a tenant's brand at session-validation and sets `data-brand`
- * on <html> server-side (SSR, no flash). A tenant overrides only the brand
- * anchors; every semantic token + component inherits. Example (values per tenant):
+ * WHITE-LABEL (reseller advantage) — runtime brand override, zero rebuild.
+ * The BFF resolves a tenant's brand at session-validation and sets `data-brand` on <html>
+ * server-side (SSR, no flash). A tenant overrides only the brand anchors; every semantic token +
+ * component inherits. Example:
  *
  *   [data-brand="acme"] {
- *     --primary: oklch(0.55 0.20 145);
- *     --primary-foreground: oklch(0.985 0 0);
- *     --ring: oklch(0.65 0.16 145);
- *     --sidebar-primary: oklch(0.55 0.20 145);
+ *     --primary: #0f7a5a; --primary-foreground: #ffffff;
+ *     --ring: #0f7a5a; --sidebar-primary: #0f7a5a; --sidebar-accent: #e2f2ec;
  *   }
  * ───────────────────────────────────────────────────────────────────────── */
 
@@ -205,5 +229,6 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
+    font-family: var(--font-sans);
   }
 }

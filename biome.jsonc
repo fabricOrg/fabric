@@ -47,5 +47,29 @@
       // everyone's pre-push `biome check .`. It isn't anyone's lane — exclude it.
       "!docs/platform-brief.html"
     ]
-  }
+  },
+  "overrides": [
+    {
+      // shadcn/ui components are VENDORED source (added by the CLI, re-fetched/overwritten on
+      // update) — they're radix-backed and accessible, but biome's static a11y/suspicious checks
+      // flag upstream patterns we don't hand-edit. Keep formatting + import hygiene ON; relax the
+      // rules that only fire on the generated primitives. Our own components/screens are unaffected.
+      "includes": ["packages/ui/src/components/ui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useFocusableInteractive": "off",
+            "useSemanticElements": "off",
+            "useKeyWithClickEvents": "off"
+          },
+          "suspicious": {
+            "noDocumentCookie": "off",
+            "noDoubleEquals": "off",
+            "noArrayIndexKey": "off"
+          },
+          "correctness": { "useExhaustiveDependencies": "off" }
+        }
+      }
+    }
+  ]
 }
