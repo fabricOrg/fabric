@@ -17,16 +17,20 @@ import postgres from "postgres";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { ingestDlr, sendSms, sweepExpired } from "../src/index.js";
 
-const OWNER_URL = process.env.DATABASE_URL_OWNER;
+// Seed/sweep as the TEST-ONLY SUPERUSER (DATABASE_URL_SUPER): post prod-faithful role model (653b45d)
+// the owner is NON-super app_migrator, which FORCE RLS constrains like prod → it cannot INSERT into
+// accounts without tenant context. Superuser bypasses RLS for fixtures. Falls back to OWNER locally.
+const SUPER_URL =
+  process.env.DATABASE_URL_SUPER ?? process.env.DATABASE_URL_OWNER;
 const APP_URL = process.env.DATABASE_URL_APP;
-if (!OWNER_URL || !APP_URL) {
+if (!SUPER_URL || !APP_URL) {
   throw new Error(
-    "test:integration requires DATABASE_URL_OWNER + DATABASE_URL_APP",
+    "test:integration requires DATABASE_URL_SUPER (or _OWNER) + DATABASE_URL_APP",
   );
 }
 
 const TENANT = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
-const owner = postgres(OWNER_URL, { max: 2 });
+const owner = postgres(SUPER_URL, { max: 2 });
 const db = createAppDb(APP_URL, { max: 5 });
 type Row = Record<string, unknown>;
 

@@ -19,16 +19,21 @@ import {
   reserve,
 } from "../src/index.js";
 
-const OWNER_URL = process.env.DATABASE_URL_OWNER;
+// Seed/sweep run as the TEST-ONLY SUPERUSER (DATABASE_URL_SUPER) — post prod-faithful role model
+// (653b45d) the migration owner is NON-super app_migrator, which FORCE RLS constrains exactly like
+// prod, so it CANNOT INSERT into accounts without tenant context. The superuser bypasses RLS for
+// cross-tenant fixture setup + assertions. Falls back to OWNER for single-role local envs.
+const SUPER_URL =
+  process.env.DATABASE_URL_SUPER ?? process.env.DATABASE_URL_OWNER;
 const APP_URL = process.env.DATABASE_URL_APP;
-if (!OWNER_URL || !APP_URL) {
+if (!SUPER_URL || !APP_URL) {
   throw new Error(
-    "test:integration requires DATABASE_URL_OWNER + DATABASE_URL_APP (fresh/isolated migrated DB)",
+    "test:integration requires DATABASE_URL_SUPER (or _OWNER) + DATABASE_URL_APP (fresh/isolated migrated DB)",
   );
 }
 
 const TENANT = "cccccccc-cccc-cccc-cccc-cccccccccccc";
-const owner = postgres(OWNER_URL, { max: 2 });
+const owner = postgres(SUPER_URL, { max: 2 });
 const db = createAppDb(APP_URL, { max: 5 }); // max>1 so the concurrency test truly races
 
 type Row = Record<string, unknown>;

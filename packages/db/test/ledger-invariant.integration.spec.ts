@@ -79,7 +79,8 @@ async function accountId(
   return String(first(rows).id);
 }
 
-// Post a balanced 2-leg transaction and update both accounts' cached projections in the same txn.
+// Post a balanced 2-leg transaction. Balance projection is maintained by Trigger B
+// (trg_ledger_apply_entry, AFTER INSERT) — the spec does NOT update balance_minor (would double-count).
 async function post(
   q: Querier,
   tenantId: string,
@@ -116,11 +117,7 @@ async function post(
         opts.refId ?? null,
       ],
     );
-    const delta = dir === "credit" ? opts.amount : -opts.amount;
-    await q(
-      `UPDATE ledger_accounts SET balance_minor = balance_minor + $2, version = version + 1 WHERE id = $1`,
-      [accId, delta.toString()],
-    );
+    // NO manual balance UPDATE — Trigger B (trg_ledger_apply_entry) maintains balance_minor + version.
   }
 }
 

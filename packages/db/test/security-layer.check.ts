@@ -163,6 +163,24 @@ export async function checkSecurityLayerApplied(
     );
   }
 
+  // 7. Ledger write-time enforcement (0007) — the balance/balanced/single-currency invariants are
+  // correct-by-construction via triggers, not app-code. Assert both exist (the rejection behavior
+  // itself is proven in ledger-write-time.integration.spec.ts).
+  const REQUIRED_TRIGGERS = [
+    "trg_ledger_txn_balanced",
+    "trg_ledger_apply_entry",
+  ];
+  const trigs = await db.query(
+    `SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgname IN (${REQUIRED_TRIGGERS.map((t) => `'${t}'`).join(", ")})`,
+  );
+  const trigNames = new Set(trigs.rows.map((r) => String(r.tgname)));
+  for (const t of REQUIRED_TRIGGERS) {
+    if (!trigNames.has(t))
+      violations.push(
+        `ledger enforcement trigger '${t}' is missing — write-time invariant (0007) not applied`,
+      );
+  }
+
   return { ok: violations.length === 0, violations };
 }
 
