@@ -41,6 +41,26 @@ export interface LedgerInvariantResult {
   ok: boolean;
   imbalancedTxns: TxnImbalance[];
   driftedAccounts: AccountDrift[];
+  /** ledger tables the invariant queries need but that are absent (unmigrated / partial migration). */
+  missingTables: string[];
+}
+
+// The tables the two invariant queries read. If either is absent (unmigrated or a half-applied
+// migration), the raw queries would throw 42P01 — the standing gate must instead report a CLEAN
+// violation ("migration did not apply?"), exactly like the security check does. Guarded up front.
+const REQUIRED_LEDGER_TABLES = ["ledger_entries", "ledger_accounts"] as const;
+
+/** Which REQUIRED_LEDGER_TABLES are missing — `to_regclass` returns NULL for an absent relation. */
+export async function findMissingLedgerTables(
+  db: SqlExecutor,
+): Promise<string[]> {
+  const { rows } = await db.query(
+    `SELECT ${REQUIRED_LEDGER_TABLES.map(
+      (t) => `to_regclass('public.${t}') IS NOT NULL AS "${t}"`,
+    ).join(", ")}`,
+  );
+  const present = rows[0] ?? {};
+  return REQUIRED_LEDGER_TABLES.filter((t) => present[t] !== true);
 }
 
 // A leg's signed contribution: credit adds, debit subtracts (PROPOSAL §3 sign convention:
@@ -99,6 +119,17 @@ export async function findDriftedAccounts(
 export async function checkLedgerInvariants(
   db: SqlExecutor,
 ): Promise<LedgerInvariantResult> {
+  // Fail CLEAN (not a 42P01 crash) if the ledger schema isn't there — a gate run against an
+  // unmigrated / partially-migrated DB reports "migration did not apply", parity with the security check.
+  const missingTables = await findMissingLedgerTables(db);
+  if (missingTables.length > 0) {
+    return {
+      ok: false,
+      imbalancedTxns: [],
+      driftedAccounts: [],
+      missingTables,
+    };
+  }
   const [imbalancedTxns, driftedAccounts] = await Promise.all([
     findImbalancedTxns(db),
     findDriftedAccounts(db),
@@ -107,6 +138,7 @@ export async function checkLedgerInvariants(
     ok: imbalancedTxns.length === 0 && driftedAccounts.length === 0,
     imbalancedTxns,
     driftedAccounts,
+    missingTables,
   };
 }
 
@@ -115,6 +147,12 @@ export function formatViolations(r: LedgerInvariantResult): string {
   if (r.ok)
     return "ledger invariants OK (trial balance + projection integrity)";
   const lines: string[] = [];
+  if (r.missingTables.length) {
+    for (const t of r.missingTables)
+      lines.push(
+        `✗ ledger table '${t}' not found in DB — migration did not apply?`,
+      );
+  }
   if (r.imbalancedTxns.length) {
     lines.push(
       `✗ ${r.imbalancedTxns.length} txn(s) do not balance (Σ signed legs ≠ 0):`,
