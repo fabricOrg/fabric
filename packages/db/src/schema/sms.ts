@@ -65,17 +65,15 @@ export const messages = pgTable(
     errorCode: text("error_code"),
     ...timestamps,
   },
-  (t) => ({
-    byTenantCreated: index("idx_messages_tenant_created").on(
-      t.tenantId,
-      t.createdAt,
-    ),
+  // drizzle 0.45: the 3rd pgTable arg returns an ARRAY (the object form is deprecated).
+  (t) => [
+    index("idx_messages_tenant_created").on(t.tenantId, t.createdAt),
     // provider_ref must be unique per provider so a DLR maps to exactly one message (dedup + B2).
     // Partial (provider_ref set only once acknowledged) — also serves the reconcile lookup.
-    uniqProviderRef: uniqueIndex("uniq_messages_provider_ref")
+    uniqueIndex("uniq_messages_provider_ref")
       .on(t.providerSlug, t.providerRef)
       .where(sql`provider_ref IS NOT NULL`),
-  }),
+  ],
 );
 
 export type Message = typeof messages.$inferSelect;
