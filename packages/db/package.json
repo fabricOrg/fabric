@@ -19,7 +19,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "db:assert": "tsx scripts/assert.ts",
     "db:assert:security": "tsx scripts/assert.ts security",
-    "db:assert:ledger": "tsx scripts/assert.ts ledger"
+    "db:assert:ledger": "tsx scripts/assert.ts ledger",
+    "db:assert:drift": "node scripts/assert-drift.mjs"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
