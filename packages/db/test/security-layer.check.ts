@@ -33,6 +33,7 @@ export const TENANT_TABLES = [
   "ledger_transactions",
   "ledger_entries",
   "api_keys",
+  "messages",
 ] as const;
 
 // The prod-faithful role model (653b45d): app_migrator OWNS the schema (non-super → FORCE RLS bites it
