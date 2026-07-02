@@ -69,8 +69,15 @@ describe("FakeProvider — send() scenarios (magic MSISDN)", () => {
     expect(fake.dlrFor(msg("+999900000006"))).toBeNull(); // no DLR ever → sweeper resolves it
   });
 
-  it("rejects at submit for the reject magic number (throws)", async () => {
-    await expect(fake.send(msg("+999900000005"), CREDS)).rejects.toBeInstanceOf(
+  it("S3 reject → send RETURNS {status:'failed'} with NO providerRef (clean submit refusal → engine refunds now)", async () => {
+    const r = await fake.send(msg("+999900000005"), CREDS);
+    expect(r.status).toBe("failed"); // NOT a throw — a resolvable outcome so tx2 refunds immediately (S3)
+    expect(r.providerRef).toBeUndefined(); // nothing accepted → no ref
+    expect(fake.dlrFor(msg("+999900000005"))).toBeNull(); // terminal at submit → no DLR
+  });
+
+  it("B2 transport_fault → send() THROWS (network fault → no resolve tx; BullMQ retries, sweeper tails)", async () => {
+    await expect(fake.send(msg("+999900000007"), CREDS)).rejects.toBeInstanceOf(
       FakeProviderError,
     );
   });
@@ -112,9 +119,10 @@ describe("FakeProvider — dlrFor() + parseDlr() round-trip", () => {
     expect(c.faultCause).toBe("internal_error");
   });
 
-  it("no_dlr + reject scenarios → dlrFor returns null (sweeper/never-accepted paths)", () => {
-    expect(fake.dlrFor(msg("+999900000004"))).toBeNull();
-    expect(fake.dlrFor(msg("+999900000005"))).toBeNull();
+  it("no_dlr + reject + transport_fault scenarios → dlrFor returns null (sweeper/never-accepted paths)", () => {
+    expect(fake.dlrFor(msg("+999900000004"))).toBeNull(); // no_dlr
+    expect(fake.dlrFor(msg("+999900000005"))).toBeNull(); // reject (failed at submit)
+    expect(fake.dlrFor(msg("+999900000007"))).toBeNull(); // transport_fault (threw, never submitted)
   });
 
   it("parseDlr rejects garbage + unmapped status (B1: never silently pass)", () => {
@@ -130,8 +138,9 @@ describe("FakeProvider — dlrFor() + parseDlr() round-trip", () => {
 
 describe("FakeProvider — magic-number map is the documented sandbox contract", () => {
   it("exposes the scenario map so L5 + gates reference numbers by intent", () => {
-    expect(Object.keys(MAGIC_MSISDNS)).toHaveLength(6);
+    expect(Object.keys(MAGIC_MSISDNS)).toHaveLength(7);
     expect(MAGIC_MSISDNS["+999900000005"]).toBe("reject");
     expect(MAGIC_MSISDNS["+999900000006"]).toBe("no_ack");
+    expect(MAGIC_MSISDNS["+999900000007"]).toBe("transport_fault");
   });
 });

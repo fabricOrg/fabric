@@ -29,10 +29,14 @@ import {
 export type FakeScenario =
   | "delivered" // accepted → DLR delivered            — billed at `accepted`, stays committed
   | "undelivered" // accepted → DLR undelivered (carrier reject, still provider-billable) — stays committed
-  | "platform_fault" // accepted → DLR failed w/ internal_error — committed then REFUNDED (fault exemption)
+  | "platform_fault" // accepted → DLR failed w/ internal_error — STAYS committed in the thin thread
+  // (decideResolution → 'none' post-commit; the exemption→refund fires only PRE-commit — a post-commit
+  //  reversal is a follow-up `adjustment`, not a refund; see @app/domain billing.ts)
   | "no_dlr" // accepted → no DLR → sweeper marks `expired` — COMMITTED-THEN-EXPIRED, **no refund** (S4)
   | "no_ack" // send returns `sending`, never reaches a billable status → sweeper REFUNDS at TTL (S6)
-  | "reject"; // send() throws — provider refuses at submit → never billable
+  | "reject" // send() RETURNS `{status:'failed'}` — provider cleanly refuses at submit → engine REFUNDS now (S3)
+  | "transport_fault"; // send() THROWS — network/transport fault → NO resolve tx; BullMQ retries the idempotent
+// send (same providerRef, no double-send) and, if it never acks, the TTL sweeper refunds (B2 / S6-tail)
 
 // Magic MSISDN → scenario. Adjust freely — this map is the QA-owned sandbox contract (F8.5).
 // NOTE (fifi money-semantics): `no_dlr` (S4) stays BILLED (committed at `accepted`, just no DLR → expired);
@@ -45,6 +49,7 @@ export const MAGIC_MSISDNS = {
   "+999900000004": "no_dlr",
   "+999900000005": "reject",
   "+999900000006": "no_ack",
+  "+999900000007": "transport_fault",
 } as const satisfies Record<string, FakeScenario>;
 
 /** Scenario for a destination; any non-magic number is the happy path (accepted → delivered). */
@@ -94,10 +99,20 @@ export class FakeProvider implements SmsSenderPlugin {
   send(msg: NormalizedMessage, _creds: Creds): Promise<ProviderResult> {
     const scenario = scenarioFor(msg.to);
     if (scenario === "reject") {
+      // CLEAN provider refusal at submit — the provider ACKs the request but rejects it (bad sender id,
+      // blocked route, …). Returns `{status:'failed'}` (NOT a throw) so the engine runs tx2 and REFUNDS
+      // the reservation immediately (S3). No providerRef: nothing was accepted.
+      return Promise.resolve({
+        status: "failed",
+        raw: { fake: true, scenario },
+      });
+    }
+    if (scenario === "transport_fault") {
+      // NETWORK/transport fault — the request never got a provider response. send() THROWS so the engine's
+      // tx2 never runs; the message stays `sending` + reserved. BullMQ retries the idempotent send (same
+      // deterministic providerRef → no double-send); if it never acks, the TTL sweeper refunds (B2 / S6-tail).
       return Promise.reject(
-        new FakeProviderError(
-          `fake provider rejected submission for ${msg.to}`,
-        ),
+        new FakeProviderError(`fake provider transport fault for ${msg.to}`),
       );
     }
     if (scenario === "no_ack") {
@@ -170,7 +185,8 @@ export class FakeProvider implements SmsSenderPlugin {
           occurredAt,
         };
       default:
-        return null; // no_dlr (accepted→expired), no_ack (stuck sending→swept), reject → no DLR arrives
+        return null; // no_dlr (accepted→expired), no_ack (stuck sending→swept), reject (failed at submit),
+      // transport_fault (threw, never submitted) → no DLR ever arrives for any of these
     }
   }
 }
