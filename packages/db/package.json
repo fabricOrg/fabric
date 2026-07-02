@@ -16,7 +16,10 @@
     "studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:assert": "tsx scripts/assert.ts",
+    "db:assert:security": "tsx scripts/assert.ts security",
+    "db:assert:ledger": "tsx scripts/assert.ts ledger"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
@@ -25,6 +28,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "drizzle-kit": "^0.31.10",
+    "tsx": "^4.19.0",
     "vitest": "^2.1.9"
   }
 }

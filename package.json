@@ -11,6 +11,8 @@
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @app/db generate",
     "db:migrate": "pnpm --filter @app/db migrate",
+    "db:assert": "pnpm --filter @app/db db:assert",
+    "db:gate": "pnpm db:migrate && pnpm db:assert && pnpm --filter @app/db test:integration",
 
     "lint": "biome check .",
     "lint:staged": "biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true",
