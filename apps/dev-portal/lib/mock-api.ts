@@ -92,3 +92,9 @@ export function getLog(id: string): Promise<ApiLogDetail> {
   if (!found) return fail(SAMPLE_ERROR);
   return delay(found);
 }
+
+/** The developer's test key for inlining into docs — fetched fresh per session, NEVER cached. */
+export function getInlineTestKey(): Promise<string> {
+  const test = API_KEYS.find((k) => k.env === "test" && k.status === "active");
+  return delay(test ? test.prefix.replace("…", "xxxx") : "sk_test_your_key");
+}
