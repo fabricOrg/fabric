@@ -18,7 +18,7 @@ import {
   MESSAGES,
   SAMPLE_ERROR,
   WALLET_BALANCES,
-} from "./fixtures.js";
+} from "./fixtures";
 
 export type Scenario = "populated" | "empty" | "error";
 export type SendScenario = "ok" | "insufficient" | "error";
