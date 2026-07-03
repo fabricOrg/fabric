@@ -39,6 +39,8 @@
     "validate": "pnpm guard && pnpm lint && pnpm typecheck && pnpm test",
     "verify": "pnpm validate && pnpm build",
     "verify:full": "pnpm verify && pnpm integration:gate",
+    "verify:push": "node ./scripts/git/run-verified.mjs verify",
+    "verify:full:changes": "node ./scripts/git/run-verified.mjs verify:full",
     "prepare": "husky"
   },
   "devDependencies": {
