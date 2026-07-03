@@ -10,7 +10,7 @@
 
 import type { Money } from "@app/contracts";
 import { describe, expect, it } from "vitest";
-import { formatMoney, formatSigned } from "./money.js";
+import { formatMoney, formatSigned } from "./money";
 
 const ghs = (minor: string): Money => ({ currency: "GHS", minor });
 
