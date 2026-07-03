@@ -33,3 +33,20 @@ export function formatSigned(m: Money, direction: "credit" | "debit"): string {
   const base = formatMoney({ ...m, minor: m.minor.replace(/^-/, "") });
   return `${direction === "credit" ? "+" : "-"}${base}`;
 }
+
+/**
+ * Parse a user-typed major amount ("1,204.03") into exact minor units — string math, NEVER float
+ * (parseFloat would lose precision on money). Returns `null` if malformed or over-precise for the
+ * currency. Shared so top-up (wallet) and any amount input parse amounts identically.
+ */
+export function parseAmountToMinor(
+  input: string,
+  cur: Currency,
+): bigint | null {
+  const cleaned = input.trim().replace(/[\s,]/g, "");
+  if (!/^\d+(\.\d+)?$/.test(cleaned)) return null;
+  const decimals = String(MINOR_PER_MAJOR[cur]).length - 1;
+  const [whole, frac = ""] = cleaned.split(".");
+  if (frac.length > decimals) return null; // more precision than the currency allows
+  return BigInt(`${whole}${frac.padEnd(decimals, "0")}`);
+}
