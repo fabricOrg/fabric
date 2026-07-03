@@ -1,19 +1,18 @@
 ####################################################################################################
-# Terraform STATE BACKEND bootstrap
+# Terraform STATE BACKEND
 #
 # WHY THIS EXISTS (the chicken-and-egg):
 #   Terraform records what it has built in a "state file". For a team, that state must live in shared,
-#   locked, versioned storage — not on one laptop. On AWS the standard is an S3 bucket (stores state)
-#   + a DynamoDB table (a lock, so two people can't apply at once and corrupt it).
-#   But Terraform can't store its state in a bucket that doesn't exist yet. So THIS tiny config
-#   creates that bucket+table using LOCAL state (a file on disk), run once. Everything else then
-#   uses the bucket as its backend.
+#   locked, versioned storage - not on one laptop. The S3 backend stores state and uses a lockfile
+#   in the same bucket so two writers cannot corrupt it.
+#   This stack was initially applied with local state to create the bucket. Its state and all
+#   environment state now live in separate keys in that bucket.
 #
-# WHERE TO RUN: in the **Infrastructure** account (via `aws sso login` first), region af-south-1.
+# WHERE TO RUN: the current non-production AWS account.
 # HOW:
-#   terraform init          # uses local state (no backend block here on purpose)
-#   terraform apply         # creates the bucket + table
-#   # then later stacks put a backend "s3" block pointing at this bucket.
+#   $env:AWS_PROFILE = "app-dev"
+#   terraform -chdir=infra/bootstrap init
+#   terraform -chdir=infra/bootstrap plan -var="state_bucket_name=..."
 ####################################################################################################
 
 terraform {
@@ -24,15 +23,18 @@ terraform {
       version = "~> 5.0"
     }
   }
-  # NOTE: intentionally NO `backend` block — this bootstrap uses local state to break the
-  # chicken-and-egg. Keep the generated terraform.tfstate file safe (commit it to a private,
-  # access-controlled location, or store it in the bucket it creates after the first apply).
+  backend "s3" {
+    bucket       = "fabric-terraform-state-677035504110-eu-west-1"
+    key          = "bootstrap/terraform.tfstate"
+    region       = "eu-west-1"
+    encrypt      = true
+    use_lockfile = true
+  }
 }
 
 provider "aws" {
-  region = var.region
-  # af-south-1 is an OPT-IN region: make sure it's enabled in the account and your AWS CLI
-  # profile/SSO session targets it. We pin region explicitly so nothing lands elsewhere.
+  region  = var.region
+  profile = var.profile
   default_tags {
     tags = {
       Project   = "app-platform"
@@ -75,15 +77,29 @@ resource "aws_s3_bucket_public_access_block" "tf_state" {
   restrict_public_buckets = true
 }
 
-# ---- DynamoDB table used as the Terraform state LOCK ----
-# When someone runs `apply`, Terraform writes a lock row here; a second concurrent apply waits.
-# This prevents two engineers (or two CI runs) from corrupting state by writing simultaneously.
-resource "aws_dynamodb_table" "tf_lock" {
-  name         = var.lock_table_name
-  billing_mode = "PAY_PER_REQUEST" # no capacity planning; cheap for low-frequency locks
-  hash_key     = "LockID"
-  attribute {
-    name = "LockID"
-    type = "S"
-  }
+resource "aws_s3_bucket_policy" "tf_state" {
+  bucket = aws_s3_bucket.tf_state.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "DenyInsecureTransport"
+      Effect    = "Deny"
+      Principal = "*"
+      Action    = "s3:*"
+      Resource = [
+        aws_s3_bucket.tf_state.arn,
+        "${aws_s3_bucket.tf_state.arn}/*",
+      ]
+      Condition = {
+        Bool = {
+          "aws:SecureTransport" = "false"
+        }
+      }
+    }]
+  })
+}
+
+output "state_bucket_name" {
+  description = "S3 bucket used by environment backends."
+  value       = aws_s3_bucket.tf_state.id
 }

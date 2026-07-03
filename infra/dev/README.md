@@ -1,30 +1,27 @@
-# infra/dev — development environment (eu-west-1)
+# Testing environment in the dev AWS account
 
-Single dev AWS account, accessed via an **IAM user**. Local Terraform state. Minimal by design —
-grows when we deploy services. (Prod = a separate af-south-1 account with the full landing zone.)
+The current dev AWS account hosts the first deployed environment in `eu-west-1`. The `testing`
+branch deploys here; the `dev` branch is an integration-only branch and does not deploy.
 
-## One-time: configure credentials
-```bash
-aws configure --profile app-dev
-#   AWS Access Key ID     : <your IAM user key>
-#   AWS Secret Access Key : <your IAM user secret>
-#   Default region name   : eu-west-1
-#   Default output format : json
+## Credentials
 
-aws sts get-caller-identity --profile app-dev   # confirm it's you
-```
-> Static IAM keys are acceptable **for this dev account only** (no real customer data). Production
-> will use IAM Identity Center SSO with no static keys.
-
-## Apply
-```bash
-cd infra/dev
-terraform init
-terraform plan      # review what will be created
-terraform apply     # creates the ECR repo (~$0)
+```powershell
+$env:AWS_PROFILE = "app-dev"
+aws sts get-caller-identity
 ```
 
-## What's here now / deferred
-- **Now:** ECR image registry (proves the toolchain; needed for the api image soon).
-- **Deferred until first service deploy (cost):** VPC, RDS Postgres, the two Redis tiers, Fargate.
-  Local Docker (`docker compose up`) covers the database during schema/app development.
+Use the bootstrap stack once before initializing this stack. Terraform stores state in the
+encrypted, versioned S3 backend and uses a native S3 lockfile.
+
+## Plan and apply
+
+```powershell
+$env:AWS_PROFILE = "app-dev"
+terraform -chdir=infra/dev init
+terraform -chdir=infra/dev plan
+terraform -chdir=infra/dev apply
+```
+
+The stack currently owns the API ECR repository and the testing GitHub OIDC deployment role. ECS,
+RDS, load balancing, secrets, and observability remain deferred until their architecture and
+recurring cost are approved.

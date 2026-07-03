@@ -9,3 +9,15 @@ variable "profile" {
   type        = string
   default     = "app-dev"
 }
+
+variable "github_repository" {
+  description = "GitHub repository allowed to assume the testing deployment role."
+  type        = string
+  default     = "fabricOrg/fabric"
+}
+
+variable "github_environment" {
+  description = "GitHub Environment allowed to assume the testing deployment role."
+  type        = string
+  default     = "testing"
+}
