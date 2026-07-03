@@ -207,11 +207,16 @@ describe("segment parity — rateSegments cost (exact minor units)", () => {
   });
 });
 
-// CORRECTED astral semantics (ruled msg 9ba4877a). 😀 = U+1F600 = a surrogate pair = 2 UTF-16 units.
-// `length` MUST equal str.length (UTF-16 units). Segment counts chosen so they hold regardless of
-// whether the surrogate-safe boundary carries 66 or 67 units/segment (both give the same answer here):
-//   35×😀 = 70 units ≤ 70 → 1 seg · 36×😀 = 72 → 2 seg · 70×😀 = 140 → 3 seg.
-// Held in describe.skip until newton's fix lands (fix/e5-ucs2-utf16-units); drop `.skip` to activate.
+// CORRECTED astral semantics (ruled msg 9ba4877a; LIVE since fix/e5-ucs2-utf16-units @ 436573f).
+// 😀 = U+1F600 = a surrogate pair = 2 UTF-16 units. `length` MUST equal str.length (UTF-16 units).
+// TWO tiers of vector:
+//   • basic (below): length + the emoji under-bill (36×😀 → 2 seg not 1, 70×😀 → 3 not 1).
+//   • SURROGATE-SAFE DISCRIMINATORS: a concat segment carries 67 UTF-16 units, but a surrogate pair (2
+//     units) can NEVER straddle the boundary — so an all-emoji segment packs only 33 pairs (66 units);
+//     the 67th unit stays empty. This makes the correct count DIFFER from a naive ceil(units/67):
+//       67×😀 = 134u → 3 seg (naive ceil = 2 — would split a pair) · 100×😀 = 200u → 4 (naive 3).
+//     The basic 35/36/70 vectors pass under BOTH naive and safe packing, so they can't catch a naive
+//     regression; these discriminators are the ones that actually pin surrogate-safety.
 export const ASTRAL_VECTORS: readonly SegVector[] = [
   {
     name: "single emoji forces UCS-2, counts 2 UTF-16 units",
@@ -247,6 +252,28 @@ export const ASTRAL_VECTORS: readonly SegVector[] = [
     encoding: "ucs2",
     length: 140,
     segments: 3,
+  },
+  // --- surrogate-safe discriminators (naive ceil(units/67) gives the WRONG answer here) ---
+  {
+    name: "66×😀 = 132 units → 2 seg (33+33 pairs, fills two segments exactly)",
+    body: "😀".repeat(66),
+    encoding: "ucs2",
+    length: 132,
+    segments: 2,
+  },
+  {
+    name: "67×😀 = 134 units → 3 seg (surrogate-safe 66+66+2; naive ceil=2 would split a pair)",
+    body: "😀".repeat(67),
+    encoding: "ucs2",
+    length: 134,
+    segments: 3,
+  },
+  {
+    name: "100×😀 = 200 units → 4 seg (surrogate-safe 66×3+2; naive ceil=3)",
+    body: "😀".repeat(100),
+    encoding: "ucs2",
+    length: 200,
+    segments: 4,
   },
 ];
 
