@@ -19,7 +19,7 @@ jobs:
       PR_TITLE: ${{ github.event.pull_request.title }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
