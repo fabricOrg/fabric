@@ -22,7 +22,7 @@ function currentBranch() {
 }
 
 const branch = currentBranch();
-const allowed = new Set(["main"]);
+const allowed = new Set(["dev", "testing", "staging", "main"]);
 // scope = feature id (f5-2), epic (e3), GitHub issue (gh-123), or ops
 const pattern =
   /^(feature|fix|chore|ci|docs|refactor|test|build|perf)\/((f\d+(-\d+)?)|(e\d+)|(gh-\d+)|ops)-[a-z0-9-]+$/;
@@ -36,7 +36,7 @@ if (allowed.has(branch) || pattern.test(branch) || automated.test(branch)) {
 console.error(
   [
     `Invalid branch name: ${branch || "<detached>"}`,
-    "Use main, or a short-lived work branch like:",
+    "Use a long-lived promotion branch, or a short-lived work branch like:",
     "  feature/f5-2-send-pipeline   fix/gh-123-webhook-hmac   ci/ops-cache",
   ].join("\n"),
 );

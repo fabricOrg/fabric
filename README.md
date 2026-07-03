@@ -23,4 +23,5 @@ pnpm verify:full       # verify plus database and service integration tests
 ```
 
 Architecture and product documents are indexed in [docs/README.md](docs/README.md). Development
-starts with [CONTRIBUTING.md](CONTRIBUTING.md).
+starts with [CONTRIBUTING.md](CONTRIBUTING.md). Releases move through
+[`dev` -> `testing` -> `staging` -> `main`](docs/DEPLOYMENT-ENVIRONMENTS.md).
