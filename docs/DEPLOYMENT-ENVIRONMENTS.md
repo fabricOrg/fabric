@@ -17,8 +17,10 @@ keeps one immutable artifact identity even when GitHub creates a different merge
 ## Current status
 
 The branches, GitHub Environments, branch deployment policies, workflow, regions, ECR repository
-name, and container name are configured. Deployments are intentionally disabled because the AWS
-accounts, OIDC roles, ECS services, and staging/production Terraform resources do not exist yet.
+name, and container name are configured. Testing Terraform state is encrypted, versioned, remotely
+stored, and locked in S3. The testing GitHub OIDC role is provisioned. Deployments are intentionally
+disabled because the ECS service does not exist yet; staging and production also require separate
+AWS accounts and infrastructure.
 
 Repository enable flags:
 
@@ -33,6 +35,7 @@ All default to `false`. Enable an environment only after its required variables 
 | Variable | Purpose |
 |---|---|
 | `AWS_REGION` | Target AWS region |
+| `AWS_ACCOUNT_ID` | Expected account used by the OIDC smoke check |
 | `AWS_ROLE_ARN` | GitHub OIDC deployment role |
 | `ECR_REPOSITORY` | Destination ECR repository, currently `app/api` |
 | `ECS_CLUSTER` | ECS cluster name |
@@ -65,8 +68,8 @@ responsive formats at runtime; remote image hosts must be explicitly allow-liste
 
 ## Enablement sequence
 
-1. Provision remote Terraform state and separate AWS accounts.
-2. Provision ECR, VPC, ECS, load balancer, RDS, Redis, logs, alarms, and secrets.
+1. Create separate staging and production AWS accounts and remote state backends.
+2. Provision VPC, ECS, load balancer, RDS, Redis, logs, alarms, and secrets.
 3. Create least-privilege GitHub OIDC roles scoped to this repository and environment branch.
 4. Configure the required GitHub Environment variables.
 5. Confirm database migrations and rollback procedures.

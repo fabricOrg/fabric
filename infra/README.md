@@ -1,52 +1,46 @@
-# Infrastructure — environment topology
+# Infrastructure
 
-Terraform for the platform, organized **one directory per environment** with **shared modules**.
-Each environment owns its own state, so a `terraform apply` can only ever touch one environment —
-there is no way to fat-finger a dev change into prod.
+Terraform is isolated by AWS account and environment. Every deployed environment owns separate
+state so an apply cannot modify another environment.
 
-```
+```text
 infra/
-  bootstrap/    # one-time: creates the S3 bucket + DynamoDB lock table for remote state (prod/CI pattern)
-  modules/      # reusable building blocks (ecr, network, ecs-service, db, …) — the "how"
-  dev/          # ✅ LIVE   — shared team integration (current dev AWS account, eu-west-1)
-  staging/      # 🔒 DEFINED, NOT PROVISIONED — prod-like pre-release validation / UAT
-  prod/         # 🔒 DEFINED, NOT PROVISIONED — production (af-south-1 + data residency)
+  bootstrap/  # encrypted, versioned S3 state backend with native lockfiles
+  modules/    # reusable infrastructure modules
+  dev/        # testing deployment in the current dev AWS account, eu-west-1
+  staging/    # separate-account scaffold, not provisioned
+  prod/       # separate-account scaffold, not provisioned
 ```
 
-## The four tiers
+## Environment mapping
 
-| Tier | Purpose | Account / region | Status |
-|------|---------|------------------|--------|
-| **test / CI** | Automated tests + ephemeral PR checks. No standing infra — DB via Testcontainers/local Postgres, torn down per run. | CI runner | provisioned by CI, not Terraform |
-| **dev** | Where the `dev` branch deploys; shared team integration. | dev account · `eu-west-1` | **live** |
-| **staging** | Prod-like gate before release. Runs the **same artifact** that will go to prod; used for UAT + smoke. | prod org (own account) · `af-south-1` | defined, not provisioned |
-| **prod** | Production. | prod org · `af-south-1` + residency | defined, not provisioned |
+| Git branch | Runtime | AWS account and region | Status |
+|---|---|---|---|
+| Work branch | CI only | GitHub runner | Ephemeral |
+| `dev` | CI only | None | Integration gate |
+| `testing` | Testing | Dev account, `eu-west-1` | ECR, remote state, and deployment OIDC provisioned |
+| `staging` | Staging | Separate account, `af-south-1` | Not provisioned |
+| `main` | Production | Separate account, `af-south-1` | Not provisioned |
 
-## Why "define now, provision later"
+The pipeline builds one immutable image when `testing` is deployed, then promotes the same image
+through staging and production. Environment differences are configuration and secrets, not rebuilt
+application code.
 
-Standing up four always-on environments before there is a deployable service is wasted cost and
-process. So the **structure and config live in the repo now** (adding an environment later is filling
-in variables, not restructuring), but only `dev` is actually applied. `staging`/`prod` are inert
-scaffolds — they have no `resource` blocks yet and point at an account that doesn't exist until we
-create it near first release.
+## State
 
-## Build once, promote — not rebuild per environment
+The current account stores Terraform state in
+`fabric-terraform-state-677035504110-eu-west-1` with:
 
-The environments differ by **config only** (Terraform vars + secrets), never by code. The pipeline
-builds **one** container image on merge to `dev`, then promotes that exact image forward:
+- separate `bootstrap/` and `testing/` state keys;
+- native S3 lockfiles;
+- versioning and AWS-managed KMS encryption;
+- complete public-access blocking;
+- a bucket policy denying non-TLS requests.
 
-```
-feature/*  ──►  test/CI (automated)           # per PR, ephemeral
-   dev     ──►  build image ──► deploy DEV     # on merge to dev
-   main    ──►  promote image ──► STAGING ──► (gate) ──► PROD   # on release tag
-```
+Staging and production must use separate accounts and state buckets.
 
-This is what keeps a 4-tier setup lean: no per-environment rebuilds, no "works in dev, broken in
-prod" drift from recompiling. See `docs/DEPLOYMENT-AND-DEVOPS.md` for the full flow.
+## Current scope
 
-## Provisioning a new environment (later)
-
-1. Create the AWS account (prod org) and an access profile.
-2. `cd infra/bootstrap` → apply, to create that environment's remote-state bucket + lock table.
-3. Fill in the environment's `main.tf` (compose the shared `modules/`) and `variables.tf`.
-4. Uncomment its `backend "s3"` block, `terraform init -reconfigure`, `plan`, `apply`.
+The API ECR repository, state backend, and testing GitHub OIDC role exist. ECS, RDS, load
+balancing, secrets, logging, alarms, and database migration execution still require implementation
+and a reviewed recurring-cost plan.
