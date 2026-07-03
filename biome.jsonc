@@ -77,7 +77,7 @@
       // balance) are reachable without a mouse — a WCAG 2.1.1 requirement (axe
       // `scrollable-region-focusable`). biome's `noNoninteractiveTabindex` false-positives on exactly
       // this required pattern; adams' axe browser-QA is the authoritative a11y gate. Scoped to app.
-      "includes": ["apps/dashboard/**"],
+      "includes": ["apps/**"],
       "linter": {
         "rules": {
           "a11y": { "noNoninteractiveTabindex": "off" }
