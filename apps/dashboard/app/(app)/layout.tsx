@@ -9,6 +9,7 @@ import { Wallet } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * Authenticated dashboard shell: the sidebar (corrected IA) + a topbar that keeps balance VISIBILITY
@@ -37,9 +38,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 GHS 1,204.03
               </Link>
             </Button>
+            <ThemeToggle />
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

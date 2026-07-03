@@ -39,7 +39,7 @@
   --secondary: #e9e5da; /* warm muted surface */
   --secondary-foreground: #2a2b72;
   --muted: #e9e5da;
-  --muted-foreground: #6b6759; /* warm greige — secondary text */
+  --muted-foreground: #6a6554; /* warm greige — secondary text (WCAG AA: 4.85:1 on bg, 5.58:1 on card) */
   --accent: #e9e5da; /* neutral hover/selected surface */
   --accent-foreground: #2a2b72; /* brand-ink on hover/active */
 
@@ -70,7 +70,7 @@
   /* sidebar — CUSTOMER default is LIGHT (surface chrome). admin-console overrides to navy in its
    * own layer (data-app/dark). */
   --sidebar: #fbfaf6;
-  --sidebar-foreground: #565469;
+  --sidebar-foreground: #66658a; /* indigo-slate — WCAG AA 5.30:1 on light sidebar (#fbfaf6) */
   --sidebar-primary: #383a96;
   --sidebar-primary-foreground: #f4f3fb;
   --sidebar-accent: #e7e7f4; /* active nav bg = brand tint */
