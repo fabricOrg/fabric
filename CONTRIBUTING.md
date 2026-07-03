@@ -68,6 +68,10 @@ violations.
 5. Resolve CI failures before merge.
 6. Squash merge using the Conventional Commit pull-request title.
 
+Pre-push and CI verification skip builds and tests when every changed file is Markdown
+documentation (`.md` or `.mdx`). Any code, configuration, workflow, dependency, migration, or
+script change still runs the complete gate.
+
 Database migrations must be forward-compatible and include rollback or mitigation notes. Changes to
 tenant isolation, authentication, money movement, webhook trust, or PII handling require explicit
 security and failure-path tests.
