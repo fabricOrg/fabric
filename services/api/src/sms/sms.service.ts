@@ -42,9 +42,9 @@ export class SmsService {
   }
 
   /**
-   * DLR webhook. Auth = the provider signature (verifyWebhook over the raw body). Then resolve the
-   * owning tenant possession-scoped by provider_ref (no tenant context yet, no RLS bypass), and run
-   * ingestDlr inside that tenant. Unknown provider → 404; bad signature → 401; unknown ref → 404.
+   * DLR webhook after the controller's testing ingress-token check. Verify the provider signature
+   * over the raw body, resolve the owning tenant possession-scoped by provider_ref (no tenant context
+   * yet, no RLS bypass), and ingest inside that tenant. Unknown provider/signature/ref fails closed.
    */
   async ingestDlr(
     providerSlug: string,

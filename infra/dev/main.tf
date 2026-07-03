@@ -6,9 +6,8 @@
 #
 # STATE: encrypted and versioned in S3 with a native S3 lockfile.
 #
-# COST STANCE: only create what we actually need. RDS/ElastiCache/Fargate are deliberately NOT here
-# yet — local Docker covers the dev database, and always-on managed services cost money before any
-# service uses them. They get added when we first deploy a service to the dev account.
+# COST STANCE: the testing runtime is intentionally small and has no NAT gateway or load balancer.
+# Review the recurring-cost estimate in README.md before applying this stack.
 #
 # RUN:
 #   aws configure --profile app-dev        # one-time: IAM keys + region eu-west-1
@@ -23,6 +22,10 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.9"
     }
   }
   backend "s3" {

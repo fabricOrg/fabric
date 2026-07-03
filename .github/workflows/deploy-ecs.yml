@@ -30,7 +30,11 @@ jobs:
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
       ECS_SERVICE: ${{ vars.ECS_SERVICE }}
       ECS_TASK_DEFINITION: ${{ vars.ECS_TASK_DEFINITION }}
+      ECS_MIGRATION_TASK_DEFINITION: ${{ vars.ECS_MIGRATION_TASK_DEFINITION }}
       ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+      ECS_SUBNET_IDS: ${{ vars.ECS_SUBNET_IDS }}
+      ECS_SECURITY_GROUP_ID: ${{ vars.ECS_SECURITY_GROUP_ID }}
+      ECS_DESIRED_COUNT: ${{ vars.ECS_DESIRED_COUNT || '1' }}
       PROMOTION_SOURCE_IMAGE: ${{ vars.PROMOTION_SOURCE_IMAGE }}
       PROMOTION_SOURCE_REGION: ${{ vars.PROMOTION_SOURCE_REGION }}
       SMOKE_TEST_URL: ${{ vars.SMOKE_TEST_URL }}
@@ -43,7 +47,18 @@ jobs:
       - name: Validate deployment configuration
         shell: bash
         run: |
-          required=(AWS_REGION AWS_ROLE_ARN ECR_REPOSITORY ECS_CLUSTER ECS_SERVICE ECS_TASK_DEFINITION ECS_CONTAINER_NAME)
+          required=(
+            AWS_REGION
+            AWS_ROLE_ARN
+            ECR_REPOSITORY
+            ECS_CLUSTER
+            ECS_SERVICE
+            ECS_TASK_DEFINITION
+            ECS_MIGRATION_TASK_DEFINITION
+            ECS_CONTAINER_NAME
+            ECS_SUBNET_IDS
+            ECS_SECURITY_GROUP_ID
+          )
           for name in "${required[@]}"; do
             if [[ -z "${!name}" ]]; then
               echo "::error::$name is not configured for the ${{ inputs.environment }} environment."
@@ -103,12 +118,36 @@ jobs:
           docker push "$destination_image"
           echo "image=$destination_image" >> "$GITHUB_OUTPUT"
 
-      - name: Download current task definition
+      - name: Download current task definitions
         shell: bash
         run: |
           aws ecs describe-task-definition \
             --task-definition "$ECS_TASK_DEFINITION" \
             --query taskDefinition > task-definition.json
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_MIGRATION_TASK_DEFINITION" \
+            --query taskDefinition > migration-task-definition.json
+
+      - name: Render migration task definition
+        id: migration-task-definition
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: migration-task-definition.json
+          container-name: migration
+          image: ${{ steps.build-image.outputs.image || steps.promote-image.outputs.image }}
+
+      - name: Run database migrations
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.migration-task-definition.outputs.task-definition }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          run-task: true
+          run-task-launch-type: FARGATE
+          run-task-subnets: ${{ env.ECS_SUBNET_IDS }}
+          run-task-security-groups: ${{ env.ECS_SECURITY_GROUP_ID }}
+          run-task-assign-public-IP: ENABLED
+          wait-for-task-stopped: true
+          wait-max-delay-seconds: 15
 
       - name: Render task definition
         id: task-definition
@@ -124,7 +163,9 @@ jobs:
           task-definition: ${{ steps.task-definition.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
+          desired-count: ${{ env.ECS_DESIRED_COUNT }}
           wait-for-service-stability: true
+          wait-max-delay-seconds: 15
 
       - name: Smoke test
         if: env.SMOKE_TEST_URL != ''

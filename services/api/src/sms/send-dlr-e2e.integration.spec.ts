@@ -51,6 +51,7 @@ if (!SUPER_URL || !APP_URL) {
 }
 // The app's DbModule reads DATABASE_URL_APP off the environment — ensure the factory sees it.
 process.env.DATABASE_URL_APP = APP_URL;
+process.env.WEBHOOK_INGRESS_TOKEN = "integration-webhook-token";
 
 // Distinct tenant id so this spec's rows never collide with the other integration specs' fixtures.
 const TENANT = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
@@ -174,7 +175,10 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
     const res = await app.inject({
       method: "POST",
       url: "/webhooks/dlr/fake-sms",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "x-webhook-token": "integration-webhook-token",
+      },
       payload: {
         providerRef: `fake-${messageId}`, // deterministic ref the provider assigned at 'accepted'
         status: "delivered",
