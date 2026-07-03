@@ -32,6 +32,9 @@ importers:
       '@app/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@app/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@app/ui':
         specifier: workspace:*
         version: link:../../packages/ui

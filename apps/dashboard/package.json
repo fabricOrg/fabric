@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@app/contracts": "workspace:*",
+    "@app/domain": "workspace:*",
     "@app/ui": "workspace:*",
     "lucide-react": "^0.469.0",
     "next": "^16.1.0",
