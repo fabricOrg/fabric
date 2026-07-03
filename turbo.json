@@ -2,11 +2,6 @@
   "$schema": "https://turbo.build/schema.json",
   "//": "Turbo caches & parallelizes tasks across packages. `typecheck`/`test` run per-package; `build` waits for upstream package builds (^build) so dependents compile against fresh types.",
   "tasks": {
-    "dev": {
-      "dependsOn": ["^build"],
-      "cache": false,
-      "persistent": true
-    },
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
