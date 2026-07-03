@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Security report
+  - name: Draft security advisory
     url: https://github.com/fabricOrg/fabric/security/advisories/new
-    about: Report vulnerabilities privately. Do not open a public issue.
+    about: Repository administrators coordinate vulnerability reports privately here.
