@@ -250,8 +250,8 @@ export const ASTRAL_VECTORS: readonly SegVector[] = [
   },
 ];
 
-// FLIP: remove `.skip` when fix/e5-ucs2-utf16-units lands on dev → these go live (green) as the parity belt.
-describe.skip("segment parity — astral/emoji UTF-16-unit semantics (activate on newton's fix/e5-ucs2-utf16-units)", () => {
+// LIVE (fix/e5-ucs2-utf16-units landed): the parity belt keeping the FE meter == the fixed domain fn.
+describe("segment parity — astral/emoji UTF-16-unit semantics", () => {
   for (const v of ASTRAL_VECTORS) {
     it(v.name, () => {
       expect(encodeAndSegment(v.body)).toEqual({

@@ -26,9 +26,12 @@ describe("encodeAndSegment", () => {
   it("a single non-GSM char forces UCS-2 (70/segment, 67 concatenated)", () => {
     const r = encodeAndSegment("hello 😀");
     expect(r.encoding).toBe("ucs2");
-    // 😀 is one code point beyond the BMP but [...str] counts it as 1; body length 7 → 1 segment.
+    // 😀 is beyond the BMP = a surrogate PAIR = 2 UTF-16 units; "hello 😀" = 8 units → 1 segment.
+    expect(r.length).toBe(8);
     expect(r.segments).toBe(1);
-    expect(encodeAndSegment("😀".repeat(71)).segments).toBe(2); // >70 → concat at 67/seg
+    // UTF-16 code units (not code points): 71×😀 = 142 units → 3 segments (was mis-counted as 2
+    // under the old code-point count = under-billing). See fix/e5-ucs2-utf16-units + parity gate.
+    expect(encodeAndSegment("😀".repeat(71)).segments).toBe(3);
   });
 
   it("empty body still bills as 1 segment", () => {
