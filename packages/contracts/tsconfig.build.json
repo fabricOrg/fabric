@@ -1,0 +1,13 @@
+{
+  // Emit build (prod path): compiles ONLY src → dist (+ .d.ts) for the `default` export condition
+  // (`node dist/*.js` and non-`development` consumers like the dashboard's Turbopack bundler). The
+  // base config emits .d.ts (declaration:true); `typecheck` passes --noEmit, this config does not.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"],
+  // co-located *.spec.ts must not land in the shipped dist (they import vitest, a devDep).
+  "exclude": ["src/**/*.spec.ts"]
+}
