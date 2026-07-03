@@ -24,8 +24,9 @@
     "lint": "biome check .",
     "lint:staged": "biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true",
     "format": "biome format --write .",
-    "typecheck": "pnpm -r --no-bail --if-present typecheck",
-    "test": "pnpm -r --no-bail --if-present test",
+    "build:shared": "pnpm --filter @app/contracts --filter @app/domain build",
+    "typecheck": "pnpm build:shared && pnpm -r --no-bail --if-present typecheck",
+    "test": "pnpm build:shared && pnpm -r --no-bail --if-present test",
     "build": "pnpm -r --no-bail --if-present build",
 
     "enforce:branch-name": "node ./scripts/git/validate-branch-name.mjs",
