@@ -3,7 +3,7 @@ import type {
   LedgerEntryType,
   WalletBalance,
 } from "@app/contracts";
-import { parseApiError } from "@app/contracts";
+import { parseApiError, toMoney } from "@app/contracts";
 import {
   Alert,
   AlertDescription,
@@ -41,7 +41,9 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Bell,
+  CreditCard,
   type LucideIcon,
+  Repeat,
   TriangleAlert,
   Wallet,
 } from "lucide-react";
@@ -193,6 +195,14 @@ export default async function WalletPage({
 
   const low = balances.filter(isLow);
   const primaryCurrency = balances[0]?.balance.currency ?? "GHS";
+  // "This month" spend = Σ|sms_charge| (exact bigint minor units, never float).
+  const monthSpendMinor = ledger
+    .filter((e) => e.type === "sms_charge")
+    .reduce((sum, e) => {
+      const m = BigInt(e.amount.minor);
+      return sum + (m < 0n ? -m : m);
+    }, 0n);
+  const monthSpend = toMoney(monthSpendMinor, primaryCurrency);
 
   return (
     <Shell>
@@ -258,6 +268,58 @@ export default async function WalletPage({
         ))}
       </div>
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardDescription>This month</CardDescription>
+            <CardTitle className="font-display text-2xl tabular-nums">
+              {formatMoney(monthSpend)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Spent on SMS so far this month.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Auto top-up</CardTitle>
+            <CardDescription>Never run out mid-campaign.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-between gap-2">
+            <Badge
+              variant="outline"
+              className="gap-1 border-transparent bg-muted text-muted-foreground"
+            >
+              <Repeat />
+              Off
+            </Badge>
+            <Button size="sm" variant="outline">
+              Set up
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Payment method</CardTitle>
+            <CardDescription>Used for top-ups.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <CreditCard className="size-4 text-muted-foreground" />
+              <span className="text-sm">Visa ending 4242</span>
+              <Badge variant="secondary">Default</Badge>
+            </div>
+            <Button size="sm" variant="ghost">
+              Change
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Transactions</CardTitle>
@@ -267,7 +329,13 @@ export default async function WalletPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* Semantic <section> so the scroll region is keyboard-focusable (tabIndex) — running-balance
+              columns reachable without a mouse (WCAG 2.1.1 / axe scrollable-region-focusable, QA-DS-4). */}
+          <section
+            className="overflow-x-auto"
+            tabIndex={0}
+            aria-label="Transaction history"
+          >
             <Table>
               <TableHeader>
                 <TableRow>
@@ -315,7 +383,7 @@ export default async function WalletPage({
                 ))}
               </TableBody>
             </Table>
-          </div>
+          </section>
         </CardContent>
       </Card>
     </Shell>
