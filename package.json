@@ -14,6 +14,11 @@
     "db:assert": "pnpm --filter @app/db db:assert",
     "db:gate": "pnpm db:migrate && pnpm db:assert && pnpm --filter @app/db db:assert:drift && pnpm --filter @app/db test:integration",
 
+    "dev": "pnpm --filter @app/dashboard dev",
+    "dev:portal": "pnpm --filter @app/dev-portal dev",
+    "dev:admin": "pnpm --filter @app/admin-console dev",
+    "dev:all": "turbo run dev",
+
     "lint": "biome check .",
     "lint:staged": "biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true",
     "format": "biome format --write .",
