@@ -9,7 +9,6 @@
     "paths": {
       "@app/ui/*": ["./src/*"]
     },
-    "//": "shadcn-generated components are not authored for exactOptionalPropertyTypes; relax just that flag for the UI package (the rest of strict still applies).",
     "exactOptionalPropertyTypes": false
   },
   "include": ["src"]

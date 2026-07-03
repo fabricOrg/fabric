@@ -1,0 +1,32 @@
+name: Pull Request Policy
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Validate branch name
+        run: node scripts/git/validate-branch-name.mjs
+
+      - name: Validate pull-request title
+        run: node scripts/git/validate-commit-message.mjs "$PR_TITLE"

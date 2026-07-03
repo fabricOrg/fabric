@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+      - develop
+      - main
+      - staging
+      - testing
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL_OWNER: postgresql://app_migrator:localdev@localhost:5432/app
+      DATABASE_URL_APP: postgresql://app_runtime:localdev_app@localhost:5432/app
+      DATABASE_URL_SUPER: postgresql://app_owner:localdev@localhost:5432/app
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start local infrastructure
+        run: docker compose up -d --wait
+
+      - name: Verify workspace
+        run: pnpm verify:full
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop local infrastructure
+        if: always()
+        run: docker compose down
