@@ -1,0 +1,132 @@
+name: Deploy ECS
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      build-image:
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+      ECS_TASK_DEFINITION: ${{ vars.ECS_TASK_DEFINITION }}
+      ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+      PROMOTION_SOURCE_IMAGE: ${{ vars.PROMOTION_SOURCE_IMAGE }}
+      PROMOTION_SOURCE_REGION: ${{ vars.PROMOTION_SOURCE_REGION }}
+      SMOKE_TEST_URL: ${{ vars.SMOKE_TEST_URL }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          required=(AWS_REGION AWS_ROLE_ARN ECR_REPOSITORY ECS_CLUSTER ECS_SERVICE ECS_TASK_DEFINITION ECS_CONTAINER_NAME)
+          for name in "${required[@]}"; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::$name is not configured for the ${{ inputs.environment }} environment."
+              exit 1
+            fi
+          done
+          if [[ "${{ inputs.build-image }}" != "true" && -z "$PROMOTION_SOURCE_IMAGE" ]]; then
+            echo "::error::PROMOTION_SOURCE_IMAGE is required for staging and production."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to destination ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve immutable image tag
+        id: image-meta
+        shell: bash
+        run: |
+          echo "tag=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push testing image
+        if: inputs.build-image
+        id: build-image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.image-meta.outputs.tag }}
+        shell: bash
+        run: |
+          image="$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build --file services/api/Dockerfile --tag "$image" .
+          docker push "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Promote immutable image
+        if: ${{ !inputs.build-image }}
+        id: promote-image
+        env:
+          DESTINATION_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.image-meta.outputs.tag }}
+        shell: bash
+        run: |
+          source_registry="${PROMOTION_SOURCE_IMAGE%%/*}"
+          source_region="${PROMOTION_SOURCE_REGION:-$AWS_REGION}"
+          aws ecr get-login-password --region "$source_region" |
+            docker login --username AWS --password-stdin "$source_registry"
+          source_image="$PROMOTION_SOURCE_IMAGE:$IMAGE_TAG"
+          destination_image="$DESTINATION_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker pull "$source_image"
+          docker tag "$source_image" "$destination_image"
+          docker push "$destination_image"
+          echo "image=$destination_image" >> "$GITHUB_OUTPUT"
+
+      - name: Download current task definition
+        shell: bash
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_DEFINITION" \
+            --query taskDefinition > task-definition.json
+
+      - name: Render task definition
+        id: task-definition
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.ECS_CONTAINER_NAME }}
+          image: ${{ steps.build-image.outputs.image || steps.promote-image.outputs.image }}
+
+      - name: Deploy task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-definition.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Smoke test
+        if: env.SMOKE_TEST_URL != ''
+        shell: bash
+        run: curl --fail --show-error --silent --retry 10 --retry-delay 6 "$SMOKE_TEST_URL/health"

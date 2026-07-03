@@ -1,0 +1,15 @@
+.git
+.github
+**/.next
+**/.terraform
+**/coverage
+**/dist
+**/node_modules
+_review_shots
+docs
+infra
+team
+*.tfstate
+*.tfstate.*
+.env
+.env.*

@@ -28,5 +28,8 @@ jobs:
       - name: Validate branch name
         run: node scripts/git/validate-branch-name.mjs
 
+      - name: Validate promotion path
+        run: node scripts/git/validate-pr-flow.mjs
+
       - name: Validate pull-request title
         run: node scripts/git/validate-commit-message.mjs "$PR_TITLE"
