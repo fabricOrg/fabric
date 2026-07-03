@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import type { NextConfig } from "next";
 
 /**
@@ -9,6 +10,8 @@ import type { NextConfig } from "next";
  * their `default` export condition and are resolved as normal prebuilt packages, NOT transpiled here.
  */
 const nextConfig: NextConfig = {
+  output: "standalone",
+  outputFileTracingRoot: resolve(import.meta.dirname, "../.."),
   transpilePackages: ["@app/ui"],
 };
 
