@@ -19,7 +19,7 @@
     "@app/wallet": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.1.0",
     "postgres": "^3.4.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

@@ -25,7 +25,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.1.0
-        version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)
+        version: 2.1.9(@types/node@26.1.0)(lightningcss@1.32.0)
 
   apps/admin-console:
     dependencies:
@@ -61,8 +61,8 @@ importers:
         specifier: ^4.0.0
         version: 4.3.2
       '@types/node':
-        specifier: ^22.0.0
-        version: 22.20.0
+        specifier: ^26.1.0
+        version: 26.1.0
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.17
@@ -110,8 +110,8 @@ importers:
         specifier: ^4.0.0
         version: 4.3.2
       '@types/node':
-        specifier: ^22.0.0
-        version: 22.20.0
+        specifier: ^26.1.0
+        version: 26.1.0
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.17
@@ -156,8 +156,8 @@ importers:
         specifier: ^4.0.0
         version: 4.3.2
       '@types/node':
-        specifier: ^22.0.0
-        version: 22.20.0
+        specifier: ^26.1.0
+        version: 26.1.0
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.17
@@ -187,8 +187,8 @@ importers:
         version: 3.4.9
     devDependencies:
       '@types/node':
-        specifier: ^22.0.0
-        version: 22.20.0
+        specifier: ^26.1.0
+        version: 26.1.0
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
@@ -197,7 +197,7 @@ importers:
         version: 4.22.4
       vitest:
         specifier: ^2.1.9
-        version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)
+        version: 2.1.9(@types/node@26.1.0)(lightningcss@1.32.0)
 
   packages/domain:
     dependencies:
@@ -239,8 +239,8 @@ importers:
         version: link:../wallet
     devDependencies:
       '@types/node':
-        specifier: ^22.0.0
-        version: 22.20.0
+        specifier: ^26.1.0
+        version: 26.1.0
       postgres:
         specifier: ^3.4.0
         version: 3.4.9
@@ -249,7 +249,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.1.0
-        version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)
+        version: 2.1.9(@types/node@26.1.0)(lightningcss@1.32.0)
 
   packages/ui:
     dependencies:
@@ -301,8 +301,8 @@ importers:
         version: link:../db
     devDependencies:
       '@types/node':
-        specifier: ^22.0.0
-        version: 22.20.0
+        specifier: ^26.1.0
+        version: 26.1.0
       postgres:
         specifier: ^3.4.0
         version: 3.4.9
@@ -311,7 +311,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.1.0
-        version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)
+        version: 2.1.9(@types/node@26.1.0)(lightningcss@1.32.0)
 
   services/api:
     dependencies:
@@ -350,8 +350,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/wallet
       '@types/node':
-        specifier: ^22.0.0
-        version: 22.20.0
+        specifier: ^26.1.0
+        version: 26.1.0
       postgres:
         specifier: ^3.4.0
         version: 3.4.9
@@ -363,7 +363,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.1.9
-        version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)
+        version: 2.1.9(@types/node@26.1.0)(lightningcss@1.32.0)
 
 packages:
 
@@ -2318,8 +2318,8 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
-  '@types/node@22.20.0':
-    resolution: {integrity: sha512-QWlFW2wf3nTjC13/DqRnBpR4ZO36VJH/JVBkA/vcnmbTBNQIlnObqyqZE1tUR7+Ni23Lda8R1BxMfbXRpCUx5g==}
+  '@types/node@26.1.0':
+    resolution: {integrity: sha512-O0A1G3xPGy4w7AgQdAQYUlQ+BKk2Oovw8eRpofyp5KdBZULnbe+WqaOVNrm705SHphCiG4XHsACrSmPu1f+Kgw==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -3105,8 +3105,8 @@ packages:
     resolution: {integrity: sha512-rvKSBiC5zqCCiDZ9kAOszZcDvdAHwwIKJG33Ykj43OKcWsnmcBRL09YTU4nOeHZ8Y2a7l1MgTd08SBe9A8Qj6A==}
     engines: {node: '>=18'}
 
-  undici-types@6.21.0:
-    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+  undici-types@8.3.0:
+    resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
   use-callback-ref@1.3.3:
     resolution: {integrity: sha512-jQL3lRnocaFtu3V00JToYz/4QkNWswxijDaCVNZRiRTO3HQDLsdu1ZtmIUvV4yPp+rvWm5j0y0TG/S61cuijTg==}
@@ -4726,9 +4726,9 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
-  '@types/node@22.20.0':
+  '@types/node@26.1.0':
     dependencies:
-      undici-types: 6.21.0
+      undici-types: 8.3.0
 
   '@types/react-dom@19.2.3(@types/react@19.2.17)':
     dependencies:
@@ -4745,13 +4745,13 @@ snapshots:
       chai: 5.3.3
       tinyrainbow: 1.2.0
 
-  '@vitest/mocker@2.1.9(vite@5.4.21(@types/node@22.20.0)(lightningcss@1.32.0))':
+  '@vitest/mocker@2.1.9(vite@5.4.21(@types/node@26.1.0)(lightningcss@1.32.0))':
     dependencies:
       '@vitest/spy': 2.1.9
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 5.4.21(@types/node@22.20.0)(lightningcss@1.32.0)
+      vite: 5.4.21(@types/node@26.1.0)(lightningcss@1.32.0)
 
   '@vitest/pretty-format@2.1.9':
     dependencies:
@@ -5532,7 +5532,7 @@ snapshots:
 
   uint8array-extras@1.5.0: {}
 
-  undici-types@6.21.0: {}
+  undici-types@8.3.0: {}
 
   use-callback-ref@1.3.3(@types/react@19.2.17)(react@19.2.7):
     dependencies:
@@ -5549,13 +5549,13 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.17
 
-  vite-node@2.1.9(@types/node@22.20.0)(lightningcss@1.32.0):
+  vite-node@2.1.9(@types/node@26.1.0)(lightningcss@1.32.0):
     dependencies:
       cac: 6.7.14
       debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 1.1.2
-      vite: 5.4.21(@types/node@22.20.0)(lightningcss@1.32.0)
+      vite: 5.4.21(@types/node@26.1.0)(lightningcss@1.32.0)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -5567,20 +5567,20 @@ snapshots:
       - supports-color
       - terser
 
-  vite@5.4.21(@types/node@22.20.0)(lightningcss@1.32.0):
+  vite@5.4.21(@types/node@26.1.0)(lightningcss@1.32.0):
     dependencies:
       esbuild: 0.21.5
       postcss: 8.5.16
       rollup: 4.62.2
     optionalDependencies:
-      '@types/node': 22.20.0
+      '@types/node': 26.1.0
       fsevents: 2.3.3
       lightningcss: 1.32.0
 
-  vitest@2.1.9(@types/node@22.20.0)(lightningcss@1.32.0):
+  vitest@2.1.9(@types/node@26.1.0)(lightningcss@1.32.0):
     dependencies:
       '@vitest/expect': 2.1.9
-      '@vitest/mocker': 2.1.9(vite@5.4.21(@types/node@22.20.0)(lightningcss@1.32.0))
+      '@vitest/mocker': 2.1.9(vite@5.4.21(@types/node@26.1.0)(lightningcss@1.32.0))
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.9
       '@vitest/snapshot': 2.1.9
@@ -5596,11 +5596,11 @@ snapshots:
       tinyexec: 0.3.2
       tinypool: 1.1.1
       tinyrainbow: 1.2.0
-      vite: 5.4.21(@types/node@22.20.0)(lightningcss@1.32.0)
-      vite-node: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)
+      vite: 5.4.21(@types/node@26.1.0)(lightningcss@1.32.0)
+      vite-node: 2.1.9(@types/node@26.1.0)(lightningcss@1.32.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 22.20.0
+      '@types/node': 26.1.0
     transitivePeerDependencies:
       - less
       - lightningcss
