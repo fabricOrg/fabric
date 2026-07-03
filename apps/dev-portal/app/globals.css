@@ -1,0 +1,9 @@
+/* Fabric dashboard global stylesheet. The design system (tokens + Tailwind v4 + shadcn) lives in
+ * @app/ui/theme.css — imported once here. @source tells Tailwind v4 which files to scan for utility
+ * classes: this app, and the shared @app/ui components (symlinked in node_modules, so it needs an
+ * explicit path to the real package source). */
+@import "@app/ui/theme.css";
+
+@source "../app";
+@source "../components";
+@source "../../../packages/ui/src/components";
