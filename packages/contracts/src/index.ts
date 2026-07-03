@@ -16,3 +16,8 @@ export * from "./errors.js";
 // F5.3 canonical message-status enum — public API value on responses/webhooks; @app/integrations
 // (raw→canonical mapping) and the L5 send pipeline import it from here (one source of truth).
 export * from "./message-status.js";
+
+// Money (exact, minor-unit strings) + SMS/wallet response DTOs — consumed by the dashboard/SDK.
+export * from "./money.js";
+export * from "./sms.js";
+export * from "./wallet.js";
