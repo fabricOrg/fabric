@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @app/contracts --filter @app/domain build",
     "dev": "next dev -p 3100",
+    "prebuild": "pnpm --filter @app/contracts --filter @app/domain build",
     "build": "next build",
     "start": "next start -p 3100",
     "typecheck": "tsc --noEmit",
