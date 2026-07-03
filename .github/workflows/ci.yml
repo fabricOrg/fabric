@@ -27,7 +27,7 @@ jobs:
       DATABASE_URL_SUPER: postgresql://app_owner:localdev@localhost:5432/app
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
 
