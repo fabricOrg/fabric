@@ -1,0 +1,32 @@
+name: AWS OIDC Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  testing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: testing
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Verify AWS identity
+        env:
+          EXPECTED_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          actual_account_id="$(aws sts get-caller-identity --query Account --output text)"
+          if [[ "$actual_account_id" != "$EXPECTED_ACCOUNT_ID" ]]; then
+            echo "::error::Expected AWS account $EXPECTED_ACCOUNT_ID, received $actual_account_id."
+            exit 1
+          fi
+          echo "Authenticated to expected AWS testing account."
