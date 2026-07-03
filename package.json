@@ -13,6 +13,8 @@
     "db:migrate": "pnpm --filter @app/db migrate",
     "db:assert": "pnpm --filter @app/db db:assert",
     "db:gate": "pnpm db:migrate && pnpm db:assert && pnpm --filter @app/db db:assert:drift && pnpm --filter @app/db test:integration",
+    "test:integration": "pnpm --filter @app/wallet --filter @app/sms-engine --filter @app/api --workspace-concurrency=1 run test:integration",
+    "integration:gate": "pnpm db:gate && pnpm test:integration",
 
     "dev": "pnpm --filter @app/dashboard dev",
     "dev:portal": "pnpm --filter @app/dev-portal dev",
@@ -22,18 +24,20 @@
     "lint": "biome check .",
     "lint:staged": "biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true",
     "format": "biome format --write .",
-    "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
-    "build": "turbo run build",
+    "typecheck": "pnpm -r --no-bail --if-present typecheck",
+    "test": "pnpm -r --no-bail --if-present test",
+    "build": "pnpm -r --no-bail --if-present build",
 
     "enforce:branch-name": "node ./scripts/git/validate-branch-name.mjs",
     "enforce:commit-message": "node ./scripts/git/validate-commit-message.mjs",
+    "git:setup": "node ./scripts/git/configure-local.mjs",
     "guard:file-length": "node ./scripts/architecture/guard-file-length.mjs",
     "guard:browser-safe": "node ./scripts/architecture/guard-browser-safe.mjs",
     "guard": "pnpm guard:file-length && pnpm guard:browser-safe",
 
     "validate": "pnpm guard && pnpm lint && pnpm typecheck && pnpm test",
     "verify": "pnpm validate && pnpm build",
+    "verify:full": "pnpm verify && pnpm integration:gate",
     "prepare": "husky"
   },
   "devDependencies": {

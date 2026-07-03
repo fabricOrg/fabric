@@ -42,6 +42,8 @@
       "!**/coverage",
       "!**/node_modules",
       "!**/migrations",
+      "!**/next-env.d.ts",
+      "!team/**/a2a-cli.js",
       // Generated single-file stakeholder brief (hand-exported HTML, not source). Biome lints HTML,
       // and this artifact trips ~13 rules (noImportantStyles, useButtonType…) that would wedge
       // everyone's pre-push `biome check .`. It isn't anyone's lane — exclude it.

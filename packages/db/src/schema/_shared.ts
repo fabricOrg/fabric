@@ -15,7 +15,7 @@ type Brand<T, B extends string> = T & { readonly [brand]: B };
 export type TenantId = Brand<string, "TenantId">;
 export type UserId = Brand<string, "UserId">;
 export type SubjectId = Brand<string, "SubjectId">; // a data subject (recipient) — see privacy schema
-export type DekId = Brand<string, "DekId">;        // a per-subject data-encryption-key id
+export type DekId = Brand<string, "DekId">; // a per-subject data-encryption-key id
 
 /**
  * Money is ALWAYS integer minor units (pesewas/kobo/cents) as a JS `bigint` — never a float
@@ -28,8 +28,12 @@ export type MinorUnits = Brand<bigint, "MinorUnits">;
 
 /** created_at / updated_at, timezone-aware, defaulted. Spread into every table. */
 export const timestamps = {
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 };
 
 /** A money column: bigint minor units, branded. `mode: "bigint"` returns an exact JS bigint. */

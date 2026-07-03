@@ -1,5 +1,10 @@
 import { defineConfig } from "drizzle-kit";
 
+const databaseUrl = process.env.DATABASE_URL_OWNER;
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL_OWNER is required to run Drizzle commands.");
+}
+
 // drizzle-kit reads the TYPED schema (source of truth) and:
 //   - `generate` → diffs schema vs migrations and emits versioned SQL into ./migrations
 //   - `migrate`  → applies pending migrations to the DB
@@ -13,9 +18,8 @@ export default defineConfig({
   schema: "./src/schema/index.ts",
   out: "./migrations",
   dbCredentials: {
-    // eslint-disable-next-line no-undef -- Node provides process.env
-    url: process.env.DATABASE_URL_OWNER!,
+    url: databaseUrl,
   },
-  strict: true,   // confirm destructive changes before applying
+  strict: true, // confirm destructive changes before applying
   verbose: true,
 });

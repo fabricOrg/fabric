@@ -25,6 +25,7 @@ All design, product, and process docs live here. Code/config stays at the repo r
 - [PRE-IMPLEMENTATION-REVIEW.md](PRE-IMPLEMENTATION-REVIEW.md) — adversarial flow review (9 blockers, resolved)
 
 ## Build & process
+- [../CONTRIBUTING.md](../CONTRIBUTING.md) — branches, commits, pull requests, and quality gates
 - [IMPLEMENTATION-ROADMAP.md](IMPLEMENTATION-ROADMAP.md) — the two interleaved build tracks (AWS + app)
 - [CONVENTIONS.md](CONVENTIONS.md) — code-quality working agreement (ported from shop-app-v2)
 - [DEPLOYMENT-AND-DEVOPS.md](DEPLOYMENT-AND-DEVOPS.md) — AWS Cape Town, ECS, CI/CD, hardening
