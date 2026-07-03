@@ -29,6 +29,7 @@ All design, product, and process docs live here. Code/config stays at the repo r
 - [IMPLEMENTATION-ROADMAP.md](IMPLEMENTATION-ROADMAP.md) — the two interleaved build tracks (AWS + app)
 - [CONVENTIONS.md](CONVENTIONS.md) — code-quality working agreement (ported from shop-app-v2)
 - [DEPLOYMENT-AND-DEVOPS.md](DEPLOYMENT-AND-DEVOPS.md) — AWS Cape Town, ECS, CI/CD, hardening
+- [DEPLOYMENT-ENVIRONMENTS.md](DEPLOYMENT-ENVIRONMENTS.md) - dev -> testing -> staging -> production promotion
 
 ## Shareable
 - [platform-brief.html](platform-brief.html) — single-file tabbed brief for stakeholders

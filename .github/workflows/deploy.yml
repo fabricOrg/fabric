@@ -1,0 +1,53 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - testing
+      - staging
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        required: true
+        type: choice
+        options:
+          - testing
+          - staging
+          - production
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-testing:
+    if: >-
+      (github.ref_name == 'testing' || inputs.environment == 'testing') &&
+      vars.TESTING_DEPLOYMENTS_ENABLED == 'true'
+    uses: ./.github/workflows/deploy-ecs.yml
+    with:
+      environment: testing
+      build-image: true
+    secrets: inherit
+
+  deploy-staging:
+    if: >-
+      (github.ref_name == 'staging' || inputs.environment == 'staging') &&
+      vars.STAGING_DEPLOYMENTS_ENABLED == 'true'
+    uses: ./.github/workflows/deploy-ecs.yml
+    with:
+      environment: staging
+      build-image: false
+    secrets: inherit
+
+  deploy-production:
+    if: >-
+      (github.ref_name == 'main' || inputs.environment == 'production') &&
+      vars.PRODUCTION_DEPLOYMENTS_ENABLED == 'true'
+    uses: ./.github/workflows/deploy-ecs.yml
+    with:
+      environment: production
+      build-image: false
+    secrets: inherit
