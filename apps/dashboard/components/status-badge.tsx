@@ -55,7 +55,7 @@ const MAP: Record<
   undelivered: {
     label: "Undelivered",
     icon: TriangleAlert,
-    cls: "bg-warning/15 text-warning",
+    cls: "bg-warning/15 text-warning-strong",
   },
   failed: {
     label: "Failed",

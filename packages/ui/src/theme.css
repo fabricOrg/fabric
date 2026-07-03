@@ -49,6 +49,7 @@
   --success-foreground: #f1f7f3;
   --warning: #9a6a12; /* undelivered / warn — ochre-brown */
   --warning-foreground: #fff8ec;
+  --warning-strong: #845a10; /* warning TEXT on a warning/15 tint — WCAG AA 4.81:1 (base warning fails at 3.73) */
 
   --border: #ded8cb; /* warm greige hairline */
   --input: #ded8cb;
@@ -115,6 +116,7 @@
   --success-foreground: #14141f;
   --warning: #e4b25a;
   --warning-foreground: #14141f;
+  --warning-strong: #e4b25a; /* bright ochre already clears AA on the dark warning/15 tint */
 
   --border: #2c2c3e;
   --input: #2c2c3e;
@@ -171,6 +173,7 @@
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-warning-strong: var(--warning-strong);
   --color-gold: var(--gold);
   --color-gold-foreground: var(--gold-foreground);
   --color-gold-subtle: var(--gold-subtle);
