@@ -1,11 +1,10 @@
 ####################################################################################################
-# DEV environment infra (single account, IAM user, eu-west-1).
+# TESTING environment infra in the current dev AWS account (eu-west-1).
 #
-# CONTEXT: this AWS account is DEV-ONLY (no root, no Organizations/Control Tower). Production will be
+# CONTEXT: this AWS account is non-production (no Organizations/Control Tower). Production will be
 # a separate account in af-south-1 with the full landing zone (see infra/bootstrap + DEPLOYMENT doc).
 #
-# STATE: local (terraform.tfstate on disk) — simplest for a single dev account. The S3 backend in
-# infra/bootstrap/ is the team/prod pattern; we adopt it when prod/CI arrives.
+# STATE: encrypted and versioned in S3 with a native S3 lockfile.
 #
 # COST STANCE: only create what we actually need. RDS/ElastiCache/Fargate are deliberately NOT here
 # yet — local Docker covers the dev database, and always-on managed services cost money before any
@@ -13,7 +12,9 @@
 #
 # RUN:
 #   aws configure --profile app-dev        # one-time: IAM keys + region eu-west-1
-#   cd infra/dev && terraform init && terraform apply
+#   $env:AWS_PROFILE = "app-dev"
+#   terraform -chdir=infra/dev init
+#   terraform -chdir=infra/dev plan
 ####################################################################################################
 
 terraform {
@@ -24,16 +25,22 @@ terraform {
       version = "~> 5.0"
     }
   }
-  # No backend block → local state. Fine for one dev account; switch to the S3 backend for team/prod.
+  backend "s3" {
+    bucket       = "fabric-terraform-state-677035504110-eu-west-1"
+    key          = "testing/terraform.tfstate"
+    region       = "eu-west-1"
+    encrypt      = true
+    use_lockfile = true
+  }
 }
 
 provider "aws" {
-  region  = var.region   # eu-west-1 (af-south-1 unavailable here; residency is a PROD concern only)
-  profile = var.profile  # the IAM-user profile you set with `aws configure --profile app-dev`
+  region  = var.region  # eu-west-1 (af-south-1 unavailable here; residency is a PROD concern only)
+  profile = var.profile # the IAM-user profile you set with `aws configure --profile app-dev`
   default_tags {
     tags = {
-      Project = "app-platform"
-      Env     = "dev"
+      Project   = "app-platform"
+      Env       = "testing"
       ManagedBy = "terraform"
     }
   }
