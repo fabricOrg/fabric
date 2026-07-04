@@ -18,6 +18,9 @@ Squash work-branch pull requests into `dev`. Merge environment promotion pull re
 commit; do not squash them. Preserving ancestry between the long-lived branches keeps each next
 promotion conflict-free while the tree-hash tag proves that the promoted artifact is unchanged.
 
+Push-triggered deployments classify the promoted diff first. Markdown-only changes skip image
+builds, migrations, service updates, and smoke tests. Manual workflow dispatch always deploys.
+
 ## Current status
 
 The branches, GitHub Environments, branch deployment policies, workflow, regions, ECR repository,
