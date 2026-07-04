@@ -12,6 +12,7 @@ export const resolveIdentitySessionRequestSchema = z.object({
   organization_id: identifier,
   email: z.string().trim().email().max(320),
   name: z.string().trim().min(1).max(255).nullable(),
+  user_updated_at: z.string().datetime({ offset: true }),
   role: customerRoleSchema,
   permissions: z.array(identifier).max(100),
   session_id: identifier,

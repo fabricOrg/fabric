@@ -15,6 +15,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
+    { rawBody: true },
   );
   app.enableShutdownHooks(); // so DbModule.onModuleDestroy closes the pool cleanly
   const port = Number(process.env.PORT ?? 3000);

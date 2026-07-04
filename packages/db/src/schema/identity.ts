@@ -3,6 +3,7 @@ import {
   pgEnum,
   pgTable,
   text,
+  timestamp,
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -32,6 +33,11 @@ export const membershipRole = pgEnum("membership_role", [
   "admin",
   "member",
 ]);
+export const membershipStatus = pgEnum("membership_status", [
+  "active",
+  "invited",
+  "disabled",
+]);
 export const userStatus = pgEnum("user_status", [
   "active",
   "invited",
@@ -44,6 +50,7 @@ export const accounts = pgTable("accounts", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   workosOrganizationId: text("workos_organization_id").unique(),
+  workosUpdatedAt: timestamp("workos_updated_at", { withTimezone: true }),
   status: accountStatus("status").notNull().default("active"),
   plan: text("plan").notNull().default("free"),
   // data_region drives residency (COMPLIANCE doc); validated at the app boundary.
@@ -59,6 +66,7 @@ export const users = pgTable("users", {
   email: text("email").notNull(),
   name: text("name"),
   status: userStatus("status").notNull().default("active"),
+  workosUpdatedAt: timestamp("workos_updated_at", { withTimezone: true }),
   ...timestamps,
 });
 
@@ -74,7 +82,10 @@ export const memberships = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" })
       .$type<UserId>(),
+    workosMembershipId: text("workos_membership_id").unique(),
     role: membershipRole("role").notNull().default("member"),
+    status: membershipStatus("status").notNull().default("active"),
+    workosUpdatedAt: timestamp("workos_updated_at", { withTimezone: true }),
     ...timestamps,
   },
   // drizzle 0.45: the 3rd pgTable arg returns an ARRAY (the object form is deprecated).

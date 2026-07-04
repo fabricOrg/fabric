@@ -42,6 +42,17 @@ Create one test organization for local development. The local database tenant ma
 explicit: WorkOS authentication proves the user; Fabric Postgres remains the source of truth for
 tenant membership, wallet state, API keys, and ledger state.
 
+Configure a webhook endpoint at `<public-api-base>/webhooks/workos` for only these events:
+
+- `user.created`, `user.updated`, `user.deleted`
+- `organization.updated`, `organization.deleted`
+- `organization_membership.created`, `organization_membership.updated`,
+  `organization_membership.deleted`
+
+The endpoint verifies `WorkOS-Signature` against the raw request body before processing. WorkOS
+cannot deliver to localhost; use an HTTPS development tunnel for manual delivery tests and replace
+the tunnel endpoint when it changes.
+
 ## Infisical Project
 
 In the Fabric Infisical project, use a `dev` or `development` environment and the root secret path
@@ -82,8 +93,10 @@ The current `WORKOS_WEBHOOK_SECRET` is a local placeholder: replace it with the 
 signing secret before enabling real webhook handling.
 
 The WorkOS staging environment has hosted UI, email/password, sign-up, optional MFA, the customer
-RBAC roles, and application-specific callback/sign-out redirects configured. Optional MFA allows
-owner/admin enforcement at membership policy level without forcing MFA on every member.
+RBAC roles, and application-specific callback/sign-out redirects configured. This does **not** yet
+satisfy role-specific MFA: hosted AuthKit documents global or organization-wide MFA policies, not a
+policy scoped to only `owner` and `admin`. Fabric must either require MFA for every organization
+member or build a custom factor enrollment/challenge gate for privileged roles.
 
 Use personal overrides for developer-specific local values. Do not paste secret values into issues,
 pull requests, chat, screenshots, committed env files, or frontend code.

@@ -19,6 +19,9 @@ The dashboard also uses a tenant-bound API key and must never receive database c
 - WorkOS permissions are intersected with Fabric's local role policy.
 - Cross-tenant JIT writes use `DATABASE_URL_PROVISIONER`. Local development may reuse bootstrap
   credentials; deployed environments require a dedicated least-privilege role.
+- Signed WorkOS lifecycle webhooks update source-timestamped user, account, and membership state.
+  Membership deletion disables the local membership instead of deleting it, so stale sessions
+  cannot JIT-create access again.
 
 ## Consequences
 

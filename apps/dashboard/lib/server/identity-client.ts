@@ -35,6 +35,7 @@ export async function resolveWorkOSSession(
       organization_id: claims.organizationId,
       email: claims.email,
       name: claims.name,
+      user_updated_at: claims.userUpdatedAt,
       role: claims.role,
       permissions: claims.permissions,
       session_id: claims.sessionId,
