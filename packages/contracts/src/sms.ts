@@ -59,6 +59,11 @@ export const sendSmsResponse = z.object({
 });
 export type SendSmsResponse = z.infer<typeof sendSmsResponse>;
 
+export const sendSmsApiResponse = sendSmsResponse.extend({
+  request_id: z.string(),
+});
+export type SendSmsApiResponse = z.infer<typeof sendSmsApiResponse>;
+
 /** GET /v1/messages - newest-first tenant message log. */
 export const messageListResponse = z.object({
   messages: z.array(messageSummary),

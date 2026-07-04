@@ -41,6 +41,8 @@
       "!**/.next",
       "!**/coverage",
       "!**/node_modules",
+      "!**/playwright-report",
+      "!**/test-results",
       "!**/migrations",
       "!**/next-env.d.ts",
       "!team/**/a2a-cli.js",

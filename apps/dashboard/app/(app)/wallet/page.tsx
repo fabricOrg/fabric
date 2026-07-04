@@ -26,7 +26,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@app/ui/components/ui/empty";
-import { Skeleton } from "@app/ui/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -47,18 +46,9 @@ import {
   TriangleAlert,
   Wallet,
 } from "lucide-react";
-import { getWallet, listLedger, type Scenario } from "@/lib/mock-api";
 import { formatMoney, formatSigned } from "@/lib/money";
+import { getWalletSnapshot } from "@/lib/server/dashboard-data";
 import { TopUpDialog } from "./_top-up-dialog";
-
-/** ?state= maps to the mock-api scenario; `loading` is UI-only (renders skeletons, no fetch). */
-type ViewState = Scenario | "loading";
-
-function parseViewState(raw: string | undefined): ViewState {
-  return raw === "empty" || raw === "error" || raw === "loading"
-    ? raw
-    : "populated";
-}
 
 /** Ledger-kind chip — color paired with icon + label (never color-only, WCAG). */
 const KIND: Record<
@@ -124,32 +114,13 @@ function isLow(b: WalletBalance): boolean {
   );
 }
 
-export default async function WalletPage({
-  searchParams,
-}: {
-  // Next 16: searchParams is async. `?state=empty|loading|error` demos the four global states.
-  searchParams: Promise<{ state?: string }>;
-}) {
-  const view = parseViewState((await searchParams).state);
-
-  if (view === "loading") {
-    return (
-      <Shell>
-        <PageHeader />
-        <div className="grid gap-4 md:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-32 rounded-xl" />
-          ))}
-        </div>
-        <Skeleton className="h-80 rounded-xl" />
-      </Shell>
-    );
-  }
-
+export default async function WalletPage() {
   let balances: readonly WalletBalance[];
   let ledger: readonly LedgerEntry[];
   try {
-    [balances, ledger] = await Promise.all([getWallet(view), listLedger(view)]);
+    const snapshot = await getWalletSnapshot();
+    balances = snapshot.balances;
+    ledger = snapshot.ledger;
   } catch (payload) {
     const err = parseApiError(payload);
     return (

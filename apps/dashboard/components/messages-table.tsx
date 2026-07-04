@@ -27,7 +27,7 @@ import {
 } from "@app/ui/components/ui/table";
 import { useState } from "react";
 import { type MessageStatus, StatusBadge } from "@/components/status-badge";
-import { getMessage } from "@/lib/mock-api";
+import { getMessage } from "@/lib/client/dashboard-api";
 import { formatMoney } from "@/lib/money";
 
 const STATUSES: readonly MessageStatus[] = [

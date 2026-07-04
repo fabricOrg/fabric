@@ -65,14 +65,21 @@ export function requireScope(
   tenant: RequestTenant | undefined,
   scope: string,
 ): RequestTenant {
-  if (!tenant) {
-    throw unauthorized("no_tenant", "Request is not authenticated.");
-  }
-  if (!tenant.scopes.includes(scope) && !tenant.scopes.includes("*")) {
+  const resolved = requireTenant(tenant);
+  if (!resolved.scopes.includes(scope) && !resolved.scopes.includes("*")) {
     throw forbidden(
       "insufficient_scope",
       `The API key requires the \`${scope}\` scope for this operation.`,
     );
+  }
+  return resolved;
+}
+
+export function requireTenant(
+  tenant: RequestTenant | undefined,
+): RequestTenant {
+  if (!tenant) {
+    throw unauthorized("no_tenant", "Request is not authenticated.");
   }
   return tenant;
 }

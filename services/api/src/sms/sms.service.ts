@@ -3,6 +3,7 @@ import {
   type MessageDetail,
   type MessageStatus,
   type MessageSummary,
+  type SendSmsResponse,
 } from "@app/contracts";
 import { type AppDb, findCustomerMessage, listCustomerMessages } from "@app/db";
 import type { SmsSenderPlugin } from "@app/integrations";
@@ -38,14 +39,22 @@ export class SmsService {
   }
 
   /** POST /v1/sms/send — the tenant is already resolved by ApiKeyGuard. */
-  send(input: {
+  async send(input: {
     tenantId: string;
     to: string;
     senderId: string;
     body: string;
     currency: string;
-  }): Promise<SendResult> {
-    return engineSendSms(this.deps(), input);
+  }): Promise<SendSmsResponse> {
+    const result: SendResult = await engineSendSms(this.deps(), input);
+    const message = await this.get(input.tenantId, result.messageId);
+    return {
+      id: message.id,
+      status: result.status,
+      encoding: message.encoding,
+      segments: message.segments,
+      cost: message.cost,
+    };
   }
 
   async list(tenantId: string): Promise<MessageSummary[]> {

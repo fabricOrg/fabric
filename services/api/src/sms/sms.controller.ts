@@ -1,6 +1,7 @@
 import type {
   MessageDetailResponse,
   MessageListResponse,
+  SendSmsApiResponse,
 } from "@app/contracts";
 import {
   Body,
@@ -56,7 +57,7 @@ export class SmsController {
   async send(
     @Req() req: AuthedRequest,
     @Body() body: SendBody,
-  ): Promise<{ id: string; status: string; request_id: string }> {
+  ): Promise<SendSmsApiResponse> {
     const tenant = requireScope(req.tenant, "sms:send");
     const result = await this.sms.send({
       tenantId: tenant.id,
@@ -66,8 +67,11 @@ export class SmsController {
       currency: requireString(body.currency, "currency"),
     });
     return {
-      id: result.messageId,
+      id: result.id,
       status: result.status,
+      encoding: result.encoding,
+      segments: result.segments,
+      cost: result.cost,
       request_id: newRequestId(),
     };
   }

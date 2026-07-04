@@ -10,6 +10,7 @@ import type { NextConfig } from "next";
  * their `default` export condition and are resolved as normal prebuilt packages, NOT transpiled here.
  */
 const nextConfig: NextConfig = {
+  devIndicators: false,
   output: "standalone",
   outputFileTracingRoot: resolve(import.meta.dirname, "../.."),
   transpilePackages: ["@app/ui"],
