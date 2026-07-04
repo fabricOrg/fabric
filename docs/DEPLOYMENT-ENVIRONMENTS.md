@@ -20,6 +20,7 @@ promotion conflict-free while the tree-hash tag proves that the promoted artifac
 
 Push-triggered deployments classify the promoted diff first. Markdown-only changes skip image
 builds, migrations, service updates, and smoke tests. Manual workflow dispatch always deploys.
+The completed classifier job remains in the Actions run as the audit record for a skipped deployment.
 
 ## Current status
 
