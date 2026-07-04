@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
 } from "@nestjs/common";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import type { ApiKeyEnv } from "./api-key.crypto.js";
@@ -15,6 +16,7 @@ import {
   type ApiKeySummary,
   type CreatedApiKey,
 } from "./api-keys.service.js";
+import { OperatorTokenGuard } from "./operator-token.guard.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -22,13 +24,14 @@ const UUID_RE =
 /**
  * Key MANAGEMENT endpoints (F2.3, L2 increment 4). Create / list / revoke.
  *
- * OPERATOR/SEED-gated for the Walking-Skeleton demo: there's no customer session yet (F2.1), so
+ * OPERATOR-token-gated for the Walking-Skeleton demo: there's no customer session yet (F2.1), so
  * `tenantId` is supplied by the operator (body on create, query on list/revoke). When F2.1 lands the
  * tenant comes from the session and the operator-supplied tenantId drops. Deliberately NOT behind
  * ApiKeyGuard — that guards data-plane routes (POST /v1/sms/send …); you can't mint the FIRST key
  * with a key. All input is validated → F8.3 invalid_request_error with `param`.
  */
 @Controller("v1/api-keys")
+@UseGuards(OperatorTokenGuard)
 export class ApiKeysController {
   constructor(@Inject(ApiKeyService) private readonly svc: ApiKeyService) {}
 

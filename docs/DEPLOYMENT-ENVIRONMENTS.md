@@ -16,11 +16,11 @@ keeps one immutable artifact identity even when GitHub creates a different merge
 
 ## Current status
 
-The branches, GitHub Environments, branch deployment policies, workflow, regions, ECR repository
-name, and container name are configured. Testing Terraform state is encrypted, versioned, remotely
-stored, and locked in S3. The testing GitHub OIDC role is provisioned. Deployments are intentionally
-disabled because the ECS service does not exist yet; staging and production also require separate
-AWS accounts and infrastructure.
+The branches, GitHub Environments, branch deployment policies, workflow, regions, ECR repository,
+and container name are configured. Testing Terraform state is encrypted, versioned, remotely stored,
+and locked in S3. The testing GitHub OIDC role is provisioned. The testing runtime has a validated
+Terraform plan but remains unapplied, so deployments stay disabled. Staging and production require
+separate AWS accounts and infrastructure.
 
 Repository enable flags:
 
@@ -29,6 +29,10 @@ Repository enable flags:
 - `PRODUCTION_DEPLOYMENTS_ENABLED`
 
 All default to `false`. Enable an environment only after its required variables are configured.
+
+Testing API-key management requires `x-operator-token`; fake-provider DLR ingress requires
+`x-webhook-token`. Their values are generated during Terraform apply and remain in Secrets Manager,
+not GitHub.
 
 ## Required environment variables
 
@@ -41,7 +45,11 @@ All default to `false`. Enable an environment only after its required variables 
 | `ECS_CLUSTER` | ECS cluster name |
 | `ECS_SERVICE` | ECS service name |
 | `ECS_TASK_DEFINITION` | Existing task-definition family |
+| `ECS_MIGRATION_TASK_DEFINITION` | One-off database migration task family |
 | `ECS_CONTAINER_NAME` | Container to replace, currently `api` |
+| `ECS_SUBNET_IDS` | Comma-separated subnets used for the migration task |
+| `ECS_SECURITY_GROUP_ID` | Security group used by the migration task |
+| `ECS_DESIRED_COUNT` | Service task count after a successful migration, defaults to `1` |
 | `SMOKE_TEST_URL` | Optional public service URL |
 
 Staging and production also require:
@@ -69,9 +77,9 @@ responsive formats at runtime; remote image hosts must be explicitly allow-liste
 ## Enablement sequence
 
 1. Create separate staging and production AWS accounts and remote state backends.
-2. Provision VPC, ECS, load balancer, RDS, Redis, logs, alarms, and secrets.
+2. Provision each environment's network, ECS, ingress, RDS, logs, alarms, and secrets.
 3. Create least-privilege GitHub OIDC roles scoped to this repository and environment branch.
 4. Configure the required GitHub Environment variables.
-5. Confirm database migrations and rollback procedures.
+5. Confirm forward-only database migration and application rollback procedures.
 6. Set only the target environment's repository enable flag to `true`.
 7. Integrate on `dev`, promote to and verify `testing`, then promote to `staging`; production remains last.
