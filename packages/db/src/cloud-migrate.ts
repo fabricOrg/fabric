@@ -16,6 +16,15 @@ interface RoleSpec {
   password: string;
 }
 
+interface RoleAttributes {
+  canLogin: boolean;
+  superuser: boolean;
+  bypassRls: boolean;
+  createDatabase: boolean;
+  createRole: boolean;
+  replication: boolean;
+}
+
 function requireUrl(name: keyof NodeJS.ProcessEnv): string {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -61,19 +70,45 @@ async function synchronizeRole(sql: Sql, spec: RoleSpec): Promise<void> {
     ) AS exists
   `;
   const password = await quotedLiteral(sql, spec.password);
-  const attributes =
-    "LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION";
 
   if (roleRows[0]?.exists) {
+    // RDS administrators are not PostgreSQL superusers, so they cannot restate
+    // NOSUPERUSER on an existing role even when the role is already non-super.
+    await sql.unsafe(`ALTER ROLE ${spec.name} WITH LOGIN PASSWORD ${password}`);
+  } else {
     await sql.unsafe(
-      `ALTER ROLE ${spec.name} WITH ${attributes} PASSWORD ${password}`,
+      `CREATE ROLE ${spec.name} WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD ${password}`,
     );
-    return;
   }
 
-  await sql.unsafe(
-    `CREATE ROLE ${spec.name} WITH ${attributes} PASSWORD ${password}`,
-  );
+  const attributeRows = await sql<RoleAttributes[]>`
+    SELECT
+      rolcanlogin AS "canLogin",
+      rolsuper AS superuser,
+      rolbypassrls AS "bypassRls",
+      rolcreatedb AS "createDatabase",
+      rolcreaterole AS "createRole",
+      rolreplication AS replication
+    FROM pg_roles
+    WHERE rolname = ${spec.name}
+  `;
+  assertLeastPrivilege(spec.name, attributeRows[0]);
+}
+
+export function assertLeastPrivilege(
+  roleName: RoleSpec["name"],
+  attributes: RoleAttributes | undefined,
+): void {
+  if (
+    !attributes?.canLogin ||
+    attributes.superuser ||
+    attributes.bypassRls ||
+    attributes.createDatabase ||
+    attributes.createRole ||
+    attributes.replication
+  ) {
+    throw new Error(`${roleName} failed its least-privilege verification.`);
+  }
 }
 
 async function prepareRoles(environment: MigrationEnvironment): Promise<void> {
