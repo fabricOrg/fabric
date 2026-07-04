@@ -70,8 +70,10 @@ data "aws_iam_policy_document" "github_testing_deploy" {
     sid    = "RegisterTaskDefinition"
     effect = "Allow"
     actions = [
+      "ecs:DescribeTasks",
       "ecs:DescribeTaskDefinition",
       "ecs:RegisterTaskDefinition",
+      "ecs:RunTask",
     ]
     resources = ["*"]
   }
@@ -93,7 +95,8 @@ data "aws_iam_policy_document" "github_testing_deploy" {
     effect  = "Allow"
     actions = ["iam:PassRole"]
     resources = [
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/fabric-testing-*",
+      aws_iam_role.api_task.arn,
+      aws_iam_role.ecs_task_execution.arn,
     ]
 
     condition {
