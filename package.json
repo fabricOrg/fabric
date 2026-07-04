@@ -27,7 +27,7 @@
     "lint": "biome check .",
     "lint:staged": "biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true",
     "format": "biome format --write .",
-    "build:shared": "pnpm --filter @app/contracts --filter @app/domain build",
+    "build:shared": "pnpm --filter @app/contracts --filter @app/domain --filter @app/fe-auth build",
     "typecheck": "pnpm build:shared && pnpm -r --no-bail --if-present typecheck",
     "test": "pnpm build:shared && pnpm -r --no-bail --if-present test",
     "test:e2e": "playwright test",
