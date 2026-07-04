@@ -2,9 +2,15 @@
 
 ## Status
 
-The AWS account bootstrap, remote state, ECR repository, and GitHub OIDC role are already applied.
-The runtime plan is validated but intentionally unapplied. The latest reviewed plan contains 35
-creates, one in-place IAM policy update, and no destroys.
+The AWS account bootstrap, remote state, ECR repository, GitHub OIDC role, and testing runtime are
+applied. The first successful migration-first deployment completed on 4 July 2026. The service runs
+one healthy Fargate task. Resolve its current endpoint when needed:
+
+```powershell
+terraform -chdir=infra/dev output -raw testing_api_url
+```
+
+Terraform reports no drift. `TESTING_DEPLOYMENTS_ENABLED=true`.
 
 Do not reuse this topology for staging or production. It uses a default VPC, public task IPs, a
 single-AZ database, one-day backups, no deletion protection, and no alarm notification target.
@@ -25,7 +31,7 @@ volume:
 The estimate excludes tax, data transfer, unexpected log volume, storage autoscaling, and additional
 task replicas. Confirm current AWS pricing before apply and configure an AWS Budget separately.
 
-## Pre-apply gate
+## Change gate
 
 ```powershell
 $env:AWS_PROFILE = "app-dev"
@@ -39,9 +45,10 @@ terraform -chdir=infra/dev plan
 Verify the account is `677035504110`, the region is `eu-west-1`, and the plan has no destroys or
 replacements. Database and application secret values must appear only as write-only attributes.
 
-## Apply
+## Initial apply
 
-Run apply only after the cost gate is approved:
+The initial apply has completed. For future infrastructure changes, run apply only after reviewing
+the plan and recurring-cost impact:
 
 ```powershell
 terraform -chdir=infra/dev apply

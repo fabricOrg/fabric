@@ -22,9 +22,9 @@ promotion conflict-free while the tree-hash tag proves that the promoted artifac
 
 The branches, GitHub Environments, branch deployment policies, workflow, regions, ECR repository,
 and container name are configured. Testing Terraform state is encrypted, versioned, remotely stored,
-and locked in S3. The testing GitHub OIDC role is provisioned. The testing runtime has a validated
-Terraform plan but remains unapplied, so deployments stay disabled. Staging and production require
-separate AWS accounts and infrastructure.
+and locked in S3. The testing runtime is provisioned and deploys through GitHub OIDC after running
+database migrations. Staging and production remain disabled and require separate AWS accounts and
+infrastructure.
 
 Repository enable flags:
 
