@@ -114,23 +114,23 @@ Deployment order is enforced:
 
 ## AWS services and roles
 
-| Service or role | Responsibility |
-|---|---|
-| API Gateway HTTP API | Public HTTPS endpoint, request routing, VPC integration, access logs, and basic throttling. |
-| API Gateway VPC Link | Carries API traffic from API Gateway into VPC network interfaces. |
-| Cloud Map | Supplies private SRV discovery records for healthy ECS task IPs and ports. |
-| ECS cluster and service | Runs the long-lived NestJS API on Fargate and performs circuit-breaker rollback. |
-| ECS migration task | Runs schema migrations and verifies the least-privilege database roles before service deployment. |
-| ECR | Stores immutable API images keyed by Git tree hash plus the first-deployment rollback tag. |
-| RDS PostgreSQL | Stores application data in an encrypted, non-public PostgreSQL instance. |
-| Secrets Manager | Stores admin, migration-owner, and runtime database URLs plus operator and webhook tokens. |
-| ECS execution role | Allows the ECS agent to pull ECR images, fetch specific secrets, and write container logs. |
-| ECS application task role | Runtime identity for future AWS API access; it currently has no additional permissions. |
-| GitHub OIDC provider | Exchanges GitHub identity tokens for short-lived AWS credentials without access keys. |
-| GitHub deployment role | Pushes images, registers task definitions, runs migrations, updates the testing service, and passes only the two ECS roles. |
-| CloudWatch Logs | Retains API, migration, and API Gateway access logs for 14 days. |
-| CloudWatch alarms | Detects API 5xx responses, high database CPU, and low database storage. |
-| S3 Terraform backend | Stores encrypted, versioned Terraform state with native lockfiles and public access blocked. |
+| Service or role           | Responsibility                                                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| API Gateway HTTP API      | Public HTTPS endpoint, request routing, VPC integration, access logs, and basic throttling.                                 |
+| API Gateway VPC Link      | Carries API traffic from API Gateway into VPC network interfaces.                                                           |
+| Cloud Map                 | Supplies private SRV discovery records for healthy ECS task IPs and ports.                                                  |
+| ECS cluster and service   | Runs the long-lived NestJS API on Fargate and performs circuit-breaker rollback.                                            |
+| ECS migration task        | Runs schema migrations and verifies the least-privilege database roles before service deployment.                           |
+| ECR                       | Stores immutable API images keyed by Git tree hash plus the first-deployment rollback tag.                                  |
+| RDS PostgreSQL            | Stores application data in an encrypted, non-public PostgreSQL instance.                                                    |
+| Secrets Manager           | Stores admin, migration-owner, and runtime database URLs plus operator and webhook tokens.                                  |
+| ECS execution role        | Allows the ECS agent to pull ECR images, fetch specific secrets, and write container logs.                                  |
+| ECS application task role | Runtime identity for future AWS API access; it currently has no additional permissions.                                     |
+| GitHub OIDC provider      | Exchanges GitHub identity tokens for short-lived AWS credentials without access keys.                                       |
+| GitHub deployment role    | Pushes images, registers task definitions, runs migrations, updates the testing service, and passes only the two ECS roles. |
+| CloudWatch Logs           | Retains API, migration, and API Gateway access logs for 14 days.                                                            |
+| CloudWatch alarms         | Detects API 5xx responses, high database CPU, and low database storage.                                                     |
+| S3 Terraform backend      | Stores encrypted, versioned Terraform state with native lockfiles and public access blocked.                                |
 
 ## Current testing limitations
 
