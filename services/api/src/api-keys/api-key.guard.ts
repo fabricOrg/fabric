@@ -4,7 +4,7 @@ import {
   Inject,
   Injectable,
 } from "@nestjs/common";
-import { unauthorized } from "../http/api-error.js";
+import { forbidden, unauthorized } from "../http/api-error.js";
 import { ApiKeyService } from "./api-keys.service.js";
 
 /** The tenant context a resolved key attaches to the request; handlers run data access via it. */
@@ -58,4 +58,21 @@ export function extractBearer(
   if (typeof value !== "string") return null;
   const match = /^Bearer[ ]+(\S+)$/.exec(value.trim());
   return match?.[1] ?? null;
+}
+
+/** Enforce a resolved key's permission at the controller boundary. */
+export function requireScope(
+  tenant: RequestTenant | undefined,
+  scope: string,
+): RequestTenant {
+  if (!tenant) {
+    throw unauthorized("no_tenant", "Request is not authenticated.");
+  }
+  if (!tenant.scopes.includes(scope) && !tenant.scopes.includes("*")) {
+    throw forbidden(
+      "insufficient_scope",
+      `The API key requires the \`${scope}\` scope for this operation.`,
+    );
+  }
+  return tenant;
 }

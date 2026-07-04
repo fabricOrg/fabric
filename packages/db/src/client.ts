@@ -1,4 +1,7 @@
+import { sql as drizzleSql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import * as schema from "./schema/index.js";
 
 /**
  * RUNTIME TENANT-CONTEXT SEAM (L1) — the runtime half of RLS. The DB half (roles, FORCE RLS,
@@ -43,6 +46,14 @@ export type AppSql = ReturnType<typeof postgres>;
 /** The connection type callers run tagged-template queries on inside a tenant transaction. */
 export type TenantTx = postgres.TransactionSql<Record<string, never>>;
 
+function createDrizzleDb(sql: AppSql) {
+  return drizzle(sql, { schema });
+}
+
+export type AppDrizzleDb = ReturnType<typeof createDrizzleDb>;
+type DrizzleTransactionCallback = Parameters<AppDrizzleDb["transaction"]>[0];
+export type TenantDrizzleTx = Parameters<DrizzleTransactionCallback>[0];
+
 /**
  * The tenant-context seam. `sql` is the raw non-owner pool (use sparingly, for non-tenant ops);
  * `withTenant` is the guarded entry every tenant-scoped op MUST go through. This interface is the
@@ -56,6 +67,14 @@ export interface AppDb {
    * is not a uuid. The transaction commits when `fn` resolves and rolls back if it throws.
    */
   withTenant<T>(tenantId: string, fn: (tx: TenantTx) => Promise<T>): Promise<T>;
+  /**
+   * Typed Drizzle variant for application repositories. Tenant context is still the first statement
+   * and remains local to this transaction.
+   */
+  withTenantDrizzle<T>(
+    tenantId: string,
+    fn: (tx: TenantDrizzleTx) => Promise<T>,
+  ): Promise<T>;
   /**
    * Run `fn` inside a transaction with `app.api_key_hash` set (transaction-scoped + parameterized),
    * so the `api_key_auth_lookup` RLS policy exposes ONLY the api_keys row whose hash was presented —
@@ -94,6 +113,7 @@ export function createAppDb(
   options: postgres.Options<Record<string, never>> = {},
 ): AppDb {
   const sql: AppSql = postgres(url, { max: 10, ...options });
+  const db = createDrizzleDb(sql);
 
   return {
     sql,
@@ -114,6 +134,20 @@ export function createAppDb(
         ]);
         return fn(tx as unknown as TenantTx);
       }) as Promise<T>;
+    },
+    withTenantDrizzle<T>(
+      tenantId: string,
+      fn: (tx: TenantDrizzleTx) => Promise<T>,
+    ): Promise<T> {
+      if (typeof tenantId !== "string" || !UUID_RE.test(tenantId)) {
+        return Promise.reject(new InvalidTenantIdError(tenantId));
+      }
+      return db.transaction(async (tx) => {
+        await tx.execute(
+          drizzleSql`SELECT set_config('app.tenant_id', ${tenantId}, true)`,
+        );
+        return fn(tx);
+      });
     },
     withApiKeyLookup<T>(
       keyHash: string,

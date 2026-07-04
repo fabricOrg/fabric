@@ -58,3 +58,17 @@ export const sendSmsResponse = z.object({
   cost: money,
 });
 export type SendSmsResponse = z.infer<typeof sendSmsResponse>;
+
+/** GET /v1/messages - newest-first tenant message log. */
+export const messageListResponse = z.object({
+  messages: z.array(messageSummary),
+  request_id: z.string(),
+});
+export type MessageListResponse = z.infer<typeof messageListResponse>;
+
+/** GET /v1/sms/:id - one tenant-scoped message. */
+export const messageDetailResponse = z.object({
+  message: messageDetail,
+  request_id: z.string(),
+});
+export type MessageDetailResponse = z.infer<typeof messageDetailResponse>;

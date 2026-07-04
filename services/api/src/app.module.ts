@@ -4,6 +4,7 @@ import { ApiKeysModule } from "./api-keys/api-keys.module.js";
 import { DbModule } from "./db/db.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { SmsModule } from "./sms/sms.module.js";
+import { WalletModule } from "./wallet/wallet.module.js";
 
 /**
  * Root module. ConfigModule (global) loads env (.env locally; Secrets Manager in cloud). DbModule
@@ -17,6 +18,7 @@ import { SmsModule } from "./sms/sms.module.js";
     HealthModule,
     ApiKeysModule,
     SmsModule,
+    WalletModule,
   ],
 })
 export class AppModule {}
