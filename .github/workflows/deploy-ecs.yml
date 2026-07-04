@@ -118,6 +118,26 @@ jobs:
           docker push "$destination_image"
           echo "image=$destination_image" >> "$GITHUB_OUTPUT"
 
+      - name: Ensure first-deployment rollback image exists
+        env:
+          IMAGE_TAG: ${{ steps.image-meta.outputs.tag }}
+        shell: bash
+        run: |
+          if aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag=bootstrap >/dev/null 2>&1; then
+            exit 0
+          fi
+          manifest="$(aws ecr batch-get-image \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --query 'images[0].imageManifest' \
+            --output text)"
+          aws ecr put-image \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-tag bootstrap \
+            --image-manifest "$manifest"
+
       - name: Download current task definitions
         shell: bash
         run: |
