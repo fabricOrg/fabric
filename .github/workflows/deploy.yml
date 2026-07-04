@@ -22,8 +22,37 @@ permissions:
   id-token: write
 
 jobs:
+  classify:
+    name: Classify changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.changes.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify deployment change
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          VERIFY_BASE_SHA: ${{ github.event.before }}
+        shell: bash
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "Manual deployment requested."
+          else
+            node scripts/git/run-verified.mjs --classify
+          fi
+
   deploy-testing:
+    needs: classify
     if: >-
+      needs.classify.outputs.docs_only != 'true' &&
       (github.ref_name == 'testing' || inputs.environment == 'testing') &&
       vars.TESTING_DEPLOYMENTS_ENABLED == 'true'
     uses: ./.github/workflows/deploy-ecs.yml
@@ -33,7 +62,9 @@ jobs:
     secrets: inherit
 
   deploy-staging:
+    needs: classify
     if: >-
+      needs.classify.outputs.docs_only != 'true' &&
       (github.ref_name == 'staging' || inputs.environment == 'staging') &&
       vars.STAGING_DEPLOYMENTS_ENABLED == 'true'
     uses: ./.github/workflows/deploy-ecs.yml
@@ -43,7 +74,9 @@ jobs:
     secrets: inherit
 
   deploy-production:
+    needs: classify
     if: >-
+      needs.classify.outputs.docs_only != 'true' &&
       (github.ref_name == 'main' || inputs.environment == 'production') &&
       vars.PRODUCTION_DEPLOYMENTS_ENABLED == 'true'
     uses: ./.github/workflows/deploy-ecs.yml
