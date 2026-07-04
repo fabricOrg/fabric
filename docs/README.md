@@ -11,6 +11,7 @@ All design, product, and process docs live here. Code/config stays at the repo r
 ## Subsystems
 - [IDENTITY-SSO.md](IDENTITY-SSO.md) — WorkOS SSO, staff identity
 - [WORKOS-INFISICAL-SETUP.md](WORKOS-INFISICAL-SETUP.md) - local WorkOS customer realm and Infisical secrets setup
+- [decisions/0001-workos-tenant-resolution.md](decisions/0001-workos-tenant-resolution.md) - WorkOS organization to tenant trust boundary
 - [INTEGRATIONS-PLUGIN-ARCHITECTURE.md](INTEGRATIONS-PLUGIN-ARCHITECTURE.md) — vendor plugin framework + failover
 - [CONTROL-PLANE-ADMIN.md](CONTROL-PLANE-ADMIN.md) — the admin / control plane
 - [COMPLIANCE-AND-DATA-PROTECTION.md](COMPLIANCE-AND-DATA-PROTECTION.md) — processor/controller, PII vault, residency

@@ -5,15 +5,14 @@ their AWS accounts are ready.
 
 ## Scope
 
-Fabric uses WorkOS for customer SSO and Infisical for development secret delivery. The default local
-application still runs with development auth:
+Fabric uses WorkOS for customer SSO and Infisical for development secret delivery. Development auth
+remains available as an explicit local fallback:
 
 ```env
 DEV_AUTH_ENABLED=true
 ```
 
-Switch this to `false` only after the dashboard WorkOS login, callback, session, refresh, logout,
-and JIT provisioning paths are implemented.
+Set this to `false` when testing WorkOS-only behavior.
 
 ## WorkOS Customer Realm
 
@@ -53,12 +52,14 @@ Add these shared secrets:
 ```env
 DATABASE_URL_OWNER=<local-migration-role-url>
 DATABASE_URL_APP=<local-tenant-application-role-url>
-DATABASE_URL_SUPER=<local-worker-role-url>
+DATABASE_URL_SUPER=<local-test-bootstrap-role-url>
+DATABASE_URL_PROVISIONER=<local-identity-provisioning-role-url>
 REDIS_QUEUE_URL=redis://localhost:6379/0
 REDIS_CACHE_URL=redis://localhost:6379/1
 
 OPERATOR_TOKEN=<local-operator-token>
 WEBHOOK_INGRESS_TOKEN=<local-fake-provider-webhook-token>
+BFF_INTERNAL_TOKEN=<local-dashboard-to-api-token>
 
 DEV_AUTH_ENABLED=true
 DEV_TENANT_ID=00000000-0000-0000-0000-0000000000d1
@@ -72,12 +73,17 @@ WORKOS_CLIENT_ID=<from-workos-customer-application>
 WORKOS_COOKIE_PASSWORD=<32-plus-character-random-secret>
 WORKOS_REDIRECT_URI=http://localhost:3100/auth/callback
 WORKOS_LOGOUT_REDIRECT_URI=http://localhost:3100/login
+WORKOS_ORGANIZATION_ID=<mapped-local-workos-organization>
 WORKOS_WEBHOOK_SECRET=<from-workos-webhook-endpoint>
 ```
 
 The development environment was checked on 2026-07-04 and contains all values in this inventory.
 The current `WORKOS_WEBHOOK_SECRET` is a local placeholder: replace it with the WorkOS endpoint's
 signing secret before enabling real webhook handling.
+
+The WorkOS staging environment has hosted UI, email/password, sign-up, optional MFA, the customer
+RBAC roles, and application-specific callback/sign-out redirects configured. Optional MFA allows
+owner/admin enforcement at membership policy level without forcing MFA on every member.
 
 Use personal overrides for developer-specific local values. Do not paste secret values into issues,
 pull requests, chat, screenshots, committed env files, or frontend code.

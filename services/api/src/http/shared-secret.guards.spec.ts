@@ -2,6 +2,7 @@ import type { ExecutionContext } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import { describe, expect, it } from "vitest";
 import { OperatorTokenGuard } from "../api-keys/operator-token.guard.js";
+import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { WebhookTokenGuard } from "../sms/webhook-token.guard.js";
 
 function contextWith(
@@ -24,6 +25,12 @@ describe.each([
     env: "OPERATOR_TOKEN",
     header: "x-operator-token",
     create: (config: ConfigService) => new OperatorTokenGuard(config),
+  },
+  {
+    name: "dashboard BFF",
+    env: "BFF_INTERNAL_TOKEN",
+    header: "x-bff-token",
+    create: (config: ConfigService) => new BffTokenGuard(config),
   },
   {
     name: "webhook",

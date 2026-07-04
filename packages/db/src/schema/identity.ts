@@ -43,6 +43,7 @@ export const accounts = pgTable("accounts", {
   id: uuid("id").primaryKey().defaultRandom().$type<TenantId>(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  workosOrganizationId: text("workos_organization_id").unique(),
   status: accountStatus("status").notNull().default("active"),
   plan: text("plan").notNull().default("free"),
   // data_region drives residency (COMPLIANCE doc); validated at the app boundary.

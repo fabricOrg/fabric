@@ -15,7 +15,7 @@ test("development customer sends and sees a delivered, charged message", async (
 
   await page.goto("/");
   await expect(page).toHaveURL(/\/login$/);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Development workspace" }).click();
   await expect(page).toHaveURL("/");
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await page.screenshot({

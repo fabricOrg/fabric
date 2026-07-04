@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { ApiKeysModule } from "./api-keys/api-keys.module.js";
 import { DbModule } from "./db/db.module.js";
 import { HealthModule } from "./health/health.module.js";
+import { IdentityModule } from "./identity/identity.module.js";
 import { SmsModule } from "./sms/sms.module.js";
 import { WalletModule } from "./wallet/wallet.module.js";
 
@@ -16,6 +17,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     ConfigModule.forRoot({ isGlobal: true }),
     DbModule,
     HealthModule,
+    IdentityModule,
     ApiKeysModule,
     SmsModule,
     WalletModule,
