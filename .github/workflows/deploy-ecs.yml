@@ -123,9 +123,11 @@ jobs:
           IMAGE_TAG: ${{ steps.image-meta.outputs.tag }}
         shell: bash
         run: |
-          if aws ecr describe-images \
+          if [[ "$(aws ecr batch-get-image \
             --repository-name "$ECR_REPOSITORY" \
-            --image-ids imageTag=bootstrap >/dev/null 2>&1; then
+            --image-ids imageTag=bootstrap \
+            --query 'length(images)' \
+            --output text)" == "1" ]]; then
             exit 0
           fi
           manifest="$(aws ecr batch-get-image \
