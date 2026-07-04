@@ -18,7 +18,7 @@ infra/
 |---|---|---|---|
 | Work branch | CI only | GitHub runner | Ephemeral |
 | `dev` | CI only | None | Integration gate |
-| `testing` | Testing | Dev account, `eu-west-1` | ECR, remote state, and deployment OIDC provisioned |
+| `testing` | Testing | Dev account, `eu-west-1` | Runtime defined; cost-bearing resources not yet applied |
 | `staging` | Staging | Separate account, `af-south-1` | Not provisioned |
 | `main` | Production | Separate account, `af-south-1` | Not provisioned |
 
@@ -41,6 +41,6 @@ Staging and production must use separate accounts and state buckets.
 
 ## Current scope
 
-The API ECR repository, state backend, and testing GitHub OIDC role exist. ECS, RDS, load
-balancing, secrets, logging, alarms, and database migration execution still require implementation
-and a reviewed recurring-cost plan.
+The API ECR repository, state backend, and testing GitHub OIDC role exist. The testing ECS, RDS,
+API Gateway, Cloud Map, secrets, logging, alarms, and migration runner are defined and validated in
+Terraform but are not applied. Staging and production remain separate-account scaffolds.

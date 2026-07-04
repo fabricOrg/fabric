@@ -1,14 +1,24 @@
-import { Body, Controller, Headers, Inject, Param, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Headers,
+  Inject,
+  Param,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import { newRequestId } from "../http/api-error.js";
 import { SmsService } from "./sms.service.js";
+import { WebhookTokenGuard } from "./webhook-token.guard.js";
 
 /**
  * POST /webhooks/dlr/:provider — provider delivery-report ingress (F5.4). NOT ApiKeyGuard-protected:
- * the caller is the provider, authenticated by its webhook SIGNATURE (SmsService → verifyWebhook).
+ * the testing ingress token is checked here, then SmsService verifies the provider signature.
  * The owning tenant is resolved possession-scoped by provider_ref (no RLS bypass), then the DLR is
  * reconciled (out-of-order tolerant) + commit/refund applied inside that tenant.
  */
 @Controller("webhooks/dlr")
+@UseGuards(WebhookTokenGuard)
 export class DlrController {
   constructor(@Inject(SmsService) private readonly sms: SmsService) {}
 
