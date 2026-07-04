@@ -24,6 +24,7 @@
     "dev:portal": "pnpm --filter @app/dev-portal dev",
     "dev:admin": "pnpm --filter @app/admin-console dev",
     "dev:all": "pnpm build:shared && pnpm -r --parallel --filter @app/dashboard --filter @app/dev-portal --filter @app/admin-console dev",
+    "dev:all:infisical": "infisical run --env=dev -- pnpm dev:all",
     "lint": "biome check .",
     "lint:staged": "biome check --staged --no-errors-on-unmatched --files-ignore-unknown=true",
     "format": "biome format --write .",
