@@ -3,6 +3,9 @@
 Terraform is isolated by AWS account and environment. Every deployed environment owns separate
 state so an apply cannot modify another environment.
 
+See [AWS testing architecture](../docs/AWS-TESTING-ARCHITECTURE.md) for the provisioned request,
+network, deployment, migration, IAM, and observability flows.
+
 ```text
 infra/
   bootstrap/  # encrypted, versioned S3 state backend with native lockfiles
