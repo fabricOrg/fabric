@@ -1,7 +1,7 @@
 import type { ApiErrorEnvelope } from "@app/contracts";
 import type { ExecutionContext } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
-import { ApiKeyGuard, extractBearer } from "./api-key.guard.js";
+import { ApiKeyGuard, extractBearer, requireScope } from "./api-key.guard.js";
 import type { ApiKeyService, ResolvedApiKey } from "./api-keys.service.js";
 
 // Minimal fake ExecutionContext wrapping a request with the given headers.
@@ -82,5 +82,34 @@ describe("ApiKeyGuard (F2.3)", () => {
     const { ctx } = ctxFor({});
     await expect(guard.canActivate(ctx)).rejects.toMatchObject({ status: 401 });
     expect(called).toBe(false); // rejected before touching the service
+  });
+});
+
+describe("requireScope", () => {
+  const tenant = {
+    id: "00000000-0000-0000-0000-0000000000a1",
+    scopes: ["sms:read"],
+  };
+
+  it("returns a tenant with the required or wildcard scope", () => {
+    expect(requireScope(tenant, "sms:read")).toBe(tenant);
+    expect(requireScope({ ...tenant, scopes: ["*"] }, "wallet:read")).toEqual({
+      ...tenant,
+      scopes: ["*"],
+    });
+  });
+
+  it("returns a structured 403 when the key lacks permission", () => {
+    try {
+      requireScope(tenant, "wallet:read");
+      expect.unreachable("scope check should fail");
+    } catch (error) {
+      const exception = error as {
+        getStatus(): number;
+        getResponse(): ApiErrorEnvelope;
+      };
+      expect(exception.getStatus()).toBe(403);
+      expect(exception.getResponse().error.code).toBe("insufficient_scope");
+    }
   });
 });

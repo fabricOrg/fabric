@@ -10,12 +10,17 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { formatMoney } from "@/lib/money";
+import { requireDashboardSession } from "@/lib/server/auth";
+import { getWalletSnapshot } from "@/lib/server/dashboard-data";
 
 /**
  * Authenticated dashboard shell: the sidebar (corrected IA) + a topbar that keeps balance VISIBILITY
  * one click away everywhere (visibility ≠ wallet management, which lives in its own section).
  */
-export default function AppLayout({ children }: { children: ReactNode }) {
+export default async function AppLayout({ children }: { children: ReactNode }) {
+  await requireDashboardSession();
+  const primaryBalance = (await getWalletSnapshot()).balances[0]?.balance;
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -35,7 +40,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             >
               <Link href="/wallet">
                 <Wallet data-icon="inline-start" />
-                GHS 1,204.03
+                {primaryBalance ? formatMoney(primaryBalance) : "Wallet"}
               </Link>
             </Button>
             <ThemeToggle />

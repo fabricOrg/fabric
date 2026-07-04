@@ -1,8 +1,9 @@
 # @app/fe-auth — shared frontend auth/BFF session mechanism
 
-**Status:** SEAM SCAFFOLD (ratified 2026-07-01, *seam-now / full-defer*). Interface is **frozen**;
-flow implementations are **deferred to PI-2** (stubs throw `NotImplemented`). **No login logic ships
-here yet.** Full design: `team/frontend/PROPOSAL-fe-auth-bff-seam.md`.
+**Status:** the production WorkOS interface remains frozen and its external flows are deferred.
+The package also provides an explicit development-only encrypted session used by the local
+dashboard; it is disabled by default and refuses to run in production. Full WorkOS design:
+`team/frontend/PROPOSAL-fe-auth-bff-seam.md`.
 
 ## What this is
 

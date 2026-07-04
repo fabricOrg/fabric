@@ -138,3 +138,5 @@ function notImplemented(fn: string, ..._args: readonly unknown[]): never {
     `[@app/fe-auth] ${fn}() is a seam stub — implementation deferred to PI-2. See README.md.`,
   );
 }
+
+export * from "./development.js";

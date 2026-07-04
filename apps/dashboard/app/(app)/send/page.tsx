@@ -35,13 +35,17 @@ import Link from "next/link";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { CostEstimatePanel } from "@/components/cost-estimate-panel";
+import {
+  getWallet,
+  sendSms,
+  simulateDeliveredDlr,
+} from "@/lib/client/dashboard-api";
 import { toastApiError } from "@/lib/error-toast";
-import { SENDER_IDS } from "@/lib/fixtures";
-import { getWallet, sendSms } from "@/lib/mock-api";
 import { formatMoney } from "@/lib/money";
 
 const CURRENCY: Currency = "GHS";
 const E164 = /^\+[1-9]\d{7,14}$/;
+const SENDER_IDS = ["Fabric"] as const;
 
 function parseRecipients(raw: string): { valid: string[]; invalid: number } {
   const parts = raw
@@ -54,7 +58,7 @@ function parseRecipients(raw: string): { valid: string[]; invalid: number } {
 
 export default function SendPage() {
   const [to, setTo] = useState("");
-  const [senderId, setSenderId] = useState(SENDER_IDS[0] ?? "");
+  const [senderId, setSenderId] = useState<string>(SENDER_IDS[0] ?? "");
   const [body, setBody] = useState("");
   const [balanceMinor, setBalanceMinor] = useState<bigint | null>(null);
   const [sending, setSending] = useState(false);
@@ -98,10 +102,14 @@ export default function SendPage() {
     setSending(true);
     setBlockedReqId(null);
     try {
-      const scenario = insufficient ? "insufficient" : "ok";
-      await sendSms({ to: valid.join(","), senderId, body }, scenario);
+      const results = [];
+      for (const recipient of valid) {
+        const result = await sendSms({ to: recipient, senderId, body });
+        await simulateDeliveredDlr(result.id);
+        results.push(result);
+      }
       setSentTotal(formatMoney(toMoney(totalMinor, CURRENCY)));
-      setSentCount(recipients);
+      setSentCount(results.length);
     } catch (envelope) {
       const parsed = parseApiError(envelope);
       if (parsed.type === "insufficient_funds_error") {

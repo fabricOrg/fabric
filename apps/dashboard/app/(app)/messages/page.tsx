@@ -19,17 +19,9 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@app/ui/components/ui/empty";
-import { Skeleton } from "@app/ui/components/ui/skeleton";
 import { List, TriangleAlert } from "lucide-react";
 import { MessagesTable } from "@/components/messages-table";
-import { listMessages, type Scenario } from "@/lib/mock-api";
-
-type ViewState = Scenario | "loading";
-function parseViewState(raw: string | undefined): ViewState {
-  return raw === "empty" || raw === "error" || raw === "loading"
-    ? raw
-    : "populated";
-}
+import { getMessageList } from "@/lib/server/dashboard-data";
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -50,25 +42,10 @@ function PageHeader() {
   );
 }
 
-export default async function MessagesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ state?: string }>;
-}) {
-  const view = parseViewState((await searchParams).state);
-
-  if (view === "loading") {
-    return (
-      <Shell>
-        <PageHeader />
-        <Skeleton className="h-96 rounded-xl" />
-      </Shell>
-    );
-  }
-
+export default async function MessagesPage() {
   let messages: readonly MessageSummary[];
   try {
-    messages = await listMessages(view);
+    messages = (await getMessageList()).messages;
   } catch (payload) {
     const err = parseApiError(payload);
     return (

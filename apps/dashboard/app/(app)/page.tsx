@@ -19,55 +19,37 @@ import {
 } from "@app/ui/components/ui/table";
 import { ArrowUpRight, Plus } from "lucide-react";
 import Link from "next/link";
-import { type MessageStatus, StatusBadge } from "@/components/status-badge";
+import { StatusBadge } from "@/components/status-badge";
+import { formatMoney } from "@/lib/money";
+import { getMessageList, getWalletSnapshot } from "@/lib/server/dashboard-data";
 
-interface RecentMessage {
-  to: string;
-  status: MessageStatus;
-  segments: number;
-  cost: string;
-  time: string;
-}
+export default async function OverviewPage() {
+  const [{ balances }, { messages }] = await Promise.all([
+    getWalletSnapshot(),
+    getMessageList(),
+  ]);
+  const primary = balances[0]?.balance;
+  const recent = messages.slice(0, 5);
+  const now = new Date();
+  const today = messages.filter((message) => {
+    const created = new Date(message.createdAt);
+    return (
+      created.getUTCFullYear() === now.getUTCFullYear() &&
+      created.getUTCMonth() === now.getUTCMonth() &&
+      created.getUTCDate() === now.getUTCDate()
+    );
+  });
+  const delivered = today.filter(
+    (message) => message.status === "delivered",
+  ).length;
+  const inFlight = today.filter((message) =>
+    ["queued", "sending", "accepted", "sent"].includes(message.status),
+  ).length;
+  const resolved = today.filter((message) =>
+    ["delivered", "undelivered", "failed", "expired"].includes(message.status),
+  ).length;
+  const deliveryRate = resolved === 0 ? 0 : (delivered / resolved) * 100;
 
-const RECENT: readonly RecentMessage[] = [
-  {
-    to: "+233 24● ●●● ●●12",
-    status: "delivered",
-    segments: 1,
-    cost: "0.03",
-    time: "2 min ago",
-  },
-  {
-    to: "+234 80● ●●● ●●45",
-    status: "sent",
-    segments: 2,
-    cost: "0.06",
-    time: "6 min ago",
-  },
-  {
-    to: "+233 20● ●●● ●●88",
-    status: "delivered",
-    segments: 1,
-    cost: "0.03",
-    time: "14 min ago",
-  },
-  {
-    to: "+233 27● ●●● ●●03",
-    status: "undelivered",
-    segments: 1,
-    cost: "0.03",
-    time: "22 min ago",
-  },
-  {
-    to: "+233 55● ●●● ●●71",
-    status: "failed",
-    segments: 1,
-    cost: "0.03",
-    time: "31 min ago",
-  },
-];
-
-export default function OverviewPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div className="flex flex-col gap-1">
@@ -75,20 +57,21 @@ export default function OverviewPage() {
           Overview
         </h1>
         <p className="text-sm text-muted-foreground">
-          Your wallet, today's traffic, and recent messages at a glance.
+          Your wallet, today&apos;s traffic, and recent messages at a glance.
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="md:col-span-1">
+        <Card>
           <CardHeader>
             <CardDescription>Available balance</CardDescription>
             <CardTitle className="font-display text-3xl tabular-nums">
-              GHS 1,204.03
+              {primary ? formatMoney(primary) : "No wallet"}
             </CardTitle>
             <CardAction>
               <span className="text-xs text-muted-foreground">
-                2 currencies
+                {balances.length}{" "}
+                {balances.length === 1 ? "currency" : "currencies"}
               </span>
             </CardAction>
           </CardHeader>
@@ -109,27 +92,30 @@ export default function OverviewPage() {
           <CardHeader>
             <CardDescription>Sent today</CardDescription>
             <CardTitle className="font-display text-3xl tabular-nums">
-              2,318
+              {today.length}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              2,276 delivered · 42 in flight
+              {delivered} delivered · {inFlight} in flight
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardDescription>Delivery rate · 24h</CardDescription>
+            <CardDescription>Delivery rate · today</CardDescription>
             <CardTitle className="font-display text-3xl tabular-nums">
-              98.2%
+              {deliveryRate.toFixed(1)}%
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            <Progress value={98} aria-label="Delivery rate 98.2 percent" />
+            <Progress
+              value={deliveryRate}
+              aria-label={`Delivery rate ${deliveryRate.toFixed(1)} percent`}
+            />
             <p className="text-sm text-muted-foreground">
-              Above your 95% target.
+              {resolved} resolved message{resolved === 1 ? "" : "s"}.
             </p>
           </CardContent>
         </Card>
@@ -139,7 +125,7 @@ export default function OverviewPage() {
         <CardHeader>
           <CardTitle>Recent messages</CardTitle>
           <CardDescription>
-            The last few sends across your account.
+            The latest sends across your account.
           </CardDescription>
           <CardAction>
             <Button asChild variant="ghost" size="sm">
@@ -157,26 +143,37 @@ export default function OverviewPage() {
                 <TableRow>
                   <TableHead>Recipient</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Segments</TableHead>
-                  <TableHead className="text-right">Cost</TableHead>
-                  <TableHead className="text-right">Time</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">
+                    Segments
+                  </TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">
+                    Cost
+                  </TableHead>
+                  <TableHead className="hidden text-right md:table-cell">
+                    Time
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {RECENT.map((m) => (
-                  <TableRow key={m.to}>
-                    <TableCell className="font-mono text-sm">{m.to}</TableCell>
+                {recent.map((message) => (
+                  <TableRow key={message.id}>
+                    <TableCell className="font-mono text-sm">
+                      {message.to}
+                    </TableCell>
                     <TableCell>
-                      <StatusBadge status={m.status} />
+                      <StatusBadge status={message.status} />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {m.segments}
+                    <TableCell className="hidden text-right tabular-nums sm:table-cell">
+                      {message.segments}
                     </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      GHS {m.cost}
+                    <TableCell className="hidden text-right font-mono tabular-nums sm:table-cell">
+                      {formatMoney(message.cost)}
                     </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {m.time}
+                    <TableCell className="hidden text-right text-muted-foreground md:table-cell">
+                      {new Date(message.createdAt).toLocaleTimeString("en", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </TableCell>
                   </TableRow>
                 ))}

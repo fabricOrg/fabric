@@ -1,4 +1,11 @@
-import type { AppDb } from "@app/db";
+import {
+  currency,
+  type MessageDetail,
+  type MessageStatus,
+  type MessageSummary,
+  type SendSmsResponse,
+} from "@app/contracts";
+import { type AppDb, findCustomerMessage, listCustomerMessages } from "@app/db";
 import type { SmsSenderPlugin } from "@app/integrations";
 import { FakeProvider } from "@app/integrations/testing";
 import {
@@ -12,6 +19,7 @@ import { notFound, unauthorized } from "../http/api-error.js";
 
 interface Row {
   tenant_id?: unknown;
+  [key: string]: unknown;
 }
 
 /**
@@ -31,14 +39,51 @@ export class SmsService {
   }
 
   /** POST /v1/sms/send — the tenant is already resolved by ApiKeyGuard. */
-  send(input: {
+  async send(input: {
     tenantId: string;
     to: string;
     senderId: string;
     body: string;
     currency: string;
-  }): Promise<SendResult> {
-    return engineSendSms(this.deps(), input);
+  }): Promise<SendSmsResponse> {
+    const result: SendResult = await engineSendSms(this.deps(), input);
+    const message = await this.get(input.tenantId, result.messageId);
+    return {
+      id: message.id,
+      status: result.status,
+      encoding: message.encoding,
+      segments: message.segments,
+      cost: message.cost,
+    };
+  }
+
+  async list(tenantId: string): Promise<MessageSummary[]> {
+    return this.db.withTenantDrizzle(tenantId, async (tx) => {
+      const rows = await listCustomerMessages(tx);
+      return rows.map(toMessageSummary);
+    });
+  }
+
+  async get(tenantId: string, id: string): Promise<MessageDetail> {
+    return this.db.withTenantDrizzle(tenantId, async (tx) => {
+      const row = await findCustomerMessage(tx, id);
+      if (!row) {
+        throw notFound("message_not_found", "No message exists with that id.");
+      }
+      const summary = toMessageSummary(row);
+      return {
+        ...summary,
+        senderId: row.senderId,
+        redacted: true,
+        timeline: [
+          {
+            status: summary.status,
+            at: row.updatedAt.toISOString(),
+          },
+        ],
+        ...(row.errorCode ? { failureReason: row.errorCode } : {}),
+      };
+    });
   }
 
   /**
@@ -81,4 +126,30 @@ export class SmsService {
     }
     return { status: await engineIngestDlr(this.deps(), tenantId, body) };
   }
+}
+
+function toMessageSummary(row: {
+  id: string;
+  status: MessageStatus;
+  encoding: "gsm7" | "ucs2";
+  segments: number;
+  costMinor: bigint;
+  currency: string;
+  providerSlug: string | null;
+  subjectId: string | null;
+  createdAt: Date;
+}): MessageSummary {
+  return {
+    id: row.id,
+    to: row.subjectId ? "Protected recipient" : "Recipient hidden",
+    status: row.status,
+    encoding: row.encoding,
+    segments: row.segments,
+    cost: {
+      currency: currency.parse(row.currency),
+      minor: row.costMinor.toString(),
+    },
+    provider: row.providerSlug ?? "pending",
+    createdAt: row.createdAt.toISOString(),
+  };
 }
