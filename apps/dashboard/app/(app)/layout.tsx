@@ -9,6 +9,7 @@ import { LogOut, Wallet } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
+import { CommandMenu, CommandMenuTrigger } from "@/components/command-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { formatMoney } from "@/lib/money";
 import { requireDashboardSession } from "@/lib/server/auth";
@@ -31,6 +32,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             orientation="vertical"
             className="mr-1 data-[orientation=vertical]:h-4"
           />
+          <CommandMenuTrigger />
           <div className="ml-auto flex items-center gap-2">
             <Button
               asChild
@@ -59,6 +61,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         </header>
         <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </SidebarInset>
+      <CommandMenu />
     </SidebarProvider>
   );
 }

@@ -81,10 +81,17 @@
       // balance) are reachable without a mouse — a WCAG 2.1.1 requirement (axe
       // `scrollable-region-focusable`). biome's `noNoninteractiveTabindex` false-positives on exactly
       // this required pattern; adams' axe browser-QA is the authoritative a11y gate. Scoped to app.
+      // `useSemanticElements` is relaxed for the same reason: our dashboards annotate styled <div>s with
+      // ARIA roles the rule wants swapped for native elements that can't take our Tailwind tokens —
+      // custom `role="meter"` progress bars and `role="group"` segmented button toggles. The ARIA
+      // roles + labels are correct; axe QA remains the authoritative gate.
       "includes": ["apps/**"],
       "linter": {
         "rules": {
-          "a11y": { "noNoninteractiveTabindex": "off" }
+          "a11y": {
+            "noNoninteractiveTabindex": "off",
+            "useSemanticElements": "off"
+          }
         }
       }
     }

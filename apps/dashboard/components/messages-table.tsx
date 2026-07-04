@@ -25,9 +25,10 @@ import {
   TableHeader,
   TableRow,
 } from "@app/ui/components/ui/table";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { type MessageStatus, StatusBadge } from "@/components/status-badge";
 import { getMessage } from "@/lib/client/dashboard-api";
+import { countryOf } from "@/lib/dial-codes";
 import { formatMoney } from "@/lib/money";
 
 const STATUSES: readonly MessageStatus[] = [
@@ -41,21 +42,41 @@ const STATUSES: readonly MessageStatus[] = [
   "expired",
 ];
 
+const ALL = "all" as const;
+
 export function MessagesTable({
   messages,
 }: {
   messages: readonly MessageSummary[];
 }) {
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<MessageStatus | "all">("all");
+  const [status, setStatus] = useState<MessageStatus | typeof ALL>(ALL);
+  // Provider is this SMS-only surface's channel/route dimension; a true multi-channel filter
+  // (WhatsApp, voice) lands when those channels ship. Country is derived from the recipient mask.
+  const [provider, setProvider] = useState<string>(ALL);
+  const [country, setCountry] = useState<string>(ALL);
   const [detail, setDetail] = useState<MessageDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  const filtered = messages.filter(
-    (m) =>
-      (status === "all" || m.status === status) &&
-      m.to.toLowerCase().includes(q.trim().toLowerCase()),
+  const providers = useMemo(
+    () => [...new Set(messages.map((m) => m.provider))].sort(),
+    [messages],
   );
+  const countries = useMemo(
+    () => [...new Set(messages.map((m) => countryOf(m.to)))].sort(),
+    [messages],
+  );
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return messages.filter(
+      (m) =>
+        (status === ALL || m.status === status) &&
+        (provider === ALL || m.provider === provider) &&
+        (country === ALL || countryOf(m.to) === country) &&
+        m.to.toLowerCase().includes(needle),
+    );
+  }, [messages, q, status, provider, country]);
 
   async function open(id: string) {
     setLoadingDetail(true);
@@ -68,7 +89,7 @@ export function MessagesTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -78,16 +99,42 @@ export function MessagesTable({
         />
         <Select
           value={status}
-          onValueChange={(v) => setStatus(v as MessageStatus | "all")}
+          onValueChange={(v) => setStatus(v as MessageStatus | typeof ALL)}
         >
           <SelectTrigger className="sm:w-44" aria-label="Filter by status">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value={ALL}>All statuses</SelectItem>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {s.charAt(0).toUpperCase() + s.slice(1)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={provider} onValueChange={setProvider}>
+          <SelectTrigger className="sm:w-44" aria-label="Filter by provider">
+            <SelectValue placeholder="All providers" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All providers</SelectItem>
+            {providers.map((p) => (
+              <SelectItem key={p} value={p}>
+                {p}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={country} onValueChange={setCountry}>
+          <SelectTrigger className="sm:w-44" aria-label="Filter by country">
+            <SelectValue placeholder="All countries" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All countries</SelectItem>
+            {countries.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
               </SelectItem>
             ))}
           </SelectContent>
