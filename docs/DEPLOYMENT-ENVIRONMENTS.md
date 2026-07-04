@@ -14,6 +14,10 @@ Work branches merge into `dev`. Promotion pull requests then move the same tree 
 container tag is the Git tree hash, so an unchanged promotion
 keeps one immutable artifact identity even when GitHub creates a different merge commit.
 
+Squash work-branch pull requests into `dev`. Merge environment promotion pull requests with a merge
+commit; do not squash them. Preserving ancestry between the long-lived branches keeps each next
+promotion conflict-free while the tree-hash tag proves that the promoted artifact is unchanged.
+
 ## Current status
 
 The branches, GitHub Environments, branch deployment policies, workflow, regions, ECR repository,
