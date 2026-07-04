@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -170,8 +171,23 @@ export async function runCloudMigrations(
   await verifyRuntimeRole(environment.runtimeUrl);
 }
 
-const invokedPath = process.argv[1] ? resolve(process.argv[1]) : undefined;
-if (invokedPath === fileURLToPath(import.meta.url)) {
+export function isEntrypoint(
+  moduleUrl: string,
+  invokedPath = process.argv[1],
+): boolean {
+  if (!invokedPath) return false;
+  try {
+    return (
+      realpathSync(resolve(invokedPath)) ===
+      realpathSync(fileURLToPath(moduleUrl))
+    );
+  } catch {
+    return false;
+  }
+}
+
+if (isEntrypoint(import.meta.url)) {
+  console.log("Starting cloud database migrations.");
   runCloudMigrations()
     .then(() => {
       console.log("Cloud database migrations and role verification passed.");
