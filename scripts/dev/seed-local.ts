@@ -9,6 +9,7 @@ const tenantId =
 const rawKey = process.env.DASHBOARD_API_KEY;
 const superUrl = process.env.DATABASE_URL_SUPER;
 const appUrl = process.env.DATABASE_URL_APP;
+const workosOrganizationId = process.env.WORKOS_ORGANIZATION_ID;
 
 if (!rawKey || !superUrl || !appUrl) {
   throw new Error(
@@ -24,8 +25,19 @@ async function main(): Promise<void> {
   try {
     await owner
       .insert(accounts)
-      .values({ id: tenantId, name: "Fabric Local", slug: "fabric-local" })
-      .onConflictDoNothing();
+      .values({
+        id: tenantId,
+        name: "Fabric Local",
+        slug: "fabric-local",
+        ...(workosOrganizationId ? { workosOrganizationId } : {}),
+      })
+      .onConflictDoUpdate({
+        target: accounts.id,
+        set: {
+          name: "Fabric Local",
+          ...(workosOrganizationId ? { workosOrganizationId } : {}),
+        },
+      });
     await owner
       .insert(apiKeys)
       .values({

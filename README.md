@@ -18,8 +18,9 @@ pnpm dev:seed
 ```
 
 Run `pnpm dev:api` and `pnpm dev` in separate terminals, then open
-`http://localhost:3100`. The local login uses an encrypted development-only session and a seeded
-test API key; it refuses to run when `NODE_ENV=production`.
+`http://localhost:3100`. Development auth uses an encrypted local-only session and refuses to run
+when `NODE_ENV=production`. When the WorkOS variables are present, the same login screen also
+supports hosted WorkOS authentication with server-only sealed sessions.
 
 After installing and authenticating the Infisical CLI, you can run the same local workflow with
 secrets injected from the Fabric Services development project:

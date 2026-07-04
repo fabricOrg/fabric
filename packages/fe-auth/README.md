@@ -1,9 +1,8 @@
 # @app/fe-auth — shared frontend auth/BFF session mechanism
 
-**Status:** the production WorkOS interface remains frozen and its external flows are deferred.
-The package also provides an explicit development-only encrypted session used by the local
-dashboard; it is disabled by default and refuses to run in production. Full WorkOS design:
-`team/frontend/PROPOSAL-fe-auth-bff-seam.md`.
+**Status:** the customer WorkOS sealed-session flow is implemented for the dashboard. The package
+also provides an explicit development-only encrypted session; it is disabled by default and refuses
+to run in production. Staff realm integration remains deferred.
 
 ## What this is
 
