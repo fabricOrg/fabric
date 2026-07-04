@@ -65,7 +65,12 @@ const workosSession = {
   organizationId: "org_1",
   role: "owner",
   permissions: ["sms:send"],
-  user: { id: "user_1", email: "owner@example.com", name: "Owner" },
+  user: {
+    id: "user_1",
+    email: "owner@example.com",
+    name: "Owner",
+    updatedAt: "2026-07-04T10:00:00.000Z",
+  },
 };
 
 describe("@app/fe-auth WorkOS flow", () => {
@@ -119,6 +124,7 @@ describe("@app/fe-auth WorkOS flow", () => {
       expect.objectContaining({
         externalUserId: "user_1",
         organizationId: "org_1",
+        userUpdatedAt: "2026-07-04T10:00:00.000Z",
       }),
     );
   });

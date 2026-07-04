@@ -46,6 +46,7 @@ export interface WorkOSSessionClaims {
   readonly organizationId: string;
   readonly email: string;
   readonly name: string | null;
+  readonly userUpdatedAt: string;
   readonly role: string;
   readonly permissions: readonly string[];
   readonly sessionId: string;
@@ -164,6 +165,7 @@ async function authenticateAndResolve(
     organizationId: result.organizationId,
     email: result.user.email,
     name: result.user.name,
+    userUpdatedAt: result.user.updatedAt,
     role: result.role,
     permissions: result.permissions ?? [],
     sessionId: result.sessionId,

@@ -10,7 +10,7 @@ import {
   users,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, lte, ne, or, type SQL } from "drizzle-orm";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
 
 const ROLE_PERMISSIONS = {
@@ -58,31 +58,53 @@ export class IdentityService {
       if (!account || account.status !== "active") return null;
 
       const now = new Date();
-      const [user] = await tx
+      const sourceUpdatedAt = new Date(request.user_updated_at);
+      await tx
         .insert(users)
         .values({
           externalSubjectId: request.external_user_id,
           email: request.email,
           name: request.name,
+          workosUpdatedAt: sourceUpdatedAt,
         })
         .onConflictDoUpdate({
           target: users.externalSubjectId,
-          set: { email: request.email, name: request.name, updatedAt: now },
+          set: {
+            email: request.email,
+            name: request.name,
+            workosUpdatedAt: sourceUpdatedAt,
+            updatedAt: now,
+          },
+          setWhere: requiredCondition(
+            or(
+              isNull(users.workosUpdatedAt),
+              lte(users.workosUpdatedAt, sourceUpdatedAt),
+            ),
+          ),
         })
-        .returning({ id: users.id, status: users.status });
+        .returning({ id: users.id });
+      const [user] = await tx
+        .select({ id: users.id, status: users.status })
+        .from(users)
+        .where(eq(users.externalSubjectId, request.external_user_id))
+        .limit(1);
       if (!user || user.status !== "active") return null;
 
-      await tx
+      const [membership] = await tx
         .insert(memberships)
         .values({
           tenantId: scopedTenantId,
           userId: user.id,
           role: request.role,
+          status: "active",
         })
         .onConflictDoUpdate({
           target: [memberships.tenantId, memberships.userId],
-          set: { role: request.role, updatedAt: now },
-        });
+          set: { role: request.role, status: "active", updatedAt: now },
+          setWhere: ne(memberships.status, "disabled"),
+        })
+        .returning({ id: memberships.id });
+      if (!membership) return null;
 
       const allowed = new Set<string>(ROLE_PERMISSIONS[request.role]);
       return {
@@ -94,4 +116,9 @@ export class IdentityService {
       };
     });
   }
+}
+
+function requiredCondition(condition: SQL | undefined): SQL {
+  if (!condition) throw new Error("A database write condition is required.");
+  return condition;
 }
