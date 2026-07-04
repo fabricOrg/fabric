@@ -18,13 +18,16 @@ Squash work-branch pull requests into `dev`. Merge environment promotion pull re
 commit; do not squash them. Preserving ancestry between the long-lived branches keeps each next
 promotion conflict-free while the tree-hash tag proves that the promoted artifact is unchanged.
 
+Push-triggered deployments classify the promoted diff first. Markdown-only changes skip image
+builds, migrations, service updates, and smoke tests. Manual workflow dispatch always deploys.
+
 ## Current status
 
 The branches, GitHub Environments, branch deployment policies, workflow, regions, ECR repository,
 and container name are configured. Testing Terraform state is encrypted, versioned, remotely stored,
-and locked in S3. The testing GitHub OIDC role is provisioned. The testing runtime has a validated
-Terraform plan but remains unapplied, so deployments stay disabled. Staging and production require
-separate AWS accounts and infrastructure.
+and locked in S3. The testing runtime is provisioned and deploys through GitHub OIDC after running
+database migrations. Staging and production remain disabled and require separate AWS accounts and
+infrastructure.
 
 Repository enable flags:
 

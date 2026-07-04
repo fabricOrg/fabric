@@ -3,6 +3,9 @@
 Terraform is isolated by AWS account and environment. Every deployed environment owns separate
 state so an apply cannot modify another environment.
 
+See [AWS testing architecture](../docs/AWS-TESTING-ARCHITECTURE.md) for the provisioned request,
+network, deployment, migration, IAM, and observability flows.
+
 ```text
 infra/
   bootstrap/  # encrypted, versioned S3 state backend with native lockfiles
@@ -18,7 +21,7 @@ infra/
 |---|---|---|---|
 | Work branch | CI only | GitHub runner | Ephemeral |
 | `dev` | CI only | None | Integration gate |
-| `testing` | Testing | Dev account, `eu-west-1` | Runtime defined; cost-bearing resources not yet applied |
+| `testing` | Testing | Dev account, `eu-west-1` | Runtime provisioned and deploying from GitHub Actions |
 | `staging` | Staging | Separate account, `af-south-1` | Not provisioned |
 | `main` | Production | Separate account, `af-south-1` | Not provisioned |
 
@@ -42,5 +45,6 @@ Staging and production must use separate accounts and state buckets.
 ## Current scope
 
 The API ECR repository, state backend, and testing GitHub OIDC role exist. The testing ECS, RDS,
-API Gateway, Cloud Map, secrets, logging, alarms, and migration runner are defined and validated in
-Terraform but are not applied. Staging and production remain separate-account scaffolds.
+API Gateway, Cloud Map, secrets, logging, alarms, and migration runner are provisioned. The API runs
+one Fargate task after a successful migration-first deployment. Staging and production remain
+separate-account scaffolds.
