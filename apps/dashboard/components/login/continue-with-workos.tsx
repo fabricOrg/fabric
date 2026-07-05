@@ -1,13 +1,13 @@
 "use client";
 
 import { Button } from "@app/ui/components/ui/button";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 /**
- * WorkOS sign-in trigger. /auth/login 302s out to the WorkOS hosted page, so the click causes a
- * full-page navigation. Without feedback that reads as "nothing happened" (the flow users disliked):
- * we flip to an explicit "Redirecting to secure sign-in…" state on click so the hop feels intentional.
+ * WorkOS sign-in trigger, Notion-style: a neutral full-width outline button. /auth/login 302s to the
+ * WorkOS hosted page (a full navigation), so on click we flip to an explicit "Redirecting…" state so
+ * the hop reads as intentional rather than a dead flicker.
  */
 export function ContinueWithWorkOS({ screenHint }: { screenHint?: "sign-up" }) {
   const [pending, setPending] = useState(false);
@@ -17,7 +17,11 @@ export function ContinueWithWorkOS({ screenHint }: { screenHint?: "sign-up" }) {
       : "/auth/login";
 
   return (
-    <Button asChild className="w-full">
+    <Button
+      asChild
+      variant="outline"
+      className="h-11 w-full justify-center gap-2 font-normal"
+    >
       <a
         href={href}
         aria-busy={pending}
@@ -26,13 +30,13 @@ export function ContinueWithWorkOS({ screenHint }: { screenHint?: "sign-up" }) {
       >
         {pending ? (
           <>
-            <Loader2 className="animate-spin" data-icon="inline-start" />
-            Redirecting to secure sign-in…
+            <Loader2 className="size-4 animate-spin" />
+            Redirecting…
           </>
         ) : (
           <>
-            Continue with WorkOS
-            <ArrowRight data-icon="inline-end" />
+            <ShieldCheck className="size-4" />
+            Continue with WorkOS SSO
           </>
         )}
       </a>
