@@ -1,11 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 /**
- * Mock platform plugin registry (control-plane). TODO(BFF): back with the real registry in
- * services/api (plugin_instances + routing rules + health). Flipping an instance to LIVE (real
- * spend/sends) is a redline — sandbox only until a human activates live with real creds.
+ * Plugin registry BFF. When the api is configured (API_BASE_URL + BFF_INTERNAL_TOKEN) this calls the
+ * real staff endpoint /internal/plugins (backed by plugin_instances); otherwise an offline mock.
+ * Flipping an instance to LIVE (real spend/sends) is a redline — sandbox only until human-activated.
  */
-const INSTANCES = [
+const MOCK = [
   {
     id: "sms_fake",
     capability: "sms",
@@ -85,8 +85,59 @@ const INSTANCES = [
   },
 ] as const;
 
+function badBody() {
+  return NextResponse.json(
+    {
+      error: {
+        type: "validation_error",
+        code: "invalid_request",
+        message: "Malformed body.",
+      },
+    },
+    { status: 400 },
+  );
+}
+
+// The api registry DTO has no market region; the UI treats it as optional.
+function withRegion(dto: Record<string, unknown>) {
+  return { region: null, ...dto };
+}
+
+function apiConfig(): { baseUrl: string; token: string } | null {
+  const baseUrl = process.env.API_BASE_URL;
+  const token = process.env.BFF_INTERNAL_TOKEN;
+  return baseUrl && token ? { baseUrl, token } : null;
+}
+
 export async function GET() {
-  return NextResponse.json({ instances: INSTANCES });
+  const cfg = apiConfig();
+  if (cfg) {
+    try {
+      const res = await fetch(new URL("/internal/plugins", cfg.baseUrl), {
+        cache: "no-store",
+        headers: { "x-bff-token": cfg.token },
+      });
+      const payload = (await res.json()) as {
+        instances?: Record<string, unknown>[];
+      };
+      if (!res.ok) return NextResponse.json(payload, { status: res.status });
+      return NextResponse.json({
+        instances: (payload.instances ?? []).map(withRegion),
+      });
+    } catch {
+      return NextResponse.json(
+        {
+          error: {
+            type: "api_error",
+            code: "registry_unavailable",
+            message: "Plugin registry is unavailable.",
+          },
+        },
+        { status: 502 },
+      );
+    }
+  }
+  return NextResponse.json({ instances: MOCK });
 }
 
 export async function POST(request: NextRequest) {
@@ -94,18 +145,40 @@ export async function POST(request: NextRequest) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return NextResponse.json(
-      {
-        error: {
-          type: "validation_error",
-          code: "invalid_request",
-          message: "Malformed body.",
-        },
-      },
-      { status: 400 },
-    );
+    return badBody();
   }
-  const found = INSTANCES.find((i) => i.id === body.id);
+
+  const cfg = apiConfig();
+  if (cfg) {
+    try {
+      const res = await fetch(new URL("/internal/plugins", cfg.baseUrl), {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "content-type": "application/json",
+          "x-bff-token": cfg.token,
+        },
+        body: JSON.stringify({ id: body.id, action: body.action }),
+      });
+      const payload = (await res.json()) as Record<string, unknown>;
+      if (!res.ok) return NextResponse.json(payload, { status: res.status });
+      return NextResponse.json(withRegion(payload));
+    } catch {
+      return NextResponse.json(
+        {
+          error: {
+            type: "api_error",
+            code: "registry_unavailable",
+            message: "Plugin registry is unavailable.",
+          },
+        },
+        { status: 502 },
+      );
+    }
+  }
+
+  // Offline mock.
+  const found = MOCK.find((i) => i.id === body.id);
   if (!found) {
     return NextResponse.json(
       {
