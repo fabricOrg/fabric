@@ -24,6 +24,8 @@ export interface NavItem {
   readonly title: string;
   readonly href: string;
   readonly icon: LucideIcon;
+  /** Mock-first surface with no real backend yet — badged "Preview" in deployed builds (honesty). */
+  readonly preview?: boolean;
 }
 
 export interface NavGroup {
@@ -35,27 +37,44 @@ export const navGroups: readonly NavGroup[] = [
   {
     items: [
       { title: "Overview", href: "/", icon: LayoutDashboard },
-      { title: "Transactions", href: "/flows", icon: Workflow },
+      { title: "Transactions", href: "/flows", icon: Workflow, preview: true },
     ],
   },
   {
     label: "Messaging",
     items: [
       { title: "Send SMS", href: "/send", icon: Send },
-      { title: "Journeys", href: "/journeys", icon: Route },
-      { title: "Campaigns", href: "/campaigns", icon: Megaphone },
+      { title: "Journeys", href: "/journeys", icon: Route, preview: true },
+      {
+        title: "Campaigns",
+        href: "/campaigns",
+        icon: Megaphone,
+        preview: true,
+      },
       { title: "Messages", href: "/messages", icon: List },
     ],
   },
   {
     label: "Verify",
-    items: [{ title: "Verify", href: "/verify", icon: ShieldCheck }],
+    items: [
+      { title: "Verify", href: "/verify", icon: ShieldCheck, preview: true },
+    ],
   },
   {
     label: "Compliance",
     items: [
-      { title: "Sender IDs", href: "/senders", icon: BadgeCheck },
-      { title: "Consent & DND", href: "/consent", icon: BellOff },
+      {
+        title: "Sender IDs",
+        href: "/senders",
+        icon: BadgeCheck,
+        preview: true,
+      },
+      {
+        title: "Consent & DND",
+        href: "/consent",
+        icon: BellOff,
+        preview: true,
+      },
     ],
   },
   {
