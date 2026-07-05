@@ -63,11 +63,20 @@ export function AppSidebar({ role }: { role: string }) {
                       <SidebarMenuButton
                         asChild
                         isActive={active}
-                        tooltip={item.title}
+                        tooltip={
+                          item.preview
+                            ? `${item.title} — preview (mock data)`
+                            : item.title
+                        }
                       >
                         <Link href={item.href}>
                           <item.icon />
                           <span>{item.title}</span>
+                          {item.preview ? (
+                            <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground group-data-[collapsible=icon]:hidden">
+                              Preview
+                            </span>
+                          ) : null}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
