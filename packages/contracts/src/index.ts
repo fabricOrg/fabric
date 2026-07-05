@@ -22,5 +22,7 @@ export * from "./identity.js";
 export * from "./message-status.js";
 // Money (exact, minor-unit strings) + SMS/wallet response DTOs — consumed by the dashboard/SDK.
 export * from "./money.js";
+// Platform plugin registry (control-plane) — provider instances per capability.
+export * from "./plugins.js";
 export * from "./sms.js";
 export * from "./wallet.js";
