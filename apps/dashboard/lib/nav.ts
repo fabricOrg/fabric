@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Users,
   Wallet,
+  Workflow,
 } from "lucide-react";
 
 /**
@@ -30,7 +31,12 @@ export interface NavGroup {
 }
 
 export const navGroups: readonly NavGroup[] = [
-  { items: [{ title: "Overview", href: "/", icon: LayoutDashboard }] },
+  {
+    items: [
+      { title: "Overview", href: "/", icon: LayoutDashboard },
+      { title: "Transactions", href: "/flows", icon: Workflow },
+    ],
+  },
   {
     label: "Messaging",
     items: [
