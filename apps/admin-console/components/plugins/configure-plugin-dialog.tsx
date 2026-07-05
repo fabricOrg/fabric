@@ -21,9 +21,9 @@ import { toast } from "sonner";
 import type { PluginInstance } from "@/lib/client/plugins-api";
 
 /**
- * Credential config for a plugin instance. Mock — TODO(BFF): store creds in Vault + verify the
- * connection. Live mode is a redline (real spend/sends): sandbox is the default and only safe mode
- * here; a live switch must be human-approved.
+ * Credential config for a platform plugin instance. Mock — TODO(BFF): store creds in Vault + verify.
+ * Live mode is a redline (real spend/sends): sandbox is the only mode here; going live is a separate,
+ * human-approved step with real credentials.
  */
 export function ConfigurePluginDialog({
   instance,
@@ -42,7 +42,6 @@ export function ConfigurePluginDialog({
   function save() {
     if (!instance) return;
     setSaving(true);
-    // Mock: no creds leave the browser. Real path posts to a Vault-backed BFF route.
     setTimeout(() => {
       setSaving(false);
       onOpenChange(false);
@@ -60,8 +59,8 @@ export function ConfigurePluginDialog({
         <DialogHeader>
           <DialogTitle>Configure {instance?.vendor}</DialogTitle>
           <DialogDescription>
-            Sandbox / test credentials only. Going live (real spend & sends) is
-            a separate, approved step.
+            Sandbox / test credentials only. Going live (real spend &amp; sends)
+            is a separate, approved step.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 py-2">

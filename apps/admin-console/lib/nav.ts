@@ -1,4 +1,5 @@
 import {
+  Blocks,
   Building2,
   GitPullRequestArrow,
   type LucideIcon,
@@ -31,6 +32,10 @@ export const navGroups: readonly NavGroup[] = [
       { title: "Impersonation", href: "/impersonation", icon: UserCog },
       { title: "Kill-switch", href: "/kill-switch", icon: Power },
     ],
+  },
+  {
+    label: "Integrations",
+    items: [{ title: "Plugins", href: "/plugins", icon: Blocks }],
   },
   {
     label: "Trust",

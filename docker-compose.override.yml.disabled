@@ -1,0 +1,8 @@
+# LOCAL override — not the shared compose. Maps our Postgres to host port 5433 so it doesn't clash
+# with another project already bound to 5432 on this machine. The container still listens on 5432
+# internally; only the host mapping changes. Point DATABASE_URL_* at localhost:5433 locally.
+# `!override` REPLACES the base ports list (otherwise Compose appends and 5432 still clashes).
+services:
+  postgres:
+    ports: !override
+      - "5433:5432"

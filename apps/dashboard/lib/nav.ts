@@ -1,7 +1,6 @@
 import {
   BadgeCheck,
   BellOff,
-  Blocks,
   LayoutDashboard,
   List,
   type LucideIcon,
@@ -56,10 +55,6 @@ export const navGroups: readonly NavGroup[] = [
       { title: "Sender IDs", href: "/senders", icon: BadgeCheck },
       { title: "Consent & DND", href: "/consent", icon: BellOff },
     ],
-  },
-  {
-    label: "Integrations",
-    items: [{ title: "Plugins", href: "/plugins", icon: Blocks }],
   },
   {
     label: "Account",

@@ -1,16 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 /**
- * Mock plugin registry. TODO(BFF): back with the real registry in services/api — plugin instances,
- * routing rules (default + fallback), health. Enabling/configuring a LIVE instance is an external,
- * credentialed move (redline) — sandbox instances only until a human flips it.
+ * Mock platform plugin registry (control-plane). TODO(BFF): back with the real registry in
+ * services/api (plugin_instances + routing rules + health). Flipping an instance to LIVE (real
+ * spend/sends) is a redline — sandbox only until a human activates live with real creds.
  */
 const INSTANCES = [
   {
     id: "sms_fake",
     capability: "sms",
     vendor: "FakeProvider",
-    label: "FakeProvider (sandbox)",
+    label: "FakeProvider",
     enabled: true,
     isDefault: true,
     status: "connected",
@@ -119,10 +119,9 @@ export async function POST(request: NextRequest) {
     );
   }
   const action = body.action;
-  // Mock: echo the resulting instance state (real path re-evaluates routing rules + persists).
   return NextResponse.json({
     ...found,
-    enabled: action === "disable" ? false : true,
+    enabled: action !== "disable",
     isDefault: action === "make-default" ? true : found.isDefault,
     mode: found.mode ?? "sandbox",
     status: action === "disable" ? "available" : "connected",

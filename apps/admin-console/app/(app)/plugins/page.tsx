@@ -77,7 +77,6 @@ export default function PluginsPage() {
       setInstances((prev) =>
         (prev ?? []).map((i) => {
           if (i.id === updated.id) return updated;
-          // Only one default per capability.
           if (action === "make-default" && i.capability === updated.capability)
             return { ...i, isDefault: false };
           return i;
@@ -95,8 +94,9 @@ export default function PluginsPage() {
           Plugins
         </h1>
         <p className="text-sm text-muted-foreground">
-          Providers are hot-swappable plugins. Enable instances, pick a default,
-          and add fallbacks per capability — no vendor lock-in.
+          Platform providers. Enable instances, pick a default, add fallbacks
+          per capability — the product routes through whatever is enabled here.
+          No vendor lock-in.
         </p>
       </div>
 

@@ -78,6 +78,13 @@
       "when": 1783176713358,
       "tag": "0010_workos_identity_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1783242345756,
+      "tag": "0011_lean_the_renegades",
+      "breakpoints": true
     }
   ]
 }
