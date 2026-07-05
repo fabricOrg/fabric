@@ -1,3 +1,5 @@
+"use client";
+
 import { Badge } from "@app/ui/components/ui/badge";
 import { Button } from "@app/ui/components/ui/button";
 import {
@@ -16,6 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from "@app/ui/components/ui/table";
+import { useMemo, useState } from "react";
+import { CreateTenantDialog } from "@/components/create-tenant-dialog";
 import { TENANTS, type Tenant, type TenantStatus } from "@/lib/mock-admin";
 import { formatMoney } from "@/lib/money";
 
@@ -35,16 +39,33 @@ function StatusBadge({ status }: { status: TenantStatus }) {
 }
 
 export default function TenantsPage() {
+  const [tenants, setTenants] = useState<readonly Tenant[]>(TENANTS);
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return tenants;
+    return tenants.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) || t.slug.toLowerCase().includes(q),
+    );
+  }, [tenants, query]);
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Tenants
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Every customer organisation on Fabric. Accounts soft-close — never
-          hard-delete.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-display text-2xl font-semibold tracking-tight">
+            Tenants
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Every customer organisation on Fabric. Accounts soft-close — never
+            hard-delete.
+          </p>
+        </div>
+        <CreateTenantDialog
+          onCreated={(tenant) => setTenants((prev) => [tenant, ...prev])}
+        />
       </div>
 
       <Card>
@@ -54,6 +75,8 @@ export default function TenantsPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Search tenants…"
             className="sm:max-w-xs"
             aria-label="Search tenants"
@@ -76,7 +99,7 @@ export default function TenantsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {TENANTS.map((t: Tenant) => (
+                {filtered.map((t) => (
                   <TableRow key={t.id}>
                     <TableCell>
                       <div className="flex flex-col">
@@ -107,6 +130,11 @@ export default function TenantsPage() {
                 ))}
               </TableBody>
             </Table>
+            {filtered.length === 0 && (
+              <p className="p-6 text-center text-sm text-muted-foreground">
+                No tenants match this search.
+              </p>
+            )}
           </section>
         </CardContent>
       </Card>

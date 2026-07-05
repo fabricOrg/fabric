@@ -9,6 +9,8 @@
 //
 // Domains add their schemas as files here (e.g. ./sms.ts, ./wallet.ts) and re-export below.
 
+// Admin control-plane DTOs — ops-provisioned tenant onboarding (WorkOS org + account + invite).
+export * from "./admin.js";
 // Dev-portal DTOs (F8.6/F2.3) — API keys, webhook endpoints, request logs.
 export * from "./dev-portal.js";
 // F8.3 error model — shared error envelope + browser-safe parser (produced by services, consumed

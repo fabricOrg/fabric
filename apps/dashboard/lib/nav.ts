@@ -1,17 +1,24 @@
 import {
+  BadgeCheck,
+  BellOff,
+  Blocks,
   LayoutDashboard,
   List,
   type LucideIcon,
+  Megaphone,
   Send,
+  ShieldCheck,
   Users,
   Wallet,
+  Workflow,
 } from "lucide-react";
 
 /**
  * Dashboard information architecture. THE key correction vs the imported design: the app is the
- * tenant CONSOLE, not "the SMS product". SMS-specific screens live under a Messaging group; the
- * wallet is a product-NEUTRAL account concern (SMS, and soon Verify, both bill from it), so it sits
- * in its own Account group — not nested under Messaging. Overview keeps balance VISIBILITY up top.
+ * tenant CONSOLE, not "the SMS product". Channel/campaign screens live under Messaging; Verify is a
+ * product-neutral primitive; sender-ID + consent are Compliance (Nigeria NCC gates delivery on them);
+ * the wallet is a product-NEUTRAL account concern (every product bills from it) so it sits in Account.
+ * Overview keeps balance VISIBILITY up top. Groups here also feed the ⌘K command palette.
  */
 export interface NavItem {
   readonly title: string;
@@ -25,13 +32,34 @@ export interface NavGroup {
 }
 
 export const navGroups: readonly NavGroup[] = [
-  { items: [{ title: "Overview", href: "/", icon: LayoutDashboard }] },
+  {
+    items: [
+      { title: "Overview", href: "/", icon: LayoutDashboard },
+      { title: "Transactions", href: "/flows", icon: Workflow },
+    ],
+  },
   {
     label: "Messaging",
     items: [
       { title: "Send SMS", href: "/send", icon: Send },
+      { title: "Campaigns", href: "/campaigns", icon: Megaphone },
       { title: "Messages", href: "/messages", icon: List },
     ],
+  },
+  {
+    label: "Verify",
+    items: [{ title: "Verify", href: "/verify", icon: ShieldCheck }],
+  },
+  {
+    label: "Compliance",
+    items: [
+      { title: "Sender IDs", href: "/senders", icon: BadgeCheck },
+      { title: "Consent & DND", href: "/consent", icon: BellOff },
+    ],
+  },
+  {
+    label: "Integrations",
+    items: [{ title: "Plugins", href: "/plugins", icon: Blocks }],
   },
   {
     label: "Account",
@@ -41,3 +69,18 @@ export const navGroups: readonly NavGroup[] = [
     ],
   },
 ];
+
+/** Flattened destinations for the ⌘K command palette (single source of truth = navGroups). */
+export const navCommands: readonly {
+  title: string;
+  href: string;
+  group: string;
+  icon: LucideIcon;
+}[] = navGroups.flatMap((g) =>
+  g.items.map((item) => ({
+    title: item.title,
+    href: item.href,
+    group: g.label ?? "General",
+    icon: item.icon,
+  })),
+);

@@ -34,3 +34,4 @@ playwright-report/
 # docker-compose local overrides (per-machine port remaps etc.) — auto-loaded, never shared
 docker-compose.override.yml
 /team
+/.playwright-mcp
