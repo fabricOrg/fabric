@@ -28,6 +28,7 @@ import { useCallback, useEffect, useState } from "react";
 import { RecentActivity } from "@/components/overview/recent-activity";
 import { SpendByChannel } from "@/components/overview/spend-by-channel";
 import { StatTiles } from "@/components/overview/stat-tiles";
+import { TrafficChart } from "@/components/overview/traffic-chart";
 import { getOverview, type OverviewSummary } from "@/lib/client/overview-api";
 import { toastApiError } from "@/lib/error-toast";
 
@@ -190,6 +191,7 @@ export default function OverviewPage() {
       {state.status === "ready" && !isEmpty(state.summary) && (
         <>
           <StatTiles summary={state.summary} />
+          <TrafficChart points={state.summary.traffic} />
           <div className="grid gap-4 lg:grid-cols-2">
             <SpendByChannel channels={state.summary.spendByChannel} />
             <RecentActivity items={state.summary.recentActivity} />

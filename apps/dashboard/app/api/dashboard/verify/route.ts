@@ -116,6 +116,24 @@ function recentVerifications(now: number): Verification[] {
   });
 }
 
+// Last 14 days: attempts started vs successfully verified (verified ≤ attempts). TODO(BFF): real rollup.
+const TREND = [
+  { date: "Jun 22", attempts: 92, verified: 74 },
+  { date: "Jun 23", attempts: 108, verified: 89 },
+  { date: "Jun 24", attempts: 86, verified: 71 },
+  { date: "Jun 25", attempts: 124, verified: 103 },
+  { date: "Jun 26", attempts: 117, verified: 96 },
+  { date: "Jun 27", attempts: 71, verified: 58 },
+  { date: "Jun 28", attempts: 64, verified: 51 },
+  { date: "Jun 29", attempts: 103, verified: 86 },
+  { date: "Jun 30", attempts: 119, verified: 99 },
+  { date: "Jul 1", attempts: 138, verified: 117 },
+  { date: "Jul 2", attempts: 129, verified: 108 },
+  { date: "Jul 3", attempts: 112, verified: 91 },
+  { date: "Jul 4", attempts: 141, verified: 120 },
+  { date: "Jul 5", attempts: 78, verified: 63 },
+];
+
 export function GET() {
   const now = Date.now();
   return NextResponse.json({
@@ -123,6 +141,7 @@ export function GET() {
     recent: recentVerifications(now),
     // Coherent funnel: verified ≤ delivered ≤ sent.
     stats: { sent: 1284, delivered: 1207, verified: 1043 },
+    trend: TREND,
   });
 }
 

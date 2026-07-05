@@ -48,6 +48,30 @@ export const transactionRecordSchema = z.object({
 });
 export type TransactionRecord = z.infer<typeof transactionRecordSchema>;
 
+/** One day of throughput for the volume trend chart. `volumeMinor` stays an exact integer string. */
+export const flowSeriesPointSchema = z.object({
+  date: z.string(),
+  volumeMinor: z.string(),
+  count: z.number().int().nonnegative(),
+});
+export type FlowSeriesPoint = z.infer<typeof flowSeriesPointSchema>;
+
+const transactionsResponseSchema = z.object({
+  transactions: z.array(transactionRecordSchema),
+  series: z.array(flowSeriesPointSchema),
+});
+export type TransactionsResponse = z.infer<typeof transactionsResponseSchema>;
+
+/** The transactions explorer feed — the reconciled list + the daily volume series for the chart. */
+export async function listTransactions(): Promise<TransactionsResponse> {
+  const response = await fetch("/api/dashboard/flows", {
+    headers: { "content-type": "application/json" },
+  });
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw payload;
+  return transactionsResponseSchema.parse(payload);
+}
+
 const startResponseSchema = z.object({
   correlationId: z.string(),
   verificationId: z.string(),

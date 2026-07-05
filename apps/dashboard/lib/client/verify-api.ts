@@ -48,10 +48,19 @@ export const conversionStats = z.object({
 });
 export type ConversionStats = z.infer<typeof conversionStats>;
 
+/** One day of verification activity — attempts started vs successfully verified (verified ≤ attempts). */
+export const verifyTrendPoint = z.object({
+  date: z.string(),
+  attempts: z.number().int().nonnegative(),
+  verified: z.number().int().nonnegative(),
+});
+export type VerifyTrendPoint = z.infer<typeof verifyTrendPoint>;
+
 export const verifyOverviewResponse = z.object({
   channels: z.array(verifyChannel),
   recent: z.array(verification),
   stats: conversionStats,
+  trend: z.array(verifyTrendPoint),
 });
 export type VerifyOverview = z.infer<typeof verifyOverviewResponse>;
 
