@@ -25,6 +25,89 @@ function validAmount(minor: unknown): minor is string {
   return typeof minor === "string" && /^[0-9]+$/.test(minor) && minor !== "0";
 }
 
+function entry(
+  label: string,
+  account: string,
+  direction: "debit" | "credit",
+  minor: string,
+) {
+  return { label, account, direction, amount: { currency: "GHS", minor } };
+}
+
+function buildTxn(t: {
+  id: string;
+  customer: string;
+  channel: string;
+  minor: string;
+  notify: "done" | "failed";
+  at: string;
+}) {
+  const amount = { currency: "GHS", minor: t.minor };
+  return {
+    correlationId: t.id,
+    createdAt: t.at,
+    customer: t.customer,
+    channel: t.channel,
+    amount,
+    verify: {
+      status: "done",
+      verificationId: `ver_${t.id.slice(5)}`,
+      at: t.at,
+    },
+    charge: {
+      status: "done",
+      at: t.at,
+      entries: [
+        entry(
+          "Customer collection",
+          "payments:collection-clearing",
+          "debit",
+          t.minor,
+        ),
+        entry("Tenant wallet", "wallet:available", "credit", t.minor),
+      ],
+    },
+    notify: {
+      status: t.notify,
+      messageId: t.notify === "done" ? `msg_${t.id.slice(5)}` : null,
+      at: t.notify === "done" ? t.at : null,
+    },
+    audit: { actor: "you@fabric", at: t.at },
+  };
+}
+
+// Reconciled transactions for the explorer. TODO(BFF): served by /v1/flows (the real saga's records).
+const SAMPLE = [
+  buildTxn({
+    id: "corr_9f2a1c8d",
+    customer: "+23320●●●42",
+    channel: "sms",
+    minor: "5000",
+    notify: "done",
+    at: "2026-07-05T09:12:00Z",
+  }),
+  buildTxn({
+    id: "corr_7b3e8841",
+    customer: "+23324●●●17",
+    channel: "whatsapp",
+    minor: "12000",
+    notify: "done",
+    at: "2026-07-05T08:40:00Z",
+  }),
+  buildTxn({
+    id: "corr_5c1d2077",
+    customer: "+23420●●●90",
+    channel: "sms",
+    minor: "2500",
+    notify: "failed",
+    at: "2026-07-04T22:03:00Z",
+  }),
+];
+
+export async function GET() {
+  return NextResponse.json({ transactions: SAMPLE });
+}
+
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
   try {

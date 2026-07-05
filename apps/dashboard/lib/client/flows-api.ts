@@ -48,6 +48,20 @@ export const transactionRecordSchema = z.object({
 });
 export type TransactionRecord = z.infer<typeof transactionRecordSchema>;
 
+const transactionsResponseSchema = z.object({
+  transactions: z.array(transactionRecordSchema),
+});
+
+/** The transactions explorer list — what ops/finance/support actually come here to read/audit. */
+export async function listTransactions(): Promise<TransactionRecord[]> {
+  const response = await fetch("/api/dashboard/flows", {
+    headers: { "content-type": "application/json" },
+  });
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw payload;
+  return transactionsResponseSchema.parse(payload).transactions;
+}
+
 const startResponseSchema = z.object({
   correlationId: z.string(),
   verificationId: z.string(),
