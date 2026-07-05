@@ -5,6 +5,7 @@ import {
   List,
   type LucideIcon,
   Megaphone,
+  Route,
   Send,
   ShieldCheck,
   Users,
@@ -41,6 +42,7 @@ export const navGroups: readonly NavGroup[] = [
     label: "Messaging",
     items: [
       { title: "Send SMS", href: "/send", icon: Send },
+      { title: "Journeys", href: "/journeys", icon: Route },
       { title: "Campaigns", href: "/campaigns", icon: Megaphone },
       { title: "Messages", href: "/messages", icon: List },
     ],
