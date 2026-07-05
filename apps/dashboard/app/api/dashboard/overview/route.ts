@@ -17,6 +17,23 @@ const MOCK = {
     { channel: "voice", spend: { currency: "GHS", minor: "31820" } },
     { channel: "verify", spend: { currency: "GHS", minor: "15675" } },
   ],
+  // Last 14 days of traffic — sent vs delivered (delivered ≤ sent). TODO(BFF): real daily rollup.
+  traffic: [
+    { date: "Jun 22", sent: 3120, delivered: 2960 },
+    { date: "Jun 23", sent: 3480, delivered: 3300 },
+    { date: "Jun 24", sent: 2980, delivered: 2810 },
+    { date: "Jun 25", sent: 4100, delivered: 3910 },
+    { date: "Jun 26", sent: 3760, delivered: 3560 },
+    { date: "Jun 27", sent: 2210, delivered: 2050 },
+    { date: "Jun 28", sent: 1980, delivered: 1870 },
+    { date: "Jun 29", sent: 3620, delivered: 3450 },
+    { date: "Jun 30", sent: 3980, delivered: 3790 },
+    { date: "Jul 1", sent: 4460, delivered: 4270 },
+    { date: "Jul 2", sent: 4210, delivered: 3990 },
+    { date: "Jul 3", sent: 3890, delivered: 3660 },
+    { date: "Jul 4", sent: 4620, delivered: 4400 },
+    { date: "Jul 5", sent: 2510, delivered: 2380 },
+  ],
   recentActivity: [
     {
       id: "cmp_9f2a",

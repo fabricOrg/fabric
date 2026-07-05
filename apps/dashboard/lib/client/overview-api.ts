@@ -27,12 +27,21 @@ export const overviewChannelSpend = z.object({
 });
 export type OverviewChannelSpend = z.infer<typeof overviewChannelSpend>;
 
+/** One day of traffic — sent vs delivered (delivered ≤ sent). Counts, not money. */
+export const overviewTrafficPoint = z.object({
+  date: z.string(),
+  sent: z.number().int().nonnegative(),
+  delivered: z.number().int().nonnegative(),
+});
+export type OverviewTrafficPoint = z.infer<typeof overviewTrafficPoint>;
+
 /** The whole home summary — one round-trip powers every tile on the Overview screen. */
 export const overviewSummary = z.object({
   messagesSent: z.number().int().nonnegative(),
   deliveryRate: z.number().min(0).max(1),
   spendThisMonth: money,
   walletBalance: money,
+  traffic: z.array(overviewTrafficPoint),
   spendByChannel: z.array(overviewChannelSpend),
   recentActivity: z.array(overviewActivity),
 });

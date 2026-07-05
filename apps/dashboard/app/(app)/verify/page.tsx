@@ -19,6 +19,7 @@ import { ChannelConfigCard } from "@/components/verify/channel-config-card";
 import { ConversionStats } from "@/components/verify/conversion-stats";
 import { TestVerificationCard } from "@/components/verify/test-verification-card";
 import { VerificationLog } from "@/components/verify/verification-log";
+import { VerifyTrend } from "@/components/verify/verify-trend";
 import {
   getVerifyOverview,
   type Verification,
@@ -139,6 +140,8 @@ export default function VerifyPage() {
       <PageHeader />
 
       <ConversionStats stats={data.stats} />
+
+      {data.trend.length > 0 ? <VerifyTrend points={data.trend} /> : null}
 
       <div className="grid gap-4 md:grid-cols-2">
         <ChannelConfigCard

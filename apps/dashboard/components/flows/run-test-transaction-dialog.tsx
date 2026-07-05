@@ -25,6 +25,7 @@ import {
 } from "@app/ui/components/ui/select";
 import { ArrowRight, FlaskConical, ShieldCheck } from "lucide-react";
 import { useState } from "react";
+import { PhoneInput } from "@/components/phone-input";
 import {
   confirmFlow,
   type StartResponse,
@@ -151,17 +152,19 @@ export function RunTestTransactionDialog({
               data-invalid={(msisdn.length > 0 && !msisdnValid) || undefined}
             >
               <FieldLabel htmlFor="t-msisdn">Customer phone</FieldLabel>
-              <Input
+              <PhoneInput
                 id="t-msisdn"
-                inputMode="tel"
-                placeholder="+233201234567"
                 value={msisdn}
-                onChange={(e) => setMsisdn(e.target.value)}
-                className="font-mono"
+                onChange={setMsisdn}
+                invalid={msisdn.length > 0 && !msisdnValid}
               />
               {msisdn.length > 0 && !msisdnValid ? (
-                <FieldError>Enter a valid E.164 number.</FieldError>
-              ) : null}
+                <FieldError>Enter a valid phone number.</FieldError>
+              ) : (
+                <FieldDescription>
+                  Pick the country, then type the local number.
+                </FieldDescription>
+              )}
             </Field>
             <div className="grid grid-cols-2 gap-4">
               <Field

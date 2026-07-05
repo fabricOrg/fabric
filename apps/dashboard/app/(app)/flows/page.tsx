@@ -45,7 +45,9 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { RunTestTransactionDialog } from "@/components/flows/run-test-transaction-dialog";
 import { TransactionRecordView } from "@/components/flows/transaction-record";
+import { VolumeChart } from "@/components/flows/volume-chart";
 import {
+  type FlowSeriesPoint,
   listTransactions,
   type TransactionRecord,
 } from "@/lib/client/flows-api";
@@ -132,6 +134,7 @@ function StatTile({
 
 export default function TransactionsPage() {
   const [txns, setTxns] = useState<TransactionRecord[] | null>(null);
+  const [series, setSeries] = useState<FlowSeriesPoint[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<Outcome | "all">("all");
   const [detail, setDetail] = useState<TransactionRecord | null>(null);
@@ -140,7 +143,9 @@ export default function TransactionsPage() {
     let live = true;
     listTransactions()
       .then((r) => {
-        if (live) setTxns(r);
+        if (!live) return;
+        setTxns(r.transactions);
+        setSeries(r.series);
       })
       .catch((e) => {
         if (!live) return;
@@ -212,6 +217,8 @@ export default function TransactionsPage() {
           helper="Stopped before or during the flow."
         />
       </div>
+
+      {series.length > 0 ? <VolumeChart series={series} /> : null}
 
       <Card>
         <CardHeader>

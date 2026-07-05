@@ -104,8 +104,26 @@ const SAMPLE = [
   }),
 ];
 
+// Daily throughput for the trend chart — volume collected + transaction count. TODO(BFF): real rollup.
+const SERIES = [
+  { date: "Jun 22", volumeMinor: "18500", count: 4 },
+  { date: "Jun 23", volumeMinor: "22000", count: 5 },
+  { date: "Jun 24", volumeMinor: "15000", count: 3 },
+  { date: "Jun 25", volumeMinor: "31000", count: 7 },
+  { date: "Jun 26", volumeMinor: "27500", count: 6 },
+  { date: "Jun 27", volumeMinor: "12000", count: 3 },
+  { date: "Jun 28", volumeMinor: "9500", count: 2 },
+  { date: "Jun 29", volumeMinor: "24000", count: 5 },
+  { date: "Jun 30", volumeMinor: "29500", count: 6 },
+  { date: "Jul 1", volumeMinor: "34000", count: 8 },
+  { date: "Jul 2", volumeMinor: "30500", count: 7 },
+  { date: "Jul 3", volumeMinor: "26000", count: 6 },
+  { date: "Jul 4", volumeMinor: "35500", count: 8 },
+  { date: "Jul 5", volumeMinor: "17000", count: 4 },
+];
+
 export async function GET() {
-  return NextResponse.json({ transactions: SAMPLE });
+  return NextResponse.json({ transactions: SAMPLE, series: SERIES });
 }
 
 export async function POST(request: NextRequest) {
