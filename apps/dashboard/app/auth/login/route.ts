@@ -4,6 +4,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import {
   customerRealmConfig,
   OAUTH_STATE_COOKIE,
+  redirectUrl,
   sessionCookieOptions,
 } from "@/lib/server/auth";
 
@@ -11,7 +12,7 @@ export function GET(request: NextRequest) {
   const state = randomBytes(32).toString("base64url");
   const organizationId = process.env.WORKOS_ORGANIZATION_ID;
   if (!organizationId) {
-    return NextResponse.redirect(new URL("/login?error=config", request.url));
+    return NextResponse.redirect(redirectUrl("/login?error=config", request));
   }
   const authorizationUrl = buildAuthorizationUrl(customerRealmConfig(), {
     state,

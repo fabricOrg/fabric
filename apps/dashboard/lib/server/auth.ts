@@ -118,3 +118,14 @@ export function sessionCookieOptions() {
     maxAge: 7 * 24 * 60 * 60,
   };
 }
+
+/**
+ * Absolute redirect target on the app's PUBLIC origin. Behind API Gateway + VPC Link the container
+ * sees the internal host (ip-…:3000) as `request.url`, so redirects built from it send users to an
+ * unreachable URL. Prefer DASHBOARD_BASE_URL (the public domain); fall back to request.url locally
+ * where it isn't set.
+ */
+export function redirectUrl(path: string, request: { url: string }): URL {
+  const base = process.env.DASHBOARD_BASE_URL;
+  return base ? new URL(path, base) : new URL(path, request.url);
+}

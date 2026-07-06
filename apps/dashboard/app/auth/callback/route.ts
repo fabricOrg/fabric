@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import {
   customerRealmConfig,
   OAUTH_STATE_COOKIE,
+  redirectUrl,
   sessionCookieOptions,
   WORKOS_COOKIE,
 } from "@/lib/server/auth";
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
       state,
       expectedState,
     });
-    const response = NextResponse.redirect(new URL("/", request.url));
+    const response = NextResponse.redirect(redirectUrl("/", request));
     response.cookies.set(
       WORKOS_COOKIE,
       result.sealedCookie,
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
 
 function loginError(request: NextRequest) {
   const response = NextResponse.redirect(
-    new URL("/login?error=authentication", request.url),
+    redirectUrl("/login?error=authentication", request),
   );
   response.cookies.delete(OAUTH_STATE_COOKIE);
   return response;

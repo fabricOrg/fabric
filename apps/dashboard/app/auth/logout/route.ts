@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import {
   customerRealmConfig,
   DEVELOPMENT_COOKIE,
+  redirectUrl,
   WORKOS_COOKIE,
   workosAuthConfigured,
 } from "@/lib/server/auth";
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
   const logout =
     workosAuthConfigured() && sealedCookie
       ? await buildLogout(customerRealmConfig(), sealedCookie)
-      : { workosLogoutUrl: new URL("/login", request.url).toString() };
+      : { workosLogoutUrl: redirectUrl("/login", request).toString() };
   const response = NextResponse.redirect(logout.workosLogoutUrl, 303);
   response.cookies.delete(WORKOS_COOKIE);
   response.cookies.delete(DEVELOPMENT_COOKIE);
