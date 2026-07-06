@@ -33,3 +33,30 @@ export const resolveIdentitySessionResponseSchema = z.object({
 export type ResolveIdentitySessionResponse = z.infer<
   typeof resolveIdentitySessionResponseSchema
 >;
+
+// ---- Staff (platform operators) — resolved against staff_users, not a tenant membership ----------
+export const staffRoleSchema = z.enum(["operator", "admin"]);
+
+/** Staff sign-in claims. No org/role/permissions from the IdP — staff authz comes from staff_users. */
+export const resolveStaffSessionRequestSchema = z.object({
+  external_user_id: identifier,
+  email: z.string().trim().email().max(320),
+  name: z.string().trim().min(1).max(255).nullable(),
+  user_updated_at: z.string().datetime({ offset: true }),
+  session_id: identifier,
+});
+
+export type ResolveStaffSessionRequest = z.infer<
+  typeof resolveStaffSessionRequestSchema
+>;
+
+export const resolveStaffSessionResponseSchema = z.object({
+  staff_user_id: postgresUuid,
+  role: staffRoleSchema,
+  permissions: z.array(identifier),
+  session_id: identifier,
+});
+
+export type ResolveStaffSessionResponse = z.infer<
+  typeof resolveStaffSessionResponseSchema
+>;

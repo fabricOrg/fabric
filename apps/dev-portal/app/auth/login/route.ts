@@ -1,17 +1,22 @@
 import { randomBytes } from "node:crypto";
 import { buildAuthorizationUrl } from "@app/fe-auth";
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import {
   developerRealmConfig,
   OAUTH_STATE_COOKIE,
   sessionCookieOptions,
 } from "@/lib/server/auth";
 
-export function GET() {
+export function GET(request: NextRequest) {
   const state = randomBytes(32).toString("base64url");
-  // No organizationId here — this is a coarse allowlist gate, not tenant-scoped (yet).
+  // Org-scoped like the dashboard — a developer signs into their tenant's WorkOS organization.
+  const organizationId = process.env.WORKOS_ORGANIZATION_ID;
+  if (!organizationId) {
+    return NextResponse.redirect(new URL("/login?error=config", request.url));
+  }
   const authorizationUrl = buildAuthorizationUrl(developerRealmConfig(), {
     state,
+    organizationId,
     screenHint: "sign-in",
   });
   const response = NextResponse.redirect(authorizationUrl);

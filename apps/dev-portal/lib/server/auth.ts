@@ -30,7 +30,7 @@ export function developmentAuthConfig(): DevelopmentSessionConfig {
   };
 }
 
-/** No WORKOS_ORGANIZATION_ID here — this is a coarse allowlist gate, not tenant-scoped (yet). */
+/** Org-scoped like the dashboard — a developer is a tenant member; BFF token gates the session call. */
 export function workosAuthConfigured(): boolean {
   return [
     "WORKOS_API_KEY",
@@ -38,6 +38,8 @@ export function workosAuthConfigured(): boolean {
     "WORKOS_COOKIE_PASSWORD",
     "WORKOS_REDIRECT_URI",
     "WORKOS_LOGOUT_REDIRECT_URI",
+    "WORKOS_ORGANIZATION_ID",
+    "BFF_INTERNAL_TOKEN",
   ].every((name) => Boolean(process.env[name]));
 }
 
