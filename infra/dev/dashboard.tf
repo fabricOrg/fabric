@@ -81,6 +81,9 @@ resource "aws_ecs_task_definition" "dashboard" {
         # The api's public HTTPS endpoint (API Gateway) — simplest path for the BFF's server-side
         # fetches; avoids depending on Cloud Map SRV resolution from a second, unrelated service.
         { name = "API_BASE_URL", value = aws_apigatewayv2_api.testing.api_endpoint },
+        # The dashboard's OWN public origin. Behind API Gateway + VPC Link the container sees the
+        # internal host as request.url, so auth redirects + the trusted-origin check must use this.
+        { name = "DASHBOARD_BASE_URL", value = aws_apigatewayv2_api.dashboard_testing.api_endpoint },
       ]
       secrets = [
         {
