@@ -32,7 +32,9 @@ data "aws_iam_policy_document" "github_testing_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:environment:${var.github_environment}"]
+      values = [
+        for env in var.github_environments : "repo:${var.github_repository}:environment:${env}"
+      ]
     }
   }
 }
@@ -63,7 +65,10 @@ data "aws_iam_policy_document" "github_testing_deploy" {
       "ecr:PutImage",
       "ecr:UploadLayerPart",
     ]
-    resources = [aws_ecr_repository.api.arn]
+    resources = [
+      aws_ecr_repository.api.arn,
+      aws_ecr_repository.dashboard.arn,
+    ]
   }
 
   statement {
@@ -87,6 +92,7 @@ data "aws_iam_policy_document" "github_testing_deploy" {
     ]
     resources = [
       "arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:service/fabric-testing/fabric-api-testing",
+      "arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:service/fabric-testing/fabric-dashboard-testing",
     ]
   }
 
@@ -96,6 +102,7 @@ data "aws_iam_policy_document" "github_testing_deploy" {
     actions = ["iam:PassRole"]
     resources = [
       aws_iam_role.api_task.arn,
+      aws_iam_role.dashboard_task.arn,
       aws_iam_role.ecs_task_execution.arn,
     ]
 

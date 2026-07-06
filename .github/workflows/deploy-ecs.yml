@@ -9,6 +9,19 @@ on:
       build-image:
         required: true
         type: boolean
+      dockerfile:
+        required: false
+        type: string
+        default: services/api/Dockerfile
+      run-migration:
+        description: Whether this service has its own DB-migration task (false for the dashboard, which shares the api's database).
+        required: false
+        type: boolean
+        default: true
+      smoke-test-path:
+        required: false
+        type: string
+        default: /health
 
 permissions:
   contents: read
@@ -54,11 +67,13 @@ jobs:
             ECS_CLUSTER
             ECS_SERVICE
             ECS_TASK_DEFINITION
-            ECS_MIGRATION_TASK_DEFINITION
             ECS_CONTAINER_NAME
             ECS_SUBNET_IDS
             ECS_SECURITY_GROUP_ID
           )
+          if [[ "${{ inputs.run-migration }}" == "true" ]]; then
+            required+=(ECS_MIGRATION_TASK_DEFINITION)
+          fi
           for name in "${required[@]}"; do
             if [[ -z "${!name}" ]]; then
               echo "::error::$name is not configured for the ${{ inputs.environment }} environment."
@@ -95,7 +110,7 @@ jobs:
         shell: bash
         run: |
           image="$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker build --file services/api/Dockerfile --tag "$image" .
+          docker build --file "${{ inputs.dockerfile }}" --tag "$image" .
           docker push "$image"
           echo "image=$image" >> "$GITHUB_OUTPUT"
 
@@ -146,11 +161,14 @@ jobs:
           aws ecs describe-task-definition \
             --task-definition "$ECS_TASK_DEFINITION" \
             --query taskDefinition > task-definition.json
-          aws ecs describe-task-definition \
-            --task-definition "$ECS_MIGRATION_TASK_DEFINITION" \
-            --query taskDefinition > migration-task-definition.json
+          if [[ "${{ inputs.run-migration }}" == "true" ]]; then
+            aws ecs describe-task-definition \
+              --task-definition "$ECS_MIGRATION_TASK_DEFINITION" \
+              --query taskDefinition > migration-task-definition.json
+          fi
 
       - name: Render migration task definition
+        if: inputs.run-migration
         id: migration-task-definition
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
@@ -159,6 +177,7 @@ jobs:
           image: ${{ steps.build-image.outputs.image || steps.promote-image.outputs.image }}
 
       - name: Run database migrations
+        if: inputs.run-migration
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.migration-task-definition.outputs.task-definition }}
@@ -192,4 +211,4 @@ jobs:
       - name: Smoke test
         if: env.SMOKE_TEST_URL != ''
         shell: bash
-        run: curl --fail --show-error --silent --retry 10 --retry-delay 6 "$SMOKE_TEST_URL/health"
+        run: curl --fail --show-error --silent --retry 10 --retry-delay 6 "$SMOKE_TEST_URL${{ inputs.smoke-test-path }}"
