@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "pnpm --filter @app/contracts --filter @app/domain build",
+    "predev": "pnpm --filter @app/contracts --filter @app/domain --filter @app/fe-auth build",
     "dev": "next dev -p 3200",
-    "prebuild": "pnpm --filter @app/contracts --filter @app/domain build",
+    "prebuild": "pnpm --filter @app/contracts --filter @app/domain --filter @app/fe-auth build",
     "build": "next build",
     "start": "next start -p 3200",
     "typecheck": "tsc --noEmit",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@app/contracts": "workspace:*",
+    "@app/fe-auth": "workspace:*",
     "@app/ui": "workspace:*",
     "lucide-react": "^1.23.0",
     "next": "^16.1.0",

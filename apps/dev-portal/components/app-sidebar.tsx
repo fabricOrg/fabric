@@ -40,7 +40,7 @@ function FabricDevMark() {
   );
 }
 
-export function AppSidebar() {
+export function AppSidebar({ role }: { role: string }) {
   const pathname = usePathname();
 
   return (
@@ -79,12 +79,12 @@ export function AppSidebar() {
       <SidebarFooter>
         <div className="flex items-center gap-2 px-2 py-1.5">
           <Avatar className="size-8">
-            <AvatarFallback>KM</AvatarFallback>
+            <AvatarFallback>{role.charAt(0).toUpperCase()}</AvatarFallback>
           </Avatar>
           <div className="grid flex-1 text-left leading-tight">
-            <span className="truncate text-sm font-medium">Kofi Mensah</span>
+            <span className="truncate text-sm font-medium">Developer</span>
             <span className="truncate text-xs text-muted-foreground">
-              KwikGH · Developer
+              {role.charAt(0).toUpperCase() + role.slice(1)}
             </span>
           </div>
         </div>

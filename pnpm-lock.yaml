@@ -53,6 +53,9 @@ importers:
       '@app/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@app/fe-auth':
+        specifier: workspace:*
+        version: link:../../packages/fe-auth
       '@app/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -160,6 +163,9 @@ importers:
       '@app/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@app/fe-auth':
+        specifier: workspace:*
+        version: link:../../packages/fe-auth
       '@app/ui':
         specifier: workspace:*
         version: link:../../packages/ui
