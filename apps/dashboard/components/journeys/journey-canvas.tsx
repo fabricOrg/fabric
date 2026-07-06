@@ -18,6 +18,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { Info, Plus, RotateCcw, Save, Upload, X } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Inspector, type NodePatch } from "@/components/journeys/inspector";
@@ -75,6 +76,15 @@ function Canvas() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(true);
   const { screenToFlowPosition } = useReactFlow();
+
+  // React Flow's own dark styles must track the APP theme (next-themes), not the OS. "system" reads
+  // the OS preference, so toggling the app to light left the canvas dark. resolvedTheme is undefined
+  // until mount — fall back to "system" so first paint isn't wrong-way round.
+  const { resolvedTheme } = useTheme();
+  const colorMode =
+    resolvedTheme === "dark" || resolvedTheme === "light"
+      ? resolvedTheme
+      : "system";
 
   // Give the canvas the whole screen: collapse the app sidebar while the builder is mounted,
   // then restore whatever the user had when they leave. setOpen's identity changes on every toggle
@@ -226,7 +236,7 @@ function Canvas() {
         onNodeClick={(_, node) => setSelectedId(node.id)}
         onPaneClick={() => setSelectedId(null)}
         nodeTypes={nodeTypes}
-        colorMode="system"
+        colorMode={colorMode}
         fitView
         proOptions={{ hideAttribution: true }}
       >
@@ -300,9 +310,10 @@ function Canvas() {
         </div>
       </div>
 
-      {/* Palette — slides in from the left */}
+      {/* Palette — slides in from the left. bottom-4 caps it to the viewport; the list scrolls when
+          there are more steps than fit on a short screen (otherwise the tail clipped off-canvas). */}
       <div
-        className={`absolute left-3 top-16 z-10 w-56 rounded-xl border bg-card p-3 shadow-lg transition-transform duration-200 ${
+        className={`absolute left-3 top-16 z-10 max-h-[calc(100%-5rem)] w-56 overflow-y-auto rounded-xl border bg-card p-3 shadow-lg transition-transform duration-200 ${
           paletteOpen ? "translate-x-0" : "-translate-x-[130%]"
         }`}
       >
