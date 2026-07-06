@@ -84,3 +84,52 @@ jobs:
       environment: production
       build-image: false
     secrets: inherit
+
+  # Dashboard: same trigger/gating as the api jobs above (one *_DEPLOYMENTS_ENABLED var per
+  # environment covers both services in that account). Separate GitHub Environment per service
+  # (own vars/secrets/OIDC trust) since ECR_REPOSITORY/ECS_SERVICE/etc. differ. Shares the api's
+  # database, so run-migration is false.
+  deploy-dashboard-testing:
+    needs: classify
+    if: >-
+      needs.classify.outputs.docs_only != 'true' &&
+      (github.ref_name == 'testing' || inputs.environment == 'testing') &&
+      vars.TESTING_DEPLOYMENTS_ENABLED == 'true'
+    uses: ./.github/workflows/deploy-ecs.yml
+    with:
+      environment: testing-dashboard
+      build-image: true
+      dockerfile: apps/dashboard/Dockerfile
+      run-migration: false
+      smoke-test-path: /login
+    secrets: inherit
+
+  deploy-dashboard-staging:
+    needs: classify
+    if: >-
+      needs.classify.outputs.docs_only != 'true' &&
+      (github.ref_name == 'staging' || inputs.environment == 'staging') &&
+      vars.STAGING_DEPLOYMENTS_ENABLED == 'true'
+    uses: ./.github/workflows/deploy-ecs.yml
+    with:
+      environment: staging-dashboard
+      build-image: false
+      dockerfile: apps/dashboard/Dockerfile
+      run-migration: false
+      smoke-test-path: /login
+    secrets: inherit
+
+  deploy-dashboard-production:
+    needs: classify
+    if: >-
+      needs.classify.outputs.docs_only != 'true' &&
+      (github.ref_name == 'main' || inputs.environment == 'production') &&
+      vars.PRODUCTION_DEPLOYMENTS_ENABLED == 'true'
+    uses: ./.github/workflows/deploy-ecs.yml
+    with:
+      environment: production-dashboard
+      build-image: false
+      dockerfile: apps/dashboard/Dockerfile
+      run-migration: false
+      smoke-test-path: /login
+    secrets: inherit

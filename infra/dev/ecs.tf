@@ -32,6 +32,10 @@ data "aws_iam_policy_document" "ecs_secret_access" {
       aws_secretsmanager_secret.database_runtime.arn,
       aws_secretsmanager_secret.operator_token.arn,
       aws_secretsmanager_secret.webhook_ingress_token.arn,
+      aws_secretsmanager_secret.bff_internal_token.arn,
+      aws_secretsmanager_secret.dashboard_cookie_password.arn,
+      aws_secretsmanager_secret.dashboard_workos.arn,
+      aws_secretsmanager_secret.dashboard_api_key.arn,
     ]
   }
 }
@@ -106,6 +110,10 @@ resource "aws_ecs_task_definition" "api" {
           name      = "WEBHOOK_INGRESS_TOKEN"
           valueFrom = "${aws_secretsmanager_secret.webhook_ingress_token.arn}:WEBHOOK_INGRESS_TOKEN::"
         },
+        {
+          name      = "BFF_INTERNAL_TOKEN"
+          valueFrom = "${aws_secretsmanager_secret.bff_internal_token.arn}:BFF_INTERNAL_TOKEN::"
+        },
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -132,6 +140,7 @@ resource "aws_ecs_task_definition" "api" {
     aws_secretsmanager_secret_version.database_runtime,
     aws_secretsmanager_secret_version.operator_token,
     aws_secretsmanager_secret_version.webhook_ingress_token,
+    aws_secretsmanager_secret_version.bff_internal_token,
   ]
 }
 

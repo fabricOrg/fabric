@@ -18,6 +18,16 @@ ephemeral "random_password" "operator_token" {
   special = false
 }
 
+ephemeral "random_password" "bff_internal_token" {
+  length  = 48
+  special = false
+}
+
+ephemeral "random_password" "dashboard_cookie_password" {
+  length  = 40
+  special = false
+}
+
 ephemeral "random_password" "webhook_ingress_token" {
   length  = 48
   special = false
@@ -31,8 +41,10 @@ resource "aws_db_subnet_group" "testing" {
 resource "aws_db_instance" "postgres" {
   identifier = "fabric-testing-postgres"
 
-  engine         = "postgres"
-  engine_version = "16.9"
+  engine = "postgres"
+  # AWS auto_minor_version_upgrade has moved this to 16.13; keep the declared version in sync so
+  # plans stay clean (not part of the dashboard change — pre-existing drift found while planning it).
+  engine_version = "16.13"
   instance_class = "db.t4g.micro"
 
   allocated_storage     = 20
@@ -95,6 +107,67 @@ resource "aws_secretsmanager_secret" "webhook_ingress_token" {
   recovery_window_in_days = 0
 }
 
+# Shared between the api and dashboard tasks: dashboard's BFF routes present this to authenticate
+# as the BFF against api's internal/* routes (BffTokenGuard). Symmetric — we generate it ourselves.
+resource "aws_secretsmanager_secret" "bff_internal_token" {
+  name                    = "fabric/testing/bff-internal-token"
+  description             = "Shared token: dashboard BFF -> api internal/* routes."
+  recovery_window_in_days = 0
+}
+
+# Seals/verifies the dashboard's WorkOS session cookie. Symmetric, dashboard-only — we generate it.
+resource "aws_secretsmanager_secret" "dashboard_cookie_password" {
+  name                    = "fabric/testing/dashboard-cookie-password"
+  description             = "Seals the dashboard's WorkOS session cookie."
+  recovery_window_in_days = 0
+}
+
+# Real WorkOS credentials (API key, client ID, org ID, redirect URIs) come from the WorkOS
+# dashboard, not Terraform. This resource is a CONTAINER: apply creates it with a placeholder value,
+# then populate the real JSON once via the AWS console/CLI. Terraform ignores drift on the value so
+# subsequent applies don't stomp what you set.
+resource "aws_secretsmanager_secret" "dashboard_workos" {
+  name                    = "fabric/testing/dashboard-workos"
+  description             = "WorkOS AuthKit credentials for the dashboard (populate manually after apply)."
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "dashboard_workos" {
+  secret_id = aws_secretsmanager_secret.dashboard_workos.id
+  secret_string_wo = jsonencode({
+    WORKOS_API_KEY             = "REPLACE_ME"
+    WORKOS_CLIENT_ID           = "REPLACE_ME"
+    WORKOS_ORGANIZATION_ID     = "REPLACE_ME"
+    WORKOS_REDIRECT_URI        = "REPLACE_ME"
+    WORKOS_LOGOUT_REDIRECT_URI = "REPLACE_ME"
+  })
+  secret_string_wo_version = 1
+
+  lifecycle {
+    ignore_changes = [secret_string_wo, secret_string_wo_version]
+  }
+}
+
+# Minted post-deploy via the real POST /v1/api-keys (OPERATOR_TOKEN-gated) against a provisioned
+# testing tenant, then populated here manually — never a Terraform-generated value.
+resource "aws_secretsmanager_secret" "dashboard_api_key" {
+  name                    = "fabric/testing/dashboard-api-key"
+  description             = "Fabric API key the dashboard BFF authenticates with (populate manually after apply)."
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "dashboard_api_key" {
+  secret_id = aws_secretsmanager_secret.dashboard_api_key.id
+  secret_string_wo = jsonencode({
+    DASHBOARD_API_KEY = "REPLACE_ME"
+  })
+  secret_string_wo_version = 1
+
+  lifecycle {
+    ignore_changes = [secret_string_wo, secret_string_wo_version]
+  }
+}
+
 resource "aws_secretsmanager_secret_version" "database_admin" {
   secret_id = aws_secretsmanager_secret.database_admin.id
   secret_string_wo = jsonencode({
@@ -131,6 +204,22 @@ resource "aws_secretsmanager_secret_version" "webhook_ingress_token" {
   secret_id = aws_secretsmanager_secret.webhook_ingress_token.id
   secret_string_wo = jsonencode({
     WEBHOOK_INGRESS_TOKEN = ephemeral.random_password.webhook_ingress_token.result
+  })
+  secret_string_wo_version = 1
+}
+
+resource "aws_secretsmanager_secret_version" "bff_internal_token" {
+  secret_id = aws_secretsmanager_secret.bff_internal_token.id
+  secret_string_wo = jsonencode({
+    BFF_INTERNAL_TOKEN = ephemeral.random_password.bff_internal_token.result
+  })
+  secret_string_wo_version = 1
+}
+
+resource "aws_secretsmanager_secret_version" "dashboard_cookie_password" {
+  secret_id = aws_secretsmanager_secret.dashboard_cookie_password.id
+  secret_string_wo = jsonencode({
+    WORKOS_COOKIE_PASSWORD = ephemeral.random_password.dashboard_cookie_password.result
   })
   secret_string_wo_version = 1
 }

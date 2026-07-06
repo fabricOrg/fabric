@@ -16,8 +16,8 @@ variable "github_repository" {
   default     = "fabricOrg/fabric"
 }
 
-variable "github_environment" {
-  description = "GitHub Environment allowed to assume the testing deployment role."
-  type        = string
-  default     = "testing"
+variable "github_environments" {
+  description = "GitHub Environments allowed to assume the testing deployment role — one per deployable service (api, dashboard) sharing this account."
+  type        = list(string)
+  default     = ["testing", "testing-dashboard"]
 }
