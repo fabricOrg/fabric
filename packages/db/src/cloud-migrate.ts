@@ -9,10 +9,14 @@ interface MigrationEnvironment {
   adminUrl: string;
   ownerUrl: string;
   runtimeUrl: string;
+  provisionerUrl: string;
 }
 
 interface RoleSpec {
-  name: "app_migrator" | "app_runtime";
+  // app_provisioner: cross-tenant provisioning connection (BFF-guarded internal endpoints only).
+  // NOBYPASSRLS like the others (RDS forbids BYPASSRLS) — its reach comes from permissive RLS
+  // policies in migration 0013, not a role attribute. See docs/PI-3/PATH-TO-TESTING.md.
+  name: "app_migrator" | "app_runtime" | "app_provisioner";
   password: string;
 }
 
@@ -38,6 +42,7 @@ function readEnvironment(): MigrationEnvironment {
     adminUrl: requireUrl("DATABASE_URL_ADMIN"),
     ownerUrl: requireUrl("DATABASE_URL_OWNER"),
     runtimeUrl: requireUrl("DATABASE_URL_APP"),
+    provisionerUrl: requireUrl("DATABASE_URL_PROVISIONER"),
   };
 }
 
@@ -120,9 +125,12 @@ async function prepareRoles(environment: MigrationEnvironment): Promise<void> {
     const runtimePassword = decodeURIComponent(
       new URL(environment.runtimeUrl).password,
     );
-    if (!ownerPassword || !runtimePassword) {
+    const provisionerPassword = decodeURIComponent(
+      new URL(environment.provisionerUrl).password,
+    );
+    if (!ownerPassword || !runtimePassword || !provisionerPassword) {
       throw new Error(
-        "Owner and runtime database URLs must contain passwords.",
+        "Owner, runtime, and provisioner database URLs must contain passwords.",
       );
     }
 
@@ -133,6 +141,10 @@ async function prepareRoles(environment: MigrationEnvironment): Promise<void> {
     await synchronizeRole(admin, {
       name: "app_runtime",
       password: runtimePassword,
+    });
+    await synchronizeRole(admin, {
+      name: "app_provisioner",
+      password: provisionerPassword,
     });
 
     const adminIdentity = await admin<{ currentUser: string }[]>`
@@ -155,8 +167,60 @@ async function prepareRoles(environment: MigrationEnvironment): Promise<void> {
     );
     await admin.unsafe("ALTER SCHEMA public OWNER TO app_migrator");
     await admin.unsafe("GRANT ALL ON SCHEMA public TO app_migrator");
+
+    // app_provisioner (BYPASSRLS): DML on every table the owner creates — now and future. Default
+    // privileges are set BEFORE migrate runs, so tables created this run inherit the grant; the
+    // ON ALL TABLES grants cover any that already existed. app_provisioner owns nothing.
+    await admin.unsafe("GRANT USAGE ON SCHEMA public TO app_provisioner");
+    await admin.unsafe(
+      "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_provisioner",
+    );
+    await admin.unsafe(
+      "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_provisioner",
+    );
+    await admin.unsafe(
+      "ALTER DEFAULT PRIVILEGES FOR ROLE app_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_provisioner",
+    );
+    await admin.unsafe(
+      "ALTER DEFAULT PRIVILEGES FOR ROLE app_migrator IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO app_provisioner",
+    );
   } finally {
     await admin.end();
+  }
+}
+
+/**
+ * app_provisioner is least-privilege like app_runtime (NOBYPASSRLS, no superuser) — its cross-tenant
+ * reach comes from the permissive RLS policies in migration 0013, not a role attribute. Here we only
+ * assert the attributes + connectivity; the policies' effect is exercised end-to-end by the API's
+ * identity-resolve path and the staff-resolver integration tests.
+ */
+async function verifyProvisionerRole(provisionerUrl: string): Promise<void> {
+  const provisioner = postgres(provisionerUrl, { max: 1 });
+  try {
+    const rows = await provisioner<
+      { currentUser: string; superuser: boolean; bypassRls: boolean }[]
+    >`
+      SELECT
+        current_user AS "currentUser",
+        rolsuper AS superuser,
+        rolbypassrls AS "bypassRls"
+      FROM pg_roles
+      WHERE rolname = current_user
+    `;
+    const role = rows[0];
+    if (
+      role?.currentUser !== "app_provisioner" ||
+      role.superuser ||
+      role.bypassRls
+    ) {
+      throw new Error(
+        "app_provisioner failed its least-privilege verification.",
+      );
+    }
+    await provisioner`SELECT 1`;
+  } finally {
+    await provisioner.end();
   }
 }
 
@@ -204,6 +268,7 @@ export async function runCloudMigrations(
   }
 
   await verifyRuntimeRole(environment.runtimeUrl);
+  await verifyProvisionerRole(environment.provisionerUrl);
 }
 
 export function isEntrypoint(
