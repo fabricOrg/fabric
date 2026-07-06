@@ -20,23 +20,52 @@ import {
   SelectValue,
 } from "@app/ui/components/ui/select";
 import { UserPlus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+interface BffErrorPayload {
+  error?: { message?: string };
+}
+
 export function InviteMemberDialog() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("member");
+  const [role, setRole] = useState<"admin" | "member">("member");
+  const [pending, setPending] = useState(false);
   const valid = EMAIL.test(email);
 
-  function submit() {
-    // Mock — TODO(BFF): POST the invite; the server sends the email + creates the pending membership.
-    toast.success(`Invite sent to ${email} as ${role}`);
-    setOpen(false);
-    setEmail("");
-    setRole("member");
+  async function submit() {
+    setPending(true);
+    try {
+      const response = await fetch("/api/team/members", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), role }),
+      });
+      if (!response.ok) {
+        const payload = (await response
+          .json()
+          .catch(() => null)) as BffErrorPayload | null;
+        throw new Error(payload?.error?.message ?? "Couldn't send the invite.");
+      }
+      toast.success(`Invite sent to ${email} as ${role}`, {
+        description: "They'll get an email to join on Fabric.",
+      });
+      setOpen(false);
+      setEmail("");
+      setRole("member");
+      router.refresh(); // reflect the new invited member in the SSR list
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Couldn't send the invite.",
+      );
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -51,7 +80,7 @@ export function InviteMemberDialog() {
         <DialogHeader>
           <DialogTitle>Invite a team member</DialogTitle>
           <DialogDescription>
-            They&apos;ll get an email to join KwikGH on Fabric.
+            They&apos;ll get an email to join your organisation on Fabric.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 py-2">
@@ -67,7 +96,10 @@ export function InviteMemberDialog() {
           </Field>
           <Field>
             <FieldLabel htmlFor="invite-role">Role</FieldLabel>
-            <Select value={role} onValueChange={setRole}>
+            <Select
+              value={role}
+              onValueChange={(v) => setRole(v as "admin" | "member")}
+            >
               <SelectTrigger id="invite-role">
                 <SelectValue />
               </SelectTrigger>
@@ -79,11 +111,15 @@ export function InviteMemberDialog() {
           </Field>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={pending}
+          >
             Cancel
           </Button>
-          <Button disabled={!valid} onClick={submit}>
-            Send invite
+          <Button disabled={!valid || pending} onClick={submit}>
+            {pending ? "Sending…" : "Send invite"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,0 +1,31 @@
+import { z } from "zod";
+import { customerRoleSchema } from "./identity.js";
+
+/**
+ * Team-member management for a tenant (dashboard). Owners/admins invite teammates into their org.
+ * `owner` is NOT invitable — it's the first admin created at tenant provisioning; new people join as
+ * `admin` or `member`. An invite creates an `invited` user + `invited` membership (bound on first
+ * sign-in) and sends a WorkOS organization invitation. See docs/PI-3/ORG-PROVISIONING.md.
+ */
+export const inviteMemberRoleSchema = z.enum(["admin", "member"]);
+
+export const inviteMemberRequestSchema = z.object({
+  email: z.string().trim().email().max(320),
+  name: z.string().trim().min(1).max(255).optional(),
+  role: inviteMemberRoleSchema,
+});
+export type InviteMemberRequest = z.infer<typeof inviteMemberRequestSchema>;
+
+export const memberDtoSchema = z.object({
+  user_id: z.string(),
+  email: z.string(),
+  name: z.string().nullable(),
+  role: customerRoleSchema,
+  status: z.enum(["active", "invited", "disabled"]),
+});
+export type MemberDto = z.infer<typeof memberDtoSchema>;
+
+export const listMembersResponseSchema = z.object({
+  members: z.array(memberDtoSchema),
+});
+export type ListMembersResponse = z.infer<typeof listMembersResponseSchema>;
