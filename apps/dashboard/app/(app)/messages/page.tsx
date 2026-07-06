@@ -19,17 +19,16 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@app/ui/components/ui/empty";
-import { Skeleton } from "@app/ui/components/ui/skeleton";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@app/ui/components/ui/tabs";
 import { List, TriangleAlert } from "lucide-react";
+import { InsightsOverview } from "@/components/insights/insights-overview";
 import { MessagesTable } from "@/components/messages-table";
-import { listMessages, type Scenario } from "@/lib/mock-api";
-
-type ViewState = Scenario | "loading";
-function parseViewState(raw: string | undefined): ViewState {
-  return raw === "empty" || raw === "error" || raw === "loading"
-    ? raw
-    : "populated";
-}
+import { getMessageList } from "@/lib/server/dashboard-data";
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -44,88 +43,101 @@ function PageHeader() {
         Messages
       </h1>
       <p className="text-sm text-muted-foreground">
-        Every send, its delivery status, and the full report timeline.
+        Every send, its delivery status, and the analytics behind them.
       </p>
     </div>
   );
 }
 
-export default async function MessagesPage({
-  searchParams,
+/** The Log tab body — the real-BFF message log, with its error/empty/loaded states intact. */
+function MessageLog({
+  result,
 }: {
-  searchParams: Promise<{ state?: string }>;
+  result:
+    | { kind: "error"; message: string; requestId?: string }
+    | { kind: "messages"; messages: readonly MessageSummary[] };
 }) {
-  const view = parseViewState((await searchParams).state);
-
-  if (view === "loading") {
+  if (result.kind === "error") {
     return (
-      <Shell>
-        <PageHeader />
-        <Skeleton className="h-96 rounded-xl" />
-      </Shell>
+      <Alert variant="destructive">
+        <TriangleAlert />
+        <AlertTitle>Couldn&apos;t load your messages</AlertTitle>
+        <AlertDescription>
+          <p>{result.message}</p>
+          {result.requestId && (
+            <p>
+              Contact support with{" "}
+              <code className="font-mono">{result.requestId}</code>.
+            </p>
+          )}
+        </AlertDescription>
+      </Alert>
     );
   }
 
-  let messages: readonly MessageSummary[];
+  if (result.messages.length === 0) {
+    return (
+      <Empty className="mx-auto max-w-2xl">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <List />
+          </EmptyMedia>
+          <EmptyTitle>No messages yet</EmptyTitle>
+          <EmptyDescription>
+            Your sends will appear here with live delivery status. Head to Send
+            SMS to get started.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Message log</CardTitle>
+        <CardDescription>
+          Filter by recipient, status, provider, or country; select a row for
+          its delivery timeline.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <MessagesTable messages={result.messages} />
+      </CardContent>
+    </Card>
+  );
+}
+
+export default async function MessagesPage() {
+  let result:
+    | { kind: "error"; message: string; requestId?: string }
+    | { kind: "messages"; messages: readonly MessageSummary[] };
   try {
-    messages = await listMessages(view);
+    result = { kind: "messages", messages: (await getMessageList()).messages };
   } catch (payload) {
     const err = parseApiError(payload);
-    return (
-      <Shell>
-        <PageHeader />
-        <Alert variant="destructive">
-          <TriangleAlert />
-          <AlertTitle>Couldn&apos;t load your messages</AlertTitle>
-          <AlertDescription>
-            <p>{err.message}</p>
-            {err.requestId && (
-              <p>
-                Contact support with{" "}
-                <code className="font-mono">{err.requestId}</code>.
-              </p>
-            )}
-          </AlertDescription>
-        </Alert>
-      </Shell>
-    );
-  }
-
-  if (messages.length === 0) {
-    return (
-      <Shell>
-        <PageHeader />
-        <Empty className="mx-auto max-w-2xl">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <List />
-            </EmptyMedia>
-            <EmptyTitle>No messages yet</EmptyTitle>
-            <EmptyDescription>
-              Your sends will appear here with live delivery status. Head to
-              Send SMS to get started.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </Shell>
-    );
+    result = {
+      kind: "error",
+      message: err.message,
+      ...(err.requestId ? { requestId: err.requestId } : {}),
+    };
   }
 
   return (
     <Shell>
       <PageHeader />
-      <Card>
-        <CardHeader>
-          <CardTitle>Message log</CardTitle>
-          <CardDescription>
-            Filter by recipient or status; select a row for its delivery
-            timeline.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <MessagesTable messages={messages} />
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="log" className="gap-6">
+        <TabsList>
+          <TabsTrigger value="log">Log</TabsTrigger>
+          <TabsTrigger value="insights">Insights</TabsTrigger>
+        </TabsList>
+        <TabsContent value="log">
+          <MessageLog result={result} />
+        </TabsContent>
+        <TabsContent value="insights">
+          <InsightsOverview />
+        </TabsContent>
+      </Tabs>
     </Shell>
   );
 }

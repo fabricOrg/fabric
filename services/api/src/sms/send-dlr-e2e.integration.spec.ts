@@ -83,7 +83,7 @@ beforeAll(async () => {
   );
   await owner.unsafe(
     `INSERT INTO api_keys (tenant_id, prefix, key_hash, env, scopes, status)
-     VALUES ($1, 'sk_test_e2e', $2, 'test', '["sms:send"]'::jsonb, 'active')
+     VALUES ($1, 'sk_test_e2e', $2, 'test', '["sms:send","sms:read","wallet:read"]'::jsonb, 'active')
      ON CONFLICT (key_hash) DO NOTHING`,
     [TENANT, hashApiKey(ACTIVE_RAW)],
   );
@@ -193,6 +193,72 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
     expect(await balance("customer")).toBe(customerBefore);
     expect(await balance("revenue")).toBe(revenueBefore);
     expect(await balance("reserved_clearing")).toBe(0n);
+  });
+
+  it("exposes the resulting message and exact wallet ledger through tenant-scoped reads", async () => {
+    const headers = { authorization: `Bearer ${ACTIVE_RAW}` };
+    const messages = await app.inject({
+      method: "GET",
+      url: "/v1/messages",
+      headers,
+    });
+    expect(messages.statusCode).toBe(200);
+    const messageBody = messages.json() as {
+      messages: Array<{ id: string; status: string; cost: { minor: string } }>;
+      request_id: string;
+    };
+    expect(messageBody.request_id).toMatch(/^req_/);
+    expect(messageBody.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: messageId,
+          status: "delivered",
+          cost: { currency: "GHS", minor: cost.toString() },
+        }),
+      ]),
+    );
+
+    const detail = await app.inject({
+      method: "GET",
+      url: `/v1/sms/${messageId}`,
+      headers,
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject({
+      message: {
+        id: messageId,
+        status: "delivered",
+        redacted: true,
+      },
+    });
+
+    const wallet = await app.inject({
+      method: "GET",
+      url: "/v1/wallet",
+      headers,
+    });
+    expect(wallet.statusCode).toBe(200);
+    const walletBody = wallet.json() as {
+      balances: Array<{ balance: { currency: string; minor: string } }>;
+      ledger: Array<{
+        type: string;
+        direction: string;
+        amount: { minor: string };
+        runningBalance: { minor: string };
+      }>;
+    };
+    expect(walletBody.balances).toContainEqual({
+      balance: {
+        currency: "GHS",
+        minor: (FUNDING_MINOR - cost).toString(),
+      },
+    });
+    expect(walletBody.ledger[0]).toMatchObject({
+      type: "sms_charge",
+      direction: "debit",
+      amount: { minor: cost.toString() },
+      runningBalance: { minor: (FUNDING_MINOR - cost).toString() },
+    });
   });
 
   it("8. a provider-rejected send refunds the reservation — customer nets to zero for that send", async () => {

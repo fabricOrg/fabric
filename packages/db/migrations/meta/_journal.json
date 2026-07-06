@@ -64,6 +64,34 @@
       "when": 1782946008098,
       "tag": "0008_messages_dlr_lookup",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783173040061,
+      "tag": "0009_workos_organization_mapping",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783176713358,
+      "tag": "0010_workos_identity_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1783242345756,
+      "tag": "0011_lean_the_renegades",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783327435176,
+      "tag": "0012_staff_users",
+      "breakpoints": true
     }
   ]
 }

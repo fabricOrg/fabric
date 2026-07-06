@@ -38,3 +38,11 @@ export const topupRequest = z.object({
   minor: z.string().regex(/^\d+$/),
 });
 export type TopupRequest = z.infer<typeof topupRequest>;
+
+/** GET /v1/wallet - balances and the customer-visible ledger in one dashboard read. */
+export const walletSnapshot = z.object({
+  balances: z.array(walletBalance),
+  ledger: z.array(ledgerEntry),
+  request_id: z.string(),
+});
+export type WalletSnapshot = z.infer<typeof walletSnapshot>;

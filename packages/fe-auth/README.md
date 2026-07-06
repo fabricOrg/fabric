@@ -1,8 +1,8 @@
 # @app/fe-auth — shared frontend auth/BFF session mechanism
 
-**Status:** SEAM SCAFFOLD (ratified 2026-07-01, *seam-now / full-defer*). Interface is **frozen**;
-flow implementations are **deferred to PI-2** (stubs throw `NotImplemented`). **No login logic ships
-here yet.** Full design: `team/frontend/PROPOSAL-fe-auth-bff-seam.md`.
+**Status:** the customer WorkOS sealed-session flow is implemented for the dashboard. The package
+also provides an explicit development-only encrypted session; it is disabled by default and refuses
+to run in production. Staff realm integration remains deferred.
 
 ## What this is
 
@@ -18,14 +18,14 @@ server-rendered props or BFF endpoints — never tokens, never this module. The 
 `@app/contracts` (zod-only, browser-safe); this one is not. A CI guard keeps `@app/contracts`
 browser-safe; do not defeat the boundary by re-exporting `fe-auth` from it.
 
-## The session-middleware loop (documented; built at PI-2)
+## The session-middleware loop
 
 Every protected request:
 1. `readSession(cfg, cookie)` → if a valid `AppSession`, continue.
 2. else `refreshSession(cfg, cookie)` → if it returns a session, re-set the cookie and continue.
 3. else redirect to `buildAuthorizationUrl(cfg, { state })`.
-4. On a valid session, run the `AccountLivenessCheck` (§6) — fail-closed if the account/membership
-   is no longer live.
+4. On a valid session, resolve it through the API, which checks account, user, and membership
+   liveness and fails closed if access has been revoked.
 
 **No protected route ever 500s on an expired/invalid/missing session — it redirects to login.**
 `readSession`/`refreshSession` return `null`, never throw.
@@ -55,10 +55,10 @@ Postgres RLS is the backstop.
 The local account/membership **status is the source of truth** the BFF checks on refresh:
 - A `closed`/`suspended` account or a revoked membership must **fail closed** at session validation
   (blocked-login), not ride a stale sealed cookie past the close.
-- WorkOS webhooks (`user.created`, `organization_membership.deleted`, …) can invalidate an active
-  BFF session via the `AccountLivenessCheck`.
-- Consumer side of backend **F8**: once provisioning is unblocked (non-tenant-RLS path) and
-  upsert-by-`external_subject_id` is idempotent + order-tolerant, the BFF trusts local status.
+- WorkOS webhooks (`user.created`, `organization_membership.deleted`, …) update timestamped local
+  lifecycle state through the dedicated provisioning path.
+- Replayed and out-of-order events cannot overwrite newer WorkOS state. A disabled membership
+  cannot be recreated by a stale sealed session; the API identity resolver denies it.
 
 ## §7 The 5 safety-critical flows (one feature, two seams; PI-2)
 

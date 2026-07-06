@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ApiContextController } from "./api-context.controller.js";
 import { ApiKeyGuard } from "./api-key.guard.js";
 import { ApiKeysController } from "./api-keys.controller.js";
 import { ApiKeyService } from "./api-keys.service.js";
@@ -11,7 +12,7 @@ import { OperatorTokenGuard } from "./operator-token.guard.js";
  * operator-token-gated separately until customer sessions land in F2.1.
  */
 @Module({
-  controllers: [ApiKeysController],
+  controllers: [ApiKeysController, ApiContextController],
   providers: [ApiKeyService, ApiKeyGuard, OperatorTokenGuard],
   exports: [ApiKeyService, ApiKeyGuard],
 })

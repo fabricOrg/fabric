@@ -37,7 +37,7 @@ function FabricMark() {
   );
 }
 
-export function AppSidebar() {
+export function AppSidebar({ role }: { role: string }) {
   const pathname = usePathname();
 
   return (
@@ -63,11 +63,20 @@ export function AppSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={active}
-                        tooltip={item.title}
+                        tooltip={
+                          item.preview
+                            ? `${item.title} — preview (mock data)`
+                            : item.title
+                        }
                       >
                         <Link href={item.href}>
                           <item.icon />
                           <span>{item.title}</span>
+                          {item.preview ? (
+                            <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground group-data-[collapsible=icon]:hidden">
+                              Preview
+                            </span>
+                          ) : null}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -81,12 +90,14 @@ export function AppSidebar() {
       <SidebarFooter>
         <div className="flex items-center gap-2 px-2 py-1.5">
           <Avatar className="size-8">
-            <AvatarFallback>AO</AvatarFallback>
+            <AvatarFallback>F</AvatarFallback>
           </Avatar>
           <div className="grid flex-1 text-left leading-tight">
-            <span className="truncate text-sm font-medium">Ama Owusu</span>
+            <span className="truncate text-sm font-medium">
+              Customer workspace
+            </span>
             <span className="truncate text-xs text-muted-foreground">
-              KwikGH · Owner
+              {role.charAt(0).toUpperCase() + role.slice(1)}
             </span>
           </div>
         </div>

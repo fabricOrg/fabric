@@ -1,5 +1,23 @@
-import { Body, Controller, Inject, Post, Req, UseGuards } from "@nestjs/common";
-import { ApiKeyGuard, type RequestTenant } from "../api-keys/api-key.guard.js";
+import type {
+  MessageDetailResponse,
+  MessageListResponse,
+  SendSmsApiResponse,
+} from "@app/contracts";
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
+import {
+  ApiKeyGuard,
+  type RequestTenant,
+  requireScope,
+} from "../api-keys/api-key.guard.js";
 import { invalidRequest, newRequestId } from "../http/api-error.js";
 import { SmsService } from "./sms.service.js";
 
@@ -30,21 +48,17 @@ function requireString(v: unknown, param: string): string {
  * req.tenant; the handler runs the L5 pipeline under that tenant. Segmentation/rating/reserve/commit
  * all happen in the engine. Success → 201 { id, status, request_id }; bad field → 400 invalid_request_error.
  */
-@Controller("v1/sms")
+@Controller("v1")
 @UseGuards(ApiKeyGuard)
 export class SmsController {
   constructor(@Inject(SmsService) private readonly sms: SmsService) {}
 
-  @Post("send")
+  @Post("sms/send")
   async send(
     @Req() req: AuthedRequest,
     @Body() body: SendBody,
-  ): Promise<{ id: string; status: string; request_id: string }> {
-    const tenant = req.tenant;
-    if (!tenant) {
-      // Guard guarantees this; defensive.
-      throw invalidRequest("no_tenant", "request is not authenticated");
-    }
+  ): Promise<SendSmsApiResponse> {
+    const tenant = requireScope(req.tenant, "sms:send");
     const result = await this.sms.send({
       tenantId: tenant.id,
       to: requireString(body.to, "to"),
@@ -53,8 +67,32 @@ export class SmsController {
       currency: requireString(body.currency, "currency"),
     });
     return {
-      id: result.messageId,
+      id: result.id,
       status: result.status,
+      encoding: result.encoding,
+      segments: result.segments,
+      cost: result.cost,
+      request_id: newRequestId(),
+    };
+  }
+
+  @Get("messages")
+  async list(@Req() req: AuthedRequest): Promise<MessageListResponse> {
+    const tenant = requireScope(req.tenant, "sms:read");
+    return {
+      messages: await this.sms.list(tenant.id),
+      request_id: newRequestId(),
+    };
+  }
+
+  @Get("sms/:id")
+  async get(
+    @Req() req: AuthedRequest,
+    @Param("id") id: string,
+  ): Promise<MessageDetailResponse> {
+    const tenant = requireScope(req.tenant, "sms:read");
+    return {
+      message: await this.sms.get(tenant.id, id),
       request_id: newRequestId(),
     };
   }

@@ -1,190 +1,203 @@
-import { Button } from "@app/ui/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@app/ui/components/ui/card";
-import { Progress } from "@app/ui/components/ui/progress";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@app/ui/components/ui/table";
-import { ArrowUpRight, Plus } from "lucide-react";
-import Link from "next/link";
-import { type MessageStatus, StatusBadge } from "@/components/status-badge";
+"use client";
 
-interface RecentMessage {
-  to: string;
-  status: MessageStatus;
-  segments: number;
-  cost: string;
-  time: string;
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@app/ui/components/ui/alert";
+import { Button } from "@app/ui/components/ui/button";
+import { Card, CardContent, CardHeader } from "@app/ui/components/ui/card";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@app/ui/components/ui/empty";
+import { Skeleton } from "@app/ui/components/ui/skeleton";
+import {
+  BadgeCheck,
+  Megaphone,
+  Send,
+  Signal,
+  TriangleAlert,
+} from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { RecentActivity } from "@/components/overview/recent-activity";
+import { SpendByChannel } from "@/components/overview/spend-by-channel";
+import { StatTiles } from "@/components/overview/stat-tiles";
+import { TrafficChart } from "@/components/overview/traffic-chart";
+import { getOverview, type OverviewSummary } from "@/lib/client/overview-api";
+import { toastApiError } from "@/lib/error-toast";
+
+type State =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; summary: OverviewSummary };
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">{children}</div>
+  );
 }
 
-const RECENT: readonly RecentMessage[] = [
-  {
-    to: "+233 24● ●●● ●●12",
-    status: "delivered",
-    segments: 1,
-    cost: "0.03",
-    time: "2 min ago",
-  },
-  {
-    to: "+234 80● ●●● ●●45",
-    status: "sent",
-    segments: 2,
-    cost: "0.06",
-    time: "6 min ago",
-  },
-  {
-    to: "+233 20● ●●● ●●88",
-    status: "delivered",
-    segments: 1,
-    cost: "0.03",
-    time: "14 min ago",
-  },
-  {
-    to: "+233 27● ●●● ●●03",
-    status: "undelivered",
-    segments: 1,
-    cost: "0.03",
-    time: "22 min ago",
-  },
-  {
-    to: "+233 55● ●●● ●●71",
-    status: "failed",
-    segments: 1,
-    cost: "0.03",
-    time: "31 min ago",
-  },
-];
-
-export default function OverviewPage() {
+function Header() {
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex flex-col gap-1">
         <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Overview
+          Welcome to Fabric
         </h1>
         <p className="text-sm text-muted-foreground">
-          Your wallet, today's traffic, and recent messages at a glance.
+          Traffic, delivery, and spend across your workspace at a glance.
         </p>
       </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardDescription>Available balance</CardDescription>
-            <CardTitle className="font-display text-3xl tabular-nums">
-              GHS 1,204.03
-            </CardTitle>
-            <CardAction>
-              <span className="text-xs text-muted-foreground">
-                2 currencies
-              </span>
-            </CardAction>
-          </CardHeader>
-          <CardFooter className="gap-2">
-            <Button asChild size="sm">
-              <Link href="/wallet">
-                <Plus data-icon="inline-start" />
-                Top up
-              </Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/wallet">Transactions</Link>
-            </Button>
-          </CardFooter>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardDescription>Sent today</CardDescription>
-            <CardTitle className="font-display text-3xl tabular-nums">
-              2,318
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              2,276 delivered · 42 in flight
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardDescription>Delivery rate · 24h</CardDescription>
-            <CardTitle className="font-display text-3xl tabular-nums">
-              98.2%
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            <Progress value={98} aria-label="Delivery rate 98.2 percent" />
-            <p className="text-sm text-muted-foreground">
-              Above your 95% target.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent messages</CardTitle>
-          <CardDescription>
-            The last few sends across your account.
-          </CardDescription>
-          <CardAction>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/messages">
-                View all
-                <ArrowUpRight data-icon="inline-end" />
-              </Link>
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Recipient</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Segments</TableHead>
-                  <TableHead className="text-right">Cost</TableHead>
-                  <TableHead className="text-right">Time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {RECENT.map((m) => (
-                  <TableRow key={m.to}>
-                    <TableCell className="font-mono text-sm">{m.to}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={m.status} />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {m.segments}
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      GHS {m.cost}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {m.time}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <QuickActions />
     </div>
+  );
+}
+
+/** Link-only quick actions — the primary jobs launched from home. */
+function QuickActions() {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button asChild size="sm">
+        <Link href="/send">
+          <Send data-icon="inline-start" />
+          Send
+        </Link>
+      </Button>
+      <Button asChild size="sm" variant="outline">
+        <Link href="/campaigns">
+          <Megaphone data-icon="inline-start" />
+          New campaign
+        </Link>
+      </Button>
+      <Button asChild size="sm" variant="outline">
+        <Link href="/verify">
+          <BadgeCheck data-icon="inline-start" />
+          Verify
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Card key={i}>
+            <CardHeader className="gap-3">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-8 w-32" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-4 w-28" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {[0, 1].map((i) => (
+          <Card key={i}>
+            <CardHeader className="gap-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-56" />
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {[0, 1, 2, 3].map((r) => (
+                <Skeleton key={r} className="h-8 w-full" />
+              ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function isEmpty(summary: OverviewSummary): boolean {
+  return summary.messagesSent === 0 && summary.recentActivity.length === 0;
+}
+
+export default function OverviewPage() {
+  const [state, setState] = useState<State>({ status: "loading" });
+
+  const load = useCallback(async () => {
+    setState({ status: "loading" });
+    try {
+      setState({ status: "ready", summary: await getOverview() });
+    } catch (payload) {
+      toastApiError(payload);
+      setState({ status: "error" });
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <Shell>
+      <Header />
+
+      {state.status === "loading" && <LoadingState />}
+
+      {state.status === "error" && (
+        <Alert variant="destructive">
+          <TriangleAlert />
+          <AlertTitle>Couldn&apos;t load your overview</AlertTitle>
+          <AlertDescription>
+            <p>Something went wrong fetching your summary.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => void load()}
+            >
+              Try again
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {state.status === "ready" && isEmpty(state.summary) && (
+        <Empty className="mx-auto max-w-2xl">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Signal />
+            </EmptyMedia>
+            <EmptyTitle>Nothing to show yet</EmptyTitle>
+            <EmptyDescription>
+              Send your first message to start seeing traffic, delivery, and
+              spend here.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button asChild>
+              <Link href="/send">
+                <Send data-icon="inline-start" />
+                Send a message
+              </Link>
+            </Button>
+          </EmptyContent>
+        </Empty>
+      )}
+
+      {state.status === "ready" && !isEmpty(state.summary) && (
+        <>
+          <StatTiles summary={state.summary} />
+          <TrafficChart points={state.summary.traffic} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <SpendByChannel channels={state.summary.spendByChannel} />
+            <RecentActivity items={state.summary.recentActivity} />
+          </div>
+        </>
+      )}
+    </Shell>
   );
 }

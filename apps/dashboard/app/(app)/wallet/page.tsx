@@ -4,6 +4,7 @@ import type {
   WalletBalance,
 } from "@app/contracts";
 import { parseApiError, toMoney } from "@app/contracts";
+import { DEFAULT_RATES, rateSegments } from "@app/domain";
 import {
   Alert,
   AlertDescription,
@@ -26,7 +27,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@app/ui/components/ui/empty";
-import { Skeleton } from "@app/ui/components/ui/skeleton";
+import { Separator } from "@app/ui/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -47,18 +48,10 @@ import {
   TriangleAlert,
   Wallet,
 } from "lucide-react";
-import { getWallet, listLedger, type Scenario } from "@/lib/mock-api";
+import { BalanceTrend } from "@/components/wallet/balance-trend";
 import { formatMoney, formatSigned } from "@/lib/money";
+import { getWalletSnapshot } from "@/lib/server/dashboard-data";
 import { TopUpDialog } from "./_top-up-dialog";
-
-/** ?state= maps to the mock-api scenario; `loading` is UI-only (renders skeletons, no fetch). */
-type ViewState = Scenario | "loading";
-
-function parseViewState(raw: string | undefined): ViewState {
-  return raw === "empty" || raw === "error" || raw === "loading"
-    ? raw
-    : "populated";
-}
 
 /** Ledger-kind chip — color paired with icon + label (never color-only, WCAG). */
 const KIND: Record<
@@ -124,32 +117,28 @@ function isLow(b: WalletBalance): boolean {
   );
 }
 
-export default async function WalletPage({
-  searchParams,
-}: {
-  // Next 16: searchParams is async. `?state=empty|loading|error` demos the four global states.
-  searchParams: Promise<{ state?: string }>;
-}) {
-  const view = parseViewState((await searchParams).state);
-
-  if (view === "loading") {
-    return (
-      <Shell>
-        <PageHeader />
-        <div className="grid gap-4 md:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-32 rounded-xl" />
-          ))}
-        </div>
-        <Skeleton className="h-80 rounded-xl" />
-      </Shell>
-    );
+/** Runway = how many SMS segments this balance buys at the standard rate (exact bigint division). */
+function messageRunway(b: WalletBalance) {
+  let rateMinor = 0n;
+  try {
+    rateMinor = rateSegments(1, b.balance.currency, DEFAULT_RATES);
+  } catch {
+    return null;
   }
+  if (rateMinor <= 0n) return null;
+  return {
+    count: Number(BigInt(b.balance.minor) / rateMinor),
+    rate: toMoney(rateMinor, b.balance.currency),
+  };
+}
 
+export default async function WalletPage() {
   let balances: readonly WalletBalance[];
   let ledger: readonly LedgerEntry[];
   try {
-    [balances, ledger] = await Promise.all([getWallet(view), listLedger(view)]);
+    const snapshot = await getWalletSnapshot();
+    balances = snapshot.balances;
+    ledger = snapshot.ledger;
   } catch (payload) {
     const err = parseApiError(payload);
     return (
@@ -204,6 +193,21 @@ export default async function WalletPage({
     }, 0n);
   const monthSpend = toMoney(monthSpendMinor, primaryCurrency);
 
+  // Running-balance series (chronological) for the trend chart. Number is display-only — the exact
+  // money stays in bigint minor units on `runningBalance`.
+  const balancePoints = [...ledger]
+    .sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    )
+    .map((e) => ({
+      label: new Date(e.createdAt).toLocaleDateString("en", {
+        month: "short",
+        day: "numeric",
+      }),
+      balance: Number(e.runningBalance.minor) / 100,
+    }));
+
   return (
     <Shell>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -245,44 +249,60 @@ export default async function WalletPage({
       )}
 
       <div className="grid gap-4 md:grid-cols-3">
-        {balances.map((b) => (
-          <Card key={b.balance.currency}>
-            <CardHeader>
-              <CardDescription>{b.balance.currency} balance</CardDescription>
-              <CardTitle className="font-display text-3xl tabular-nums">
-                {formatMoney(b.balance)}
-              </CardTitle>
-              {isLow(b) && (
-                <CardAction>
-                  <Badge
-                    variant="outline"
-                    className="gap-1 border-transparent bg-warning/15 text-warning"
-                  >
-                    <TriangleAlert />
-                    Low
-                  </Badge>
-                </CardAction>
-              )}
-            </CardHeader>
-          </Card>
-        ))}
+        {balances.map((b) => {
+          const runway = messageRunway(b);
+          const isPrimary = b.balance.currency === primaryCurrency;
+          return (
+            <Card key={b.balance.currency} className="flex flex-col">
+              <CardHeader>
+                <CardDescription>{b.balance.currency} balance</CardDescription>
+                <CardTitle className="font-display text-3xl tabular-nums">
+                  {formatMoney(b.balance)}
+                </CardTitle>
+                {isLow(b) && (
+                  <CardAction>
+                    <Badge
+                      variant="outline"
+                      className="gap-1 border-transparent bg-warning/15 text-warning"
+                    >
+                      <TriangleAlert />
+                      Low
+                    </Badge>
+                  </CardAction>
+                )}
+              </CardHeader>
+              <CardContent className="mt-auto flex flex-col gap-3 text-sm">
+                {runway && (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono text-lg font-semibold tabular-nums">
+                      ≈ {runway.count.toLocaleString("en")} SMS
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      left at {formatMoney(runway.rate)} / segment
+                    </span>
+                  </div>
+                )}
+                {isPrimary && (
+                  <>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">
+                        Spent this month
+                      </span>
+                      <span className="font-mono tabular-nums">
+                        {formatMoney(monthSpend)}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+        <BalanceTrend points={balancePoints} currency={primaryCurrency} />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardDescription>This month</CardDescription>
-            <CardTitle className="font-display text-2xl tabular-nums">
-              {formatMoney(monthSpend)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Spent on SMS so far this month.
-            </p>
-          </CardContent>
-        </Card>
-
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Auto top-up</CardTitle>

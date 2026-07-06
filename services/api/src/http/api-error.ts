@@ -45,6 +45,11 @@ export function unauthorized(code: string, message: string): HttpException {
   return apiError({ type: "auth_error", code, message, status: 401 });
 }
 
+/** 403 in the F8.3 envelope - authenticated but missing the endpoint permission. */
+export function forbidden(code: string, message: string): HttpException {
+  return apiError({ type: "auth_error", code, message, status: 403 });
+}
+
 /** 400 in the F8.3 envelope (`type: "invalid_request_error"`) — `param` pinpoints the bad field. */
 export function invalidRequest(
   code: string,
