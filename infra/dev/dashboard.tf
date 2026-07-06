@@ -128,15 +128,17 @@ resource "aws_ecs_task_definition" "dashboard" {
         }
       }
       healthCheck = {
-        # No /health route on the dashboard; the public /login page returns 200 unauthenticated.
+        # Hit the trivial /healthz route (app/healthz/route.ts) — no SSR, so page-render time can't
+        # flap the deploy. The Dockerfile CMD forces HOSTNAME=0.0.0.0, so 127.0.0.1 is reliably bound.
+        # Liveness: any HTTP response → healthy; only a refused connection is unhealthy.
         command = [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:3000/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\"",
+          "node -e \"fetch('http://127.0.0.1:3000/healthz').then(()=>process.exit(0)).catch(()=>process.exit(1))\"",
         ]
         interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 30
+        timeout     = 10
+        retries     = 5
+        startPeriod = 60
       }
     },
   ])
