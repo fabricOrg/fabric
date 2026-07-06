@@ -30,6 +30,7 @@ data "aws_iam_policy_document" "ecs_secret_access" {
       aws_secretsmanager_secret.database_admin.arn,
       aws_secretsmanager_secret.database_owner.arn,
       aws_secretsmanager_secret.database_runtime.arn,
+      aws_secretsmanager_secret.database_provisioner.arn,
       aws_secretsmanager_secret.operator_token.arn,
       aws_secretsmanager_secret.webhook_ingress_token.arn,
       aws_secretsmanager_secret.bff_internal_token.arn,
@@ -114,6 +115,10 @@ resource "aws_ecs_task_definition" "api" {
           name      = "BFF_INTERNAL_TOKEN"
           valueFrom = "${aws_secretsmanager_secret.bff_internal_token.arn}:BFF_INTERNAL_TOKEN::"
         },
+        {
+          name      = "DATABASE_URL_PROVISIONER"
+          valueFrom = "${aws_secretsmanager_secret.database_provisioner.arn}:DATABASE_URL_PROVISIONER::"
+        },
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -138,6 +143,7 @@ resource "aws_ecs_task_definition" "api" {
 
   depends_on = [
     aws_secretsmanager_secret_version.database_runtime,
+    aws_secretsmanager_secret_version.database_provisioner,
     aws_secretsmanager_secret_version.operator_token,
     aws_secretsmanager_secret_version.webhook_ingress_token,
     aws_secretsmanager_secret_version.bff_internal_token,
@@ -180,6 +186,10 @@ resource "aws_ecs_task_definition" "migration" {
           name      = "DATABASE_URL_APP"
           valueFrom = "${aws_secretsmanager_secret.database_runtime.arn}:DATABASE_URL_APP::"
         },
+        {
+          name      = "DATABASE_URL_PROVISIONER"
+          valueFrom = "${aws_secretsmanager_secret.database_provisioner.arn}:DATABASE_URL_PROVISIONER::"
+        },
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -196,6 +206,7 @@ resource "aws_ecs_task_definition" "migration" {
     aws_secretsmanager_secret_version.database_admin,
     aws_secretsmanager_secret_version.database_owner,
     aws_secretsmanager_secret_version.database_runtime,
+    aws_secretsmanager_secret_version.database_provisioner,
   ]
 }
 

@@ -13,6 +13,11 @@ ephemeral "random_password" "database_runtime" {
   special = false
 }
 
+ephemeral "random_password" "database_provisioner" {
+  length  = 40
+  special = false
+}
+
 ephemeral "random_password" "operator_token" {
   length  = 48
   special = false
@@ -92,6 +97,12 @@ resource "aws_secretsmanager_secret" "database_owner" {
 resource "aws_secretsmanager_secret" "database_runtime" {
   name                    = "fabric/testing/database/runtime"
   description             = "RLS-constrained PostgreSQL runtime URL."
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret" "database_provisioner" {
+  name                    = "fabric/testing/database/provisioner"
+  description             = "BYPASSRLS provisioning URL — cross-tenant identity/tenant provisioning (internal only)."
   recovery_window_in_days = 0
 }
 
@@ -188,6 +199,14 @@ resource "aws_secretsmanager_secret_version" "database_runtime" {
   secret_id = aws_secretsmanager_secret.database_runtime.id
   secret_string_wo = jsonencode({
     DATABASE_URL_APP = "postgresql://app_runtime:${urlencode(ephemeral.random_password.database_runtime.result)}@${aws_db_instance.postgres.address}:5432/app?sslmode=require"
+  })
+  secret_string_wo_version = 1
+}
+
+resource "aws_secretsmanager_secret_version" "database_provisioner" {
+  secret_id = aws_secretsmanager_secret.database_provisioner.id
+  secret_string_wo = jsonencode({
+    DATABASE_URL_PROVISIONER = "postgresql://app_provisioner:${urlencode(ephemeral.random_password.database_provisioner.result)}@${aws_db_instance.postgres.address}:5432/app?sslmode=require"
   })
   secret_string_wo_version = 1
 }
