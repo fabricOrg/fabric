@@ -7,7 +7,7 @@ import {
   type MemberDto,
   memberDtoSchema,
 } from "@app/contracts";
-import { BffError } from "./api-client.js";
+import { BffError } from "./api-client";
 
 /**
  * Team-member management via the api's BffToken-guarded `/internal/tenants/:id/members`. The tenant
