@@ -31,13 +31,22 @@ export function developmentAuthConfig(): DevelopmentSessionConfig {
   };
 }
 
+/**
+ * This app's own public origin. Cloud sets DASHBOARD_BASE_URL (the deployed URL); locally it falls
+ * back to the dev port — so the WorkOS redirect/logout URIs are DERIVED per-app from one base,
+ * instead of each app needing its own WORKOS_REDIRECT_URI in a shared env. Trailing slash trimmed.
+ */
+function appBaseUrl(): string {
+  return (
+    process.env.DASHBOARD_BASE_URL?.trim() || "http://localhost:3100"
+  ).replace(/\/$/, "");
+}
+
 export function workosAuthConfigured(): boolean {
   return [
     "WORKOS_API_KEY",
     "WORKOS_CLIENT_ID",
     "WORKOS_COOKIE_PASSWORD",
-    "WORKOS_REDIRECT_URI",
-    "WORKOS_LOGOUT_REDIRECT_URI",
     "WORKOS_ORGANIZATION_ID",
     "BFF_INTERNAL_TOKEN",
   ].every((name) => Boolean(process.env[name]));
@@ -47,14 +56,15 @@ export function customerRealmConfig(): RealmConfig {
   if (!workosAuthConfigured()) {
     throw new Error("The customer WorkOS realm is not fully configured.");
   }
+  const base = appBaseUrl();
   return {
     realm: "customer",
     apiKey: process.env.WORKOS_API_KEY ?? "",
     clientId: process.env.WORKOS_CLIENT_ID ?? "",
     cookieName: WORKOS_COOKIE,
     cookiePassword: process.env.WORKOS_COOKIE_PASSWORD ?? "",
-    redirectUri: process.env.WORKOS_REDIRECT_URI ?? "",
-    logoutRedirectUri: process.env.WORKOS_LOGOUT_REDIRECT_URI ?? "",
+    redirectUri: `${base}/auth/callback`,
+    logoutRedirectUri: `${base}/login`,
     cookieOptions: {
       httpOnly: true,
       secure: true,

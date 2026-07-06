@@ -30,14 +30,20 @@ export function developmentAuthConfig(): DevelopmentSessionConfig {
   };
 }
 
+/** This app's public origin — cloud sets DEV_PORTAL_BASE_URL, dev falls back to the port. The WorkOS
+ * redirect/logout URIs derive from it (no per-app WORKOS_REDIRECT_URI in the shared env). */
+function appBaseUrl(): string {
+  return (
+    process.env.DEV_PORTAL_BASE_URL?.trim() || "http://localhost:3200"
+  ).replace(/\/$/, "");
+}
+
 /** Org-scoped like the dashboard — a developer is a tenant member; BFF token gates the session call. */
 export function workosAuthConfigured(): boolean {
   return [
     "WORKOS_API_KEY",
     "WORKOS_CLIENT_ID",
     "WORKOS_COOKIE_PASSWORD",
-    "WORKOS_REDIRECT_URI",
-    "WORKOS_LOGOUT_REDIRECT_URI",
     "WORKOS_ORGANIZATION_ID",
     "BFF_INTERNAL_TOKEN",
   ].every((name) => Boolean(process.env[name]));
@@ -47,14 +53,15 @@ export function developerRealmConfig(): RealmConfig {
   if (!workosAuthConfigured()) {
     throw new Error("The developer WorkOS realm is not fully configured.");
   }
+  const base = appBaseUrl();
   return {
     realm: "developer",
     apiKey: process.env.WORKOS_API_KEY ?? "",
     clientId: process.env.WORKOS_CLIENT_ID ?? "",
     cookieName: WORKOS_COOKIE,
     cookiePassword: process.env.WORKOS_COOKIE_PASSWORD ?? "",
-    redirectUri: process.env.WORKOS_REDIRECT_URI ?? "",
-    logoutRedirectUri: process.env.WORKOS_LOGOUT_REDIRECT_URI ?? "",
+    redirectUri: `${base}/auth/callback`,
+    logoutRedirectUri: `${base}/login`,
     cookieOptions: {
       httpOnly: true,
       secure: true,
