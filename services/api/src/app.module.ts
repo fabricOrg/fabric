@@ -5,6 +5,7 @@ import { ApiKeysModule } from "./api-keys/api-keys.module.js";
 import { DbModule } from "./db/db.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { IdentityModule } from "./identity/identity.module.js";
+import { MembersModule } from "./members/members.module.js";
 import { PluginsModule } from "./plugins/plugins.module.js";
 import { SmsModule } from "./sms/sms.module.js";
 import { WalletModule } from "./wallet/wallet.module.js";
@@ -21,6 +22,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     HealthModule,
     IdentityModule,
     AdminModule,
+    MembersModule,
     PluginsModule,
     ApiKeysModule,
     SmsModule,
