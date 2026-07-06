@@ -1,10 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { readAdminSession } from "@/lib/server/auth";
 
 /**
  * Plugin registry BFF. When the api is configured (API_BASE_URL + BFF_INTERNAL_TOKEN) this calls the
  * real staff endpoint /internal/plugins (backed by plugin_instances); otherwise an offline mock.
  * Flipping an instance to LIVE (real spend/sends) is a redline — sandbox only until human-activated.
+ * Staff-session gated: these routes are directly reachable at the admin origin, so the page guard
+ * (requireAdminSession) is NOT enough — every handler must verify the session itself.
  */
+function unauthorized() {
+  return NextResponse.json(
+    {
+      error: {
+        type: "auth_error",
+        code: "invalid_session",
+        message: "Staff sign-in required.",
+      },
+    },
+    { status: 401 },
+  );
+}
 const MOCK = [
   {
     id: "sms_fake",
@@ -110,6 +125,7 @@ function apiConfig(): { baseUrl: string; token: string } | null {
 }
 
 export async function GET() {
+  if (!(await readAdminSession())) return unauthorized();
   const cfg = apiConfig();
   if (cfg) {
     try {
@@ -141,6 +157,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  if (!(await readAdminSession())) return unauthorized();
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;

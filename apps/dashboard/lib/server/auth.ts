@@ -6,6 +6,7 @@ import {
   type RealmConfig,
   readDevelopmentSession,
   readSession,
+  refreshSession,
   sealDevelopmentSession,
 } from "@app/fe-auth";
 import { cookies } from "next/headers";
@@ -30,13 +31,22 @@ export function developmentAuthConfig(): DevelopmentSessionConfig {
   };
 }
 
+/**
+ * This app's own public origin. Cloud sets DASHBOARD_BASE_URL (the deployed URL); locally it falls
+ * back to the dev port — so the WorkOS redirect/logout URIs are DERIVED per-app from one base,
+ * instead of each app needing its own WORKOS_REDIRECT_URI in a shared env. Trailing slash trimmed.
+ */
+function appBaseUrl(): string {
+  return (
+    process.env.DASHBOARD_BASE_URL?.trim() || "http://localhost:3100"
+  ).replace(/\/$/, "");
+}
+
 export function workosAuthConfigured(): boolean {
   return [
     "WORKOS_API_KEY",
     "WORKOS_CLIENT_ID",
     "WORKOS_COOKIE_PASSWORD",
-    "WORKOS_REDIRECT_URI",
-    "WORKOS_LOGOUT_REDIRECT_URI",
     "WORKOS_ORGANIZATION_ID",
     "BFF_INTERNAL_TOKEN",
   ].every((name) => Boolean(process.env[name]));
@@ -46,14 +56,15 @@ export function customerRealmConfig(): RealmConfig {
   if (!workosAuthConfigured()) {
     throw new Error("The customer WorkOS realm is not fully configured.");
   }
+  const base = appBaseUrl();
   return {
     realm: "customer",
     apiKey: process.env.WORKOS_API_KEY ?? "",
     clientId: process.env.WORKOS_CLIENT_ID ?? "",
     cookieName: WORKOS_COOKIE,
     cookiePassword: process.env.WORKOS_COOKIE_PASSWORD ?? "",
-    redirectUri: process.env.WORKOS_REDIRECT_URI ?? "",
-    logoutRedirectUri: process.env.WORKOS_LOGOUT_REDIRECT_URI ?? "",
+    redirectUri: `${base}/auth/callback`,
+    logoutRedirectUri: `${base}/login`,
     cookieOptions: {
       httpOnly: true,
       secure: true,
@@ -97,6 +108,30 @@ export async function readDashboardSession(): Promise<AppSession | null> {
     developmentAuthConfig(),
     store.get(DEVELOPMENT_COOKIE)?.value,
   );
+}
+
+/**
+ * Refresh an expired WorkOS session from a route handler (BFF), where cookies are writable. The
+ * access token in the sealed cookie is short-lived; on expiry readSession() fails closed and BFF
+ * fetches would 401. Here we swap the refresh token for a fresh access token, re-seal the cookie,
+ * and return the session — so a `fetch` to a BFF route recovers silently instead of dead-ending the
+ * user (page navigations already refresh via requireDashboardSession → /auth/refresh).
+ * Returns null if there's no cookie or the refresh token is spent/revoked (→ genuine re-login).
+ */
+export async function refreshDashboardSession(): Promise<AppSession | null> {
+  if (!workosAuthConfigured()) return null;
+  const store = await cookies();
+  const sealed = store.get(WORKOS_COOKIE)?.value;
+  if (!sealed) return null;
+  const refreshed = await refreshSession(customerRealmConfig(), sealed);
+  if (!refreshed) return null;
+  try {
+    store.set(WORKOS_COOKIE, refreshed.sealedCookie, sessionCookieOptions());
+  } catch {
+    // cookies() is read-only during a Server Component render; the refreshed session is still valid
+    // for THIS request, and the next request re-refreshes. Only route handlers persist the new cookie.
+  }
+  return refreshed.session;
 }
 
 export async function requireDashboardSession(): Promise<AppSession> {
