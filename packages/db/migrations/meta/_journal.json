@@ -99,6 +99,13 @@
       "when": 1783331381279,
       "tag": "0013_provisioner_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783345813520,
+      "tag": "0014_customer_invite_only",
+      "breakpoints": true
     }
   ]
 }

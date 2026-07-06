@@ -1,8 +1,9 @@
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { eq } from "drizzle-orm";
 import { createProvisioningDb } from "./provisioning.js";
 import type { TenantId } from "./schema/_shared.js";
-import { accounts, staffUsers } from "./schema/index.js";
+import { accounts, memberships, staffUsers, users } from "./schema/index.js";
 
 /**
  * One-off cloud bootstrap seed — the minimum for a real login in a fresh environment:
@@ -24,6 +25,13 @@ export async function runCloudSeed(): Promise<void> {
     process.env.SEED_TENANT_ID ?? "00000000-0000-0000-0000-0000000000d1";
   const workosOrganizationId = process.env.WORKOS_ORGANIZATION_ID?.trim();
   const staffEmails = (process.env.SEED_STAFF_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email.length > 0);
+  // The dashboard is invite-only: without a membership, no one can sign in. Seed bootstrap owners so
+  // the testing org is reachable before admin-console provisioning exists. Their WorkOS subject binds
+  // on first login (users.external_subject_id starts null).
+  const ownerEmails = (process.env.SEED_TENANT_OWNER_EMAILS ?? "")
     .split(",")
     .map((email) => email.trim().toLowerCase())
     .filter((email) => email.length > 0);
@@ -56,7 +64,34 @@ export async function runCloudSeed(): Promise<void> {
         });
     }
 
-    console.log(`Seeded tenant ${tenantId}; staff: ${staffEmails.join(", ")}`);
+    for (const email of ownerEmails) {
+      // onConflictDoNothing on users.email so a re-run never clobbers an already-bound subject id.
+      await db
+        .insert(users)
+        .values({ email, name: "Fabric Owner", status: "active" })
+        .onConflictDoNothing({ target: users.email });
+      const [owner] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      if (!owner) continue;
+      await db
+        .insert(memberships)
+        .values({
+          tenantId: tenantId as TenantId,
+          userId: owner.id,
+          role: "owner",
+          status: "active",
+        })
+        .onConflictDoNothing({
+          target: [memberships.tenantId, memberships.userId],
+        });
+    }
+
+    console.log(
+      `Seeded tenant ${tenantId}; staff: ${staffEmails.join(", ")}; owners: ${ownerEmails.join(", ")}`,
+    );
   } finally {
     await end();
   }

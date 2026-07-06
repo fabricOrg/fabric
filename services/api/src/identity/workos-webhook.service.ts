@@ -2,7 +2,7 @@ import { accounts, memberships, type ProvisioningDb, users } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Event } from "@workos-inc/node";
-import { and, eq, isNull, lte, or, type SQL } from "drizzle-orm";
+import { and, eq, isNull, lte, or } from "drizzle-orm";
 import { unauthorized } from "../http/api-error.js";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
 import {
@@ -11,6 +11,10 @@ import {
 } from "./workos-client.provider.js";
 
 const CUSTOMER_ROLES = new Set(["owner", "admin", "member"]);
+
+// The transaction handle drizzle hands to the `.transaction()` callback — reconcileUser only ever
+// runs inside one (a tx lacks the top-level connection's `$client`, so we can't reuse the db type).
+type Tx = Parameters<Parameters<ProvisioningDb["db"]["transaction"]>[0]>[0];
 
 @Injectable()
 export class WorkosWebhookService {
@@ -84,37 +88,94 @@ export class WorkosWebhookService {
     }
   }
 
+  /**
+   * Reconcile the local users row for a WorkOS subject, honouring the invite-only model and the
+   * unique email:
+   *   - bound row (by subject) → refresh profile under the monotonic guard;
+   *   - pre-invited row (matched by email, subject still null) → bind this subject to it;
+   *   - email already bound to a DIFFERENT subject → refuse (never silently reassign an identity);
+   *   - no row → insert only when `create` (webhook user.* events materialise a profile; a bare user
+   *     row grants nothing without a membership, so this is safe. Deletes never create.)
+   */
+  private async reconcileUser(
+    tx: Tx,
+    remote: { id: string; email: string; name: string | null },
+    status: "active" | "disabled",
+    sourceUpdatedAt: Date,
+    create: boolean,
+  ): Promise<{ id: (typeof users.$inferSelect)["id"] } | null> {
+    const email = remote.email.trim().toLowerCase();
+
+    const [bound] = await tx
+      .select({ id: users.id, workosUpdatedAt: users.workosUpdatedAt })
+      .from(users)
+      .where(eq(users.externalSubjectId, remote.id))
+      .limit(1);
+    if (bound) {
+      if (!bound.workosUpdatedAt || bound.workosUpdatedAt <= sourceUpdatedAt) {
+        await tx
+          .update(users)
+          .set({
+            email,
+            name: remote.name,
+            status,
+            workosUpdatedAt: sourceUpdatedAt,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, bound.id));
+      }
+      return { id: bound.id };
+    }
+
+    const [byEmail] = await tx
+      .select({ id: users.id, externalSubjectId: users.externalSubjectId })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    if (byEmail) {
+      if (byEmail.externalSubjectId) return null; // bound to another identity
+      await tx
+        .update(users)
+        .set({
+          externalSubjectId: remote.id,
+          name: remote.name,
+          status,
+          workosUpdatedAt: sourceUpdatedAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, byEmail.id));
+      return { id: byEmail.id };
+    }
+
+    if (!create) return null;
+    const [created] = await tx
+      .insert(users)
+      .values({
+        externalSubjectId: remote.id,
+        email,
+        name: remote.name,
+        status,
+        workosUpdatedAt: sourceUpdatedAt,
+      })
+      .returning({ id: users.id });
+    return created ?? null;
+  }
+
   private async upsertUser(
     user: { id: string; email: string; name: string | null },
     sourceUpdatedAt: Date,
   ) {
-    await this.provisioning.db
-      .insert(users)
-      .values({
-        externalSubjectId: user.id,
-        email: user.email,
-        name: user.name,
-        status: "active",
-        workosUpdatedAt: sourceUpdatedAt,
-      })
-      .onConflictDoUpdate({
-        target: users.externalSubjectId,
-        set: {
-          email: user.email,
-          name: user.name,
-          status: "active",
-          workosUpdatedAt: sourceUpdatedAt,
-          updatedAt: new Date(),
-        },
-        setWhere: requiredCondition(
-          or(
-            isNull(users.workosUpdatedAt),
-            lte(users.workosUpdatedAt, sourceUpdatedAt),
-          ),
-        ),
-      });
+    await this.provisioning.db.transaction(async (tx) => {
+      await this.reconcileUser(tx, user, "active", sourceUpdatedAt, true);
+    });
   }
 
+  /**
+   * Reconcile a WorkOS org membership into Fabric — UPDATE-ONLY. The dashboard is invite-only, so
+   * Fabric admin-console provisioning is the source of truth for WHO is a member: a membership must
+   * already exist (created invited by tenant provisioning). We activate/deactivate/re-role it from
+   * WorkOS, but a WorkOS-side org add for someone Fabric never invited grants NOTHING.
+   */
   private async syncMembership(membership: {
     id: string;
     organizationId: string;
@@ -133,58 +194,49 @@ export class WorkosWebhookService {
 
     const sourceUpdatedAt = new Date(membership.updatedAt);
     await this.provisioning.db.transaction(async (tx) => {
-      let [user] = await tx
-        .select({ id: users.id, status: users.status })
-        .from(users)
-        .where(eq(users.externalSubjectId, membership.userId))
+      // Bind the subject to a pre-invited user, but do NOT create one for an unknown identity.
+      const remoteUser = await this.workosClient().userManagement.getUser(
+        membership.userId,
+      );
+      const user = await this.reconcileUser(
+        tx,
+        remoteUser,
+        "active",
+        new Date(remoteUser.updatedAt),
+        false,
+      );
+      if (!user) return; // not invited into Fabric → ignore the WorkOS-side membership
+
+      const [existing] = await tx
+        .select({ id: memberships.id })
+        .from(memberships)
+        .where(
+          and(
+            eq(memberships.tenantId, account.id),
+            eq(memberships.userId, user.id),
+          ),
+        )
         .limit(1);
-      if (!user) {
-        const remoteUser = await this.workosClient().userManagement.getUser(
-          membership.userId,
-        );
-        await tx.insert(users).values({
-          externalSubjectId: remoteUser.id,
-          email: remoteUser.email,
-          name: remoteUser.name,
-          status: "active",
-          workosUpdatedAt: new Date(remoteUser.updatedAt),
-        });
-        [user] = await tx
-          .select({ id: users.id, status: users.status })
-          .from(users)
-          .where(eq(users.externalSubjectId, membership.userId))
-          .limit(1);
-      }
-      if (!user) return;
-      const status = mapMembershipStatus(membership.status);
-      if (user.status === "disabled" && status !== "disabled") return;
+      if (!existing) return; // no Fabric invite for this member → grant nothing
 
       await tx
-        .insert(memberships)
-        .values({
-          tenantId: account.id,
-          userId: user.id,
+        .update(memberships)
+        .set({
           workosMembershipId: membership.id,
           role: membership.role.slug as "owner" | "admin" | "member",
-          status,
+          status: mapMembershipStatus(membership.status),
           workosUpdatedAt: sourceUpdatedAt,
+          updatedAt: new Date(),
         })
-        .onConflictDoUpdate({
-          target: [memberships.tenantId, memberships.userId],
-          set: {
-            workosMembershipId: membership.id,
-            role: membership.role.slug as "owner" | "admin" | "member",
-            status,
-            workosUpdatedAt: sourceUpdatedAt,
-            updatedAt: new Date(),
-          },
-          setWhere: requiredCondition(
+        .where(
+          and(
+            eq(memberships.id, existing.id),
             or(
               isNull(memberships.workosUpdatedAt),
               lte(memberships.workosUpdatedAt, sourceUpdatedAt),
             ),
           ),
-        });
+        );
     });
   }
 
@@ -193,38 +245,19 @@ export class WorkosWebhookService {
     sourceUpdatedAt: Date,
   ) {
     await this.provisioning.db.transaction(async (tx) => {
-      const [disabledUser] = await tx
-        .insert(users)
-        .values({
-          externalSubjectId: userData.id,
-          email: userData.email,
-          name: userData.name,
-          status: "disabled",
-          workosUpdatedAt: sourceUpdatedAt,
-        })
-        .onConflictDoUpdate({
-          target: users.externalSubjectId,
-          set: {
-            email: userData.email,
-            name: userData.name,
-            status: "disabled",
-            workosUpdatedAt: sourceUpdatedAt,
-            updatedAt: new Date(),
-          },
-          setWhere: requiredCondition(
-            or(
-              isNull(users.workosUpdatedAt),
-              lte(users.workosUpdatedAt, sourceUpdatedAt),
-            ),
-          ),
-        })
-        .returning({ id: users.id });
-      if (disabledUser) {
-        await tx
-          .update(memberships)
-          .set({ status: "disabled", updatedAt: new Date() })
-          .where(eq(memberships.userId, disabledUser.id));
-      }
+      // create=false: a delete for a user Fabric never knew about is a no-op.
+      const user = await this.reconcileUser(
+        tx,
+        userData,
+        "disabled",
+        sourceUpdatedAt,
+        false,
+      );
+      if (!user) return;
+      await tx
+        .update(memberships)
+        .set({ status: "disabled", updatedAt: new Date() })
+        .where(eq(memberships.userId, user.id));
     });
   }
 
@@ -260,9 +293,4 @@ function mapMembershipStatus(
   if (status === "active") return "active";
   if (status === "pending") return "invited";
   return "disabled";
-}
-
-function requiredCondition(condition: SQL | undefined): SQL {
-  if (!condition) throw new Error("A database write condition is required.");
-  return condition;
 }

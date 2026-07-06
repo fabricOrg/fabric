@@ -44,13 +44,32 @@ describeDb("WorkOS identity lifecycle", () => {
       slug: `lifecycle-${tenantId}`,
       workosOrganizationId: organizationId,
     });
+    // Invite-only: the webhook RECONCILES an existing membership, it never creates one. Pre-provision
+    // the invited user (subject bound on first login/user.created) + invited membership, exactly as
+    // tenant provisioning would — then the lifecycle events below activate/revoke it.
+    const [user] = await db.db
+      .insert(users)
+      .values({ email: remoteUser.email, status: "invited" })
+      .returning({ id: users.id });
+    if (!user) throw new Error("Seed user insert returned no row.");
+    await db.db.insert(memberships).values({
+      tenantId,
+      userId: user.id,
+      role: "member",
+      status: "invited",
+    });
   });
 
   afterAll(async () => {
+    const [user] = await db.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, remoteUser.email));
+    if (user) {
+      await db.db.delete(memberships).where(eq(memberships.userId, user.id));
+      await db.db.delete(users).where(eq(users.id, user.id));
+    }
     await db.db.delete(accounts).where(eq(accounts.id, tenantId));
-    await db.db
-      .delete(users)
-      .where(eq(users.externalSubjectId, externalUserId));
     await db.end();
   });
 

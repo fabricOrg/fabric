@@ -2,8 +2,9 @@ import type {
   ProvisionTenantRequest,
   ProvisionTenantResponse,
 } from "@app/contracts";
-import { accounts, type ProvisioningDb } from "@app/db";
+import { accounts, memberships, type ProvisioningDb, users } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
+import { eq } from "drizzle-orm";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import {
   WORKOS_CLIENT,
@@ -34,18 +35,53 @@ export class TenantProvisioningService {
     });
 
     try {
-      const [account] = await this.provisioning.db
-        .insert(accounts)
-        .values({
-          name: request.name,
-          slug: request.slug,
-          plan: request.plan,
-          dataRegion: request.dataRegion,
-          workosOrganizationId: organization.id,
-          status: "active",
-        })
-        .returning({ id: accounts.id });
-      if (!account) throw new Error("Account insert returned no row.");
+      const adminEmail = request.adminEmail.trim().toLowerCase();
+      // Account + the first admin's Fabric invite are written atomically: a pending `invited` user
+      // (external_subject_id filled on first login) and an `invited` owner membership. This is what
+      // makes the dashboard invite-only — resolve() binds/activates this row and refuses anyone with
+      // no membership. Without it, the WorkOS invite alone would grant nothing on the Fabric side.
+      const account = await this.provisioning.db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(accounts)
+          .values({
+            name: request.name,
+            slug: request.slug,
+            plan: request.plan,
+            dataRegion: request.dataRegion,
+            workosOrganizationId: organization.id,
+            status: "active",
+          })
+          .returning({ id: accounts.id });
+        if (!created) throw new Error("Account insert returned no row.");
+
+        // Reuse an existing human if this email was already invited to another org (users.email is
+        // unique — one row per person, many memberships).
+        await tx
+          .insert(users)
+          .values({ email: adminEmail, status: "invited" })
+          .onConflictDoNothing({ target: users.email });
+        const [admin] = await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.email, adminEmail))
+          .limit(1);
+        if (!admin) throw new Error("Admin user upsert returned no row.");
+
+        // Idempotent: re-provisioning the same admin leaves any existing membership untouched.
+        await tx
+          .insert(memberships)
+          .values({
+            tenantId: created.id,
+            userId: admin.id,
+            role: "owner",
+            status: "invited",
+          })
+          .onConflictDoNothing({
+            target: [memberships.tenantId, memberships.userId],
+          });
+
+        return created;
+      });
 
       await workos.userManagement.sendInvitation({
         email: request.adminEmail,
