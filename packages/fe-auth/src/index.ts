@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { WorkOS } from "@workos-inc/node";
 
 export interface RealmConfig {
-  readonly realm: "customer" | "staff";
+  readonly realm: "customer" | "staff" | "developer";
   readonly apiKey: string;
   readonly clientId: string;
   readonly cookieName: string;

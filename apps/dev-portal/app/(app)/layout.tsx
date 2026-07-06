@@ -6,20 +6,23 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@app/ui/components/ui/sidebar";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, LogOut } from "lucide-react";
 import type { ReactNode } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { requireDeveloperSession } from "@/lib/server/auth";
 
 /**
  * Dev-portal shell: sidebar (API keys · reference · webhooks · logs) + a topbar carrying the
  * environment context — a "DEV" pill (this is the developer surface, not the product dashboard) and
- * a "Back to dashboard" link (same realm, sibling app). Auth is mocked until PI-3.
+ * a "Back to dashboard" link (same realm, sibling app — intended long-term; today gated behind a
+ * coarse WorkOS allowlist since the underlying data is still mock, see lib/server/auth.ts).
  */
-export default function AppLayout({ children }: { children: ReactNode }) {
+export default async function AppLayout({ children }: { children: ReactNode }) {
+  const session = await requireDeveloperSession();
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <AppSidebar role={session.role} />
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
           <SidebarTrigger className="-ml-1" />
@@ -41,6 +44,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </a>
             </Button>
             <ThemeToggle />
+            <form action="/auth/logout" method="post">
+              <Button
+                type="submit"
+                variant="ghost"
+                size="icon"
+                title="Sign out"
+              >
+                <LogOut />
+                <span className="sr-only">Sign out</span>
+              </Button>
+            </form>
           </div>
         </header>
         <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
