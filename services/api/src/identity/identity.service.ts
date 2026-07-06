@@ -1,8 +1,11 @@
 import type {
+  InviteStaffRequest,
+  ListStaffResponse,
   ResolveIdentitySessionRequest,
   ResolveIdentitySessionResponse,
   ResolveStaffSessionRequest,
   ResolveStaffSessionResponse,
+  StaffDto,
 } from "@app/contracts";
 import {
   accounts,
@@ -13,7 +16,7 @@ import {
   users,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
 
 const ROLE_PERMISSIONS = {
@@ -205,5 +208,63 @@ export class IdentityService {
         session_id: request.session_id,
       };
     });
+  }
+
+  /** List all platform staff (admin-console management view). */
+  async listStaff(): Promise<ListStaffResponse> {
+    const rows = await this.provisioning.db
+      .select({
+        staff_user_id: staffUsers.id,
+        email: staffUsers.email,
+        name: staffUsers.name,
+        role: staffUsers.role,
+        status: staffUsers.status,
+        externalSubjectId: staffUsers.externalSubjectId,
+      })
+      .from(staffUsers)
+      .orderBy(asc(staffUsers.email));
+    return {
+      staff: rows.map(({ externalSubjectId, ...row }) => ({
+        ...row,
+        bound: externalSubjectId !== null,
+      })),
+    };
+  }
+
+  /**
+   * Allowlist a staff member by email (upsert). No WorkOS call — staff aren't org-scoped; they sign
+   * in with any WorkOS identity whose email matches, and resolveStaff binds the subject on first
+   * login. Re-inviting re-activates + updates role, so this doubles as "reinstate / change role".
+   */
+  async inviteStaff(request: InviteStaffRequest): Promise<StaffDto> {
+    const email = request.email.trim().toLowerCase();
+    const [staff] = await this.provisioning.db
+      .insert(staffUsers)
+      .values({
+        email,
+        name: request.name ?? null,
+        role: request.role,
+        status: "active",
+      })
+      .onConflictDoUpdate({
+        target: staffUsers.email,
+        set: {
+          role: request.role,
+          status: "active",
+          ...(request.name ? { name: request.name } : {}),
+          updatedAt: new Date(),
+        },
+      })
+      .returning({
+        staff_user_id: staffUsers.id,
+        email: staffUsers.email,
+        name: staffUsers.name,
+        role: staffUsers.role,
+        status: staffUsers.status,
+        externalSubjectId: staffUsers.externalSubjectId,
+      });
+    if (!staff) throw new Error("Staff upsert returned no row.");
+    const { externalSubjectId, ...row } = staff;
+    return { ...row, bound: externalSubjectId !== null };
   }
 }

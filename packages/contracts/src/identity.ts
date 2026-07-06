@@ -60,3 +60,30 @@ export const resolveStaffSessionResponseSchema = z.object({
 export type ResolveStaffSessionResponse = z.infer<
   typeof resolveStaffSessionResponseSchema
 >;
+
+// ---- Staff management (admin-console) — allowlist a platform operator by email --------------------
+export const staffStatusSchema = z.enum(["active", "suspended"]);
+
+/** Add/allowlist a staff member. No WorkOS call: staff aren't org-scoped — they sign in with any
+ *  WorkOS identity whose email matches, bound (external_subject_id) on first successful sign-in. */
+export const inviteStaffRequestSchema = z.object({
+  email: z.string().trim().email().max(320),
+  name: z.string().trim().min(1).max(255).optional(),
+  role: staffRoleSchema,
+});
+export type InviteStaffRequest = z.infer<typeof inviteStaffRequestSchema>;
+
+export const staffDtoSchema = z.object({
+  staff_user_id: postgresUuid,
+  email: z.string(),
+  name: z.string().nullable(),
+  role: staffRoleSchema,
+  status: staffStatusSchema,
+  bound: z.boolean(), // external_subject_id set → they've signed in at least once
+});
+export type StaffDto = z.infer<typeof staffDtoSchema>;
+
+export const listStaffResponseSchema = z.object({
+  staff: z.array(staffDtoSchema),
+});
+export type ListStaffResponse = z.infer<typeof listStaffResponseSchema>;
