@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { readAdminSession } from "@/lib/server/auth";
 
 /**
  * Tenant-provisioning BFF. When the api is configured (API_BASE_URL + BFF_INTERNAL_TOKEN) this calls
@@ -36,6 +37,20 @@ interface Provisioned {
 }
 
 export async function POST(request: NextRequest) {
+  // Staff-session gated — this triggers a real WorkOS org create + invite; never reachable without
+  // an authenticated staff session (the page guard alone doesn't protect this directly-hittable route).
+  if (!(await readAdminSession())) {
+    return NextResponse.json(
+      {
+        error: {
+          type: "auth_error",
+          code: "invalid_session",
+          message: "Staff sign-in required.",
+        },
+      },
+      { status: 401 },
+    );
+  }
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;

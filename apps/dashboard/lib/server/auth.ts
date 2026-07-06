@@ -6,6 +6,7 @@ import {
   type RealmConfig,
   readDevelopmentSession,
   readSession,
+  refreshSession,
   sealDevelopmentSession,
 } from "@app/fe-auth";
 import { cookies } from "next/headers";
@@ -97,6 +98,30 @@ export async function readDashboardSession(): Promise<AppSession | null> {
     developmentAuthConfig(),
     store.get(DEVELOPMENT_COOKIE)?.value,
   );
+}
+
+/**
+ * Refresh an expired WorkOS session from a route handler (BFF), where cookies are writable. The
+ * access token in the sealed cookie is short-lived; on expiry readSession() fails closed and BFF
+ * fetches would 401. Here we swap the refresh token for a fresh access token, re-seal the cookie,
+ * and return the session — so a `fetch` to a BFF route recovers silently instead of dead-ending the
+ * user (page navigations already refresh via requireDashboardSession → /auth/refresh).
+ * Returns null if there's no cookie or the refresh token is spent/revoked (→ genuine re-login).
+ */
+export async function refreshDashboardSession(): Promise<AppSession | null> {
+  if (!workosAuthConfigured()) return null;
+  const store = await cookies();
+  const sealed = store.get(WORKOS_COOKIE)?.value;
+  if (!sealed) return null;
+  const refreshed = await refreshSession(customerRealmConfig(), sealed);
+  if (!refreshed) return null;
+  try {
+    store.set(WORKOS_COOKIE, refreshed.sealedCookie, sessionCookieOptions());
+  } catch {
+    // cookies() is read-only during a Server Component render; the refreshed session is still valid
+    // for THIS request, and the next request re-refreshes. Only route handlers persist the new cookie.
+  }
+  return refreshed.session;
 }
 
 export async function requireDashboardSession(): Promise<AppSession> {

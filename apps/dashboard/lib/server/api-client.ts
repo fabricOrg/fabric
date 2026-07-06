@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { AppSession } from "@app/fe-auth";
-import { readDashboardSession } from "./auth";
+import { readDashboardSession, refreshDashboardSession } from "./auth";
 
 export class BffError extends Error {
   constructor(
@@ -68,7 +68,10 @@ export async function dashboardApi<T>(
   permission: string,
   init?: RequestInit,
 ): Promise<T> {
-  const session = await readDashboardSession();
+  // Expired access token? Try a silent refresh (swaps the refresh token, re-seals the cookie) before
+  // giving up — otherwise an idle tab's next BFF call dead-ends at 401 mid-session.
+  const session =
+    (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session) {
     throw new BffError(401, {
       error: {
