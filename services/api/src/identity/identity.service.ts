@@ -1,11 +1,14 @@
 import type {
   ResolveIdentitySessionRequest,
   ResolveIdentitySessionResponse,
+  ResolveStaffSessionRequest,
+  ResolveStaffSessionResponse,
 } from "@app/contracts";
 import {
   accounts,
   memberships,
   type ProvisioningDb,
+  staffUsers,
   type TenantId,
   users,
 } from "@app/db";
@@ -30,6 +33,12 @@ const ROLE_PERMISSIONS = {
     "request_logs:read",
   ],
   member: ["sms:send", "sms:read", "wallet:read"],
+} as const;
+
+/** Staff authz is role-based against the platform staff_users table — not tenant permissions. */
+const STAFF_ROLE_PERMISSIONS = {
+  operator: ["staff:read"],
+  admin: ["staff:read", "staff:write"],
 } as const;
 
 @Injectable()
@@ -112,6 +121,46 @@ export class IdentityService {
         user_id: user.id,
         role: request.role,
         permissions: request.permissions.filter((item) => allowed.has(item)),
+        session_id: request.session_id,
+      };
+    });
+  }
+
+  /**
+   * Resolve a WorkOS-authenticated identity to a STAFF session. Authorization is the platform
+   * staff_users allowlist (email, provisioned out of band) — a valid WorkOS login is necessary but
+   * not sufficient. On success we stamp external_subject_id (first login) + last_seen_at.
+   */
+  async resolveStaff(
+    request: ResolveStaffSessionRequest,
+  ): Promise<ResolveStaffSessionResponse | null> {
+    const email = request.email.trim().toLowerCase();
+    return this.provisioning.db.transaction(async (tx) => {
+      const [staff] = await tx
+        .select({
+          id: staffUsers.id,
+          role: staffUsers.role,
+          status: staffUsers.status,
+        })
+        .from(staffUsers)
+        .where(eq(staffUsers.email, email))
+        .limit(1);
+      if (!staff || staff.status !== "active") return null;
+
+      await tx
+        .update(staffUsers)
+        .set({
+          externalSubjectId: request.external_user_id,
+          name: request.name,
+          lastSeenAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(staffUsers.id, staff.id));
+
+      return {
+        staff_user_id: staff.id,
+        role: staff.role,
+        permissions: [...STAFF_ROLE_PERMISSIONS[staff.role]],
         session_id: request.session_id,
       };
     });

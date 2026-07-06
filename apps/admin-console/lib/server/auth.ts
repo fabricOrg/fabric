@@ -30,7 +30,7 @@ export function developmentAuthConfig(): DevelopmentSessionConfig {
   };
 }
 
-/** No WORKOS_ORGANIZATION_ID here — staff aren't scoped to one tenant org (unlike the customer realm). */
+/** No WORKOS_ORGANIZATION_ID (staff aren't org-scoped); BFF token is needed for the staff-session call. */
 export function workosAuthConfigured(): boolean {
   return [
     "WORKOS_API_KEY",
@@ -38,6 +38,7 @@ export function workosAuthConfigured(): boolean {
     "WORKOS_COOKIE_PASSWORD",
     "WORKOS_REDIRECT_URI",
     "WORKOS_LOGOUT_REDIRECT_URI",
+    "BFF_INTERNAL_TOKEN",
   ].every((name) => Boolean(process.env[name]));
 }
 
