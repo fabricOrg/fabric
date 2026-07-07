@@ -316,26 +316,22 @@ export default async function WalletPage() {
               <Repeat />
               Off
             </Badge>
-            <Button size="sm" variant="outline">
-              Set up
-            </Button>
+            <span className="text-xs text-muted-foreground">Coming soon</span>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Payment method</CardTitle>
-            <CardDescription>Used for top-ups.</CardDescription>
+            <CardDescription>How top-ups are charged.</CardDescription>
           </CardHeader>
-          <CardContent className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <CreditCard className="size-4 text-muted-foreground" />
-              <span className="text-sm">Visa ending 4242</span>
-              <Badge variant="secondary">Default</Badge>
-            </div>
-            <Button size="sm" variant="ghost">
-              Change
-            </Button>
+          <CardContent className="flex items-start gap-2">
+            <CreditCard className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              Secured by Paystack — you&apos;re redirected to a hosted checkout
+              (card or mobile money) for each top-up. No card is stored on
+              Fabric.
+            </p>
           </CardContent>
         </Card>
       </div>
