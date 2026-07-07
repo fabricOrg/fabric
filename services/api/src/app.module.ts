@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { AdminModule } from "./admin/admin.module.js";
 import { ApiKeysModule } from "./api-keys/api-keys.module.js";
+import { AuditModule } from "./audit/audit.module.js";
 import { DbModule } from "./db/db.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { IdentityModule } from "./identity/identity.module.js";
@@ -22,6 +23,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     HealthModule,
     IdentityModule,
     AdminModule,
+    AuditModule,
     MembersModule,
     PluginsModule,
     ApiKeysModule,

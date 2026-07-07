@@ -8,6 +8,7 @@ export type {
   UserId,
 } from "./_shared.js";
 export * from "./api-keys.js";
+export * from "./audit.js";
 export * from "./identity.js";
 export * from "./integrations.js";
 export * from "./privacy.js";
