@@ -48,24 +48,33 @@ export class SmsService {
     if (this.config.get<string>("SMS_PROVIDER") === "arkesel") {
       this.provider = new ArkeselSmsProvider();
       // Sandbox by default — real delivery needs ARKESEL_SANDBOX=false, a deliberate human-gated flip.
+      const callbackUrl = this.dlrCallbackUrl();
       this.creds = {
         apiKey: this.config.get<string>("ARKESEL_API_KEY") ?? "",
         senderId: this.config.get<string>("ARKESEL_SENDER_ID") ?? "",
         sandbox: this.config.get<string>("ARKESEL_SANDBOX") ?? "true",
-        ...(this.config.get<string>("ARKESEL_DLR_CALLBACK_URL")
-          ? {
-              callbackUrl: this.config.get<string>(
-                "ARKESEL_DLR_CALLBACK_URL",
-              ) as string,
-            }
-          : {}),
+        ...(callbackUrl ? { callbackUrl } : {}),
       };
       this.logger.log(
-        `SMS provider: arkesel-sms (sandbox=${this.creds.sandbox})`,
+        `SMS provider: arkesel-sms (sandbox=${this.creds.sandbox}, dlr=${callbackUrl ? "on" : "off"})`,
       );
     } else {
       this.provider = new FakeProvider();
     }
+  }
+
+  /**
+   * Build the Arkesel DLR callback URL from its base + the ingress token. Arkesel's callback is a
+   * header-less GET, so the WebhookTokenGuard reads the token from `?token=`; we append it here so the
+   * secret lives in ONE place (WEBHOOK_INGRESS_TOKEN) rather than being duplicated into the base URL.
+   */
+  private dlrCallbackUrl(): string | undefined {
+    const base = this.config.get<string>("ARKESEL_DLR_CALLBACK_URL");
+    if (!base) return undefined;
+    const token = this.config.get<string>("WEBHOOK_INGRESS_TOKEN");
+    if (!token) return base;
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}token=${encodeURIComponent(token)}`;
   }
 
   private deps() {

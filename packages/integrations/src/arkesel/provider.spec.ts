@@ -107,11 +107,14 @@ describe("ArkeselSmsProvider.parseDlr", () => {
   it("maps every Arkesel status to the canonical vocabulary", () => {
     const cases: Record<string, string> = {
       DELIVERED: "delivered",
+      SENT: "sent",
       SUBMITTED: "sent",
       QUEUED: "queued",
+      DEFERRED: "sending",
       NOT_DELIVERED: "undelivered",
       EXPIRED: "expired",
       PROHIBITED: "failed",
+      REJECTED: "failed",
     };
     for (const [arkesel, canonical] of Object.entries(cases)) {
       const dlr = provider.parseDlr({ sms_id: "ref-1", status: arkesel });
