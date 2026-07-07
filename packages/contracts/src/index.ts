@@ -30,5 +30,7 @@ export * from "./message-status.js";
 export * from "./money.js";
 // Platform plugin registry (control-plane) — provider instances per capability.
 export * from "./plugins.js";
+// Maker-checker — two-person control for consequential tenant changes.
+export * from "./proposals.js";
 export * from "./sms.js";
 export * from "./wallet.js";

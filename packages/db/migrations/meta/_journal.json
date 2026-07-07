@@ -120,6 +120,13 @@
       "when": 1783392043399,
       "tag": "0016_kill_switches",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783392819753,
+      "tag": "0017_proposals",
+      "breakpoints": true
     }
   ]
 }

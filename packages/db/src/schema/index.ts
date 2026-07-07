@@ -13,5 +13,6 @@ export * from "./identity.js";
 export * from "./integrations.js";
 export * from "./kill-switches.js";
 export * from "./privacy.js";
+export * from "./proposals.js";
 export * from "./sms.js";
 export * from "./wallet.js";
