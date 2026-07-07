@@ -30,3 +30,22 @@ export const provisionTenantResponseSchema = z.object({
 export type ProvisionTenantResponse = z.infer<
   typeof provisionTenantResponseSchema
 >;
+
+/** A tenant/account row for the staff control-plane list. Balance lives in the ledger (not joined
+ *  here); data_region is what accounts actually stores (market region → residency mapping). */
+export const tenantSummaryDtoSchema = z.object({
+  tenant_id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  plan: z.string(),
+  status: z.enum(["active", "suspended", "closed"]),
+  data_region: z.string(),
+  workos_organization_id: z.string().nullable(),
+  created_at: z.string(),
+});
+export type TenantSummaryDto = z.infer<typeof tenantSummaryDtoSchema>;
+
+export const listTenantsResponseSchema = z.object({
+  tenants: z.array(tenantSummaryDtoSchema),
+});
+export type ListTenantsResponse = z.infer<typeof listTenantsResponseSchema>;
