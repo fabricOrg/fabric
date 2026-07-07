@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  autoTopupResponseSchema,
   messageDetailResponse,
   messageListResponse,
   paymentMethodResponseSchema,
@@ -26,6 +27,12 @@ export async function getWalletSnapshot() {
 export async function getSavedPaymentMethod() {
   return paymentMethodResponseSchema.parse(
     await unwrap(dashboardApi("/v1/wallet/payment-method", "wallet:read")),
+  );
+}
+
+export async function getAutoTopup() {
+  return autoTopupResponseSchema.parse(
+    await unwrap(dashboardApi("/v1/wallet/auto-topup", "wallet:read")),
   );
 }
 

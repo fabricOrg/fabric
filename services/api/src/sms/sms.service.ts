@@ -13,9 +13,10 @@ import {
   sendSms as engineSendSms,
   type SendResult,
 } from "@app/sms-engine";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
 import { notFound, unauthorized } from "../http/api-error.js";
+import { AutoTopupService } from "../payments/auto-topup.service.js";
 
 interface Row {
   tenant_id?: unknown;
@@ -31,8 +32,12 @@ interface Row {
 export class SmsService {
   // One provider instance for the iteration (FakeProvider). Real adapters are DI-swappable later.
   private readonly provider: SmsSenderPlugin = new FakeProvider();
+  private readonly logger = new Logger(SmsService.name);
 
-  constructor(@Inject(APP_DB) private readonly db: AppDb) {}
+  constructor(
+    @Inject(APP_DB) private readonly db: AppDb,
+    @Inject(AutoTopupService) private readonly autoTopup: AutoTopupService,
+  ) {}
 
   private deps() {
     return { db: this.db, provider: this.provider };
@@ -47,6 +52,13 @@ export class SmsService {
     currency: string;
   }): Promise<SendSmsResponse> {
     const result: SendResult = await engineSendSms(this.deps(), input);
+    // After-debit trigger: the send just reserved/committed against the wallet — check whether the
+    // balance has fallen to the auto-top-up threshold. Fire-and-forget: never block or fail the send.
+    void this.autoTopup.maybeAutoTopUp(input.tenantId).catch((error) => {
+      this.logger.error(
+        `maybeAutoTopUp failed post-send for ${input.tenantId}: ${error instanceof Error ? error.message : "unknown"}`,
+      );
+    });
     const message = await this.get(input.tenantId, result.messageId);
     return {
       id: message.id,

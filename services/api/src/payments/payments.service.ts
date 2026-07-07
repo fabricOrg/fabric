@@ -153,6 +153,7 @@ export class PaymentsService {
           tenantId: payment.tenantId,
           provider: "paystack",
           authorizationCode: auth.authorizationCode,
+          email: payment.email,
           cardType: auth.cardType,
           last4: auth.last4 ?? null,
           expMonth: auth.expMonth ?? null,
@@ -164,6 +165,7 @@ export class PaymentsService {
           target: paymentAuthorizations.tenantId,
           set: {
             authorizationCode: auth.authorizationCode,
+            email: payment.email,
             cardType: auth.cardType,
             last4: auth.last4 ?? null,
             expMonth: auth.expMonth ?? null,

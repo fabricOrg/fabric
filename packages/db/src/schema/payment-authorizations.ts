@@ -13,6 +13,7 @@ export const paymentAuthorizations = pgTable("payment_authorizations", {
   tenantId: uuid("tenant_id").notNull().unique().$type<TenantId>(),
   provider: text("provider").notNull().default("paystack"),
   authorizationCode: text("authorization_code").notNull(),
+  email: text("email"), // the customer email the authorization belongs to (charge_authorization needs it)
   cardType: text("card_type"), // e.g. "visa", "mastercard"
   last4: text("last4"),
   expMonth: text("exp_month"),

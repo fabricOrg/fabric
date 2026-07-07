@@ -141,6 +141,20 @@
       "when": 1783412503544,
       "tag": "0019_payment_authorizations",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783413554699,
+      "tag": "0020_auto_topup",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1783413759812,
+      "tag": "0021_auth_email",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type {
   CanonicalPaymentEvent,
+  ChargeAuthorizationRequest,
+  ChargeAuthorizationResult,
   ChargeInit,
   ChargeRequest,
   Creds,
@@ -83,6 +85,49 @@ export class PaystackProvider implements PaymentProviderPlugin {
       authorizationUrl: payload.data.authorization_url,
       providerRef: payload.data.access_code ?? req.reference,
       reference: payload.data.reference ?? req.reference,
+      raw: payload,
+    };
+  }
+
+  async chargeAuthorization(
+    req: ChargeAuthorizationRequest,
+    creds: Creds,
+  ): Promise<ChargeAuthorizationResult> {
+    const secretKey = requireSecret(creds);
+    const response = await fetch(
+      `${BASE_URL}/transaction/charge_authorization`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${secretKey}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          authorization_code: req.authorizationCode,
+          email: req.email,
+          amount: Number(req.amountMinor),
+          currency: req.currency.toUpperCase(),
+          reference: req.reference,
+        }),
+      },
+    );
+    const payload = (await response.json().catch(() => null)) as {
+      status?: boolean;
+      message?: string;
+      data?: { status?: string; id?: number };
+    } | null;
+    if (!response.ok || !payload?.status) {
+      throw new PaystackError(
+        payload?.message ?? `Paystack charge failed (${response.status}).`,
+      );
+    }
+    const raw = payload.data?.status;
+    return {
+      status:
+        raw === "success" ? "success" : raw === "failed" ? "failed" : "pending",
+      ...(typeof payload.data?.id === "number"
+        ? { providerRef: String(payload.data.id) }
+        : {}),
       raw: payload,
     };
   }
