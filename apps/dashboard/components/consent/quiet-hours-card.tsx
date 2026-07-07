@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from "@app/ui/components/ui/card";
 import { Field, FieldLabel } from "@app/ui/components/ui/field";
-import { Input } from "@app/ui/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -19,9 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
+import { TimePicker } from "@app/ui/components/ui/time-picker";
 import { cn } from "@app/ui/lib/utils";
 import { Clock, Moon } from "lucide-react";
-import { useId, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { type QuietHours, saveQuietHours } from "@/lib/client/consent-api";
 import { toastApiError } from "@/lib/error-toast";
@@ -46,8 +46,6 @@ export function QuietHoursCard({
   const [timezone, setTimezone] = useState(quietHours.timezone);
   const [enabled, setEnabled] = useState(quietHours.enabled);
   const [saving, setSaving] = useState(false);
-  const startId = useId();
-  const endId = useId();
 
   const dirty =
     start !== quietHours.start ||
@@ -118,25 +116,21 @@ export function QuietHoursCard({
           aria-hidden={!enabled}
         >
           <Field>
-            <FieldLabel htmlFor={startId}>Start</FieldLabel>
-            <Input
-              id={startId}
-              type="time"
+            <FieldLabel>Start</FieldLabel>
+            <TimePicker
+              aria-label="Quiet hours start"
               value={start}
               disabled={!enabled}
-              onChange={(e) => setStart(e.target.value)}
-              className="font-mono tabular-nums"
+              onChange={setStart}
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor={endId}>End</FieldLabel>
-            <Input
-              id={endId}
-              type="time"
+            <FieldLabel>End</FieldLabel>
+            <TimePicker
+              aria-label="Quiet hours end"
               value={end}
               disabled={!enabled}
-              onChange={(e) => setEnd(e.target.value)}
-              className="font-mono tabular-nums"
+              onChange={setEnd}
             />
           </Field>
           <Field>
