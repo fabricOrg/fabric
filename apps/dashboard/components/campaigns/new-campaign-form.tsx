@@ -4,15 +4,12 @@ import { toMoney } from "@app/contracts";
 import { DEFAULT_RATES, encodeAndSegment, rateSegments } from "@app/domain";
 import { Button } from "@app/ui/components/ui/button";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@app/ui/components/ui/dialog";
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@app/ui/components/ui/card";
+import { DateTimePicker } from "@app/ui/components/ui/date-time-picker";
 import {
   Field,
   FieldDescription,
@@ -27,9 +24,11 @@ import {
   TabsTrigger,
 } from "@app/ui/components/ui/tabs";
 import { Textarea } from "@app/ui/components/ui/textarea";
-import { Megaphone } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
-import { type Campaign, createCampaign } from "@/lib/client/campaigns-api";
+import { toast } from "sonner";
+import { createCampaign } from "@/lib/client/campaigns-api";
 import { toastApiError } from "@/lib/error-toast";
 import { formatMoney } from "@/lib/money";
 
@@ -37,22 +36,25 @@ const CURRENCY = "GHS" as const;
 
 type Schedule = "now" | "later";
 
+/** Midnight today — the calendar disables anything before it (can't schedule in the past). */
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 /**
- * Create-campaign flow (mock BFF). Money is exact bigint minor units end-to-end:
- * cost = ratePerSegment × segments(body) × audienceSize — never a float. On success the parent
- * prepends the returned campaign optimistically; failures route through toastApiError.
+ * Create-campaign form — two columns: details on the left, a sticky review/send summary on the right.
+ * Money is exact bigint minor units: cost = ratePerSegment × segments(body) × audienceSize, never a
+ * float. On success we route back to the list (which re-fetches); failures keep the form filled.
  */
-export function NewCampaignDialog({
-  onCreated,
-}: {
-  onCreated: (campaign: Campaign) => void;
-}) {
-  const [open, setOpen] = useState(false);
+export function NewCampaignForm() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState("");
   const [schedule, setSchedule] = useState<Schedule>("now");
-  const [scheduledAt, setScheduledAt] = useState("");
+  const [scheduledAt, setScheduledAt] = useState<Date | undefined>(undefined);
   const [respectOptOuts, setRespectOptOuts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -70,24 +72,15 @@ export function NewCampaignDialog({
     body.length > 0 && hasAudience
       ? perSegmentMinor * BigInt(seg.segments) * BigInt(audienceSize)
       : 0n;
+  const showEstimate = body.length > 0 && hasAudience;
 
-  const scheduleValid = schedule === "now" || scheduledAt.length > 0;
+  const scheduleValid = schedule === "now" || scheduledAt !== undefined;
   const canSubmit =
     name.trim().length > 0 &&
     body.trim().length > 0 &&
     hasAudience &&
     scheduleValid &&
     !submitting;
-
-  function reset() {
-    setName("");
-    setBody("");
-    setAudience("");
-    setSchedule("now");
-    setScheduledAt("");
-    setRespectOptOuts(true);
-    setSubmitting(false);
-  }
 
   async function submit() {
     if (!canSubmit) return;
@@ -99,44 +92,30 @@ export function NewCampaignDialog({
         audienceSize,
         scheduledAt:
           schedule === "later" && scheduledAt
-            ? new Date(scheduledAt).toISOString()
+            ? scheduledAt.toISOString()
             : null,
         respectOptOuts,
       });
-      onCreated(created);
-      setOpen(false);
-      setTimeout(reset, 150);
+      toast.success(
+        created.status === "scheduled"
+          ? `“${created.name}” scheduled`
+          : `“${created.name}” is sending`,
+      );
+      router.push("/campaigns");
     } catch (envelope) {
       toastApiError(envelope);
-    } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) setTimeout(reset, 150);
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button>
-          <Megaphone data-icon="inline-start" />
-          New campaign
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="font-display">New campaign</DialogTitle>
-          <DialogDescription>
-            Send one message to a whole audience. The cost is exact and shown
-            before you confirm.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-4 py-2">
+    <div className="grid gap-6 lg:grid-cols-3">
+      {/* Details — left, wider column */}
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle className="text-base">Campaign details</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
           <Field>
             <FieldLabel htmlFor={nameId}>Campaign name</FieldLabel>
             <Input
@@ -154,7 +133,7 @@ export function NewCampaignDialog({
             <FieldLabel htmlFor={bodyId}>Message</FieldLabel>
             <Textarea
               id={bodyId}
-              rows={4}
+              rows={5}
               placeholder="Type your message…"
               value={body}
               onChange={(e) => setBody(e.target.value)}
@@ -205,12 +184,10 @@ export function NewCampaignDialog({
                 </FieldDescription>
               </TabsContent>
               <TabsContent value="later">
-                <Input
-                  type="datetime-local"
-                  aria-label="Scheduled date and time"
+                <DateTimePicker
                   value={scheduledAt}
-                  onChange={(e) => setScheduledAt(e.target.value)}
-                  className="font-mono"
+                  onChange={setScheduledAt}
+                  disabled={(date) => date < startOfToday()}
                 />
               </TabsContent>
             </Tabs>
@@ -248,29 +225,72 @@ export function NewCampaignDialog({
                 : "Transactional only: send to everyone. Use only for service messages the law exempts from opt-out."}
             </FieldDescription>
           </Field>
+        </CardContent>
+      </Card>
 
-          <Separator />
+      {/* Review & send — right column, sticky. The spend consequence + the send action. */}
+      <div className="lg:col-span-1">
+        <Card className="lg:sticky lg:top-6">
+          <CardHeader>
+            <CardTitle className="text-base">Review &amp; send</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-sm text-muted-foreground">
+                Estimated cost
+              </span>
+              <span className="font-display text-3xl font-semibold tabular-nums">
+                {showEstimate
+                  ? formatMoney(toMoney(estimateMinor, CURRENCY))
+                  : "—"}
+              </span>
+              {showEstimate && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {formatMoney(toMoney(perSegmentMinor, CURRENCY))} ×{" "}
+                  {seg.segments} segment{seg.segments === 1 ? "" : "s"} ×{" "}
+                  {audienceSize.toLocaleString("en")} recipients
+                </span>
+              )}
+            </div>
 
-          {/* Exact estimate (bigint minor) shown before confirm — the spend consequence, made legible. */}
-          <div className="flex items-center justify-between gap-4 text-sm">
-            <span className="text-muted-foreground">Estimated cost</span>
-            <span className="font-mono tabular-nums font-semibold">
-              {body.length > 0 && hasAudience
-                ? formatMoney(toMoney(estimateMinor, CURRENCY))
-                : "—"}
-            </span>
-          </div>
-        </div>
+            <Separator />
 
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
-          <Button onClick={submit} loading={submitting} disabled={!canSubmit}>
-            {schedule === "later" ? "Schedule campaign" : "Send campaign"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <span className="text-muted-foreground">Schedule</span>
+              <span className="text-right font-medium">
+                {schedule === "now"
+                  ? "Send now"
+                  : scheduledAt
+                    ? scheduledAt.toLocaleString("en", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : "Not set"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <span className="text-muted-foreground">Opt-outs</span>
+              <span className="font-medium">
+                {respectOptOuts ? "Respected" : "Sending to all"}
+              </span>
+            </div>
+
+            <Separator />
+
+            <Button
+              onClick={submit}
+              loading={submitting}
+              disabled={!canSubmit}
+              className="w-full"
+            >
+              {schedule === "later" ? "Schedule campaign" : "Send campaign"}
+            </Button>
+            <Button variant="outline" asChild className="w-full">
+              <Link href="/campaigns">Cancel</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }

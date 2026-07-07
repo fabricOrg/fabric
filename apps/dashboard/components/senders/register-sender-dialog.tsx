@@ -154,6 +154,41 @@ export function RegisterSenderDialog({
           </DialogHeader>
 
           <div className="flex flex-col gap-4">
+            {/* Type first — it governs the Sender ID field's format, placeholder + validation. */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor={`${idBase}-type`}>Type</FieldLabel>
+                <Select
+                  value={type}
+                  onValueChange={(v) => setType(v as SenderType)}
+                >
+                  <SelectTrigger id={`${idBase}-type`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="alphanumeric">Alphanumeric</SelectItem>
+                    <SelectItem value="short-code">Short code</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor={`${idBase}-country`}>Country</FieldLabel>
+                <Select
+                  value={country}
+                  onValueChange={(v) => setCountry(v as SenderCountry)}
+                >
+                  <SelectTrigger id={`${idBase}-country`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NG">Nigeria</SelectItem>
+                    <SelectItem value="GH">Ghana</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+
             <Field data-invalid={errors.senderId ? true : undefined}>
               <FieldLabel htmlFor={senderIdField}>Sender ID</FieldLabel>
               <Input
@@ -182,40 +217,6 @@ export function RegisterSenderDialog({
                 </FieldDescription>
               )}
             </Field>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor={`${idBase}-country`}>Country</FieldLabel>
-                <Select
-                  value={country}
-                  onValueChange={(v) => setCountry(v as SenderCountry)}
-                >
-                  <SelectTrigger id={`${idBase}-country`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NG">Nigeria</SelectItem>
-                    <SelectItem value="GH">Ghana</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor={`${idBase}-type`}>Type</FieldLabel>
-                <Select
-                  value={type}
-                  onValueChange={(v) => setType(v as SenderType)}
-                >
-                  <SelectTrigger id={`${idBase}-type`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alphanumeric">Alphanumeric</SelectItem>
-                    <SelectItem value="short-code">Short code</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
 
             <Field data-invalid={errors.useCase ? true : undefined}>
               <FieldLabel htmlFor={useCaseField}>Use case</FieldLabel>
