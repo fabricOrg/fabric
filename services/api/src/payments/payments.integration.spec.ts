@@ -85,7 +85,7 @@ describeDb("wallet top-up (Paystack)", () => {
       email: "payer@example.com",
     });
     expect(result.authorization_url).toBe("https://checkout.paystack.com/xyz");
-    expect(result.reference).toMatch(/^topup:/);
+    expect(result.reference).toMatch(/^topup-/);
 
     const [row] = await provisioning.db
       .select()
@@ -97,7 +97,7 @@ describeDb("wallet top-up (Paystack)", () => {
   });
 
   it("credits the wallet once on charge.success, and is idempotent on replay", async () => {
-    const reference = `topup:${randomUUID()}`;
+    const reference = `topup-${randomUUID()}`;
     await provisioning.db.insert(payments).values({
       tenantId,
       reference,
@@ -134,7 +134,7 @@ describeDb("wallet top-up (Paystack)", () => {
   it("rejects a webhook with a bad signature", async () => {
     const body = JSON.stringify({
       event: "charge.success",
-      data: { reference: "topup:x" },
+      data: { reference: "topup-x" },
     });
     await expect(
       service.handleWebhook(Buffer.from(body), "bad-signature"),
@@ -144,7 +144,7 @@ describeDb("wallet top-up (Paystack)", () => {
   });
 
   it("marks the intent failed on an amount mismatch", async () => {
-    const reference = `topup:${randomUUID()}`;
+    const reference = `topup-${randomUUID()}`;
     await provisioning.db.insert(payments).values({
       tenantId,
       reference,
