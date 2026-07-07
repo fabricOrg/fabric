@@ -120,6 +120,42 @@ describe("PaystackProvider.parseEvent", () => {
     });
   });
 
+  it("extracts a reusable card authorization", () => {
+    const event = provider.parseEvent({
+      event: "charge.success",
+      data: {
+        reference: "topup-abc",
+        status: "success",
+        authorization: {
+          authorization_code: "AUTH_abc123",
+          card_type: "visa",
+          last4: "4081",
+          exp_month: "12",
+          exp_year: "2030",
+          bank: "TEST BANK",
+          reusable: true,
+        },
+      },
+    });
+    expect(event.authorization).toEqual({
+      authorizationCode: "AUTH_abc123",
+      cardType: "visa",
+      last4: "4081",
+      expMonth: "12",
+      expYear: "2030",
+      bank: "TEST BANK",
+      reusable: true,
+    });
+  });
+
+  it("omits authorization when absent", () => {
+    const event = provider.parseEvent({
+      event: "charge.success",
+      data: { reference: "topup-abc", status: "success" },
+    });
+    expect(event.authorization).toBeUndefined();
+  });
+
   it("throws when the reference is missing", () => {
     expect(() =>
       provider.parseEvent({ event: "charge.success", data: {} }),

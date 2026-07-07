@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import type {
   InitiateTopUpRequest,
   InitiateTopUpResponse,
+  PaymentMethodResponse,
 } from "@app/contracts";
 import {
   type AppDb,
   type MinorUnits,
   type ProvisioningDb,
+  paymentAuthorizations,
   payments,
   type TenantId,
 } from "@app/db";
@@ -141,8 +143,40 @@ export class PaymentsService {
       return;
     }
 
-    // Credit under the tenant's RLS context; idempotent on the reference (topup:{uuid}).
-    // idempotencyKey (topup:{uuid}) dedups a replayed webhook; referenceId is omitted — it's a uuid
+    // Capture a reusable card token (auto top-up + real Payment-method card). Latest reusable card
+    // wins; non-reusable auths (e.g. mobile money) are ignored.
+    const auth = event.authorization;
+    if (auth?.reusable && auth.cardType) {
+      await this.provisioning.db
+        .insert(paymentAuthorizations)
+        .values({
+          tenantId: payment.tenantId,
+          provider: "paystack",
+          authorizationCode: auth.authorizationCode,
+          cardType: auth.cardType,
+          last4: auth.last4 ?? null,
+          expMonth: auth.expMonth ?? null,
+          expYear: auth.expYear ?? null,
+          bank: auth.bank ?? null,
+          reusable: true,
+        })
+        .onConflictDoUpdate({
+          target: paymentAuthorizations.tenantId,
+          set: {
+            authorizationCode: auth.authorizationCode,
+            cardType: auth.cardType,
+            last4: auth.last4 ?? null,
+            expMonth: auth.expMonth ?? null,
+            expYear: auth.expYear ?? null,
+            bank: auth.bank ?? null,
+            reusable: true,
+            updatedAt: new Date(),
+          },
+        });
+    }
+
+    // Credit under the tenant's RLS context; idempotent on the reference (topup-{uuid}).
+    // idempotencyKey (topup-{uuid}) dedups a replayed webhook; referenceId is omitted — it's a uuid
     // FK to messages, not applicable to a top-up.
     await this.appDb.withTenant(payment.tenantId, (tx) =>
       credit(tx, {
@@ -155,5 +189,23 @@ export class PaymentsService {
       .update(payments)
       .set({ status: "success", updatedAt: new Date() })
       .where(eq(payments.reference, payment.reference));
+  }
+
+  /** The tenant's saved reusable card (Payment-method card + auto-top-up source), or null. */
+  async getSavedMethod(tenantId: string): Promise<PaymentMethodResponse> {
+    const [row] = await this.provisioning.db
+      .select()
+      .from(paymentAuthorizations)
+      .where(eq(paymentAuthorizations.tenantId, tenantId as TenantId))
+      .limit(1);
+    if (!row) return { method: null };
+    return {
+      method: {
+        brand: row.cardType,
+        last4: row.last4,
+        exp:
+          row.expMonth && row.expYear ? `${row.expMonth}/${row.expYear}` : null,
+      },
+    };
   }
 }

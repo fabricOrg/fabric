@@ -3,6 +3,7 @@ import "server-only";
 import {
   messageDetailResponse,
   messageListResponse,
+  paymentMethodResponseSchema,
   walletSnapshot,
 } from "@app/contracts";
 import { BffError, dashboardApi } from "./api-client";
@@ -19,6 +20,12 @@ async function unwrap<T>(operation: Promise<T>): Promise<T> {
 export async function getWalletSnapshot() {
   return walletSnapshot.parse(
     await unwrap(dashboardApi("/v1/wallet", "wallet:read")),
+  );
+}
+
+export async function getSavedPaymentMethod() {
+  return paymentMethodResponseSchema.parse(
+    await unwrap(dashboardApi("/v1/wallet/payment-method", "wallet:read")),
   );
 }
 

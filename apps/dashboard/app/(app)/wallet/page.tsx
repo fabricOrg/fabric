@@ -50,7 +50,10 @@ import {
 } from "lucide-react";
 import { BalanceTrend } from "@/components/wallet/balance-trend";
 import { formatMoney, formatSigned } from "@/lib/money";
-import { getWalletSnapshot } from "@/lib/server/dashboard-data";
+import {
+  getSavedPaymentMethod,
+  getWalletSnapshot,
+} from "@/lib/server/dashboard-data";
 import { TopUpDialog } from "./_top-up-dialog";
 
 /** Ledger-kind chip — color paired with icon + label (never color-only, WCAG). */
@@ -135,6 +138,10 @@ function messageRunway(b: WalletBalance) {
 export default async function WalletPage() {
   let balances: readonly WalletBalance[];
   let ledger: readonly LedgerEntry[];
+  // Best-effort: a missing saved card just shows the Paystack fallback, never blocks the page.
+  const savedMethod = await getSavedPaymentMethod()
+    .then((r) => r.method)
+    .catch(() => null);
   try {
     const snapshot = await getWalletSnapshot();
     balances = snapshot.balances;
@@ -327,11 +334,24 @@ export default async function WalletPage() {
           </CardHeader>
           <CardContent className="flex items-start gap-2">
             <CreditCard className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              Secured by Paystack — you&apos;re redirected to a hosted checkout
-              (card or mobile money) for each top-up. No card is stored on
-              Fabric.
-            </p>
+            {savedMethod ? (
+              <div className="flex flex-col gap-0.5 text-sm">
+                <span className="font-medium capitalize">
+                  {savedMethod.brand ?? "Card"} ••••{" "}
+                  {savedMethod.last4 ?? "····"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {savedMethod.exp ? `Expires ${savedMethod.exp} · ` : ""}
+                  Saved via Paystack · reused for auto top-up
+                </span>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Secured by Paystack — you&apos;re redirected to a hosted
+                checkout (card or mobile money) for each top-up. No card is
+                stored on Fabric. Pay once by card to enable auto top-up.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

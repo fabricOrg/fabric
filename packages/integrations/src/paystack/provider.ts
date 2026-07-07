@@ -7,6 +7,7 @@ import type {
   HealthState,
   IncomingRequest,
   JsonSchema,
+  PaymentAuthorization,
   PaymentProviderPlugin,
   RequestContext,
 } from "../plugin.js";
@@ -116,6 +117,7 @@ export class PaystackProvider implements PaymentProviderPlugin {
         : rawStatus === "failed"
           ? "failed"
           : "pending";
+    const authorization = parseAuthorization(data.authorization);
     return {
       type,
       reference,
@@ -126,6 +128,7 @@ export class PaystackProvider implements PaymentProviderPlugin {
         ? { amountMinor: BigInt(data.amount) }
         : {}),
       ...(typeof data.currency === "string" ? { currency: data.currency } : {}),
+      ...(authorization ? { authorization } : {}),
     };
   }
 }
@@ -134,4 +137,22 @@ function requireSecret(creds: Creds): string {
   const secretKey = creds.secretKey;
   if (!secretKey) throw new PaystackError("Paystack secretKey is required.");
   return secretKey;
+}
+
+/** Map Paystack's `data.authorization` into a reusable token (returns undefined if not present). */
+function parseAuthorization(value: unknown): PaymentAuthorization | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const a = value as Record<string, unknown>;
+  const authorizationCode =
+    typeof a.authorization_code === "string" ? a.authorization_code : "";
+  if (!authorizationCode) return undefined;
+  return {
+    authorizationCode,
+    reusable: a.reusable === true,
+    ...(typeof a.card_type === "string" ? { cardType: a.card_type } : {}),
+    ...(typeof a.last4 === "string" ? { last4: a.last4 } : {}),
+    ...(typeof a.exp_month === "string" ? { expMonth: a.exp_month } : {}),
+    ...(typeof a.exp_year === "string" ? { expYear: a.exp_year } : {}),
+    ...(typeof a.bank === "string" ? { bank: a.bank } : {}),
+  };
 }
