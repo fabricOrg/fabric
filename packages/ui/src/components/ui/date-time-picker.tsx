@@ -2,12 +2,12 @@
 
 import { Button } from "@app/ui/components/ui/button";
 import { Calendar } from "@app/ui/components/ui/calendar";
-import { Input } from "@app/ui/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@app/ui/components/ui/popover";
+import { TimePicker } from "@app/ui/components/ui/time-picker";
 import { CalendarIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -56,8 +56,8 @@ export function DateTimePicker({
     setOpen(false);
   }
 
-  function handleTime(event: React.ChangeEvent<HTMLInputElement>) {
-    const [h, m] = event.target.value.split(":").map(Number);
+  function handleTime(next: string) {
+    const [h, m] = next.split(":").map(Number);
     const base = value ? new Date(value) : new Date();
     base.setHours(h || 0, m || 0, 0, 0);
     onChange(base);
@@ -87,12 +87,10 @@ export function DateTimePicker({
           />
         </PopoverContent>
       </Popover>
-      <Input
-        type="time"
+      <TimePicker
         aria-label="Time"
         value={value ? timeValue(value) : ""}
         onChange={handleTime}
-        className="w-32 font-mono tabular-nums"
       />
     </div>
   );
