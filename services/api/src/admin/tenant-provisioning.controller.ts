@@ -1,5 +1,5 @@
 import { provisionTenantRequestSchema } from "@app/contracts";
-import { Body, Controller, Inject, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
 import { invalidRequest } from "../http/api-error.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { TenantProvisioningService } from "./tenant-provisioning.service.js";
@@ -15,6 +15,11 @@ export class TenantProvisioningController {
     @Inject(TenantProvisioningService)
     private readonly provisioning: TenantProvisioningService,
   ) {}
+
+  @Get("tenants")
+  async list() {
+    return this.provisioning.list();
+  }
 
   @Post("tenants")
   async create(@Body() body: unknown) {

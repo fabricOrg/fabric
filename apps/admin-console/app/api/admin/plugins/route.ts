@@ -2,11 +2,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSession } from "@/lib/server/auth";
 
 /**
- * Plugin registry BFF. When the api is configured (API_BASE_URL + BFF_INTERNAL_TOKEN) this calls the
- * real staff endpoint /internal/plugins (backed by plugin_instances); otherwise an offline mock.
- * Flipping an instance to LIVE (real spend/sends) is a redline — sandbox only until human-activated.
- * Staff-session gated: these routes are directly reachable at the admin origin, so the page guard
- * (requireAdminSession) is NOT enough — every handler must verify the session itself.
+ * Plugin registry BFF → the real staff endpoint /internal/plugins (backed by plugin_instances). No
+ * mock: the control plane is live. Flipping an instance to LIVE (real spend/sends) is a redline —
+ * sandbox only until human-activated. Staff-session gated: these routes are directly reachable at
+ * the admin origin, so the page guard is NOT enough; every handler verifies the session itself.
  */
 function unauthorized() {
   return NextResponse.json(
@@ -20,85 +19,19 @@ function unauthorized() {
     { status: 401 },
   );
 }
-const MOCK = [
-  {
-    id: "sms_fake",
-    capability: "sms",
-    vendor: "FakeProvider",
-    label: "FakeProvider",
-    enabled: true,
-    isDefault: true,
-    status: "connected",
-    mode: "sandbox",
-    region: "gh-accra",
-  },
-  {
-    id: "sms_at",
-    capability: "sms",
-    vendor: "Africa's Talking",
-    label: "Africa's Talking",
-    enabled: false,
-    isDefault: false,
-    status: "available",
-    mode: null,
-    region: "gh-accra",
-  },
-  {
-    id: "sms_hubtel",
-    capability: "sms",
-    vendor: "Hubtel",
-    label: "Hubtel",
-    enabled: false,
-    isDefault: false,
-    status: "available",
-    mode: null,
-    region: "gh-accra",
-  },
-  {
-    id: "wa_meta",
-    capability: "whatsapp",
-    vendor: "Meta WhatsApp Cloud",
-    label: "WhatsApp Business Cloud",
-    enabled: false,
-    isDefault: false,
-    status: "available",
-    mode: null,
-    region: null,
-  },
-  {
-    id: "pay_paystack",
-    capability: "payment",
-    vendor: "Paystack",
-    label: "Paystack",
-    enabled: false,
-    isDefault: false,
-    status: "available",
-    mode: null,
-    region: "gh-accra",
-  },
-  {
-    id: "pay_flutterwave",
-    capability: "payment",
-    vendor: "Flutterwave",
-    label: "Flutterwave",
-    enabled: false,
-    isDefault: false,
-    status: "available",
-    mode: null,
-    region: "ng-lagos",
-  },
-  {
-    id: "id_workos",
-    capability: "identity",
-    vendor: "WorkOS",
-    label: "WorkOS AuthKit",
-    enabled: true,
-    isDefault: true,
-    status: "connected",
-    mode: "sandbox",
-    region: null,
-  },
-] as const;
+
+function unavailable() {
+  return NextResponse.json(
+    {
+      error: {
+        type: "api_error",
+        code: "registry_unavailable",
+        message: "Plugin registry is unavailable.",
+      },
+    },
+    { status: 502 },
+  );
+}
 
 function badBody() {
   return NextResponse.json(
@@ -118,42 +51,33 @@ function withRegion(dto: Record<string, unknown>) {
   return { region: null, ...dto };
 }
 
-function apiConfig(): { baseUrl: string; token: string } | null {
+function apiConfig(): { baseUrl: string; token: string } {
   const baseUrl = process.env.API_BASE_URL;
   const token = process.env.BFF_INTERNAL_TOKEN;
-  return baseUrl && token ? { baseUrl, token } : null;
+  if (!baseUrl || !token) {
+    throw new Error("API_BASE_URL and BFF_INTERNAL_TOKEN are required.");
+  }
+  return { baseUrl, token };
 }
 
 export async function GET() {
   if (!(await readAdminSession())) return unauthorized();
-  const cfg = apiConfig();
-  if (cfg) {
-    try {
-      const res = await fetch(new URL("/internal/plugins", cfg.baseUrl), {
-        cache: "no-store",
-        headers: { "x-bff-token": cfg.token },
-      });
-      const payload = (await res.json()) as {
-        instances?: Record<string, unknown>[];
-      };
-      if (!res.ok) return NextResponse.json(payload, { status: res.status });
-      return NextResponse.json({
-        instances: (payload.instances ?? []).map(withRegion),
-      });
-    } catch {
-      return NextResponse.json(
-        {
-          error: {
-            type: "api_error",
-            code: "registry_unavailable",
-            message: "Plugin registry is unavailable.",
-          },
-        },
-        { status: 502 },
-      );
-    }
+  try {
+    const { baseUrl, token } = apiConfig();
+    const res = await fetch(new URL("/internal/plugins", baseUrl), {
+      cache: "no-store",
+      headers: { "x-bff-token": token },
+    });
+    const payload = (await res.json()) as {
+      instances?: Record<string, unknown>[];
+    };
+    if (!res.ok) return NextResponse.json(payload, { status: res.status });
+    return NextResponse.json({
+      instances: (payload.instances ?? []).map(withRegion),
+    });
+  } catch {
+    return unavailable();
   }
-  return NextResponse.json({ instances: MOCK });
 }
 
 export async function POST(request: NextRequest) {
@@ -164,56 +88,18 @@ export async function POST(request: NextRequest) {
   } catch {
     return badBody();
   }
-
-  const cfg = apiConfig();
-  if (cfg) {
-    try {
-      const res = await fetch(new URL("/internal/plugins", cfg.baseUrl), {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          "content-type": "application/json",
-          "x-bff-token": cfg.token,
-        },
-        body: JSON.stringify({ id: body.id, action: body.action }),
-      });
-      const payload = (await res.json()) as Record<string, unknown>;
-      if (!res.ok) return NextResponse.json(payload, { status: res.status });
-      return NextResponse.json(withRegion(payload));
-    } catch {
-      return NextResponse.json(
-        {
-          error: {
-            type: "api_error",
-            code: "registry_unavailable",
-            message: "Plugin registry is unavailable.",
-          },
-        },
-        { status: 502 },
-      );
-    }
+  try {
+    const { baseUrl, token } = apiConfig();
+    const res = await fetch(new URL("/internal/plugins", baseUrl), {
+      method: "POST",
+      cache: "no-store",
+      headers: { "content-type": "application/json", "x-bff-token": token },
+      body: JSON.stringify({ id: body.id, action: body.action }),
+    });
+    const payload = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) return NextResponse.json(payload, { status: res.status });
+    return NextResponse.json(withRegion(payload));
+  } catch {
+    return unavailable();
   }
-
-  // Offline mock.
-  const found = MOCK.find((i) => i.id === body.id);
-  if (!found) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "not_found",
-          code: "unknown_plugin",
-          message: "Unknown plugin instance.",
-        },
-      },
-      { status: 404 },
-    );
-  }
-  const action = body.action;
-  return NextResponse.json({
-    ...found,
-    enabled: action !== "disable",
-    isDefault: action === "make-default" ? true : found.isDefault,
-    mode: found.mode ?? "sandbox",
-    status: action === "disable" ? "available" : "connected",
-  });
 }

@@ -1,10 +1,11 @@
 import type {
+  ListTenantsResponse,
   ProvisionTenantRequest,
   ProvisionTenantResponse,
 } from "@app/contracts";
 import { accounts, memberships, type ProvisioningDb, users } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import {
   WORKOS_CLIENT,
@@ -24,6 +25,29 @@ export class TenantProvisioningService {
     @Inject(PROVISIONING_DB) private readonly provisioning: ProvisioningDb,
     @Inject(WORKOS_CLIENT) private readonly workosClient: WorkosClientProvider,
   ) {}
+
+  /** Staff control-plane list of every account. Runs on the provisioning connection (cross-tenant). */
+  async list(): Promise<ListTenantsResponse> {
+    const rows = await this.provisioning.db
+      .select({
+        tenant_id: accounts.id,
+        name: accounts.name,
+        slug: accounts.slug,
+        plan: accounts.plan,
+        status: accounts.status,
+        data_region: accounts.dataRegion,
+        workos_organization_id: accounts.workosOrganizationId,
+        created_at: accounts.createdAt,
+      })
+      .from(accounts)
+      .orderBy(desc(accounts.createdAt));
+    return {
+      tenants: rows.map((r) => ({
+        ...r,
+        created_at: r.created_at.toISOString(),
+      })),
+    };
+  }
 
   async provision(
     request: ProvisionTenantRequest,
