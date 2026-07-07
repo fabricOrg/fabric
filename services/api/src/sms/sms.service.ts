@@ -6,7 +6,8 @@ import {
   type SendSmsResponse,
 } from "@app/contracts";
 import { type AppDb, findCustomerMessage, listCustomerMessages } from "@app/db";
-import type { SmsSenderPlugin } from "@app/integrations";
+import type { Creds, SmsSenderPlugin } from "@app/integrations";
+import { ArkeselSmsProvider } from "@app/integrations";
 import { FakeProvider } from "@app/integrations/testing";
 import {
   ingestDlr as engineIngestDlr,
@@ -14,8 +15,10 @@ import {
   type SendResult,
 } from "@app/sms-engine";
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { APP_DB } from "../db/db.module.js";
-import { notFound, unauthorized } from "../http/api-error.js";
+import { invalidRequest, notFound, unauthorized } from "../http/api-error.js";
+import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { AutoTopupService } from "../payments/auto-topup.service.js";
 
 interface Row {
@@ -25,22 +28,52 @@ interface Row {
 
 /**
  * Wires the HTTP boundary to the L5 send pipeline. Holds the EngineDeps (the app_runtime AppDb + the
- * SMS provider) and exposes send + DLR-ingest. Thin-thread provider = FakeProvider; a real vendor
- * adapter swaps in here (the engine + controllers are provider-agnostic via SmsSenderPlugin).
+ * SMS provider + its creds) and exposes send + DLR-ingest. Provider is selected by SMS_PROVIDER:
+ * `fake` (default — sandbox/tests) or `arkesel` (real Ghana vendor). The engine + controllers stay
+ * provider-agnostic via SmsSenderPlugin. Live SMS is a redline: Arkesel defaults to sandbox mode
+ * (ARKESEL_SANDBOX) and every send is gated by the platform.sms_sending kill-switch.
  */
 @Injectable()
 export class SmsService {
-  // One provider instance for the iteration (FakeProvider). Real adapters are DI-swappable later.
-  private readonly provider: SmsSenderPlugin = new FakeProvider();
+  private readonly provider: SmsSenderPlugin;
+  private readonly creds: Creds | undefined;
   private readonly logger = new Logger(SmsService.name);
 
   constructor(
     @Inject(APP_DB) private readonly db: AppDb,
     @Inject(AutoTopupService) private readonly autoTopup: AutoTopupService,
-  ) {}
+    @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
+    @Inject(ConfigService) private readonly config: ConfigService,
+  ) {
+    if (this.config.get<string>("SMS_PROVIDER") === "arkesel") {
+      this.provider = new ArkeselSmsProvider();
+      // Sandbox by default — real delivery needs ARKESEL_SANDBOX=false, a deliberate human-gated flip.
+      this.creds = {
+        apiKey: this.config.get<string>("ARKESEL_API_KEY") ?? "",
+        senderId: this.config.get<string>("ARKESEL_SENDER_ID") ?? "",
+        sandbox: this.config.get<string>("ARKESEL_SANDBOX") ?? "true",
+        ...(this.config.get<string>("ARKESEL_DLR_CALLBACK_URL")
+          ? {
+              callbackUrl: this.config.get<string>(
+                "ARKESEL_DLR_CALLBACK_URL",
+              ) as string,
+            }
+          : {}),
+      };
+      this.logger.log(
+        `SMS provider: arkesel-sms (sandbox=${this.creds.sandbox})`,
+      );
+    } else {
+      this.provider = new FakeProvider();
+    }
+  }
 
   private deps() {
-    return { db: this.db, provider: this.provider };
+    return {
+      db: this.db,
+      provider: this.provider,
+      ...(this.creds ? { creds: this.creds } : {}),
+    };
   }
 
   /** POST /v1/sms/send — the tenant is already resolved by ApiKeyGuard. */
@@ -51,6 +84,13 @@ export class SmsService {
     body: string;
     currency: string;
   }): Promise<SendSmsResponse> {
+    // Global kill-switch: staff can halt ALL sending (incident, abuse, vendor outage) in one flip.
+    if (await this.killSwitch.isPaused("platform.sms_sending")) {
+      throw invalidRequest(
+        "sms_sending_paused",
+        "SMS sending is temporarily paused.",
+      );
+    }
     const result: SendResult = await engineSendSms(this.deps(), input);
     // After-debit trigger: the send just reserved/committed against the wallet — check whether the
     // balance has fallen to the auto-top-up threshold. Fire-and-forget: never block or fail the send.
