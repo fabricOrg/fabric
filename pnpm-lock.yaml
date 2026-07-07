@@ -259,6 +259,10 @@ importers:
       '@app/contracts':
         specifier: workspace:*
         version: link:../contracts
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.0
 
   packages/sms-engine:
     dependencies:

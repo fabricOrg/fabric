@@ -113,5 +113,51 @@ export interface SmsSenderPlugin extends PluginManifest {
   verifyWebhook(req: IncomingRequest, creds: Creds): boolean;
 }
 
-// PaymentProviderPlugin (initCharge/parseEvent/refund) arrives with E4 (top-up) — deliberately out of
-// scope for L4 to keep the SMS thin-thread tight; the `capability: 'payment'` slot is reserved above.
+// ---- Payment capability (E4 top-up) --------------------------------------------------------------
+
+/** A charge to initialize — collect `amountMinor` (exact minor units) from `email`, keyed by our
+ *  idempotent `reference` (e.g. `topup:{uuid}`). `callbackUrl` is where the provider returns the
+ *  payer after the hosted checkout. */
+export interface ChargeRequest {
+  readonly amountMinor: bigint;
+  readonly currency: string; // ISO 4217, e.g. 'GHS'
+  readonly email: string; // payer email (providers require it)
+  readonly reference: string; // OUR idempotency key → maps back to the top-up intent
+  readonly callbackUrl?: string;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+/** Result of `initCharge` — the hosted checkout URL to redirect to, plus the provider's ref. */
+export interface ChargeInit {
+  readonly authorizationUrl: string;
+  readonly providerRef: string; // provider's access code / transaction ref
+  readonly reference: string; // echoes our reference
+  readonly raw?: unknown;
+}
+
+export type PaymentEventStatus = "success" | "failed" | "pending";
+
+/** A provider webhook mapped to canonical form (`parseEvent`). `reference` correlates back to the
+ *  top-up intent; `amountMinor`/`currency` are re-verified against the intent before crediting. */
+export interface CanonicalPaymentEvent {
+  readonly type: string; // provider event name, e.g. 'charge.success'
+  readonly reference: string;
+  readonly providerRef?: string;
+  readonly amountMinor?: bigint;
+  readonly currency?: string;
+  readonly status: PaymentEventStatus;
+  readonly raw?: unknown;
+}
+
+/**
+ * Payment capability contract (wallet top-up / collections). Same vendor-agnostic shape as SMS:
+ * `initCharge` starts a hosted checkout, `verifyWebhook` authenticates the raw callback, `parseEvent`
+ * maps it to canonical form. The wallet credit (idempotent on the reference) is the ENGINE's job, not
+ * the adapter's — the adapter only speaks to the provider.
+ */
+export interface PaymentProviderPlugin extends PluginManifest {
+  readonly capability: "payment";
+  initCharge(req: ChargeRequest, creds: Creds): Promise<ChargeInit>;
+  verifyWebhook(req: IncomingRequest, creds: Creds): boolean;
+  parseEvent(payload: unknown): CanonicalPaymentEvent;
+}
