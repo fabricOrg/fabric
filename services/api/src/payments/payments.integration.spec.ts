@@ -8,6 +8,7 @@ import {
 } from "@app/db";
 import type { ConfigService } from "@nestjs/config";
 import { eq } from "drizzle-orm";
+import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PaymentsService } from "./payments.service.js";
@@ -25,6 +26,9 @@ function sign(body: string): string {
 describeDb("wallet top-up (Paystack)", () => {
   const provisioning = createProvisioningDb(superUrl ?? "", { max: 1 });
   const appDb = createAppDb(appUrl ?? "");
+  // Raw superuser connection for teardown: the ledger is append-only (app_runtime can't DELETE), so
+  // the test-only superuser bypasses the REVOKE + RLS to clean up — same pattern as the wallet spec.
+  const owner = postgres(superUrl ?? "", { max: 1 });
   const config = {
     get: (key: string) =>
       key === "PAYSTACK_SECRET_KEY"
@@ -52,14 +56,12 @@ describeDb("wallet top-up (Paystack)", () => {
     await provisioning.db
       .delete(payments)
       .where(eq(payments.tenantId, tenantId));
-    await appDb.withTenant(tenantId, async (tx) => {
-      await tx`DELETE FROM ledger_entries WHERE account_id IN (SELECT id FROM ledger_accounts WHERE tenant_id = ${tenantId})`;
-      await tx`DELETE FROM ledger_transactions WHERE tenant_id = ${tenantId}`;
-      await tx`DELETE FROM ledger_accounts WHERE tenant_id = ${tenantId}`;
-    });
-    await provisioning.db.delete(accounts).where(eq(accounts.id, tenantId));
-    await provisioning.end();
-    await appDb.end();
+    // Owner bypasses the append-only REVOKE + RLS (test teardown only).
+    await owner`DELETE FROM ledger_entries WHERE tenant_id = ${tenantId}`;
+    await owner`DELETE FROM ledger_transactions WHERE tenant_id = ${tenantId}`;
+    await owner`DELETE FROM ledger_accounts WHERE tenant_id = ${tenantId}`;
+    await owner`DELETE FROM accounts WHERE id = ${tenantId}`;
+    await Promise.all([provisioning.end(), appDb.end(), owner.end()]);
   });
 
   it("initiate creates a pending intent and returns the checkout URL", async () => {
