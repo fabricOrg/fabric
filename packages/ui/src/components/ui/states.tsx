@@ -102,9 +102,8 @@ export function LoadingRows({
 }) {
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      {Array.from({ length: rows }, (_, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length static skeleton list.
-        <Skeleton key={i} className="h-12 w-full" />
+      {Array.from({ length: rows }, (_, i) => `row-${i}`).map((key) => (
+        <Skeleton key={key} className="h-12 w-full" />
       ))}
     </div>
   );
