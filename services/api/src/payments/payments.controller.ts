@@ -1,5 +1,13 @@
 import { initiateTopUpRequestSchema } from "@app/contracts";
-import { Body, Controller, Inject, Post, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Post,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import {
   ApiKeyGuard,
   type RequestTenant,
@@ -31,5 +39,11 @@ export class PaymentsController {
       );
     }
     return this.payments.initiate(tenant.id, parsed.data);
+  }
+
+  @Get("payment-method")
+  async paymentMethod(@Req() req: AuthedRequest) {
+    const tenant = requireScope(req.tenant, "wallet:read");
+    return this.payments.getSavedMethod(tenant.id);
   }
 }

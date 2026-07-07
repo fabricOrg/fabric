@@ -134,6 +134,13 @@
       "when": 1783408026043,
       "tag": "0018_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783412503544,
+      "tag": "0019_payment_authorizations",
+      "breakpoints": true
     }
   ]
 }

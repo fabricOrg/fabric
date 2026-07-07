@@ -12,6 +12,7 @@ export * from "./audit.js";
 export * from "./identity.js";
 export * from "./integrations.js";
 export * from "./kill-switches.js";
+export * from "./payment-authorizations.js";
 export * from "./payments.js";
 export * from "./privacy.js";
 export * from "./proposals.js";

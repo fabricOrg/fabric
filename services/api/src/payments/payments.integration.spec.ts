@@ -60,6 +60,7 @@ describeDb("wallet top-up (Paystack)", () => {
     await owner`DELETE FROM ledger_entries WHERE tenant_id = ${tenantId}`;
     await owner`DELETE FROM ledger_transactions WHERE tenant_id = ${tenantId}`;
     await owner`DELETE FROM ledger_accounts WHERE tenant_id = ${tenantId}`;
+    await owner`DELETE FROM payment_authorizations WHERE tenant_id = ${tenantId}`;
     await owner`DELETE FROM accounts WHERE id = ${tenantId}`;
     await Promise.all([provisioning.end(), appDb.end(), owner.end()]);
   });
@@ -108,12 +109,33 @@ describeDb("wallet top-up (Paystack)", () => {
     });
     const body = JSON.stringify({
       event: "charge.success",
-      data: { reference, amount: 5000, currency: "GHS", status: "success" },
+      data: {
+        reference,
+        amount: 5000,
+        currency: "GHS",
+        status: "success",
+        authorization: {
+          authorization_code: "AUTH_test123",
+          card_type: "visa",
+          last4: "4081",
+          exp_month: "12",
+          exp_year: "2030",
+          reusable: true,
+        },
+      },
     });
 
     await service.handleWebhook(Buffer.from(body), sign(body));
     // Replay — must NOT double-credit.
     await service.handleWebhook(Buffer.from(body), sign(body));
+
+    // The reusable card authorization was captured (powers the Payment-method card + auto top-up).
+    const saved = await service.getSavedMethod(tenantId);
+    expect(saved.method).toMatchObject({
+      brand: "visa",
+      last4: "4081",
+      exp: "12/2030",
+    });
 
     const [row] = await provisioning.db
       .select()

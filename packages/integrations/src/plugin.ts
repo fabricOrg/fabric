@@ -137,6 +137,18 @@ export interface ChargeInit {
 
 export type PaymentEventStatus = "success" | "failed" | "pending";
 
+/** A reusable card token from a successful charge — lets us charge the customer later without them
+ *  present (auto top-up). The code is a provider token, NOT the card number. */
+export interface PaymentAuthorization {
+  readonly authorizationCode: string;
+  readonly cardType?: string;
+  readonly last4?: string;
+  readonly expMonth?: string;
+  readonly expYear?: string;
+  readonly bank?: string;
+  readonly reusable: boolean;
+}
+
 /** A provider webhook mapped to canonical form (`parseEvent`). `reference` correlates back to the
  *  top-up intent; `amountMinor`/`currency` are re-verified against the intent before crediting. */
 export interface CanonicalPaymentEvent {
@@ -146,6 +158,7 @@ export interface CanonicalPaymentEvent {
   readonly amountMinor?: bigint;
   readonly currency?: string;
   readonly status: PaymentEventStatus;
+  readonly authorization?: PaymentAuthorization; // reusable card token, when the provider returns one
   readonly raw?: unknown;
 }
 
