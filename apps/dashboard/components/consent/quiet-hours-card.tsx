@@ -177,8 +177,8 @@ export function QuietHoursCard({
       </CardContent>
 
       <CardFooter>
-        <Button onClick={save} disabled={!dirty || saving}>
-          {saving ? "Saving…" : "Save quiet hours"}
+        <Button onClick={save} loading={saving} disabled={!dirty}>
+          Save quiet hours
         </Button>
       </CardFooter>
     </Card>

@@ -262,9 +262,9 @@ export function OptOutTable({
             <Button
               variant="destructive"
               onClick={confirmRemove}
-              disabled={removing}
+              loading={removing}
             >
-              {removing ? "Removing…" : "Remove opt-out"}
+              Remove opt-out
             </Button>
           </DialogFooter>
         </DialogContent>

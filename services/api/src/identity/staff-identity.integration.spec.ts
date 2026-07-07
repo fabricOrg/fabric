@@ -1,7 +1,7 @@
 import { createProvisioningDb, staffUsers } from "@app/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { IdentityService } from "./identity.service.js";
+import { StaffService } from "./staff.service.js";
 
 // Runs only when a real DB is configured (local docker / CI ephemeral); skipped otherwise.
 const superUrl = process.env.DATABASE_URL_SUPER;
@@ -17,7 +17,7 @@ const CLAIMS = {
 
 describeDb("staff identity resolve", () => {
   const db = createProvisioningDb(superUrl ?? "", { max: 1 });
-  const service = new IdentityService(db);
+  const service = new StaffService(db);
 
   // staff_users is GLOBAL platform config (no tenant) — the test owns its own rows.
   beforeAll(async () => {
@@ -47,7 +47,7 @@ describeDb("staff identity resolve", () => {
   });
 
   it("resolves an active staff member (case-insensitive) with role permissions", async () => {
-    const resolved = await service.resolveStaff(CLAIMS);
+    const resolved = await service.resolveSession(CLAIMS);
     expect(resolved).not.toBeNull();
     expect(resolved?.role).toBe("admin");
     expect(resolved?.permissions).toContain("staff:write");
@@ -55,7 +55,7 @@ describeDb("staff identity resolve", () => {
   });
 
   it("stamps external_subject_id + last_seen_at on resolve", async () => {
-    await service.resolveStaff(CLAIMS);
+    await service.resolveSession(CLAIMS);
     const [row] = await db.db
       .select({
         ext: staffUsers.externalSubjectId,
@@ -68,7 +68,7 @@ describeDb("staff identity resolve", () => {
   });
 
   it("refuses a suspended staff member", async () => {
-    const resolved = await service.resolveStaff({
+    const resolved = await service.resolveSession({
       ...CLAIMS,
       email: "suspended.test@fabric.dev",
     });
@@ -76,7 +76,7 @@ describeDb("staff identity resolve", () => {
   });
 
   it("refuses an email that isn't on the staff table", async () => {
-    const resolved = await service.resolveStaff({
+    const resolved = await service.resolveSession({
       ...CLAIMS,
       email: "stranger@fabric.dev",
     });

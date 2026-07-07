@@ -118,8 +118,8 @@ export function InviteMemberDialog() {
           >
             Cancel
           </Button>
-          <Button disabled={!valid || pending} onClick={submit}>
-            {pending ? "Sending…" : "Send invite"}
+          <Button disabled={!valid} loading={pending} onClick={submit}>
+            Send invite
           </Button>
         </DialogFooter>
       </DialogContent>

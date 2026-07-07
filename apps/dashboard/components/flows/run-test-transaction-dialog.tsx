@@ -195,8 +195,13 @@ export function RunTestTransactionDialog({
                 </Select>
               </Field>
             </div>
-            <Button className="self-start" onClick={start} disabled={!canStart}>
-              {busy ? "Sending OTP…" : "Start"}
+            <Button
+              className="self-start"
+              onClick={start}
+              loading={busy}
+              disabled={!canStart}
+            >
+              Start
               <ArrowRight data-icon="inline-end" />
             </Button>
           </div>

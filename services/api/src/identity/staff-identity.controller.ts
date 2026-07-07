@@ -2,7 +2,7 @@ import { resolveStaffSessionRequestSchema } from "@app/contracts";
 import { Body, Controller, Inject, Post, UseGuards } from "@nestjs/common";
 import { forbidden, invalidRequest } from "../http/api-error.js";
 import { BffTokenGuard } from "./bff-token.guard.js";
-import { IdentityService } from "./identity.service.js";
+import { StaffService } from "./staff.service.js";
 
 /**
  * Staff session resolution for the admin-console BFF. BffTokenGuard ONLY — staff are platform
@@ -11,9 +11,7 @@ import { IdentityService } from "./identity.service.js";
 @Controller("internal/identity")
 @UseGuards(BffTokenGuard)
 export class StaffIdentityController {
-  constructor(
-    @Inject(IdentityService) private readonly identity: IdentityService,
-  ) {}
+  constructor(@Inject(StaffService) private readonly staff: StaffService) {}
 
   @Post("staff-session")
   async resolve(@Body() body: unknown) {
@@ -24,7 +22,7 @@ export class StaffIdentityController {
         "The staff session claims are invalid.",
       );
     }
-    const resolved = await this.identity.resolveStaff(parsed.data);
+    const resolved = await this.staff.resolveSession(parsed.data);
     if (!resolved) {
       throw forbidden(
         "staff_not_authorized",

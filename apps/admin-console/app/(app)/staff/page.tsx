@@ -3,7 +3,6 @@ import { Avatar, AvatarFallback } from "@app/ui/components/ui/avatar";
 import { Badge } from "@app/ui/components/ui/badge";
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -18,6 +17,7 @@ import {
   TableRow,
 } from "@app/ui/components/ui/table";
 import { InviteStaffDialog } from "@/components/invite-staff-dialog";
+import { StaffRowActions } from "@/components/staff-row-actions";
 import { requireAdminSession } from "@/lib/server/auth";
 import { listStaff, StaffApiError } from "@/lib/server/staff-client";
 
@@ -38,9 +38,28 @@ function initials(value: string): string {
     .toUpperCase();
 }
 
+function StatusBadge({ status }: { status: StaffDto["status"] }) {
+  return status === "suspended" ? (
+    <Badge
+      variant="outline"
+      className="border-transparent bg-warning/15 text-warning"
+    >
+      Suspended
+    </Badge>
+  ) : (
+    <Badge
+      variant="outline"
+      className="border-transparent bg-success/12 text-success"
+    >
+      Active
+    </Badge>
+  );
+}
+
 export default async function StaffPage() {
   const session = await requireAdminSession();
   const canManage = session.permissions.includes("staff:write");
+  const selfId = session.userId;
 
   let staff: StaffDto[] = [];
   let loadError = false;
@@ -51,30 +70,28 @@ export default async function StaffPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Staff
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Platform operators. Access is by email allowlist; they sign in with a
-          matching WorkOS identity.
-        </p>
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-display text-2xl font-semibold tracking-tight">
+            Staff
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Platform operators. Access is by email allowlist — they sign in with
+            a matching WorkOS identity.
+          </p>
+        </div>
+        {canManage ? <InviteStaffDialog /> : null}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Team</CardTitle>
+          <CardTitle>All staff</CardTitle>
           <CardDescription>
             {canManage
-              ? "Admins can add operators and other admins."
+              ? "Admins add operators and other admins, and can suspend or remove access."
               : "Only staff admins can add or change staff."}
           </CardDescription>
-          {canManage ? (
-            <CardAction>
-              <InviteStaffDialog />
-            </CardAction>
-          ) : null}
         </CardHeader>
         <CardContent>
           {loadError ? (
@@ -96,7 +113,11 @@ export default async function StaffPage() {
                   <TableRow>
                     <TableHead>Member</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead className="text-right">Status</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Access</TableHead>
+                    {canManage ? (
+                      <TableHead className="text-right">Actions</TableHead>
+                    ) : null}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -109,11 +130,11 @@ export default async function StaffPage() {
                               {initials(s.name ?? s.email)}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex flex-col">
-                            <span className="font-medium">
+                          <div className="flex min-w-0 flex-col">
+                            <span className="truncate font-medium">
                               {s.name ?? s.email}
                             </span>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="truncate text-xs text-muted-foreground">
                               {s.email}
                             </span>
                           </div>
@@ -126,35 +147,36 @@ export default async function StaffPage() {
                           {ROLE_LABEL[s.role]}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {s.status === "suspended" ? (
-                            <Badge
-                              variant="outline"
-                              className="border-transparent bg-destructive/12 text-destructive"
-                            >
-                              Suspended
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="border-transparent bg-success/12 text-success"
-                            >
-                              Active
-                            </Badge>
-                          )}
-                          <Badge
-                            variant="outline"
-                            className={
-                              s.bound
-                                ? "text-muted-foreground"
-                                : "border-transparent bg-warning/15 text-warning"
-                            }
-                          >
-                            {s.bound ? "Signed in" : "Pending"}
-                          </Badge>
-                        </div>
+                      <TableCell>
+                        <StatusBadge status={s.status} />
                       </TableCell>
+                      <TableCell>
+                        <span
+                          className={
+                            s.bound
+                              ? "text-xs text-muted-foreground"
+                              : "text-xs text-warning"
+                          }
+                        >
+                          {s.bound ? "Signed in" : "Pending"}
+                        </span>
+                      </TableCell>
+                      {canManage ? (
+                        <TableCell className="text-right">
+                          {s.staff_user_id === selfId ? (
+                            <span className="text-xs text-muted-foreground">
+                              You
+                            </span>
+                          ) : (
+                            <StaffRowActions
+                              id={s.staff_user_id}
+                              label={s.name ?? s.email}
+                              role={s.role}
+                              status={s.status}
+                            />
+                          )}
+                        </TableCell>
+                      ) : null}
                     </TableRow>
                   ))}
                 </TableBody>
