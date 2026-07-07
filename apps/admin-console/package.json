@@ -13,6 +13,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.66.0",
     "@app/contracts": "workspace:*",
     "@app/domain": "workspace:*",
     "@app/fe-auth": "workspace:*",

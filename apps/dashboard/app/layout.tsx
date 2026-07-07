@@ -1,3 +1,4 @@
+import { QueryProvider } from "@app/ui/components/ui/query-provider";
 import { Toaster } from "@app/ui/components/ui/sonner";
 import { TooltipProvider } from "@app/ui/components/ui/tooltip";
 import type { Metadata } from "next";
@@ -57,7 +58,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           enableSystem
           disableTransitionOnChange
         >
-          <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+          <QueryProvider>
+            <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+          </QueryProvider>
           <Toaster position="bottom-right" richColors />
         </ThemeProvider>
       </body>
