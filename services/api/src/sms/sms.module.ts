@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
+import { KillSwitchModule } from "../kill-switches/kill-switches.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
 import { DlrController } from "./dlr.controller.js";
 import { SmsController } from "./sms.controller.js";
@@ -9,10 +10,10 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
 /**
  * SMS HTTP surface (L5): POST /v1/sms/send (ApiKeyGuard) + POST /webhooks/dlr/:provider. Imports
  * ApiKeysModule so the guard (+ its ApiKeyService) is available to SmsController; PaymentsModule so
- * a send can fire the after-debit auto-top-up check.
+ * a send can fire the after-debit auto-top-up check; KillSwitchModule to gate sending.
  */
 @Module({
-  imports: [ApiKeysModule, PaymentsModule],
+  imports: [ApiKeysModule, PaymentsModule, KillSwitchModule],
   controllers: [SmsController, DlrController],
   providers: [SmsService, WebhookTokenGuard],
 })
