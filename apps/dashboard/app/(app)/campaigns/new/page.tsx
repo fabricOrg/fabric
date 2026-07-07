@@ -7,7 +7,7 @@ import {
 } from "@app/ui/components/ui/page-header";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { NewCampaignForm } from "@/components/campaigns/new-campaign-form";
+import { NewCampaignForm } from "@/components/forms/new-campaign-form";
 
 export default function NewCampaignPage() {
   return (

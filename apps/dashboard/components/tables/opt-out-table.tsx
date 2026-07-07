@@ -35,7 +35,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ShieldOff, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AddOptOutDialog } from "@/components/consent/add-opt-out-dialog";
+import { AddOptOutDialog } from "@/components/forms/add-opt-out-dialog";
 import {
   type OptOut,
   type OptOutScope,

@@ -1,7 +1,7 @@
 "use client";
 
 import { toMoney } from "@app/contracts";
-import { DEFAULT_RATES, encodeAndSegment, rateSegments } from "@app/domain";
+import { encodeAndSegment } from "@app/domain";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Card,
@@ -24,150 +24,156 @@ import {
   TabsTrigger,
 } from "@app/ui/components/ui/tabs";
 import { Textarea } from "@app/ui/components/ui/textarea";
+import { useForm, useStore } from "@tanstack/react-form";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useMemo, useState } from "react";
+import { useId, useState } from "react";
 import { toast } from "sonner";
 import { createCampaign } from "@/lib/client/campaigns-api";
 import { toastApiError } from "@/lib/error-toast";
 import { formatMoney } from "@/lib/money";
-
-const CURRENCY = "GHS" as const;
-
-type Schedule = "now" | "later";
-
-/** Midnight today — the calendar disables anything before it (can't schedule in the past). */
-function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+import {
+  CURRENCY,
+  estimate,
+  type Schedule,
+  schema,
+  startOfToday,
+} from "./new-campaign-form.schema";
 
 /**
- * Create-campaign form — two columns: details on the left, a sticky review/send summary on the right.
- * Money is exact bigint minor units: cost = ratePerSegment × segments(body) × audienceSize, never a
- * float. On success we route back to the list (which re-fetches); failures keep the form filled.
+ * Create-campaign form. Validated inputs (name/message/audience) live in a single TanStack Form; the
+ * schedule tabs, date picker, and opt-out toggle stay local state as they drive the live summary.
  */
 export function NewCampaignForm() {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [body, setBody] = useState("");
-  const [audience, setAudience] = useState("");
   const [schedule, setSchedule] = useState<Schedule>("now");
   const [scheduledAt, setScheduledAt] = useState<Date | undefined>(undefined);
   const [respectOptOuts, setRespectOptOuts] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-
-  const nameId = useId();
-  const bodyId = useId();
-  const audienceId = useId();
   const scheduleId = useId();
 
-  const audienceSize = Number.parseInt(audience, 10);
-  const hasAudience = Number.isInteger(audienceSize) && audienceSize > 0;
-
-  const seg = useMemo(() => encodeAndSegment(body || " "), [body]);
-  const perSegmentMinor = rateSegments(1, CURRENCY, DEFAULT_RATES);
-  const estimateMinor =
-    body.length > 0 && hasAudience
-      ? perSegmentMinor * BigInt(seg.segments) * BigInt(audienceSize)
-      : 0n;
-  const showEstimate = body.length > 0 && hasAudience;
-
   const scheduleValid = schedule === "now" || scheduledAt !== undefined;
-  const canSubmit =
-    name.trim().length > 0 &&
-    body.trim().length > 0 &&
-    hasAudience &&
-    scheduleValid &&
-    !submitting;
 
-  async function submit() {
-    if (!canSubmit) return;
-    setSubmitting(true);
-    try {
-      const created = await createCampaign({
-        name: name.trim(),
-        body: body.trim(),
-        audienceSize,
-        scheduledAt:
-          schedule === "later" && scheduledAt
-            ? scheduledAt.toISOString()
-            : null,
-        respectOptOuts,
-      });
-      toast.success(
-        created.status === "scheduled"
-          ? `“${created.name}” scheduled`
-          : `“${created.name}” is sending`,
-      );
-      router.push("/campaigns");
-    } catch (envelope) {
-      toastApiError(envelope);
-      setSubmitting(false);
-    }
-  }
+  const form = useForm({
+    defaultValues: { name: "", body: "", audience: "" },
+    validators: { onMount: schema, onChange: schema },
+    onSubmit: async ({ value }) => {
+      if (!scheduleValid) return;
+      try {
+        const created = await createCampaign({
+          name: value.name.trim(),
+          body: value.body.trim(),
+          audienceSize: Number.parseInt(value.audience, 10),
+          scheduledAt:
+            schedule === "later" && scheduledAt
+              ? scheduledAt.toISOString()
+              : null,
+          respectOptOuts,
+        });
+        toast.success(
+          created.status === "scheduled"
+            ? `“${created.name}” scheduled`
+            : `“${created.name}” is sending`,
+        );
+        router.push("/campaigns");
+      } catch (envelope) {
+        toastApiError(envelope);
+      }
+    },
+  });
+
+  // Reactive reads for the live summary + submit gating (same whole-form re-render the old useState had).
+  const body = useStore(form.store, (s) => s.values.body);
+  const audience = useStore(form.store, (s) => s.values.audience);
+  const canSubmit = useStore(form.store, (s) => s.canSubmit);
+  const isSubmitting = useStore(form.store, (s) => s.isSubmitting);
+  const { seg, perSegmentMinor, show, estimateMinor, audienceSize } = estimate(
+    body,
+    audience,
+  );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void form.handleSubmit();
+      }}
+      className="grid gap-6 lg:grid-cols-3"
+    >
       {/* Details — left, wider column */}
       <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle className="text-base">Campaign details</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <Field>
-            <FieldLabel htmlFor={nameId}>Campaign name</FieldLabel>
-            <Input
-              id={nameId}
-              placeholder="e.g. October flash sale"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <FieldDescription>
-              Internal label — recipients never see this.
-            </FieldDescription>
-          </Field>
-
-          <Field>
-            <FieldLabel htmlFor={bodyId}>Message</FieldLabel>
-            <Textarea
-              id={bodyId}
-              rows={5}
-              placeholder="Type your message…"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-            <FieldDescription>
-              {body.length > 0 ? (
-                <span className="tabular-nums">
-                  {body.length} chars · {seg.segments} segment
-                  {seg.segments === 1 ? "" : "s"} ·{" "}
-                  {seg.encoding === "ucs2" ? "UCS-2" : "GSM-7"}
-                </span>
-              ) : (
-                "Longer messages and non-GSM characters use more segments."
-              )}
-            </FieldDescription>
-          </Field>
-
-          <Field>
-            <FieldLabel htmlFor={audienceId}>Audience size</FieldLabel>
-            <Input
-              id={audienceId}
-              inputMode="numeric"
-              placeholder="e.g. 5000"
-              value={audience}
-              onChange={(e) =>
-                setAudience(e.target.value.replace(/[^\d]/g, ""))
-              }
-              className="font-mono tabular-nums"
-            />
-            <FieldDescription>
-              Number of recipients in the selected list.
-            </FieldDescription>
-          </Field>
-
+          <form.Field name="name">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Campaign name</FieldLabel>
+                <Input
+                  id={field.name}
+                  placeholder="e.g. October flash sale"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                />
+                <FieldDescription>
+                  Internal label — recipients never see this.
+                </FieldDescription>
+              </Field>
+            )}
+          </form.Field>
+          <form.Field name="body">
+            {(field) => {
+              const seg = encodeAndSegment(field.state.value || " ");
+              return (
+                <Field>
+                  <FieldLabel htmlFor={field.name}>Message</FieldLabel>
+                  <Textarea
+                    id={field.name}
+                    rows={5}
+                    placeholder="Type your message…"
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                  />
+                  <FieldDescription>
+                    {field.state.value.length > 0 ? (
+                      <span className="tabular-nums">
+                        {field.state.value.length} chars · {seg.segments}{" "}
+                        segment
+                        {seg.segments === 1 ? "" : "s"} ·{" "}
+                        {seg.encoding === "ucs2" ? "UCS-2" : "GSM-7"}
+                      </span>
+                    ) : (
+                      "Longer messages and non-GSM characters use more segments."
+                    )}
+                  </FieldDescription>
+                </Field>
+              );
+            }}
+          </form.Field>
+          <form.Field name="audience">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>Audience size</FieldLabel>
+                <Input
+                  id={field.name}
+                  inputMode="numeric"
+                  placeholder="e.g. 5000"
+                  value={field.state.value}
+                  onChange={(e) =>
+                    field.handleChange(e.target.value.replace(/[^\d]/g, ""))
+                  }
+                  onBlur={field.handleBlur}
+                  className="font-mono tabular-nums"
+                />
+                <FieldDescription>
+                  Number of recipients in the selected list.
+                </FieldDescription>
+              </Field>
+            )}
+          </form.Field>
           <Field>
             <FieldLabel id={scheduleId}>Schedule</FieldLabel>
             <Tabs
@@ -240,11 +246,9 @@ export function NewCampaignForm() {
                 Estimated cost
               </span>
               <span className="font-display text-3xl font-semibold tabular-nums">
-                {showEstimate
-                  ? formatMoney(toMoney(estimateMinor, CURRENCY))
-                  : "—"}
+                {show ? formatMoney(toMoney(estimateMinor, CURRENCY)) : "—"}
               </span>
-              {showEstimate && (
+              {show && (
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {formatMoney(toMoney(perSegmentMinor, CURRENCY))} ×{" "}
                   {seg.segments} segment{seg.segments === 1 ? "" : "s"} ×{" "}
@@ -278,9 +282,9 @@ export function NewCampaignForm() {
             <Separator />
 
             <Button
-              onClick={submit}
-              loading={submitting}
-              disabled={!canSubmit}
+              type="submit"
+              loading={isSubmitting}
+              disabled={!canSubmit || !scheduleValid}
               className="w-full"
             >
               {schedule === "later" ? "Schedule campaign" : "Send campaign"}
@@ -291,6 +295,6 @@ export function NewCampaignForm() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </form>
   );
 }
