@@ -58,7 +58,9 @@ export class PaymentsService {
       throw invalidRequest("payments_paused", "Top-ups are paused right now.");
     }
     const creds = this.creds();
-    const reference = `topup:${randomUUID()}`;
+    // Paystack references allow only alphanumerics + - . = (no colon); a uuid with a topup- prefix
+    // is all hyphens/alphanumerics. Doubles as our credit() idempotency key.
+    const reference = `topup-${randomUUID()}`;
     const amountMinor = BigInt(request.amount_minor);
 
     await this.provisioning.db.insert(payments).values({

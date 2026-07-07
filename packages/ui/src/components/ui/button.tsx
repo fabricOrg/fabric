@@ -53,26 +53,34 @@ function Button({
     /** Show a leading spinner and disable the button. Ignored with asChild (Slot needs one child). */
     loading?: boolean;
   }) {
-  const Comp = asChild ? Slot.Root : "button";
-  const showSpinner = loading && !asChild;
+  const sharedProps = {
+    "data-slot": "button",
+    "data-variant": variant,
+    "data-size": size,
+    className: cn(buttonVariants({ variant, size, className })),
+  };
+
+  // asChild forwards to an arbitrary single child (Radix Slot requires EXACTLY ONE child — a spinner
+  // sibling, even a null one, breaks it), and that child may be an <a> that can't take `disabled` or
+  // a spinner. So `loading` only applies to the real <button>; with asChild we pass children through.
+  if (asChild) {
+    return (
+      <Slot.Root {...sharedProps} {...props}>
+        {children}
+      </Slot.Root>
+    );
+  }
 
   return (
-    <Comp
-      data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+    <button
+      {...sharedProps}
       aria-busy={loading || undefined}
-      // asChild forwards to an arbitrary element (e.g. a link) that may not accept `disabled`, so
-      // only the real <button> gets the loading/disabled wiring.
-      {...(asChild ? {} : { disabled: disabled || loading })}
+      disabled={disabled || loading}
       {...props}
     >
-      {showSpinner ? (
-        <Loader2 className="size-4 animate-spin" aria-hidden />
-      ) : null}
+      {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
       {children}
-    </Comp>
+    </button>
   );
 }
 
