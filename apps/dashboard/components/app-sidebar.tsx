@@ -18,19 +18,24 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navGroups } from "@/lib/nav";
 
-/** The Fabric wordmark — a woven-threads mark (three warp threads) + the display-face name. */
+/** The Fabric wordmark — the brand "F" mark (mirrors app/icon.svg, tokenised for white-label) +
+ *  the display-face name. */
 function FabricMark() {
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5">
-      <div
-        className="flex size-8 flex-col items-center justify-center gap-[3px] rounded-md bg-primary"
-        aria-hidden="true"
+    <div className="flex items-center gap-2.5 px-2 py-1.5">
+      <svg
+        viewBox="0 0 64 64"
+        className="size-10 shrink-0"
+        role="img"
+        aria-label="Fabric"
       >
-        <span className="h-0.5 w-3.5 rounded-full bg-primary-foreground" />
-        <span className="h-0.5 w-3.5 rounded-full bg-primary-foreground" />
-        <span className="h-0.5 w-3.5 rounded-full bg-primary-foreground" />
-      </div>
-      <span className="font-display text-lg font-semibold tracking-tight">
+        <rect width="64" height="64" rx="14" className="fill-primary" />
+        <path
+          d="M18 14h31v9H28v9h18v9H28v15H18z"
+          className="fill-primary-foreground"
+        />
+      </svg>
+      <span className="font-display text-2xl font-semibold tracking-tight">
         Fabric
       </span>
     </div>
