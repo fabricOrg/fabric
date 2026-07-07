@@ -19,6 +19,8 @@ export * from "./dev-portal.js";
 // by the frontend). Keep this package zod-only / browser-safe; a CI guard enforces it.
 export * from "./errors.js";
 export * from "./identity.js";
+// Kill switches — platform circuit breakers (pause SMS, disable a provider…).
+export * from "./kill-switches.js";
 // Team-member management — owners/admins invite teammates into their tenant (dashboard).
 export * from "./members.js";
 // F5.3 canonical message-status enum — public API value on responses/webhooks; @app/integrations

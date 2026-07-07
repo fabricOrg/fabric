@@ -52,15 +52,20 @@ export async function resolveStaffSession(
   }
   return toAppSession(
     resolveStaffSessionResponseSchema.parse(await response.json()),
+    claims.email,
   );
 }
 
-function toAppSession(response: ResolveStaffSessionResponse): AppSession {
+function toAppSession(
+  response: ResolveStaffSessionResponse,
+  email: string,
+): AppSession {
   return {
     userId: response.staff_user_id,
     orgId: "",
     role: response.role,
     permissions: response.permissions,
     sessionId: response.session_id,
+    email,
   };
 }

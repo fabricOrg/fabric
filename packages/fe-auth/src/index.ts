@@ -28,6 +28,8 @@ export interface AppSession {
   readonly role: string;
   readonly permissions: readonly string[];
   readonly sessionId: string;
+  /** The signed-in identity's email (from WorkOS). Used for audit-actor attribution + display. */
+  readonly email?: string;
   readonly stepUpAt?: number;
   readonly impersonation?: ImpersonationClaim;
 }
