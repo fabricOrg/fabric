@@ -168,9 +168,29 @@ export interface CanonicalPaymentEvent {
  * maps it to canonical form. The wallet credit (idempotent on the reference) is the ENGINE's job, not
  * the adapter's — the adapter only speaks to the provider.
  */
+/** Charge a saved authorization with no user present (auto top-up). The credit still arrives via the
+ *  webhook (charge.success) — this just triggers it and reports the synchronous status. */
+export interface ChargeAuthorizationRequest {
+  readonly authorizationCode: string;
+  readonly email: string;
+  readonly amountMinor: bigint;
+  readonly currency: string;
+  readonly reference: string;
+}
+
+export interface ChargeAuthorizationResult {
+  readonly status: PaymentEventStatus;
+  readonly providerRef?: string;
+  readonly raw?: unknown;
+}
+
 export interface PaymentProviderPlugin extends PluginManifest {
   readonly capability: "payment";
   initCharge(req: ChargeRequest, creds: Creds): Promise<ChargeInit>;
+  chargeAuthorization(
+    req: ChargeAuthorizationRequest,
+    creds: Creds,
+  ): Promise<ChargeAuthorizationResult>;
   verifyWebhook(req: IncomingRequest, creds: Creds): boolean;
   parseEvent(payload: unknown): CanonicalPaymentEvent;
 }

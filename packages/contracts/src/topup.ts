@@ -33,3 +33,22 @@ export const paymentMethodResponseSchema = z.object({
     .nullable(),
 });
 export type PaymentMethodResponse = z.infer<typeof paymentMethodResponseSchema>;
+
+/** Auto top-up: when balance ≤ threshold, charge the saved card by top_up. Amounts exact minor
+ *  units (threshold may be 0; top_up must be positive). */
+export const autoTopupConfigSchema = z.object({
+  enabled: z.boolean(),
+  threshold_minor: z.string().regex(/^\d+$/, "Non-negative minor units."),
+  top_up_minor: z.string().regex(/^[1-9]\d*$/, "Positive minor units."),
+  currency,
+});
+export type AutoTopupConfig = z.infer<typeof autoTopupConfigSchema>;
+
+export const updateAutoTopupRequestSchema = autoTopupConfigSchema;
+export type UpdateAutoTopupRequest = AutoTopupConfig;
+
+export const autoTopupResponseSchema = z.object({
+  config: autoTopupConfigSchema.nullable(), // null = never configured
+  has_card: z.boolean(), // a reusable card is on file (required to enable)
+});
+export type AutoTopupResponse = z.infer<typeof autoTopupResponseSchema>;

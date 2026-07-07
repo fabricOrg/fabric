@@ -1,0 +1,1 @@
+ALTER TABLE "payment_authorizations" ADD COLUMN "email" text;

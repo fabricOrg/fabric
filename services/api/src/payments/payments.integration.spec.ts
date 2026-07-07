@@ -7,10 +7,11 @@ import {
   type TenantId,
 } from "@app/db";
 import type { ConfigService } from "@nestjs/config";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
+import { AutoTopupService } from "./auto-topup.service.js";
 import { PaymentsService } from "./payments.service.js";
 
 const superUrl = process.env.DATABASE_URL_SUPER;
@@ -41,6 +42,12 @@ describeDb("wallet top-up (Paystack)", () => {
     isPaused: async () => false,
   } as unknown as KillSwitchService;
   const service = new PaymentsService(provisioning, appDb, config, killSwitch);
+  const autoTopupService = new AutoTopupService(
+    provisioning,
+    appDb,
+    config,
+    killSwitch,
+  );
 
   const tenantId = randomUUID() as TenantId;
 
@@ -61,6 +68,7 @@ describeDb("wallet top-up (Paystack)", () => {
     await owner`DELETE FROM ledger_transactions WHERE tenant_id = ${tenantId}`;
     await owner`DELETE FROM ledger_accounts WHERE tenant_id = ${tenantId}`;
     await owner`DELETE FROM payment_authorizations WHERE tenant_id = ${tenantId}`;
+    await owner`DELETE FROM auto_topup WHERE tenant_id = ${tenantId}`;
     await owner`DELETE FROM accounts WHERE id = ${tenantId}`;
     await Promise.all([provisioning.end(), appDb.end(), owner.end()]);
   });
@@ -186,5 +194,102 @@ describeDb("wallet top-up (Paystack)", () => {
       .from(payments)
       .where(eq(payments.reference, reference));
     expect(row?.status).toBe("failed");
+  });
+
+  // ---- Auto top-up ------------------------------------------------------------------------------
+  // These run AFTER the charge.success test above, so `tenantId` now has a reusable card on file and
+  // a 5000 GHS balance — the preconditions auto top-up needs.
+
+  it("refuses to enable auto top-up without a saved card", async () => {
+    const noCard = randomUUID() as TenantId;
+    await provisioning.db.insert(accounts).values({
+      id: noCard,
+      name: "No Card",
+      slug: `nocard-${noCard}`,
+    });
+    await expect(
+      autoTopupService.updateAutoTopup(noCard, {
+        enabled: true,
+        threshold_minor: "1000",
+        top_up_minor: "5000",
+        currency: "GHS",
+      }),
+    ).rejects.toMatchObject({ response: { error: { code: "no_saved_card" } } });
+    await owner`DELETE FROM accounts WHERE id = ${noCard}`;
+  });
+
+  it("persists and reads back the auto top-up config (card on file)", async () => {
+    const saved = await autoTopupService.updateAutoTopup(tenantId, {
+      enabled: true,
+      threshold_minor: "1000000", // 5000 balance ≤ threshold → the next check will charge
+      top_up_minor: "5000",
+      currency: "GHS",
+    });
+    expect(saved).toMatchObject({
+      has_card: true,
+      config: {
+        enabled: true,
+        threshold_minor: "1000000",
+        top_up_minor: "5000",
+        currency: "GHS",
+      },
+    });
+    const got = await autoTopupService.getAutoTopup(tenantId);
+    expect(got.config?.enabled).toBe(true);
+  });
+
+  it("charges the saved card when balance is at/below the threshold", async () => {
+    // Clear the stray pending intent left by the `initiate` test so the in-flight guard doesn't block.
+    await provisioning.db
+      .delete(payments)
+      .where(
+        and(eq(payments.tenantId, tenantId), eq(payments.status, "pending")),
+      );
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: true,
+          data: { status: "success", id: 90210 },
+        }),
+        { status: 200 },
+      ),
+    );
+    await autoTopupService.maybeAutoTopUp(tenantId);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/transaction/charge_authorization"),
+      expect.anything(),
+    );
+    // A fresh pending intent for the top-up amount was created; the webhook credits it later.
+    const [pending] = await provisioning.db
+      .select()
+      .from(payments)
+      .where(
+        and(eq(payments.tenantId, tenantId), eq(payments.status, "pending")),
+      );
+    expect(pending?.amountMinor).toBe(5000n);
+    expect(pending?.providerRef).toBe("90210");
+    vi.restoreAllMocks();
+  });
+
+  it("does not charge again while an intent is in flight", async () => {
+    // The prior test left a pending intent → the in-flight guard must block a second charge.
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await autoTopupService.maybeAutoTopUp(tenantId);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("does nothing when auto top-up is disabled", async () => {
+    await autoTopupService.updateAutoTopup(tenantId, {
+      enabled: false,
+      threshold_minor: "1000000",
+      top_up_minor: "5000",
+      currency: "GHS",
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    await autoTopupService.maybeAutoTopUp(tenantId);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 });

@@ -9,6 +9,7 @@ export type {
 } from "./_shared.js";
 export * from "./api-keys.js";
 export * from "./audit.js";
+export * from "./auto-topup.js";
 export * from "./identity.js";
 export * from "./integrations.js";
 export * from "./kill-switches.js";
