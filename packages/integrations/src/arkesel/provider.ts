@@ -33,14 +33,22 @@ import { PLATFORM_FAULT_CAUSES } from "../status.js";
 const BASE_URL = "https://sms.arkesel.com/api/v2";
 const SUPPORTED_COUNTRIES = new Set(["GH", "NG"]); // West Africa focus (reseller region)
 
-/** Arkesel DLR status vocabulary → our canonical MessageStatus. An unmapped status throws (B1). */
+/**
+ * Arkesel DLR status vocabulary → our canonical MessageStatus. Covers the documented callback set
+ * (DELIVERED/SUBMITTED/QUEUED/NOT_DELIVERED/EXPIRED/PROHIBITED) plus the extra labels the dashboard
+ * shows in flight (DEFERRED/REJECTED/SENT) so a live callback carrying one never trips the throw.
+ * An unmapped status still throws (B1) — we never silently pass an unknown status.
+ */
 const DLR_STATUS: Record<string, MessageStatus> = {
   DELIVERED: "delivered",
+  SENT: "sent",
   SUBMITTED: "sent", // handed to the carrier; more advanced than `accepted`, not yet `delivered`
   QUEUED: "queued",
+  DEFERRED: "sending", // temporary hold / carrier retry — not terminal, still in flight
   NOT_DELIVERED: "undelivered",
   EXPIRED: "expired",
   PROHIBITED: "failed", // carrier/route rejection (blocked content, unapproved sender id, …)
+  REJECTED: "failed", // dashboard label variant of a hard rejection
 };
 
 export class ArkeselError extends Error {}
