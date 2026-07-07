@@ -6,6 +6,7 @@ import { AuditModule } from "./audit/audit.module.js";
 import { DbModule } from "./db/db.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { IdentityModule } from "./identity/identity.module.js";
+import { ImpersonationModule } from "./impersonation/impersonation.module.js";
 import { KillSwitchModule } from "./kill-switches/kill-switches.module.js";
 import { MembersModule } from "./members/members.module.js";
 import { PluginsModule } from "./plugins/plugins.module.js";
@@ -26,6 +27,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     IdentityModule,
     AdminModule,
     AuditModule,
+    ImpersonationModule,
     KillSwitchModule,
     MembersModule,
     PluginsModule,
