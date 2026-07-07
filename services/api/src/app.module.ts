@@ -9,6 +9,7 @@ import { IdentityModule } from "./identity/identity.module.js";
 import { ImpersonationModule } from "./impersonation/impersonation.module.js";
 import { KillSwitchModule } from "./kill-switches/kill-switches.module.js";
 import { MembersModule } from "./members/members.module.js";
+import { PaymentsModule } from "./payments/payments.module.js";
 import { PluginsModule } from "./plugins/plugins.module.js";
 import { ProposalsModule } from "./proposals/proposals.module.js";
 import { SmsModule } from "./sms/sms.module.js";
@@ -30,6 +31,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     ImpersonationModule,
     KillSwitchModule,
     MembersModule,
+    PaymentsModule,
     PluginsModule,
     ProposalsModule,
     ApiKeysModule,

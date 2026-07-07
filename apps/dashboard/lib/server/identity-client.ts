@@ -47,15 +47,20 @@ export async function resolveWorkOSSession(
   }
   return toAppSession(
     resolveIdentitySessionResponseSchema.parse(await response.json()),
+    claims.email,
   );
 }
 
-function toAppSession(response: ResolveIdentitySessionResponse): AppSession {
+function toAppSession(
+  response: ResolveIdentitySessionResponse,
+  email: string,
+): AppSession {
   return {
     userId: response.user_id,
     orgId: response.tenant_id,
     role: response.role,
     permissions: response.permissions,
     sessionId: response.session_id,
+    email,
   };
 }

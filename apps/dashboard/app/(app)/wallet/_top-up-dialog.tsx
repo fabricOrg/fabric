@@ -21,19 +21,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
-import { CheckCircle2, Loader2, Plus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { useId, useState } from "react";
+import { toast } from "sonner";
 import { formatMoney, parseAmountToMinor } from "@/lib/money";
 
-type Phase = "form" | "processing" | "done";
+type Phase = "form" | "processing";
 
 const CURRENCIES = currencySchema.options;
 
 /**
- * Top-up flow (mock): enter amount → payment-provider handoff (pending) → credited.
- * Amount is parsed to exact minor units (bigint string math, never float).
- * TODO(BFF): replace the mock timer with real payment-provider initiation + callback poll; surface
- * failures via toastApiError (@/lib/error-toast).
+ * Top-up flow: enter amount → initiate a real Paystack charge (BFF) → redirect to hosted checkout.
+ * The wallet credits asynchronously via the /webhooks/paystack callback on charge.success. Amount is
+ * parsed to exact minor units (bigint string math, never float).
  */
 export function TopUpDialog({
   defaultCurrency = "GHS",
@@ -56,11 +56,34 @@ export function TopUpDialog({
     setCurrency(defaultCurrency);
   }
 
-  function submit() {
-    if (!valid) return;
+  async function submit() {
+    if (!valid || minor === null) return;
     setPhase("processing");
-    // Mock provider handoff → credited.
-    setTimeout(() => setPhase("done"), 1400);
+    try {
+      const response = await fetch("/api/dashboard/wallet/topup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amount_minor: minor.toString(), currency }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(
+          payload?.error?.message ?? "Couldn't start the top-up.",
+        );
+      }
+      const { authorization_url } = (await response.json()) as {
+        authorization_url: string;
+      };
+      // Hand off to the provider's hosted checkout; the wallet credits via webhook on success.
+      window.location.href = authorization_url;
+    } catch (error) {
+      setPhase("form");
+      toast.error(
+        error instanceof Error ? error.message : "Couldn't start the top-up.",
+      );
+    }
   }
 
   return (
@@ -143,36 +166,12 @@ export function TopUpDialog({
             aria-live="polite"
           >
             <Loader2 className="size-8 animate-spin text-primary" />
-            <p className="font-medium">Waiting for payment confirmation…</p>
+            <p className="font-medium">Redirecting to secure checkout…</p>
             <p className="text-sm text-muted-foreground">
-              Complete the payment with your provider. This closes automatically
-              once we receive the confirmation.
+              Complete the payment with your provider. Your balance credits once
+              the payment is confirmed.
             </p>
           </div>
-        )}
-
-        {phase === "done" && (
-          <>
-            <div
-              className="flex flex-col items-center gap-3 py-6 text-center"
-              aria-live="polite"
-            >
-              <CheckCircle2 className="size-8 text-success" />
-              <p className="font-medium">Wallet credited</p>
-              <p className="font-display text-2xl tabular-nums">
-                {formatMoney(previewMoney)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Your balance is updated. The top-up appears in your transactions
-                below.
-              </p>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button>Done</Button>
-              </DialogClose>
-            </DialogFooter>
-          </>
         )}
       </DialogContent>
     </Dialog>

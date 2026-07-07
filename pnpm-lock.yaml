@@ -374,6 +374,9 @@ importers:
       '@app/sms-engine':
         specifier: workspace:*
         version: link:../../packages/sms-engine
+      '@app/wallet':
+        specifier: workspace:*
+        version: link:../../packages/wallet
       '@nestjs/common':
         specifier: ^11.1.27
         version: 11.1.27(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -399,9 +402,6 @@ importers:
         specifier: ^7.8.1
         version: 7.8.2
     devDependencies:
-      '@app/wallet':
-        specifier: workspace:*
-        version: link:../../packages/wallet
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.0
