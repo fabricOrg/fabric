@@ -87,3 +87,14 @@ export const listStaffResponseSchema = z.object({
   staff: z.array(staffDtoSchema),
 });
 export type ListStaffResponse = z.infer<typeof listStaffResponseSchema>;
+
+/** Change a staff member's role and/or status (suspend/reactivate). At least one field required. */
+export const updateStaffRequestSchema = z
+  .object({
+    role: staffRoleSchema.optional(),
+    status: staffStatusSchema.optional(),
+  })
+  .refine((v) => v.role !== undefined || v.status !== undefined, {
+    message: "Provide a role or status to update.",
+  });
+export type UpdateStaffRequest = z.infer<typeof updateStaffRequestSchema>;

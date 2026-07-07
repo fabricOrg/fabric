@@ -6,6 +6,7 @@ import {
   listStaffResponseSchema,
   type StaffDto,
   staffDtoSchema,
+  type UpdateStaffRequest,
 } from "@app/contracts";
 
 /**
@@ -55,4 +56,41 @@ export async function inviteStaff(
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new StaffApiError(response.status, payload);
   return staffDtoSchema.parse(payload);
+}
+
+export async function updateStaff(
+  id: string,
+  patch: UpdateStaffRequest,
+): Promise<StaffDto> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL(`/internal/admin/staff/${id}`, baseUrl),
+    {
+      method: "PATCH",
+      cache: "no-store",
+      headers: { "content-type": "application/json", "x-bff-token": bffToken },
+      body: JSON.stringify(patch),
+    },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw new StaffApiError(response.status, payload);
+  return staffDtoSchema.parse(payload);
+}
+
+export async function removeStaff(id: string): Promise<void> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL(`/internal/admin/staff/${id}`, baseUrl),
+    {
+      method: "DELETE",
+      cache: "no-store",
+      headers: { "x-bff-token": bffToken },
+    },
+  );
+  if (!response.ok) {
+    throw new StaffApiError(
+      response.status,
+      (await response.json()) as unknown,
+    );
+  }
 }

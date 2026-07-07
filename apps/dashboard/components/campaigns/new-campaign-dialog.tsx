@@ -266,12 +266,8 @@ export function NewCampaignDialog({
           <DialogClose asChild>
             <Button variant="outline">Cancel</Button>
           </DialogClose>
-          <Button onClick={submit} disabled={!canSubmit}>
-            {submitting
-              ? "Creating…"
-              : schedule === "later"
-                ? "Schedule campaign"
-                : "Send campaign"}
+          <Button onClick={submit} loading={submitting} disabled={!canSubmit}>
+            {schedule === "later" ? "Schedule campaign" : "Send campaign"}
           </Button>
         </DialogFooter>
       </DialogContent>

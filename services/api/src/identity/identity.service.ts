@@ -1,22 +1,16 @@
 import type {
-  InviteStaffRequest,
-  ListStaffResponse,
   ResolveIdentitySessionRequest,
   ResolveIdentitySessionResponse,
-  ResolveStaffSessionRequest,
-  ResolveStaffSessionResponse,
-  StaffDto,
 } from "@app/contracts";
 import {
   accounts,
   memberships,
   type ProvisioningDb,
-  staffUsers,
   type TenantId,
   users,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
 
 const ROLE_PERMISSIONS = {
@@ -36,12 +30,6 @@ const ROLE_PERMISSIONS = {
     "request_logs:read",
   ],
   member: ["sms:send", "sms:read", "wallet:read"],
-} as const;
-
-/** Staff authz is role-based against the platform staff_users table — not tenant permissions. */
-const STAFF_ROLE_PERMISSIONS = {
-  operator: ["staff:read"],
-  admin: ["staff:read", "staff:write"],
 } as const;
 
 @Injectable()
@@ -168,103 +156,5 @@ export class IdentityService {
         session_id: request.session_id,
       };
     });
-  }
-
-  /**
-   * Resolve a WorkOS-authenticated identity to a STAFF session. Authorization is the platform
-   * staff_users allowlist (email, provisioned out of band) — a valid WorkOS login is necessary but
-   * not sufficient. On success we stamp external_subject_id (first login) + last_seen_at.
-   */
-  async resolveStaff(
-    request: ResolveStaffSessionRequest,
-  ): Promise<ResolveStaffSessionResponse | null> {
-    const email = request.email.trim().toLowerCase();
-    return this.provisioning.db.transaction(async (tx) => {
-      const [staff] = await tx
-        .select({
-          id: staffUsers.id,
-          role: staffUsers.role,
-          status: staffUsers.status,
-        })
-        .from(staffUsers)
-        .where(eq(staffUsers.email, email))
-        .limit(1);
-      if (!staff || staff.status !== "active") return null;
-
-      await tx
-        .update(staffUsers)
-        .set({
-          externalSubjectId: request.external_user_id,
-          name: request.name,
-          lastSeenAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(staffUsers.id, staff.id));
-
-      return {
-        staff_user_id: staff.id,
-        role: staff.role,
-        permissions: [...STAFF_ROLE_PERMISSIONS[staff.role]],
-        session_id: request.session_id,
-      };
-    });
-  }
-
-  /** List all platform staff (admin-console management view). */
-  async listStaff(): Promise<ListStaffResponse> {
-    const rows = await this.provisioning.db
-      .select({
-        staff_user_id: staffUsers.id,
-        email: staffUsers.email,
-        name: staffUsers.name,
-        role: staffUsers.role,
-        status: staffUsers.status,
-        externalSubjectId: staffUsers.externalSubjectId,
-      })
-      .from(staffUsers)
-      .orderBy(asc(staffUsers.email));
-    return {
-      staff: rows.map(({ externalSubjectId, ...row }) => ({
-        ...row,
-        bound: externalSubjectId !== null,
-      })),
-    };
-  }
-
-  /**
-   * Allowlist a staff member by email (upsert). No WorkOS call — staff aren't org-scoped; they sign
-   * in with any WorkOS identity whose email matches, and resolveStaff binds the subject on first
-   * login. Re-inviting re-activates + updates role, so this doubles as "reinstate / change role".
-   */
-  async inviteStaff(request: InviteStaffRequest): Promise<StaffDto> {
-    const email = request.email.trim().toLowerCase();
-    const [staff] = await this.provisioning.db
-      .insert(staffUsers)
-      .values({
-        email,
-        name: request.name ?? null,
-        role: request.role,
-        status: "active",
-      })
-      .onConflictDoUpdate({
-        target: staffUsers.email,
-        set: {
-          role: request.role,
-          status: "active",
-          ...(request.name ? { name: request.name } : {}),
-          updatedAt: new Date(),
-        },
-      })
-      .returning({
-        staff_user_id: staffUsers.id,
-        email: staffUsers.email,
-        name: staffUsers.name,
-        role: staffUsers.role,
-        status: staffUsers.status,
-        externalSubjectId: staffUsers.externalSubjectId,
-      });
-    if (!staff) throw new Error("Staff upsert returned no row.");
-    const { externalSubjectId, ...row } = staff;
-    return { ...row, bound: externalSubjectId !== null };
   }
 }

@@ -1,5 +1,6 @@
 import { cn } from "@app/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 import { Slot } from "radix-ui";
 import type * as React from "react";
 
@@ -42,12 +43,18 @@ function Button({
   variant = "default",
   size = "default",
   asChild = false,
+  loading = false,
+  disabled,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
+    /** Show a leading spinner and disable the button. Ignored with asChild (Slot needs one child). */
+    loading?: boolean;
   }) {
   const Comp = asChild ? Slot.Root : "button";
+  const showSpinner = loading && !asChild;
 
   return (
     <Comp
@@ -55,8 +62,17 @@ function Button({
       data-variant={variant}
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
+      aria-busy={loading || undefined}
+      // asChild forwards to an arbitrary element (e.g. a link) that may not accept `disabled`, so
+      // only the real <button> gets the loading/disabled wiring.
+      {...(asChild ? {} : { disabled: disabled || loading })}
       {...props}
-    />
+    >
+      {showSpinner ? (
+        <Loader2 className="size-4 animate-spin" aria-hidden />
+      ) : null}
+      {children}
+    </Comp>
   );
 }
 

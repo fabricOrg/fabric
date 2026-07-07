@@ -97,11 +97,10 @@ export function ConfigurePluginDialog({
           </DialogClose>
           <Button
             onClick={save}
-            disabled={
-              saving || key.trim().length === 0 || secret.trim().length === 0
-            }
+            loading={saving}
+            disabled={key.trim().length === 0 || secret.trim().length === 0}
           >
-            {saving ? "Saving…" : "Save credentials"}
+            Save credentials
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -222,8 +222,8 @@ export function CreateTenantDialog({
               Cancel
             </Button>
           </DialogClose>
-          <Button onClick={submit} disabled={!canSubmit}>
-            {saving ? "Provisioning…" : "Create tenant"}
+          <Button onClick={submit} loading={saving} disabled={!canSubmit}>
+            Create tenant
           </Button>
         </DialogFooter>
       </DialogContent>

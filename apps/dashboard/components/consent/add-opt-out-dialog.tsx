@@ -131,8 +131,8 @@ export function AddOptOutDialog({
           <DialogClose asChild>
             <Button variant="outline">Cancel</Button>
           </DialogClose>
-          <Button onClick={submit} disabled={!valid || saving}>
-            {saving ? "Adding…" : "Add opt-out"}
+          <Button onClick={submit} loading={saving} disabled={!valid}>
+            Add opt-out
           </Button>
         </DialogFooter>
       </DialogContent>

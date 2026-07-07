@@ -130,8 +130,8 @@ export function InviteStaffDialog() {
           >
             Cancel
           </Button>
-          <Button disabled={!valid || pending} onClick={submit}>
-            {pending ? "Adding…" : "Add staff"}
+          <Button disabled={!valid} loading={pending} onClick={submit}>
+            Add staff
           </Button>
         </DialogFooter>
       </DialogContent>
