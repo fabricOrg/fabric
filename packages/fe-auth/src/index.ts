@@ -36,6 +36,7 @@ export interface AppSession {
 
 export interface ImpersonationClaim {
   readonly targetTenantId: string;
+  readonly targetLabel?: string;
   readonly expiresAt: number;
   readonly reason: string;
 }
@@ -220,3 +221,4 @@ function secretsEqual(left: string, right: string): boolean {
 }
 
 export * from "./development.js";
+export * from "./impersonation.js";

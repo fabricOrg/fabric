@@ -3,8 +3,10 @@ import "server-only";
 import {
   type AppSession,
   type DevelopmentSessionConfig,
+  type ImpersonationClaim,
   type RealmConfig,
   readDevelopmentSession,
+  readImpersonation,
   readSession,
   sealDevelopmentSession,
 } from "@app/fe-auth";
@@ -122,4 +124,21 @@ export function sessionCookieOptions() {
     path: "/",
     maxAge: 7 * 24 * 60 * 60,
   };
+}
+
+export const IMPERSONATION_COOKIE = "fabric-admin-impersonation";
+/** Max impersonation window; the sealed claim also carries its own expiry (defense in depth). */
+export const IMPERSONATION_WINDOW_SECONDS = 15 * 60;
+
+/** The secret that seals the impersonation claim cookie — reuse the WorkOS cookie password (≥32). */
+export function impersonationCookiePassword(): string {
+  return process.env.WORKOS_COOKIE_PASSWORD ?? "";
+}
+
+/** Read the active impersonation claim (or null if none / expired / tampered). */
+export async function readImpersonationClaim(): Promise<ImpersonationClaim | null> {
+  const password = impersonationCookiePassword();
+  if (password.length < 32) return null;
+  const store = await cookies();
+  return readImpersonation(password, store.get(IMPERSONATION_COOKIE)?.value);
 }
