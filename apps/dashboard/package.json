@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.0",
+    "@tanstack/react-table": "^8.21.0",
     "@app/contracts": "workspace:*",
     "@app/domain": "workspace:*",
     "@app/fe-auth": "workspace:*",

@@ -20,7 +20,7 @@ import { IdCard } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RegisterSenderDialog } from "@/components/senders/register-sender-dialog";
-import { SenderIdTable } from "@/components/senders/sender-id-table";
+import { SenderIdTable } from "@/components/tables/sender-id-table";
 import {
   listSenders,
   type RegisterSenderInput,

@@ -31,7 +31,7 @@ import { Skeleton } from "@app/ui/components/ui/skeleton";
 import { Megaphone, Plus, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CampaignTable } from "@/components/campaigns/campaign-table";
+import { CampaignTable } from "@/components/tables/campaign-table";
 import { type Campaign, listCampaigns } from "@/lib/client/campaigns-api";
 import { toastApiError } from "@/lib/error-toast";
 
