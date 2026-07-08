@@ -108,6 +108,11 @@ no secret in logs/prose, respect RLS + the redlines below.
   **Staging** env, Test IdP. Each app resolves its redirect/logout URIs from `<APP>_BASE_URL`, which
   must be registered in the WorkOS app's Redirects (both `/auth/callback` and `/login`).
 - Health: a trivial `/healthz` route per frontend; Dockerfile forces `HOSTNAME=0.0.0.0`.
+- **Never point an ECS service at a raw `terraform apply` task-def revision of the api/dashboard.**
+  Terraform hardcodes the `:bootstrap` placeholder image; the REAL content-addressed image is
+  injected only by the deploy workflow. A config-only task-def change (e.g. adding a secret) must
+  ship through a deploy — or, for a hotfix, register a new revision that grafts the change onto the
+  currently-running real image, then `update-service` to it.
 
 ## 7. Redlines — never cross without an explicit human go
 
