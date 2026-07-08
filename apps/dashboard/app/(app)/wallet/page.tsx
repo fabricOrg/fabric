@@ -48,6 +48,8 @@ import {
   TriangleAlert,
   Wallet,
 } from "lucide-react";
+import { AutoTopupDialog } from "@/components/forms/auto-topup-dialog";
+import { TopUpDialog } from "@/components/forms/top-up-dialog";
 import { BalanceTrend } from "@/components/wallet/balance-trend";
 import { formatMoney, formatSigned } from "@/lib/money";
 import {
@@ -55,8 +57,6 @@ import {
   getSavedPaymentMethod,
   getWalletSnapshot,
 } from "@/lib/server/dashboard-data";
-import { AutoTopupDialog } from "./_auto-topup-dialog";
-import { TopUpDialog } from "./_top-up-dialog";
 
 /** Ledger-kind chip — color paired with icon + label (never color-only, WCAG). */
 const KIND: Record<

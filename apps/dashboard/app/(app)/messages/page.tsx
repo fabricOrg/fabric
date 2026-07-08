@@ -27,7 +27,7 @@ import {
 } from "@app/ui/components/ui/tabs";
 import { List, TriangleAlert } from "lucide-react";
 import { InsightsOverview } from "@/components/insights/insights-overview";
-import { MessagesTable } from "@/components/messages-table";
+import { MessagesTable } from "@/components/tables/messages-table";
 import { getMessageList } from "@/lib/server/dashboard-data";
 
 function Shell({ children }: { children: React.ReactNode }) {

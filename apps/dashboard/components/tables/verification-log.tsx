@@ -2,6 +2,10 @@
 
 import { Badge } from "@app/ui/components/ui/badge";
 import {
+  DataTable,
+  DataTableColumnHeader,
+} from "@app/ui/components/ui/data-table";
+import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -15,15 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@app/ui/components/ui/table";
 import { cn } from "@app/ui/lib/utils";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   CheckCheck,
   Clock,
@@ -108,6 +105,46 @@ function VerifyStatusBadge({ status }: { status: VerifyStatus }) {
   );
 }
 
+const columns: ColumnDef<Verification>[] = [
+  {
+    accessorKey: "msisdn",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Recipient" />
+    ),
+    cell: ({ row }) => (
+      <span className="font-mono text-sm">{row.original.msisdn}</span>
+    ),
+  },
+  {
+    id: "channel",
+    header: "Channel",
+    cell: ({ row }) => <ChannelBadge channel={row.original.channel} />,
+  },
+  {
+    id: "status",
+    header: "Status",
+    cell: ({ row }) => <VerifyStatusBadge status={row.original.status} />,
+  },
+  {
+    accessorKey: "createdAt",
+    header: ({ column }) => (
+      <div className="flex justify-end">
+        <DataTableColumnHeader column={column} title="Created" />
+      </div>
+    ),
+    cell: ({ row }) => (
+      <div className="text-right text-muted-foreground">
+        {new Date(row.original.createdAt).toLocaleString("en", {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
+      </div>
+    ),
+  },
+];
+
 export function VerificationLog({
   verifications,
 }: {
@@ -176,49 +213,12 @@ export function VerificationLog({
         </Select>
       </div>
 
-      {/* Semantic <section> keeps the wide table's scroll region keyboard-focusable (WCAG 2.1.1). */}
-      <section
-        className="overflow-x-auto"
-        tabIndex={0}
-        aria-label="Recent verifications"
-      >
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Recipient</TableHead>
-              <TableHead>Channel</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Created</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((v) => (
-              <TableRow key={v.id}>
-                <TableCell className="font-mono text-sm">{v.msisdn}</TableCell>
-                <TableCell>
-                  <ChannelBadge channel={v.channel} />
-                </TableCell>
-                <TableCell>
-                  <VerifyStatusBadge status={v.status} />
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {new Date(v.createdAt).toLocaleString("en", {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        {filtered.length === 0 ? (
-          <p className="p-6 text-center text-sm text-muted-foreground">
-            No verifications match this filter.
-          </p>
-        ) : null}
-      </section>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        ariaLabel="Recent verifications"
+        empty="No verifications match this filter."
+      />
     </div>
   );
 }

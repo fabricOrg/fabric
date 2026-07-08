@@ -10,8 +10,8 @@ import { Skeleton } from "@app/ui/components/ui/skeleton";
 import { TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ClassificationCard } from "@/components/consent/classification-card";
-import { OptOutTable } from "@/components/consent/opt-out-table";
 import { QuietHoursCard } from "@/components/consent/quiet-hours-card";
+import { OptOutTable } from "@/components/tables/opt-out-table";
 import {
   type ConsentSnapshot,
   getConsent,

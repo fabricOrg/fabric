@@ -2,6 +2,10 @@
 
 import { Badge } from "@app/ui/components/ui/badge";
 import {
+  DataTable,
+  DataTableColumnHeader,
+} from "@app/ui/components/ui/data-table";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -9,20 +13,13 @@ import {
   SelectValue,
 } from "@app/ui/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@app/ui/components/ui/table";
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@app/ui/components/ui/tooltip";
 import { cn } from "@app/ui/lib/utils";
+import type { ColumnDef } from "@tanstack/react-table";
 import { BadgeCheck, CircleX, Clock, type LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
@@ -82,6 +79,78 @@ function formatSubmitted(iso: string): string {
   });
 }
 
+const columns: ColumnDef<SenderId>[] = [
+  {
+    accessorKey: "senderId",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Sender ID" />
+    ),
+    cell: ({ row }) => (
+      <span className="font-mono font-medium">{row.original.senderId}</span>
+    ),
+  },
+  {
+    id: "country",
+    accessorFn: (s) => COUNTRY_LABEL[s.country],
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Country" />
+    ),
+    cell: ({ row }) => COUNTRY_LABEL[row.original.country],
+  },
+  {
+    id: "type",
+    accessorFn: (s) => TYPE_LABEL[s.type],
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Type" />
+    ),
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">
+        {TYPE_LABEL[row.original.type]}
+      </span>
+    ),
+  },
+  {
+    id: "useCase",
+    header: "Use case",
+    cell: ({ row }) => (
+      <span className="block max-w-xs text-muted-foreground">
+        {row.original.useCase}
+      </span>
+    ),
+  },
+  {
+    id: "status",
+    header: "Status",
+    cell: ({ row }) => {
+      const s = row.original;
+      return s.status === "rejected" && s.note ? (
+        <Tooltip>
+          <TooltipTrigger className="rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+            <StatusBadge status={s.status} />
+            <span className="sr-only">Rejection reason: {s.note}</span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">{s.note}</TooltipContent>
+        </Tooltip>
+      ) : (
+        <StatusBadge status={s.status} />
+      );
+    },
+  },
+  {
+    accessorKey: "submittedAt",
+    header: ({ column }) => (
+      <div className="flex justify-end">
+        <DataTableColumnHeader column={column} title="Submitted" />
+      </div>
+    ),
+    cell: ({ row }) => (
+      <div className="text-right tabular-nums text-muted-foreground">
+        {formatSubmitted(row.original.submittedAt)}
+      </div>
+    ),
+  },
+];
+
 export function SenderIdTable({ senders }: { senders: readonly SenderId[] }) {
   const [status, setStatus] = useState<SenderStatus | "all">("all");
   const [country, setCountry] = useState<SenderCountry | "all">("all");
@@ -134,66 +203,12 @@ export function SenderIdTable({ senders }: { senders: readonly SenderId[] }) {
           </Select>
         </div>
 
-        {/* Semantic <section> keeps the wide table's scroll region keyboard-focusable (WCAG 2.1.1). */}
-        <section
-          className="overflow-x-auto"
-          tabIndex={0}
-          aria-label="Sender IDs"
-        >
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Sender ID</TableHead>
-                <TableHead>Country</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Use case</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Submitted</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-mono font-medium">
-                    {s.senderId}
-                  </TableCell>
-                  <TableCell>{COUNTRY_LABEL[s.country]}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {TYPE_LABEL[s.type]}
-                  </TableCell>
-                  <TableCell className="max-w-xs text-muted-foreground">
-                    {s.useCase}
-                  </TableCell>
-                  <TableCell>
-                    {s.status === "rejected" && s.note ? (
-                      <Tooltip>
-                        <TooltipTrigger className="rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                          <StatusBadge status={s.status} />
-                          <span className="sr-only">
-                            Rejection reason: {s.note}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs">
-                          {s.note}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : (
-                      <StatusBadge status={s.status} />
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {formatSubmitted(s.submittedAt)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {filtered.length === 0 && (
-            <p className="p-6 text-center text-sm text-muted-foreground">
-              No sender IDs match this filter.
-            </p>
-          )}
-        </section>
+        <DataTable
+          columns={columns}
+          data={filtered}
+          ariaLabel="Sender IDs"
+          empty="No sender IDs match this filter."
+        />
 
         {filtered.some((s) => s.status === "rejected") && (
           <p className="text-xs text-muted-foreground">

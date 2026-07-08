@@ -43,9 +43,9 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { RunTestTransactionDialog } from "@/components/flows/run-test-transaction-dialog";
 import { TransactionRecordView } from "@/components/flows/transaction-record";
 import { VolumeChart } from "@/components/flows/volume-chart";
+import { RunTestTransactionDialog } from "@/components/forms/run-test-transaction-dialog";
 import {
   type FlowSeriesPoint,
   listTransactions,

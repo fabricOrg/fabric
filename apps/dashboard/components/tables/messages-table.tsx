@@ -2,6 +2,10 @@
 
 import type { MessageDetail, MessageSummary } from "@app/contracts";
 import { Badge } from "@app/ui/components/ui/badge";
+import {
+  DataTable,
+  DataTableColumnHeader,
+} from "@app/ui/components/ui/data-table";
 import { Input } from "@app/ui/components/ui/input";
 import {
   Select,
@@ -17,14 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@app/ui/components/ui/sheet";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@app/ui/components/ui/table";
+import type { ColumnDef } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { type MessageStatus, StatusBadge } from "@/components/status-badge";
 import { getMessage } from "@/lib/client/dashboard-api";
@@ -43,6 +40,72 @@ const STATUSES: readonly MessageStatus[] = [
 ];
 
 const ALL = "all" as const;
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleString("en", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+const columns: ColumnDef<MessageSummary>[] = [
+  {
+    accessorKey: "to",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Recipient" />
+    ),
+    cell: ({ row }) => (
+      <span className="font-mono text-sm">{row.original.to}</span>
+    ),
+  },
+  {
+    id: "status",
+    header: "Status",
+    cell: ({ row }) => <StatusBadge status={row.original.status} />,
+  },
+  {
+    accessorKey: "provider",
+    header: "Provider",
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">{row.original.provider}</span>
+    ),
+  },
+  {
+    accessorKey: "segments",
+    header: ({ column }) => (
+      <div className="flex justify-end">
+        <DataTableColumnHeader column={column} title="Segments" />
+      </div>
+    ),
+    cell: ({ row }) => (
+      <div className="text-right tabular-nums">{row.original.segments}</div>
+    ),
+  },
+  {
+    id: "cost",
+    header: () => <div className="text-right">Cost</div>,
+    cell: ({ row }) => (
+      <div className="text-right font-mono tabular-nums">
+        {formatMoney(row.original.cost)}
+      </div>
+    ),
+  },
+  {
+    accessorKey: "createdAt",
+    header: ({ column }) => (
+      <div className="flex justify-end">
+        <DataTableColumnHeader column={column} title="Time" />
+      </div>
+    ),
+    cell: ({ row }) => (
+      <div className="text-right text-muted-foreground">
+        {formatTime(row.original.createdAt)}
+      </div>
+    ),
+  },
+];
 
 export function MessagesTable({
   messages,
@@ -141,61 +204,14 @@ export function MessagesTable({
         </Select>
       </div>
 
-      {/* Semantic <section> keeps the wide table's scroll region keyboard-focusable (WCAG 2.1.1). */}
-      <section
-        className="overflow-x-auto"
-        tabIndex={0}
-        aria-label="Message log"
-      >
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Recipient</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Provider</TableHead>
-              <TableHead className="text-right">Segments</TableHead>
-              <TableHead className="text-right">Cost</TableHead>
-              <TableHead className="text-right">Time</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((m) => (
-              <TableRow
-                key={m.id}
-                onClick={() => open(m.id)}
-                className="cursor-pointer"
-              >
-                <TableCell className="font-mono text-sm">{m.to}</TableCell>
-                <TableCell>
-                  <StatusBadge status={m.status} />
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {m.provider}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {m.segments}
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {formatMoney(m.cost)}
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {new Date(m.createdAt).toLocaleString("en", {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        {filtered.length === 0 && (
-          <p className="p-6 text-center text-sm text-muted-foreground">
-            No messages match this filter.
-          </p>
-        )}
-      </section>
+      <DataTable
+        columns={columns}
+        data={filtered}
+        ariaLabel="Message log"
+        onRowClick={(m) => open(m.id)}
+        rowLabel={(m) => `Open message to ${m.to}`}
+        empty="No messages match this filter."
+      />
 
       <Sheet
         open={detail !== null || loadingDetail}
@@ -273,12 +289,7 @@ export function MessagesTable({
                       <div className="flex flex-col gap-0.5 pb-1">
                         <StatusBadge status={ev.status} />
                         <span className="text-xs text-muted-foreground">
-                          {new Date(ev.at).toLocaleString("en", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {formatTime(ev.at)}
                           {ev.note ? ` · ${ev.note}` : ""}
                         </span>
                       </div>

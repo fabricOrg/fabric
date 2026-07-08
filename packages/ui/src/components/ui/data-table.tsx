@@ -20,7 +20,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useState } from "react";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -30,6 +30,8 @@ interface DataTableProps<TData, TValue> {
   /** Accessible label for the scroll region (WCAG scrollable-region-focusable). */
   ariaLabel?: string;
   onRowClick?: (row: TData) => void;
+  /** Per-row accessible label when rows are clickable (e.g. "Open <name>"). */
+  rowLabel?: (row: TData) => string;
   className?: string;
 }
 
@@ -44,6 +46,7 @@ export function DataTable<TData, TValue>({
   empty,
   ariaLabel,
   onRowClick,
+  rowLabel,
   className,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -88,6 +91,20 @@ export function DataTable<TData, TValue>({
                 onClick={
                   onRowClick ? () => onRowClick(row.original) : undefined
                 }
+                // Clickable rows are keyboard-operable (button semantics + Enter/Space), WCAG 2.1.1.
+                {...(onRowClick
+                  ? {
+                      role: "button",
+                      tabIndex: 0,
+                      "aria-label": rowLabel?.(row.original),
+                      onKeyDown: (e: KeyboardEvent) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onRowClick(row.original);
+                        }
+                      },
+                    }
+                  : {})}
                 className={onRowClick ? "cursor-pointer" : undefined}
               >
                 {row.getVisibleCells().map((cell) => (

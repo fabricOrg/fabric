@@ -15,10 +15,10 @@ import {
 import { Skeleton } from "@app/ui/components/ui/skeleton";
 import { TriangleAlert } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { VerificationLog } from "@/components/tables/verification-log";
 import { ChannelConfigCard } from "@/components/verify/channel-config-card";
 import { ConversionStats } from "@/components/verify/conversion-stats";
 import { TestVerificationCard } from "@/components/verify/test-verification-card";
-import { VerificationLog } from "@/components/verify/verification-log";
 import { VerifyTrend } from "@/components/verify/verify-trend";
 import {
   getVerifyOverview,

@@ -3,6 +3,10 @@
 import { Badge } from "@app/ui/components/ui/badge";
 import { Button } from "@app/ui/components/ui/button";
 import {
+  DataTable,
+  DataTableColumnHeader,
+} from "@app/ui/components/ui/data-table";
+import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -26,18 +30,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@app/ui/components/ui/table";
 import { cn } from "@app/ui/lib/utils";
+import type { ColumnDef } from "@tanstack/react-table";
 import { ShieldOff, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { AddOptOutDialog } from "@/components/forms/add-opt-out-dialog";
 import {
   type OptOut,
   type OptOutScope,
@@ -45,7 +43,6 @@ import {
   removeOptOut,
 } from "@/lib/client/consent-api";
 import { toastApiError } from "@/lib/error-toast";
-import { AddOptOutDialog } from "./add-opt-out-dialog";
 
 const SCOPE_META: Record<OptOutScope, { label: string; cls: string }> = {
   all: { label: "All traffic", cls: "bg-destructive/12 text-destructive" },
@@ -70,6 +67,14 @@ function ScopeBadge({ scope }: { scope: OptOutScope }) {
   );
 }
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export function OptOutTable({
   optOuts,
   onAdd,
@@ -86,6 +91,66 @@ export function OptOutTable({
   );
   const [pending, setPending] = useState<OptOut | null>(null);
   const [removing, setRemoving] = useState(false);
+
+  const columns = useMemo<ColumnDef<OptOut>[]>(
+    () => [
+      {
+        accessorKey: "msisdn",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Number" />
+        ),
+        cell: ({ row }) => (
+          <span className="font-mono text-sm">{row.original.msisdn}</span>
+        ),
+      },
+      {
+        id: "scope",
+        header: "Scope",
+        cell: ({ row }) => <ScopeBadge scope={row.original.scope} />,
+      },
+      {
+        id: "source",
+        header: "Source",
+        cell: ({ row }) => (
+          <Badge
+            variant="outline"
+            className="border-transparent bg-muted text-muted-foreground"
+          >
+            {SOURCE_LABEL[row.original.source]}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "at",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Date" />
+        ),
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {formatDate(row.original.at)}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => (
+          <div className="text-right">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setPending(row.original)}
+              aria-label={`Remove opt-out for ${row.original.msisdn}`}
+            >
+              <Trash2 />
+              Remove
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -171,68 +236,12 @@ export function OptOutTable({
           </EmptyHeader>
         </Empty>
       ) : (
-        <section
-          className="overflow-x-auto"
-          tabIndex={0}
-          aria-label="Opt-out list"
-        >
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Number</TableHead>
-                <TableHead>Scope</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((o) => (
-                <TableRow key={o.id}>
-                  <TableCell className="font-mono text-sm">
-                    {o.msisdn}
-                  </TableCell>
-                  <TableCell>
-                    <ScopeBadge scope={o.scope} />
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className="border-transparent bg-muted text-muted-foreground"
-                    >
-                      {SOURCE_LABEL[o.source]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(o.at).toLocaleDateString("en", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setPending(o)}
-                      aria-label={`Remove opt-out for ${o.msisdn}`}
-                    >
-                      <Trash2 />
-                      Remove
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {filtered.length === 0 && (
-            <p className="p-6 text-center text-sm text-muted-foreground">
-              No numbers match this filter.
-            </p>
-          )}
-        </section>
+        <DataTable
+          columns={columns}
+          data={filtered}
+          ariaLabel="Opt-out list"
+          empty="No numbers match this filter."
+        />
       )}
 
       <Dialog

@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@app/ui/components/ui/table";
 import { Check } from "lucide-react";
-import { InviteMemberDialog } from "@/components/invite-member-dialog";
+import { InviteMemberDialog } from "@/components/forms/invite-member-dialog";
 import { BffError } from "@/lib/server/api-client";
 import { requireDashboardSession } from "@/lib/server/auth";
 import { listMembers } from "@/lib/server/members-client";
