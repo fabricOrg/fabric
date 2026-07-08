@@ -6,6 +6,7 @@ import {
   listMembersResponseSchema,
   type MemberDto,
   memberDtoSchema,
+  type UpdateMemberRequest,
 } from "@app/contracts";
 import { BffError } from "./api-client";
 
@@ -56,4 +57,46 @@ export async function inviteMember(
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new BffError(response.status, payload);
   return memberDtoSchema.parse(payload);
+}
+
+export async function updateMemberRole(
+  tenantId: string,
+  userId: string,
+  request: UpdateMemberRequest,
+): Promise<MemberDto> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL(`/internal/tenants/${tenantId}/members/${userId}`, baseUrl),
+    {
+      method: "PATCH",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-bff-token": bffToken,
+      },
+      body: JSON.stringify(request),
+    },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw new BffError(response.status, payload);
+  return memberDtoSchema.parse(payload);
+}
+
+export async function removeMember(
+  tenantId: string,
+  userId: string,
+): Promise<void> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL(`/internal/tenants/${tenantId}/members/${userId}`, baseUrl),
+    {
+      method: "DELETE",
+      cache: "no-store",
+      headers: { "x-bff-token": bffToken },
+    },
+  );
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as unknown;
+    throw new BffError(response.status, payload);
+  }
 }

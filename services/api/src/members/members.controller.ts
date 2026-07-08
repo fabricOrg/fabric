@@ -1,10 +1,16 @@
-import { inviteMemberRequestSchema } from "@app/contracts";
+import {
+  inviteMemberRequestSchema,
+  updateMemberRequestSchema,
+} from "@app/contracts";
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Inject,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from "@nestjs/common";
@@ -46,5 +52,33 @@ export class MembersController {
       );
     }
     return this.members.invite(tenantId, parsed.data);
+  }
+
+  @Patch(":tenantId/members/:userId")
+  async updateRole(
+    @Param("tenantId") tenantId: string,
+    @Param("userId") userId: string,
+    @Body() body: unknown,
+  ) {
+    if (!UUID.test(tenantId) || !UUID.test(userId)) {
+      throw invalidRequest("invalid_id", "Invalid tenant or member id.");
+    }
+    const parsed = updateMemberRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest("invalid_role", "Provide a valid role.");
+    }
+    return this.members.updateRole(tenantId, userId, parsed.data);
+  }
+
+  @Delete(":tenantId/members/:userId")
+  @HttpCode(204)
+  async remove(
+    @Param("tenantId") tenantId: string,
+    @Param("userId") userId: string,
+  ) {
+    if (!UUID.test(tenantId) || !UUID.test(userId)) {
+      throw invalidRequest("invalid_id", "Invalid tenant or member id.");
+    }
+    await this.members.remove(tenantId, userId);
   }
 }

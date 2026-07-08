@@ -2,12 +2,14 @@ import type {
   InviteMemberRequest,
   ListMembersResponse,
   MemberDto,
+  UpdateMemberRequest,
 } from "@app/contracts";
 import {
   accounts,
   memberships,
   type ProvisioningDb,
   type TenantId,
+  type UserId,
   users,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
@@ -148,5 +150,95 @@ export class MembersService {
         status: "invited" as const,
       };
     });
+  }
+
+  /**
+   * Change a member's role. The `owner` is immutable through this path — it's singular and set at
+   * provisioning, so we neither demote it (would orphan the org) nor let anyone be promoted into it.
+   * Purely local: WorkOS org roles aren't touched (Fabric authz reads the local membership role).
+   */
+  async updateRole(
+    tenantId: string,
+    userId: string,
+    request: UpdateMemberRequest,
+  ): Promise<MemberDto> {
+    const scoped = tenantId as TenantId;
+    const current = await this.requireMembership(scoped, userId);
+    if (current.role === "owner") {
+      throw invalidRequest(
+        "owner_immutable",
+        "The owner's role can't be changed here.",
+      );
+    }
+    const [updated] = await this.provisioning.db
+      .update(memberships)
+      .set({ role: request.role, updatedAt: new Date() })
+      .where(
+        and(
+          eq(memberships.tenantId, scoped),
+          eq(memberships.userId, current.userId),
+        ),
+      )
+      .returning({ role: memberships.role, status: memberships.status });
+    if (!updated) throw new Error("Membership update returned no row.");
+    return {
+      user_id: current.userId,
+      email: current.email,
+      name: current.name,
+      role: updated.role,
+      status: updated.status,
+    };
+  }
+
+  /**
+   * Remove a member — soft-disable the membership (reversible via re-invite; login fails closed on a
+   * disabled membership). The owner can't be removed. WorkOS identity is left intact; access is
+   * revoked at the Fabric layer.
+   */
+  async remove(tenantId: string, userId: string): Promise<void> {
+    const scoped = tenantId as TenantId;
+    const current = await this.requireMembership(scoped, userId);
+    if (current.role === "owner") {
+      throw invalidRequest(
+        "owner_immutable",
+        "The owner can't be removed from the organisation.",
+      );
+    }
+    await this.provisioning.db
+      .update(memberships)
+      .set({ status: "disabled", updatedAt: new Date() })
+      .where(
+        and(
+          eq(memberships.tenantId, scoped),
+          eq(memberships.userId, current.userId),
+        ),
+      );
+  }
+
+  /** Load a membership + its user's identity, or 404. Shared by role-change + remove. */
+  private async requireMembership(
+    tenantId: TenantId,
+    userId: string,
+  ): Promise<{
+    userId: UserId;
+    email: string;
+    name: string | null;
+    role: MemberDto["role"];
+  }> {
+    const [row] = await this.provisioning.db
+      .select({
+        userId: users.id,
+        email: users.email,
+        name: users.name,
+        role: memberships.role,
+      })
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
+      .where(
+        and(eq(memberships.tenantId, tenantId), eq(users.id, userId as UserId)),
+      )
+      .limit(1);
+    if (!row) throw notFound("member_not_found", "No such member.");
+    return row;
   }
 }
