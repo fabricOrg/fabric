@@ -1,4 +1,4 @@
-import { ImpersonationForm } from "@/components/impersonation-form";
+import { ImpersonationForm } from "@/components/forms/impersonation-form";
 import { readImpersonationClaim, requireAdminSession } from "@/lib/server/auth";
 import { listTenants, TenantApiError } from "@/lib/server/tenants-client";
 
