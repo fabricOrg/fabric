@@ -1,6 +1,6 @@
 import { updateStaffRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
-import { readAdminSession } from "@/lib/server/auth";
+import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import {
   removeStaff,
   StaffApiError,
@@ -33,7 +33,7 @@ function errorResponse(error: unknown) {
 }
 
 async function authorize(id: string) {
-  const session = await readAdminSession();
+  const session = await readAdminSessionWithRefresh();
   if (!session)
     return { error: fail("invalid_session", "Staff sign-in required.", 401) };
   if (!session.permissions.includes("staff:write")) {

@@ -84,6 +84,7 @@ no secret in logs/prose, respect RLS + the redlines below.
   `DataTable` + TanStack Form via the shared Form kit. Per app: `components/tables/` + `components/forms/`.
   Charts get typed skeletons and lazy-render (don't block the page). No mock data on real surfaces.
 - **Kill-switches** gate risky operations (`platform.payments`, sms). Check them before the side effect.
+- **BFF route handlers must read the session with a refresh fallback** — `readXSession() ?? refreshXSession()` — so an in-page action (invite / remove / role-change) doesn't 401 when the short-lived WorkOS access token lapsed since page load. Pages/Server Components instead use `requireXSession`, which redirects to `/auth/refresh`. A plain `readXSession()` in a mutation route is a bug.
 
 ## 5. Process + git
 

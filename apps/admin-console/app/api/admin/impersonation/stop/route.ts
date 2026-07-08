@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import {
   IMPERSONATION_COOKIE,
-  readAdminSession,
+  readAdminSessionWithRefresh,
   readImpersonationClaim,
 } from "@/lib/server/auth";
 import { recordImpersonationStop } from "@/lib/server/impersonation-client";
 
 /** Stop impersonating: clear the claim cookie + audit. Any staff session may end their own window. */
 export async function POST() {
-  const session = await readAdminSession();
+  const session = await readAdminSessionWithRefresh();
   if (!session) {
     return NextResponse.json(
       {
