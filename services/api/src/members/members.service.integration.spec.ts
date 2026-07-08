@@ -19,6 +19,7 @@ describeDb("member invites", () => {
   const tenantId = randomUUID() as TenantId;
   const organizationId = `org_${randomUUID()}`;
   const email = `teammate-${randomUUID()}@example.com`;
+  const devEmail = `dev-${randomUUID()}@example.com`;
   const sendInvitation = vi.fn(async () => ({}));
   const workos = {
     userManagement: { sendInvitation },
@@ -35,13 +36,15 @@ describeDb("member invites", () => {
   });
 
   afterAll(async () => {
-    const [user] = await db.db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, email));
-    if (user) {
-      await db.db.delete(memberships).where(eq(memberships.userId, user.id));
-      await db.db.delete(users).where(eq(users.id, user.id));
+    for (const target of [email, devEmail]) {
+      const [user] = await db.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, target));
+      if (user) {
+        await db.db.delete(memberships).where(eq(memberships.userId, user.id));
+        await db.db.delete(users).where(eq(users.id, user.id));
+      }
     }
     await db.db.delete(accounts).where(eq(accounts.id, tenantId));
     await db.end();
@@ -109,5 +112,27 @@ describeDb("member invites", () => {
     ).rejects.toMatchObject({
       response: { error: { code: "tenant_not_found" } },
     });
+  });
+
+  it("invites a developer with the local role but no WorkOS role slug", async () => {
+    sendInvitation.mockClear();
+    const member = await service.invite(tenantId, {
+      email: devEmail,
+      role: "developer",
+    });
+
+    expect(member).toMatchObject({ role: "developer", status: "invited" });
+    // `developer` is Fabric-local — WorkOS gets email + org only, no roleSlug.
+    expect(sendInvitation).toHaveBeenCalledWith({
+      email: devEmail,
+      organizationId,
+    });
+
+    const [membership] = await db.db
+      .select({ role: memberships.role })
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
+      .where(eq(users.email, devEmail));
+    expect(membership).toMatchObject({ role: "developer" });
   });
 });

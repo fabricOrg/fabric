@@ -65,7 +65,8 @@ export function InviteStaffDialog() {
           );
         }
         toast.success(`${email} added as ${value.role}`, {
-          description: "They can sign in with a matching WorkOS identity.",
+          description:
+            "We've sent a WorkOS invite; they can also sign in via company SSO.",
         });
         setOpen(false);
         form.reset();

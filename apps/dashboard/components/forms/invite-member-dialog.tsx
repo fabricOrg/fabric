@@ -10,7 +10,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@app/ui/components/ui/dialog";
-import { Field, FieldLabel } from "@app/ui/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import {
   Select,
@@ -30,8 +34,10 @@ const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 const schema = z.object({
   email: z.string().regex(EMAIL, "Enter a valid email address."),
-  role: z.enum(["admin", "member"]),
+  role: z.enum(["admin", "member", "developer"]),
 });
+
+type InviteRole = "admin" | "member" | "developer";
 
 interface BffErrorPayload {
   error?: { message?: string };
@@ -42,7 +48,7 @@ export function InviteMemberDialog() {
   const [open, setOpen] = useState(false);
 
   const form = useForm({
-    defaultValues: { email: "", role: "member" as "admin" | "member" },
+    defaultValues: { email: "", role: "member" as InviteRole },
     validators: { onMount: schema, onChange: schema },
     onSubmit: async ({ value }) => {
       try {
@@ -117,9 +123,7 @@ export function InviteMemberDialog() {
                   <FieldLabel htmlFor="invite-role">Role</FieldLabel>
                   <Select
                     value={field.state.value}
-                    onValueChange={(v) =>
-                      field.handleChange(v as "admin" | "member")
-                    }
+                    onValueChange={(v) => field.handleChange(v as InviteRole)}
                   >
                     <SelectTrigger id="invite-role">
                       <SelectValue />
@@ -127,8 +131,13 @@ export function InviteMemberDialog() {
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="member">Member</SelectItem>
+                      <SelectItem value="developer">Developer</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FieldDescription>
+                    Developers get the developer portal (API keys, logs) — no
+                    SMS sending or team management.
+                  </FieldDescription>
                 </Field>
               )}
             </form.Field>

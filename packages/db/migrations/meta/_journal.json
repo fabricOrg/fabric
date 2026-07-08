@@ -183,6 +183,13 @@
       "when": 1783501565392,
       "tag": "0025_flow_charge_reference",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1783538313782,
+      "tag": "0026_membership_role_developer",
+      "breakpoints": true
     }
   ]
 }

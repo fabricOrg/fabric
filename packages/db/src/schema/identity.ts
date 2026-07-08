@@ -32,6 +32,9 @@ export const membershipRole = pgEnum("membership_role", [
   "owner",
   "admin",
   "member",
+  // API-focused, least-privilege role: dev-portal access (api_keys + request_logs + wallet:read),
+  // NOT sms:send or org/member management. A developer is a tenant member, not an org admin.
+  "developer",
 ]);
 export const membershipStatus = pgEnum("membership_status", [
   "active",

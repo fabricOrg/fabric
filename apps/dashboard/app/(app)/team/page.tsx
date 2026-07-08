@@ -29,6 +29,7 @@ const ROLE_LABEL: Record<Role, string> = {
   owner: "Owner",
   admin: "Admin",
   member: "Member",
+  developer: "Developer",
 };
 
 function initials(value: string): string {

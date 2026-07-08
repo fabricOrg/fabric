@@ -104,11 +104,13 @@ export class MembersService {
       }
     }
 
-    // External write first — if WorkOS rejects, nothing is persisted.
+    // External write first — if WorkOS rejects, nothing is persisted. `developer` is a Fabric-local
+    // role with no matching WorkOS org role slug, so omit roleSlug (WorkOS assigns the org default) —
+    // our authz reads the LOCAL membership role, not the WorkOS one.
     await this.workosClient().userManagement.sendInvitation({
       email,
       organizationId: account.organizationId,
-      roleSlug: request.role,
+      ...(request.role === "developer" ? {} : { roleSlug: request.role }),
     });
 
     return this.provisioning.db.transaction(async (tx) => {

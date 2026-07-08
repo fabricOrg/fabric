@@ -30,6 +30,15 @@ const ROLE_PERMISSIONS = {
     "request_logs:read",
   ],
   member: ["sms:send", "sms:read", "wallet:read"],
+  // Developer: API/integration surface only. Can mint + manage API keys and read request logs +
+  // wallet — but NOT send SMS from the console or manage the org/its members. This is what clears
+  // the dev-portal gate (api_keys:*) without granting org-admin rights.
+  developer: [
+    "wallet:read",
+    "api_keys:write",
+    "api_keys:read",
+    "request_logs:read",
+  ],
 } as const;
 
 @Injectable()
