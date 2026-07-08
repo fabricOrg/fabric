@@ -27,7 +27,11 @@ COPY --from=build --chown=node:node /workspace/apps/dev-portal/.next/static ./ap
 USER node
 
 EXPOSE 3000
-# No /health route; the public /login page returns 200 unauthenticated.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3   CMD node -e "fetch('http://127.0.0.1:3000/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+# Trivial liveness probe (see app/healthz/route.ts) — no SSR, decoupled from page rendering.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:3000/healthz').then(()=>process.exit(0)).catch(()=>process.exit(1))"
 
-CMD ["node", "apps/dev-portal/server.js"]
+# Force HOSTNAME=0.0.0.0 for the server process: ECS/Fargate injects HOSTNAME=the container's IP
+# hostname, which Next standalone would otherwise bind to (so 127.0.0.1 checks are refused). The
+# inline assignment wins over the inherited container env.
+CMD ["sh", "-c", "HOSTNAME=0.0.0.0 exec node apps/dev-portal/server.js"]

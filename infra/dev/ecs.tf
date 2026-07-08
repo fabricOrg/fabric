@@ -37,6 +37,10 @@ data "aws_iam_policy_document" "ecs_secret_access" {
       aws_secretsmanager_secret.dashboard_cookie_password.arn,
       aws_secretsmanager_secret.dashboard_workos.arn,
       aws_secretsmanager_secret.dashboard_api_key.arn,
+      aws_secretsmanager_secret.admin_console_cookie_password.arn,
+      aws_secretsmanager_secret.admin_console_workos.arn,
+      aws_secretsmanager_secret.dev_portal_cookie_password.arn,
+      aws_secretsmanager_secret.dev_portal_workos.arn,
     ]
   }
 }
