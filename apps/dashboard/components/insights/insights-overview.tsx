@@ -7,13 +7,7 @@ import {
   AlertTitle,
 } from "@app/ui/components/ui/alert";
 import { Button } from "@app/ui/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@app/ui/components/ui/card";
+import { Card, CardContent, CardHeader } from "@app/ui/components/ui/card";
 import {
   Empty,
   EmptyDescription,
@@ -22,6 +16,7 @@ import {
   EmptyTitle,
 } from "@app/ui/components/ui/empty";
 import { Skeleton } from "@app/ui/components/ui/skeleton";
+import { StatCard } from "@app/ui/components/ui/stat-card";
 import { BarChart3, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { DeliveryErrorsCard } from "@/components/insights/delivery-errors-card";
@@ -56,17 +51,9 @@ function StatTile({
   hint: string;
 }) {
   return (
-    <Card>
-      <CardHeader className="gap-1 pb-2">
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="font-display text-3xl font-semibold tabular-nums">
-          {value}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-xs text-muted-foreground">{hint}</p>
-      </CardContent>
-    </Card>
+    <StatCard label={label} value={value}>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </StatCard>
   );
 }
 
