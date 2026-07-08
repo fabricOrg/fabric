@@ -4,6 +4,7 @@ import { AdminModule } from "./admin/admin.module.js";
 import { ApiKeysModule } from "./api-keys/api-keys.module.js";
 import { AuditModule } from "./audit/audit.module.js";
 import { DbModule } from "./db/db.module.js";
+import { FlowsModule } from "./flows/flows.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { IdentityModule } from "./identity/identity.module.js";
 import { ImpersonationModule } from "./impersonation/impersonation.module.js";
@@ -28,6 +29,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     IdentityModule,
     AdminModule,
     AuditModule,
+    FlowsModule,
     ImpersonationModule,
     KillSwitchModule,
     MembersModule,

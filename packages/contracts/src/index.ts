@@ -18,6 +18,8 @@ export * from "./dev-portal.js";
 // F8.3 error model — shared error envelope + browser-safe parser (produced by services, consumed
 // by the frontend). Keep this package zod-only / browser-safe; a CI guard enforces it.
 export * from "./errors.js";
+// Lighthouse flow (Transactions explorer) — verify → charge → notify, one reconciled record.
+export * from "./flows.js";
 export * from "./identity.js";
 // Staff impersonation — time-boxed, audited "view as tenant".
 export * from "./impersonation.js";

@@ -10,6 +10,7 @@ export type {
 export * from "./api-keys.js";
 export * from "./audit.js";
 export * from "./auto-topup.js";
+export * from "./flows.js";
 export * from "./identity.js";
 export * from "./integrations.js";
 export * from "./kill-switches.js";
