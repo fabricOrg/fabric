@@ -16,6 +16,7 @@ import { PaystackWebhookController } from "./paystack-webhook.controller.js";
   imports: [ApiKeysModule, ProvisioningDbModule, KillSwitchModule],
   controllers: [PaymentsController, PaystackWebhookController],
   providers: [PaymentsService, AutoTopupService],
-  exports: [AutoTopupService], // SmsModule fires maybeAutoTopUp after each wallet debit
+  // AutoTopupService → SmsModule (after-debit trigger); PaymentsService → FlowsModule (collections).
+  exports: [AutoTopupService, PaymentsService],
 })
 export class PaymentsModule {}

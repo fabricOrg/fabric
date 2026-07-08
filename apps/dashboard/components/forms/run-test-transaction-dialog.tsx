@@ -91,19 +91,19 @@ export function RunTestTransactionDialog({
   }
 
   async function confirm() {
-    const { msisdn, amount, channel, code } = form.state.values;
-    const minor = parseMinor(amount);
-    if (!started || code.trim().length === 0 || minor === null || busy) return;
+    const { code } = form.state.values;
+    if (!started || code.trim().length === 0 || busy) return;
     setBusy(true);
     try {
-      const record = await confirmFlow({
+      const { record, authorizationUrl } = await confirmFlow({
         correlationId: started.correlationId,
         code: code.trim(),
-        msisdn: msisdn.trim(),
-        currency: CURRENCY,
-        minor,
-        channel,
       });
+      // Verified → hand off to the hosted checkout; the webhook completes the flow on return.
+      if (authorizationUrl) {
+        window.location.href = authorizationUrl;
+        return;
+      }
       onCreated(record);
       setOpen(false);
       setTimeout(reset, 150);

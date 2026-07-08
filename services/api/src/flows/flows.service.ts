@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   ConfirmFlowRequest,
+  ConfirmFlowResponse,
   FlowLedgerEntry,
   StartFlowRequest,
   StartFlowResponse,
@@ -8,11 +9,11 @@ import type {
   TransactionsResponse,
 } from "@app/contracts";
 import type { AppDb, TenantId, TenantTx } from "@app/db";
-import { credit } from "@app/wallet";
 import { Inject, Injectable } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
+import { PaymentsService } from "../payments/payments.service.js";
 
 // Slice-1 verification: a fixed dev code. Real OTP generation + delivery (SMS/Verify provider) is a
 // later, human-gated slice — the record + the ledger charge below are already real.
@@ -32,6 +33,7 @@ interface FlowRow {
   verification_id: string | null;
   verify_at: Date | string | null;
   charge_status: string;
+  charge_reference: string | null;
   charge_at: Date | string | null;
   charge_entries: FlowLedgerEntry[] | null;
   notify_status: string;
@@ -61,6 +63,7 @@ export class FlowsService {
   constructor(
     @Inject(APP_DB) private readonly appDb: AppDb,
     @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
+    @Inject(PaymentsService) private readonly payments: PaymentsService,
   ) {}
 
   async list(tenantId: string): Promise<TransactionsResponse> {
@@ -100,7 +103,7 @@ export class FlowsService {
   async confirm(
     tenantId: string,
     request: ConfirmFlowRequest,
-  ): Promise<TransactionRecord> {
+  ): Promise<ConfirmFlowResponse> {
     if (await this.killSwitch.isPaused("platform.payments")) {
       throw invalidRequest("payments_paused", "Collections are paused.");
     }
@@ -111,7 +114,10 @@ export class FlowsService {
         WHERE correlation_id = ${request.correlationId}
         FOR UPDATE`) as unknown as FlowRow[];
       if (!row) throw notFound("flow_not_found", "No such transaction.");
-      if (row.status === "complete") return toRecord(row); // idempotent replay
+      // Idempotent: already complete, or collection already initiated (charge pending w/ a reference).
+      if (row.status === "complete" || row.charge_reference) {
+        return { record: toRecord(row), authorizationUrl: null };
+      }
       if (request.code.trim() !== DEV_OTP) {
         throw invalidRequest(
           "otp_invalid",
@@ -119,45 +125,25 @@ export class FlowsService {
         );
       }
 
-      // Charge: real double-entry credit into the tenant wallet, idempotent on the correlationId.
-      await credit(tx, {
-        currency: row.currency,
-        amountMinor: BigInt(row.amount_minor),
-        idempotencyKey: `flow:${request.correlationId}`,
-      });
-
-      const entries = chargeEntries(row.currency, row.amount_minor);
+      // Verify passed → initiate the customer collection (Paystack hosted checkout). The webhook
+      // credits the ledger + completes charge/notify once the payment clears. FOR UPDATE holds the
+      // row so a concurrent confirm can't start a second collection.
+      const { authorizationUrl, reference } =
+        await this.payments.startCollection(scoped, {
+          amountMinor: BigInt(row.amount_minor),
+          currency: row.currency,
+          email: `flow+${row.correlation_id}@fabric.dev`,
+        });
       const [updated] = (await tx`
         UPDATE flow_records SET
-          status = 'complete',
           verify_status = 'done', verify_at = now(),
-          charge_status = 'done', charge_at = now(),
-          charge_entries = ${JSON.stringify(entries)}::jsonb,
-          notify_status = 'done', notify_message_id = ${`msg_${randomUUID().slice(0, 10)}`}, notify_at = now(),
+          charge_status = 'pending', charge_reference = ${reference},
           updated_at = now()
         WHERE correlation_id = ${request.correlationId}
         RETURNING *`) as unknown as FlowRow[];
-      return toRecord(updated ?? row);
+      return { record: toRecord(updated ?? row), authorizationUrl };
     });
   }
-}
-
-function chargeEntries(currency: string, minor: string): FlowLedgerEntry[] {
-  const amount = { currency: currency as never, minor };
-  return [
-    {
-      account: "payments:collection-clearing",
-      label: "Customer collection",
-      direction: "debit",
-      amount,
-    },
-    {
-      account: "wallet:available",
-      label: "Tenant wallet",
-      direction: "credit",
-      amount,
-    },
-  ];
 }
 
 function toRecord(row: FlowRow): TransactionRecord {
