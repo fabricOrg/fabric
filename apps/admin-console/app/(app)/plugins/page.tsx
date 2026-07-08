@@ -12,7 +12,7 @@ import {
 import { Skeleton } from "@app/ui/components/ui/skeleton";
 import { CreditCard, MessageCircle, Send, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ConfigurePluginDialog } from "@/components/plugins/configure-plugin-dialog";
+import { ConfigurePluginDialog } from "@/components/forms/configure-plugin-dialog";
 import {
   CAPABILITIES,
   type Capability,

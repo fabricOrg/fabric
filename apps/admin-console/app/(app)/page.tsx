@@ -1,6 +1,6 @@
 import type { TenantSummaryDto } from "@app/contracts";
 import { NewTenantButton } from "@/components/new-tenant-button";
-import { TenantsTable } from "@/components/tenants-table";
+import { TenantsTable } from "@/components/tables/tenants-table";
 import { requireAdminSession } from "@/lib/server/auth";
 import { listTenants, TenantApiError } from "@/lib/server/tenants-client";
 
