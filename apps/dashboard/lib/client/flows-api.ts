@@ -99,15 +99,22 @@ export async function startFlow(input: {
   return startResponseSchema.parse(await bff({ action: "start", ...input }));
 }
 
+const confirmFlowResponseSchema = z.object({
+  record: transactionRecordSchema,
+  authorizationUrl: z.string().url().nullable(),
+});
+export type ConfirmFlowResponse = z.infer<typeof confirmFlowResponseSchema>;
+
+/**
+ * confirm verifies the OTP, then starts the customer collection: returns the record (charge now
+ * `pending`) + the hosted-checkout URL to redirect to. The Paystack webhook credits + completes the
+ * flow. `authorizationUrl` is null on an idempotent replay.
+ */
 export async function confirmFlow(input: {
   correlationId: string;
   code: string;
-  msisdn: string;
-  currency: string;
-  minor: string;
-  channel: string;
-}): Promise<TransactionRecord> {
-  return transactionRecordSchema.parse(
+}): Promise<ConfirmFlowResponse> {
+  return confirmFlowResponseSchema.parse(
     await bff({ action: "confirm", ...input }),
   );
 }

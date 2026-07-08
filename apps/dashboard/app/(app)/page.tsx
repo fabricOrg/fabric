@@ -1,41 +1,18 @@
 "use client";
 
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@app/ui/components/ui/alert";
+import { parseApiError } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import { Card, CardContent, CardHeader } from "@app/ui/components/ui/card";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@app/ui/components/ui/empty";
 import { Skeleton } from "@app/ui/components/ui/skeleton";
-import {
-  BadgeCheck,
-  Megaphone,
-  Send,
-  Signal,
-  TriangleAlert,
-} from "lucide-react";
+import { EmptyState, ErrorState } from "@app/ui/components/ui/states";
+import { type UseQueryResult, useQuery } from "@tanstack/react-query";
+import { BadgeCheck, Megaphone, Send, Signal } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
 import { RecentActivity } from "@/components/overview/recent-activity";
 import { SpendByChannel } from "@/components/overview/spend-by-channel";
 import { StatTiles } from "@/components/overview/stat-tiles";
 import { TrafficChart } from "@/components/overview/traffic-chart";
 import { getOverview, type OverviewSummary } from "@/lib/client/overview-api";
-import { toastApiError } from "@/lib/error-toast";
-
-type State =
-  | { status: "loading" }
-  | { status: "error" }
-  | { status: "ready"; summary: OverviewSummary };
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -124,80 +101,64 @@ function isEmpty(summary: OverviewSummary): boolean {
   return summary.messagesSent === 0 && summary.recentActivity.length === 0;
 }
 
+/** Body renders exactly one of the first-class states, resolved with early-return if-blocks. */
+function OverviewBody({ query }: { query: UseQueryResult<OverviewSummary> }) {
+  if (query.isPending) {
+    return <LoadingState />;
+  }
+
+  if (query.isError) {
+    const err = parseApiError(query.error);
+    return (
+      <ErrorState
+        title="Couldn't load your overview"
+        message={err.message}
+        requestId={err.requestId}
+        onRetry={() => {
+          void query.refetch();
+        }}
+      />
+    );
+  }
+
+  const summary = query.data;
+  if (isEmpty(summary)) {
+    return (
+      <EmptyState
+        icon={<Signal />}
+        title="Nothing to show yet"
+        description="Send your first message to start seeing traffic, delivery, and spend here."
+        action={
+          <Button asChild>
+            <Link href="/send">
+              <Send data-icon="inline-start" />
+              Send a message
+            </Link>
+          </Button>
+        }
+      />
+    );
+  }
+
+  return (
+    <>
+      <StatTiles summary={summary} />
+      <TrafficChart points={summary.traffic} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SpendByChannel channels={summary.spendByChannel} />
+        <RecentActivity items={summary.recentActivity} />
+      </div>
+    </>
+  );
+}
+
 export default function OverviewPage() {
-  const [state, setState] = useState<State>({ status: "loading" });
-
-  const load = useCallback(async () => {
-    setState({ status: "loading" });
-    try {
-      setState({ status: "ready", summary: await getOverview() });
-    } catch (payload) {
-      toastApiError(payload);
-      setState({ status: "error" });
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const query = useQuery({ queryKey: ["overview"], queryFn: getOverview });
 
   return (
     <Shell>
       <Header />
-
-      {state.status === "loading" && <LoadingState />}
-
-      {state.status === "error" && (
-        <Alert variant="destructive">
-          <TriangleAlert />
-          <AlertTitle>Couldn&apos;t load your overview</AlertTitle>
-          <AlertDescription>
-            <p>Something went wrong fetching your summary.</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              onClick={() => void load()}
-            >
-              Try again
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {state.status === "ready" && isEmpty(state.summary) && (
-        <Empty className="mx-auto max-w-2xl">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Signal />
-            </EmptyMedia>
-            <EmptyTitle>Nothing to show yet</EmptyTitle>
-            <EmptyDescription>
-              Send your first message to start seeing traffic, delivery, and
-              spend here.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button asChild>
-              <Link href="/send">
-                <Send data-icon="inline-start" />
-                Send a message
-              </Link>
-            </Button>
-          </EmptyContent>
-        </Empty>
-      )}
-
-      {state.status === "ready" && !isEmpty(state.summary) && (
-        <>
-          <StatTiles summary={state.summary} />
-          <TrafficChart points={state.summary.traffic} />
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SpendByChannel channels={state.summary.spendByChannel} />
-            <RecentActivity items={state.summary.recentActivity} />
-          </div>
-        </>
-      )}
+      <OverviewBody query={query} />
     </Shell>
   );
 }

@@ -3,8 +3,10 @@ import "server-only";
 import {
   type AppSession,
   type DevelopmentSessionConfig,
+  type ImpersonationClaim,
   type RealmConfig,
   readDevelopmentSession,
+  readImpersonation,
   readSession,
   sealDevelopmentSession,
 } from "@app/fe-auth";
@@ -15,6 +17,23 @@ import { resolveStaffSession } from "./staff-identity";
 export const DEVELOPMENT_COOKIE = "fabric-admin-development-session";
 export const WORKOS_COOKIE = "wos-admin-session";
 export const OAUTH_STATE_COOKIE = "fabric-admin-oauth-state";
+/**
+ * Short-lived flash cookie carrying a sign-in NOTICE ("access_denied" | "signed_out") across the
+ * WorkOS logout hop. A `?error=` query can't survive that external round-trip, so the reason rides a
+ * same-site cookie the /login page reads on the way back.
+ */
+export const AUTH_NOTICE_COOKIE = "fabric-admin-auth-notice";
+
+/** Cookie options for the flash notice — same-site so it survives the WorkOS logout redirect. */
+export function noticeCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: 60,
+  };
+}
 
 export function developmentAuthConfig(): DevelopmentSessionConfig {
   const runtime =
@@ -30,14 +49,20 @@ export function developmentAuthConfig(): DevelopmentSessionConfig {
   };
 }
 
+/** This app's public origin — cloud sets ADMIN_CONSOLE_BASE_URL, dev falls back to the port. The
+ * WorkOS redirect/logout URIs derive from it (no per-app WORKOS_REDIRECT_URI in the shared env). */
+function appBaseUrl(): string {
+  return (
+    process.env.ADMIN_CONSOLE_BASE_URL?.trim() || "http://localhost:3300"
+  ).replace(/\/$/, "");
+}
+
 /** No WORKOS_ORGANIZATION_ID (staff aren't org-scoped); BFF token is needed for the staff-session call. */
 export function workosAuthConfigured(): boolean {
   return [
     "WORKOS_API_KEY",
     "WORKOS_CLIENT_ID",
     "WORKOS_COOKIE_PASSWORD",
-    "WORKOS_REDIRECT_URI",
-    "WORKOS_LOGOUT_REDIRECT_URI",
     "BFF_INTERNAL_TOKEN",
   ].every((name) => Boolean(process.env[name]));
 }
@@ -46,14 +71,15 @@ export function staffRealmConfig(): RealmConfig {
   if (!workosAuthConfigured()) {
     throw new Error("The staff WorkOS realm is not fully configured.");
   }
+  const base = appBaseUrl();
   return {
     realm: "staff",
     apiKey: process.env.WORKOS_API_KEY ?? "",
     clientId: process.env.WORKOS_CLIENT_ID ?? "",
     cookieName: WORKOS_COOKIE,
     cookiePassword: process.env.WORKOS_COOKIE_PASSWORD ?? "",
-    redirectUri: process.env.WORKOS_REDIRECT_URI ?? "",
-    logoutRedirectUri: process.env.WORKOS_LOGOUT_REDIRECT_URI ?? "",
+    redirectUri: `${base}/auth/callback`,
+    logoutRedirectUri: `${base}/login`,
     cookieOptions: {
       httpOnly: true,
       secure: true,
@@ -115,4 +141,21 @@ export function sessionCookieOptions() {
     path: "/",
     maxAge: 7 * 24 * 60 * 60,
   };
+}
+
+export const IMPERSONATION_COOKIE = "fabric-admin-impersonation";
+/** Max impersonation window; the sealed claim also carries its own expiry (defense in depth). */
+export const IMPERSONATION_WINDOW_SECONDS = 15 * 60;
+
+/** The secret that seals the impersonation claim cookie — reuse the WorkOS cookie password (≥32). */
+export function impersonationCookiePassword(): string {
+  return process.env.WORKOS_COOKIE_PASSWORD ?? "";
+}
+
+/** Read the active impersonation claim (or null if none / expired / tampered). */
+export async function readImpersonationClaim(): Promise<ImpersonationClaim | null> {
+  const password = impersonationCookiePassword();
+  if (password.length < 32) return null;
+  const store = await cookies();
+  return readImpersonation(password, store.get(IMPERSONATION_COOKIE)?.value);
 }

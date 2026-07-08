@@ -19,8 +19,8 @@ import { Skeleton } from "@app/ui/components/ui/skeleton";
 import { IdCard } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { RegisterSenderDialog } from "@/components/senders/register-sender-dialog";
-import { SenderIdTable } from "@/components/senders/sender-id-table";
+import { RegisterSenderDialog } from "@/components/forms/register-sender-dialog";
+import { SenderIdTable } from "@/components/tables/sender-id-table";
 import {
   listSenders,
   type RegisterSenderInput,

@@ -6,6 +6,7 @@ import {
   Power,
   ScrollText,
   UserCog,
+  Users,
 } from "lucide-react";
 
 /** Fabric Admin (staff) information architecture — control-plane operations, grouped by concern. */
@@ -32,6 +33,10 @@ export const navGroups: readonly NavGroup[] = [
       { title: "Impersonation", href: "/impersonation", icon: UserCog },
       { title: "Kill-switch", href: "/kill-switch", icon: Power },
     ],
+  },
+  {
+    label: "Access",
+    items: [{ title: "Staff", href: "/staff", icon: Users }],
   },
   {
     label: "Integrations",

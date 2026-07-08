@@ -1,55 +1,19 @@
-"use client";
+import type { TenantSummaryDto } from "@app/contracts";
+import { NewTenantButton } from "@/components/new-tenant-button";
+import { TenantsTable } from "@/components/tables/tenants-table";
+import { requireAdminSession } from "@/lib/server/auth";
+import { listTenants, TenantApiError } from "@/lib/server/tenants-client";
 
-import { Badge } from "@app/ui/components/ui/badge";
-import { Button } from "@app/ui/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@app/ui/components/ui/card";
-import { Input } from "@app/ui/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@app/ui/components/ui/table";
-import { useMemo, useState } from "react";
-import { CreateTenantDialog } from "@/components/create-tenant-dialog";
-import { TENANTS, type Tenant, type TenantStatus } from "@/lib/mock-admin";
-import { formatMoney } from "@/lib/money";
+export default async function TenantsPage() {
+  await requireAdminSession();
 
-const STATUS: Record<TenantStatus, string> = {
-  active: "border-transparent bg-success/12 text-success",
-  suspended: "border-transparent bg-warning/15 text-warning",
-  closed: "border-transparent bg-muted text-muted-foreground",
-};
-
-function StatusBadge({ status }: { status: TenantStatus }) {
-  return (
-    <Badge variant="outline" className={STATUS[status]}>
-      {status[0]?.toUpperCase()}
-      {status.slice(1)}
-    </Badge>
-  );
-}
-
-export default function TenantsPage() {
-  const [tenants, setTenants] = useState<readonly Tenant[]>(TENANTS);
-  const [query, setQuery] = useState("");
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return tenants;
-    return tenants.filter(
-      (t) =>
-        t.name.toLowerCase().includes(q) || t.slug.toLowerCase().includes(q),
-    );
-  }, [tenants, query]);
+  let tenants: TenantSummaryDto[] = [];
+  let loadError = false;
+  try {
+    tenants = (await listTenants()).tenants;
+  } catch (error) {
+    loadError = error instanceof TenantApiError || error instanceof Error;
+  }
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -63,81 +27,10 @@ export default function TenantsPage() {
             hard-delete.
           </p>
         </div>
-        <CreateTenantDialog
-          onCreated={(tenant) => setTenants((prev) => [tenant, ...prev])}
-        />
+        <NewTenantButton />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>All tenants</CardTitle>
-          <CardDescription>Search, review health, and manage.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tenants…"
-            className="sm:max-w-xs"
-            aria-label="Search tenants"
-          />
-          {/* Semantic <section> keeps the wide table's scroll region keyboard-focusable (WCAG 2.1.1). */}
-          <section
-            className="overflow-x-auto"
-            tabIndex={0}
-            aria-label="Tenants"
-          >
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Balance</TableHead>
-                  <TableHead>Region</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{t.name}</span>
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {t.slug}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="capitalize text-muted-foreground">
-                      {t.plan}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={t.status} />
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      {formatMoney(t.balance)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {t.region}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
-                        View
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {filtered.length === 0 && (
-              <p className="p-6 text-center text-sm text-muted-foreground">
-                No tenants match this search.
-              </p>
-            )}
-          </section>
-        </CardContent>
-      </Card>
+      <TenantsTable tenants={tenants} loadError={loadError} />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@app/ui/components/ui/alert";
+import { Button } from "@app/ui/components/ui/button";
 import {
   Card,
   CardContent,
@@ -19,12 +20,18 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@app/ui/components/ui/empty";
+import {
+  PageHeaderActions,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+  PageHeader as UIPageHeader,
+} from "@app/ui/components/ui/page-header";
 import { Skeleton } from "@app/ui/components/ui/skeleton";
-import { Megaphone, TriangleAlert } from "lucide-react";
+import { Megaphone, Plus, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { CampaignTable } from "@/components/campaigns/campaign-table";
-import { NewCampaignDialog } from "@/components/campaigns/new-campaign-dialog";
+import { CampaignTable } from "@/components/tables/campaign-table";
 import { type Campaign, listCampaigns } from "@/lib/client/campaigns-api";
 import { toastApiError } from "@/lib/error-toast";
 
@@ -36,18 +43,16 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function PageHeader({ action }: { action?: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Campaigns
-        </h1>
-        <p className="text-sm text-muted-foreground">
+    <UIPageHeader>
+      <PageHeaderHeading>
+        <PageHeaderTitle>Campaigns</PageHeaderTitle>
+        <PageHeaderDescription>
           Bulk messaging to whole audiences — schedule sends, respect opt-outs,
           and track delivery.
-        </p>
-      </div>
-      {action}
-    </div>
+        </PageHeaderDescription>
+      </PageHeaderHeading>
+      {action ? <PageHeaderActions>{action}</PageHeaderActions> : null}
+    </UIPageHeader>
   );
 }
 
@@ -91,16 +96,14 @@ export default function CampaignsPage() {
     };
   }, []);
 
-  function handleCreated(campaign: Campaign) {
-    setCampaigns((prev) => [campaign, ...(prev ?? [])]);
-    toast.success(
-      campaign.status === "scheduled"
-        ? `“${campaign.name}” scheduled`
-        : `“${campaign.name}” is sending`,
-    );
-  }
-
-  const createAction = <NewCampaignDialog onCreated={handleCreated} />;
+  const createAction = (
+    <Button asChild>
+      <Link href="/campaigns/new">
+        <Plus data-icon="inline-start" />
+        New campaign
+      </Link>
+    </Button>
+  );
 
   if (failed) {
     return (

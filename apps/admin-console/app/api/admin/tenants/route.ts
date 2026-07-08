@@ -1,12 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { readAdminSession } from "@/lib/server/auth";
 
 /**
- * Tenant-provisioning BFF. When the api is configured (API_BASE_URL + BFF_INTERNAL_TOKEN) this calls
- * the real staff endpoint POST /internal/admin/tenants (WorkOS org → account → invite); otherwise it
- * falls back to a local mock so the admin console works offline. See docs/PI-3/ORG-PROVISIONING.md.
+ * Tenant-provisioning BFF → the real staff endpoint POST /internal/admin/tenants (WorkOS org →
+ * account → first-admin invite). See docs/PI-3/ORG-PROVISIONING.md.
  *
- * NOTE: the real call is an external write (creates a WorkOS org + sends an invite email) — run it
- * against staging with test creds; it is not exercised by the offline mock.
+ * NOTE: the real call is an external write (creates a WorkOS org + sends an invite email). No offline
+ * mock — a provisioning that "succeeds" without creating anything an identity can log into is worse
+ * than a clear "not configured" error.
  */
 
 const REGIONS = new Set(["gh-accra", "ng-lagos", "ke-nairobi"]);
@@ -36,6 +37,20 @@ interface Provisioned {
 }
 
 export async function POST(request: NextRequest) {
+  // Staff-session gated — this triggers a real WorkOS org create + invite; never reachable without
+  // an authenticated staff session (the page guard alone doesn't protect this directly-hittable route).
+  if (!(await readAdminSession())) {
+    return NextResponse.json(
+      {
+        error: {
+          type: "auth_error",
+          code: "invalid_session",
+          message: "Staff sign-in required.",
+        },
+      },
+      { status: 401 },
+    );
+  }
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -75,41 +90,33 @@ export async function POST(request: NextRequest) {
 
   const apiBaseUrl = process.env.API_BASE_URL;
   const bffToken = process.env.BFF_INTERNAL_TOKEN;
-
-  // Real path: delegate to the staff-guarded api endpoint (external write).
-  if (apiBaseUrl && bffToken) {
-    try {
-      const response = await fetch(
-        new URL("/internal/admin/tenants", apiBaseUrl),
-        {
-          method: "POST",
-          cache: "no-store",
-          headers: {
-            "content-type": "application/json",
-            "x-bff-token": bffToken,
-          },
-          body: JSON.stringify({ name, slug, plan, adminEmail, dataRegion }),
-        },
-      );
-      const payload = (await response.json()) as Provisioned | unknown;
-      if (!response.ok)
-        return NextResponse.json(payload, { status: response.status });
-      const provisioned = payload as Provisioned;
-      return NextResponse.json(
-        tenantFor(provisioned.tenant_id, provisioned.workos_organization_id),
-        { status: 201 },
-      );
-    } catch {
-      return fail(
-        "Provisioning service is unavailable. Try again shortly.",
-        502,
-      );
-    }
+  if (!apiBaseUrl || !bffToken) {
+    return fail("Provisioning isn't configured for this environment.", 500);
   }
 
-  // Offline fallback: mock (no external write). TODO(BFF): remove once the api is always configured.
-  const id = crypto.randomUUID();
-  return NextResponse.json(tenantFor(id, `org_mock_${id.slice(0, 8)}`), {
-    status: 201,
-  });
+  // Delegate to the staff-guarded api endpoint (external write: WorkOS org create + invite).
+  try {
+    const response = await fetch(
+      new URL("/internal/admin/tenants", apiBaseUrl),
+      {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "content-type": "application/json",
+          "x-bff-token": bffToken,
+        },
+        body: JSON.stringify({ name, slug, plan, adminEmail, dataRegion }),
+      },
+    );
+    const payload = (await response.json()) as Provisioned | unknown;
+    if (!response.ok)
+      return NextResponse.json(payload, { status: response.status });
+    const provisioned = payload as Provisioned;
+    return NextResponse.json(
+      tenantFor(provisioned.tenant_id, provisioned.workos_organization_id),
+      { status: 201 },
+    );
+  } catch {
+    return fail("Provisioning service is unavailable. Try again shortly.", 502);
+  }
 }

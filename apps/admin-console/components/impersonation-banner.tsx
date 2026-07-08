@@ -2,57 +2,43 @@
 
 import { Button } from "@app/ui/components/ui/button";
 import { UserCog, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 /**
- * Never-silent impersonation banner. Persists across every page in the shell for the entire
- * impersonation window with a live countdown — an operator can never forget they're acting as a
- * tenant. (Mock: session-scoped in sessionStorage; PI-3 wires the real time-boxed ImpersonationClaim
- * from the fe-auth session.)
+ * Never-silent impersonation banner. The active claim is read server-side (sealed cookie) and passed
+ * in; this client piece renders the live countdown + "End now". Persists across every page in the
+ * shell so an operator can never forget they're acting as a tenant. Auto-ends when the window
+ * elapses (fail-safe).
  */
-interface Session {
-  tenant: string;
-  endsAt: number;
-}
-const KEY = "fabric-impersonation";
-export const IMPERSONATION_EVENT = "fabric-impersonation-change";
-
-export function ImpersonationBanner() {
-  const [session, setSession] = useState<Session | null>(null);
+export function ImpersonationBanner({
+  claim,
+}: {
+  claim: { tenantLabel: string; endsAt: number } | null;
+}) {
+  const router = useRouter();
   const [, tick] = useState(0);
-
-  const read = useCallback(() => {
-    try {
-      const raw = sessionStorage.getItem(KEY);
-      setSession(raw ? (JSON.parse(raw) as Session) : null);
-    } catch {
-      setSession(null);
-    }
-  }, []);
+  const [ending, setEnding] = useState(false);
 
   useEffect(() => {
-    read();
-    window.addEventListener(IMPERSONATION_EVENT, read);
+    if (!claim) return;
     const t = setInterval(() => tick((n) => n + 1), 1000);
-    return () => {
-      window.removeEventListener(IMPERSONATION_EVENT, read);
-      clearInterval(t);
-    };
-  }, [read]);
+    return () => clearInterval(t);
+  }, [claim]);
 
-  const end = useCallback(() => {
-    sessionStorage.removeItem(KEY);
-    window.dispatchEvent(new Event(IMPERSONATION_EVENT));
-    setSession(null);
-  }, []);
+  async function end() {
+    setEnding(true);
+    try {
+      await fetch("/api/admin/impersonation/stop", { method: "POST" });
+    } finally {
+      router.refresh();
+    }
+  }
 
-  if (!session) return null;
-  const remaining = Math.max(
-    0,
-    Math.floor((session.endsAt - Date.now()) / 1000),
-  );
-  if (remaining === 0) {
-    // window elapsed — auto-end (fail-safe: never leave a stale impersonation).
+  if (!claim) return null;
+  const remaining = Math.max(0, Math.floor((claim.endsAt - Date.now()) / 1000));
+  if (remaining === 0 && !ending) {
+    // Window elapsed — auto-end (never leave a stale impersonation).
     queueMicrotask(end);
     return null;
   }
@@ -67,12 +53,20 @@ export function ImpersonationBanner() {
       <UserCog className="size-4 shrink-0" />
       <span className="font-medium">
         Viewing as{" "}
-        <span className="font-semibold text-foreground">{session.tenant}</span>
+        <span className="font-semibold text-foreground">
+          {claim.tenantLabel}
+        </span>
       </span>
       <span className="font-mono tabular-nums">
         ends in {mm}:{ss}
       </span>
-      <Button size="sm" variant="outline" className="ml-auto" onClick={end}>
+      <Button
+        size="sm"
+        variant="outline"
+        className="ml-auto"
+        loading={ending}
+        onClick={end}
+      >
         <X data-icon="inline-start" />
         End now
       </Button>

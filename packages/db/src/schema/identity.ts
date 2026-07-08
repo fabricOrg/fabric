@@ -32,6 +32,9 @@ export const membershipRole = pgEnum("membership_role", [
   "owner",
   "admin",
   "member",
+  // API-focused, least-privilege role: dev-portal access (api_keys + request_logs + wallet:read),
+  // NOT sms:send or org/member management. A developer is a tenant member, not an org admin.
+  "developer",
 ]);
 export const membershipStatus = pgEnum("membership_status", [
   "active",
@@ -59,11 +62,13 @@ export const accounts = pgTable("accounts", {
   ...timestamps,
 });
 
-// A human. Identified across the platform by the WorkOS subject id.
+// A human. Identified across the platform by the WorkOS subject id — but a user is provisioned by
+// EMAIL before their first sign-in (invite-only, like staff_users), so external_subject_id is
+// nullable and stamped on first login. email is the stable provisioning key → unique.
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom().$type<UserId>(),
-  externalSubjectId: text("external_subject_id").notNull().unique(), // WorkOS `sub`
-  email: text("email").notNull(),
+  externalSubjectId: text("external_subject_id").unique(), // WorkOS `sub`, set on first login
+  email: text("email").notNull().unique(), // lowercased at the write boundary; provisioning key
   name: text("name"),
   status: userStatus("status").notNull().default("active"),
   workosUpdatedAt: timestamp("workos_updated_at", { withTimezone: true }),

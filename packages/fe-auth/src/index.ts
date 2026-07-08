@@ -28,12 +28,15 @@ export interface AppSession {
   readonly role: string;
   readonly permissions: readonly string[];
   readonly sessionId: string;
+  /** The signed-in identity's email (from WorkOS). Used for audit-actor attribution + display. */
+  readonly email?: string;
   readonly stepUpAt?: number;
   readonly impersonation?: ImpersonationClaim;
 }
 
 export interface ImpersonationClaim {
   readonly targetTenantId: string;
+  readonly targetLabel?: string;
   readonly expiresAt: number;
   readonly reason: string;
 }
@@ -74,6 +77,17 @@ export function buildAuthorizationUrl(
   });
 }
 
+/**
+ * Outcome of the OAuth callback. `session` is null when the identity authenticated with WorkOS but
+ * ISN'T authorized here (e.g. not invited) — `sealedCookie` is still present so the caller can end
+ * the WorkOS session (letting a retry re-prompt for a different account). Both null = the exchange
+ * couldn't even establish a WorkOS session (bad/expired state or code).
+ */
+export interface CallbackResult {
+  readonly session: AppSession | null;
+  readonly sealedCookie: string | null;
+}
+
 export function handleCallback(
   cfg: RealmConfig,
   params: {
@@ -81,9 +95,9 @@ export function handleCallback(
     readonly state: string;
     readonly expectedState: string;
   },
-): Promise<{ session: AppSession; sealedCookie: string }> {
+): Promise<CallbackResult> {
   if (!secretsEqual(params.state, params.expectedState)) {
-    return Promise.reject(new Error("Invalid OAuth state."));
+    return Promise.resolve({ session: null, sealedCookie: null });
   }
   return exchangeAndResolve(cfg, params.code);
 }
@@ -128,17 +142,18 @@ function workos(cfg: RealmConfig): WorkOS {
 async function exchangeAndResolve(
   cfg: RealmConfig,
   code: string,
-): Promise<{ session: AppSession; sealedCookie: string }> {
+): Promise<CallbackResult> {
   const response = await workos(cfg).userManagement.authenticateWithCode({
     clientId: cfg.clientId,
     code,
     session: { sealSession: true, cookiePassword: cfg.cookiePassword },
   });
   if (!response.sealedSession) {
-    throw new Error("WorkOS did not return a sealed session.");
+    return { session: null, sealedCookie: null };
   }
+  // A WorkOS session exists; `session` is null when OUR authorization (membership) denies it. The
+  // caller keeps `sealedCookie` to end the WorkOS session so a retry isn't stuck on this identity.
   const session = await authenticateAndResolve(cfg, response.sealedSession);
-  if (!session) throw new Error("The WorkOS identity is not authorized.");
   return { session, sealedCookie: response.sealedSession };
 }
 
@@ -218,3 +233,4 @@ function secretsEqual(left: string, right: string): boolean {
 }
 
 export * from "./development.js";
+export * from "./impersonation.js";

@@ -1,7 +1,9 @@
-import { handleCallback } from "@app/fe-auth";
+import { buildLogout, handleCallback } from "@app/fe-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import {
+  AUTH_NOTICE_COOKIE,
   developerRealmConfig,
+  noticeCookieOptions,
   OAUTH_STATE_COOKIE,
   sessionCookieOptions,
   WORKOS_COOKIE,
@@ -14,33 +16,45 @@ export async function GET(request: NextRequest) {
   if (!code || !state || !expectedState) return loginError(request);
 
   try {
-    const result = await handleCallback(developerRealmConfig(), {
-      code,
-      state,
-      expectedState,
-    });
-    const response = NextResponse.redirect(new URL("/", request.url));
-    response.cookies.set(
-      WORKOS_COOKIE,
-      result.sealedCookie,
-      sessionCookieOptions(),
+    const { session, sealedCookie } = await handleCallback(
+      developerRealmConfig(),
+      { code, state, expectedState },
     );
-    response.cookies.delete(OAUTH_STATE_COOKIE);
-    return response;
+
+    if (session && sealedCookie) {
+      const response = NextResponse.redirect(new URL("/", request.url));
+      response.cookies.set(WORKOS_COOKIE, sealedCookie, sessionCookieOptions());
+      response.cookies.delete(OAUTH_STATE_COOKIE);
+      response.cookies.delete(AUTH_NOTICE_COOKIE);
+      return response;
+    }
+
+    // Authenticated with WorkOS but not on the developer allowlist. END the WorkOS session so a retry
+    // re-prompts for a different account rather than silently replaying this identity — and drop a
+    // flash notice so /login explains the denial instead of looking like a dead button.
+    if (sealedCookie) {
+      const { workosLogoutUrl } = await buildLogout(
+        developerRealmConfig(),
+        sealedCookie,
+      );
+      const response = NextResponse.redirect(workosLogoutUrl, 303);
+      response.cookies.delete(OAUTH_STATE_COOKIE);
+      response.cookies.delete(WORKOS_COOKIE);
+      response.cookies.set(
+        AUTH_NOTICE_COOKIE,
+        "access_denied",
+        noticeCookieOptions(),
+      );
+      return response;
+    }
+
+    return loginError(request);
   } catch (error) {
-    // resolveDeveloperSession returning null (email not allowlisted) surfaces here as this exact
-    // message from @app/fe-auth's exchangeAndResolve — distinguish it from a real auth failure.
-    const deniedByAllowlist =
-      error instanceof Error &&
-      error.message === "The WorkOS identity is not authorized.";
     console.error(
       "WorkOS callback failed:",
       error instanceof Error ? error.message : "unknown error",
     );
-    return loginError(
-      request,
-      deniedByAllowlist ? "access_denied" : "authentication",
-    );
+    return loginError(request);
   }
 }
 

@@ -1,5 +1,6 @@
 import { cn } from "@app/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 import { Slot } from "radix-ui";
 import type * as React from "react";
 
@@ -42,21 +43,44 @@ function Button({
   variant = "default",
   size = "default",
   asChild = false,
+  loading = false,
+  disabled,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
+    /** Show a leading spinner and disable the button. Ignored with asChild (Slot needs one child). */
+    loading?: boolean;
   }) {
-  const Comp = asChild ? Slot.Root : "button";
+  const sharedProps = {
+    "data-slot": "button",
+    "data-variant": variant,
+    "data-size": size,
+    className: cn(buttonVariants({ variant, size, className })),
+  };
+
+  // asChild forwards to an arbitrary single child (Radix Slot requires EXACTLY ONE child — a spinner
+  // sibling, even a null one, breaks it), and that child may be an <a> that can't take `disabled` or
+  // a spinner. So `loading` only applies to the real <button>; with asChild we pass children through.
+  if (asChild) {
+    return (
+      <Slot.Root {...sharedProps} {...props}>
+        {children}
+      </Slot.Root>
+    );
+  }
 
   return (
-    <Comp
-      data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+    <button
+      {...sharedProps}
+      aria-busy={loading || undefined}
+      disabled={disabled || loading}
       {...props}
-    />
+    >
+      {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+      {children}
+    </button>
   );
 }
 

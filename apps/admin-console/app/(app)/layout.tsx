@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { requireAdminSession } from "@/lib/server/auth";
+import { readImpersonationClaim, requireAdminSession } from "@/lib/server/auth";
 
 /**
  * Fabric Admin shell (staff realm). Requires a real WorkOS-authenticated staff session — the
@@ -19,11 +19,22 @@ import { requireAdminSession } from "@/lib/server/auth";
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await requireAdminSession();
+  const impersonation = await readImpersonationClaim();
   return (
     <SidebarProvider>
       <AppSidebar role={session.role} />
       <SidebarInset>
-        <ImpersonationBanner />
+        <ImpersonationBanner
+          claim={
+            impersonation
+              ? {
+                  tenantLabel:
+                    impersonation.targetLabel ?? impersonation.targetTenantId,
+                  endsAt: impersonation.expiresAt,
+                }
+              : null
+          }
+        />
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
           <SidebarTrigger className="-ml-1" />
           <Separator

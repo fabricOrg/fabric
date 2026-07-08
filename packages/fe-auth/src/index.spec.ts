@@ -98,15 +98,31 @@ describe("@app/fe-auth WorkOS flow", () => {
     );
   });
 
-  it("rejects callback state mismatch before exchanging the code", async () => {
+  it("returns an empty result on callback state mismatch, without exchanging the code", async () => {
     await expect(
       handleCallback(config, {
         code: "code",
         state: "returned",
         expectedState: "expected",
       }),
-    ).rejects.toThrow("Invalid OAuth state");
+    ).resolves.toEqual({ session: null, sealedCookie: null });
     expect(sdk.authenticateWithCode).not.toHaveBeenCalled();
+  });
+
+  it("returns the sealed cookie with a null session when authenticated but not authorized", async () => {
+    // WorkOS authenticates (sealed session issued) but our authorization denies → session null,
+    // sealedCookie present so the caller can end the WorkOS session and let a retry re-prompt.
+    sdk.authenticateWithSessionCookie.mockResolvedValueOnce({
+      authenticated: false,
+      reason: "invalid_session_cookie",
+    });
+    await expect(
+      handleCallback(config, {
+        code: "code",
+        state: "state",
+        expectedState: "state",
+      }),
+    ).resolves.toEqual({ session: null, sealedCookie: "sealed-session" });
   });
 
   it("exchanges and resolves a sealed callback session", async () => {

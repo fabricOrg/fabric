@@ -26,6 +26,16 @@ const CATALOG: NewPluginInstance[] = [
   },
   {
     capability: "sms",
+    vendor: "arkesel",
+    label: "Arkesel",
+    enabled: false,
+    isDefault: false,
+    mode: "sandbox",
+    status: "available",
+    priority: 100,
+  },
+  {
+    capability: "sms",
     vendor: "africas-talking",
     label: "Africa's Talking",
     enabled: false,

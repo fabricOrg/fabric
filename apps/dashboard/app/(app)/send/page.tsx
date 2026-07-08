@@ -408,12 +408,8 @@ export default function SendPage() {
               )}
             </CardContent>
             <CardFooter className="flex-col items-stretch gap-2">
-              <Button onClick={submit} disabled={!canSend}>
-                {sending
-                  ? "Sending…"
-                  : recipients > 1
-                    ? `Send to ${recipients}`
-                    : "Send"}
+              <Button onClick={submit} loading={sending} disabled={!canSend}>
+                {recipients > 1 ? `Send to ${recipients}` : "Send"}
               </Button>
               {insufficient ? (
                 <span className="text-center text-xs text-destructive">

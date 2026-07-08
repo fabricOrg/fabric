@@ -228,10 +228,34 @@
   * {
     border-color: var(--border);
     outline-color: var(--ring);
+    /* Standardised thin scrollbars (Firefox). WebKit rules below. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
   body {
     background-color: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
+  }
+
+  /* One scrollbar treatment across every app + native overflow region: a slim, tokenised thumb on
+   * a transparent track, darkening to muted-foreground on hover. Swaps automatically for dark/
+   * white-label since it reads the same semantic tokens. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
   }
 }

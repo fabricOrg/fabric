@@ -99,6 +99,97 @@
       "when": 1783331381279,
       "tag": "0013_provisioner_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783345813520,
+      "tag": "0014_customer_invite_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1783391314297,
+      "tag": "0015_audit_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1783392043399,
+      "tag": "0016_kill_switches",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783392819753,
+      "tag": "0017_proposals",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783408026043,
+      "tag": "0018_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783412503544,
+      "tag": "0019_payment_authorizations",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783413554699,
+      "tag": "0020_auto_topup",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1783413759812,
+      "tag": "0021_auth_email",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783479687422,
+      "tag": "0022_flow_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1783479700274,
+      "tag": "0023_flow_records_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783480316410,
+      "tag": "0024_flow_records_grant",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1783501565392,
+      "tag": "0025_flow_charge_reference",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1783538313782,
+      "tag": "0026_membership_role_developer",
+      "breakpoints": true
     }
   ]
 }

@@ -14,5 +14,8 @@ export {
   TERMINAL_MESSAGE_STATUSES,
   type TerminalMessageStatus,
 } from "@app/contracts";
+// Real vendor adapters (sandbox-first). Paystack = payment (E4 wallet top-up); Arkesel = SMS (Ghana).
+export * from "./arkesel/provider.js";
+export * from "./paystack/provider.js";
 export * from "./plugin.js";
 export * from "./status.js";

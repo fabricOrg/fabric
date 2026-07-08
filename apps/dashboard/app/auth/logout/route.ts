@@ -1,8 +1,10 @@
 import { buildLogout } from "@app/fe-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import {
+  AUTH_NOTICE_COOKIE,
   customerRealmConfig,
   DEVELOPMENT_COOKIE,
+  noticeCookieOptions,
   redirectUrl,
   WORKOS_COOKIE,
   workosAuthConfigured,
@@ -24,5 +26,6 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.redirect(logout.workosLogoutUrl, 303);
   response.cookies.delete(WORKOS_COOKIE);
   response.cookies.delete(DEVELOPMENT_COOKIE);
+  response.cookies.set(AUTH_NOTICE_COOKIE, "signed_out", noticeCookieOptions());
   return response;
 }

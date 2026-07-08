@@ -5,6 +5,8 @@ import { BffTokenGuard } from "./bff-token.guard.js";
 import { IdentityController } from "./identity.controller.js";
 import { IdentityService } from "./identity.service.js";
 import { ProvisioningDbModule } from "./provisioning-db.module.js";
+import { StaffService } from "./staff.service.js";
+import { StaffAdminController } from "./staff-admin.controller.js";
 import { StaffIdentityController } from "./staff-identity.controller.js";
 import { createWorkosClient, WORKOS_CLIENT } from "./workos-client.provider.js";
 import { WorkosWebhookController } from "./workos-webhook.controller.js";
@@ -15,10 +17,12 @@ import { WorkosWebhookService } from "./workos-webhook.service.js";
   controllers: [
     IdentityController,
     StaffIdentityController,
+    StaffAdminController,
     WorkosWebhookController,
   ],
   providers: [
     IdentityService,
+    StaffService,
     BffTokenGuard,
     WorkosWebhookService,
     {

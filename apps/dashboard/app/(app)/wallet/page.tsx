@@ -48,10 +48,15 @@ import {
   TriangleAlert,
   Wallet,
 } from "lucide-react";
+import { AutoTopupDialog } from "@/components/forms/auto-topup-dialog";
+import { TopUpDialog } from "@/components/forms/top-up-dialog";
 import { BalanceTrend } from "@/components/wallet/balance-trend";
 import { formatMoney, formatSigned } from "@/lib/money";
-import { getWalletSnapshot } from "@/lib/server/dashboard-data";
-import { TopUpDialog } from "./_top-up-dialog";
+import {
+  getAutoTopup,
+  getSavedPaymentMethod,
+  getWalletSnapshot,
+} from "@/lib/server/dashboard-data";
 
 /** Ledger-kind chip — color paired with icon + label (never color-only, WCAG). */
 const KIND: Record<
@@ -135,6 +140,15 @@ function messageRunway(b: WalletBalance) {
 export default async function WalletPage() {
   let balances: readonly WalletBalance[];
   let ledger: readonly LedgerEntry[];
+  // Best-effort: a missing saved card just shows the Paystack fallback, never blocks the page.
+  const savedMethod = await getSavedPaymentMethod()
+    .then((r) => r.method)
+    .catch(() => null);
+  // Best-effort too: never blocks the wallet if the auto-top-up read fails.
+  const autoTopup = await getAutoTopup().catch(() => ({
+    config: null,
+    has_card: Boolean(savedMethod),
+  }));
   try {
     const snapshot = await getWalletSnapshot();
     balances = snapshot.balances;
@@ -309,33 +323,80 @@ export default async function WalletPage() {
             <CardDescription>Never run out mid-campaign.</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-between gap-2">
-            <Badge
-              variant="outline"
-              className="gap-1 border-transparent bg-muted text-muted-foreground"
-            >
-              <Repeat />
-              Off
-            </Badge>
-            <Button size="sm" variant="outline">
-              Set up
-            </Button>
+            <div className="flex flex-col gap-1.5">
+              {autoTopup.config?.enabled ? (
+                <>
+                  <Badge
+                    variant="outline"
+                    className="w-fit gap-1 border-transparent bg-success/12 text-success"
+                  >
+                    <Repeat />
+                    On
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    At{" "}
+                    {formatMoney({
+                      currency: autoTopup.config.currency,
+                      minor: autoTopup.config.threshold_minor,
+                    })}
+                    , add{" "}
+                    {formatMoney({
+                      currency: autoTopup.config.currency,
+                      minor: autoTopup.config.top_up_minor,
+                    })}
+                    .
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Badge
+                    variant="outline"
+                    className="w-fit gap-1 border-transparent bg-muted text-muted-foreground"
+                  >
+                    <Repeat />
+                    Off
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {autoTopup.has_card
+                      ? "Charge your saved card automatically."
+                      : "Pay once by card to enable."}
+                  </span>
+                </>
+              )}
+            </div>
+            <AutoTopupDialog
+              config={autoTopup.config}
+              hasCard={autoTopup.has_card}
+              defaultCurrency={primaryCurrency}
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Payment method</CardTitle>
-            <CardDescription>Used for top-ups.</CardDescription>
+            <CardDescription>How top-ups are charged.</CardDescription>
           </CardHeader>
-          <CardContent className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <CreditCard className="size-4 text-muted-foreground" />
-              <span className="text-sm">Visa ending 4242</span>
-              <Badge variant="secondary">Default</Badge>
-            </div>
-            <Button size="sm" variant="ghost">
-              Change
-            </Button>
+          <CardContent className="flex items-start gap-2">
+            <CreditCard className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            {savedMethod ? (
+              <div className="flex flex-col gap-0.5 text-sm">
+                <span className="font-medium capitalize">
+                  {savedMethod.brand ?? "Card"} ••••{" "}
+                  {savedMethod.last4 ?? "····"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {savedMethod.exp ? `Expires ${savedMethod.exp} · ` : ""}
+                  Saved via Paystack · reused for auto top-up
+                </span>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Secured by Paystack — you&apos;re redirected to a hosted
+                checkout (card or mobile money) for each top-up. No card is
+                stored on Fabric. Pay once by card to enable auto top-up.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

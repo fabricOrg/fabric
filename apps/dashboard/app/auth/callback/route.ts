@@ -1,7 +1,9 @@
-import { handleCallback } from "@app/fe-auth";
+import { buildLogout, handleCallback } from "@app/fe-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import {
+  AUTH_NOTICE_COOKIE,
   customerRealmConfig,
+  noticeCookieOptions,
   OAUTH_STATE_COOKIE,
   redirectUrl,
   sessionCookieOptions,
@@ -15,19 +17,39 @@ export async function GET(request: NextRequest) {
   if (!code || !state || !expectedState) return loginError(request);
 
   try {
-    const result = await handleCallback(customerRealmConfig(), {
-      code,
-      state,
-      expectedState,
-    });
-    const response = NextResponse.redirect(redirectUrl("/", request));
-    response.cookies.set(
-      WORKOS_COOKIE,
-      result.sealedCookie,
-      sessionCookieOptions(),
+    const { session, sealedCookie } = await handleCallback(
+      customerRealmConfig(),
+      { code, state, expectedState },
     );
-    response.cookies.delete(OAUTH_STATE_COOKIE);
-    return response;
+
+    if (session && sealedCookie) {
+      const response = NextResponse.redirect(redirectUrl("/", request));
+      response.cookies.set(WORKOS_COOKIE, sealedCookie, sessionCookieOptions());
+      response.cookies.delete(OAUTH_STATE_COOKIE);
+      response.cookies.delete(AUTH_NOTICE_COOKIE);
+      return response;
+    }
+
+    // Authenticated with WorkOS but NOT authorized here (invite-only). END the WorkOS session so the
+    // next attempt re-prompts for a different account instead of silently replaying this identity —
+    // and drop a flash notice so /login explains the denial instead of looking like a dead button.
+    if (sealedCookie) {
+      const { workosLogoutUrl } = await buildLogout(
+        customerRealmConfig(),
+        sealedCookie,
+      );
+      const response = NextResponse.redirect(workosLogoutUrl, 303);
+      response.cookies.delete(OAUTH_STATE_COOKIE);
+      response.cookies.delete(WORKOS_COOKIE);
+      response.cookies.set(
+        AUTH_NOTICE_COOKIE,
+        "access_denied",
+        noticeCookieOptions(),
+      );
+      return response;
+    }
+
+    return loginError(request);
   } catch (error) {
     console.error(
       "WorkOS callback failed:",

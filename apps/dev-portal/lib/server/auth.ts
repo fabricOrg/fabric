@@ -15,6 +15,23 @@ import { resolveDeveloperSession } from "./developer-identity";
 export const DEVELOPMENT_COOKIE = "fabric-dev-development-session";
 export const WORKOS_COOKIE = "wos-dev-session";
 export const OAUTH_STATE_COOKIE = "fabric-dev-oauth-state";
+/**
+ * Short-lived flash cookie carrying a sign-in NOTICE ("access_denied" | "signed_out") across the
+ * WorkOS logout hop. A `?error=` query can't survive that external round-trip, so the reason rides a
+ * same-site cookie the /login page reads on the way back.
+ */
+export const AUTH_NOTICE_COOKIE = "fabric-dev-auth-notice";
+
+/** Cookie options for the flash notice — same-site so it survives the WorkOS logout redirect. */
+export function noticeCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: 60,
+  };
+}
 
 export function developmentAuthConfig(): DevelopmentSessionConfig {
   const runtime =
@@ -30,14 +47,20 @@ export function developmentAuthConfig(): DevelopmentSessionConfig {
   };
 }
 
+/** This app's public origin — cloud sets DEV_PORTAL_BASE_URL, dev falls back to the port. The WorkOS
+ * redirect/logout URIs derive from it (no per-app WORKOS_REDIRECT_URI in the shared env). */
+function appBaseUrl(): string {
+  return (
+    process.env.DEV_PORTAL_BASE_URL?.trim() || "http://localhost:3200"
+  ).replace(/\/$/, "");
+}
+
 /** Org-scoped like the dashboard — a developer is a tenant member; BFF token gates the session call. */
 export function workosAuthConfigured(): boolean {
   return [
     "WORKOS_API_KEY",
     "WORKOS_CLIENT_ID",
     "WORKOS_COOKIE_PASSWORD",
-    "WORKOS_REDIRECT_URI",
-    "WORKOS_LOGOUT_REDIRECT_URI",
     "WORKOS_ORGANIZATION_ID",
     "BFF_INTERNAL_TOKEN",
   ].every((name) => Boolean(process.env[name]));
@@ -47,14 +70,15 @@ export function developerRealmConfig(): RealmConfig {
   if (!workosAuthConfigured()) {
     throw new Error("The developer WorkOS realm is not fully configured.");
   }
+  const base = appBaseUrl();
   return {
     realm: "developer",
     apiKey: process.env.WORKOS_API_KEY ?? "",
     clientId: process.env.WORKOS_CLIENT_ID ?? "",
     cookieName: WORKOS_COOKIE,
     cookiePassword: process.env.WORKOS_COOKIE_PASSWORD ?? "",
-    redirectUri: process.env.WORKOS_REDIRECT_URI ?? "",
-    logoutRedirectUri: process.env.WORKOS_LOGOUT_REDIRECT_URI ?? "",
+    redirectUri: `${base}/auth/callback`,
+    logoutRedirectUri: `${base}/login`,
     cookieOptions: {
       httpOnly: true,
       secure: true,

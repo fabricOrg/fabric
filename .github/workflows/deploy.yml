@@ -133,3 +133,36 @@ jobs:
       run-migration: false
       smoke-test-path: /login
     secrets: inherit
+
+  # admin-console + dev-portal: same pattern as the dashboard jobs — own GitHub Environment per
+  # service (own vars/secrets/OIDC trust); share the api's database so run-migration is false.
+  # Testing only for now (staging/production wired later, mirroring the dashboard jobs).
+  deploy-admin-console-testing:
+    needs: classify
+    if: >-
+      needs.classify.outputs.docs_only != 'true' &&
+      (github.ref_name == 'testing' || inputs.environment == 'testing') &&
+      vars.TESTING_DEPLOYMENTS_ENABLED == 'true'
+    uses: ./.github/workflows/deploy-ecs.yml
+    with:
+      environment: testing-admin-console
+      build-image: true
+      dockerfile: apps/admin-console/Dockerfile
+      run-migration: false
+      smoke-test-path: /login
+    secrets: inherit
+
+  deploy-dev-portal-testing:
+    needs: classify
+    if: >-
+      needs.classify.outputs.docs_only != 'true' &&
+      (github.ref_name == 'testing' || inputs.environment == 'testing') &&
+      vars.TESTING_DEPLOYMENTS_ENABLED == 'true'
+    uses: ./.github/workflows/deploy-ecs.yml
+    with:
+      environment: testing-dev-portal
+      build-image: true
+      dockerfile: apps/dev-portal/Dockerfile
+      run-migration: false
+      smoke-test-path: /login
+    secrets: inherit

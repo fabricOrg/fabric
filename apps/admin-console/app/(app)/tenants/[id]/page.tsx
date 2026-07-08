@@ -1,0 +1,198 @@
+import type { MemberDto } from "@app/contracts";
+import { Avatar, AvatarFallback } from "@app/ui/components/ui/avatar";
+import { Badge } from "@app/ui/components/ui/badge";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@app/ui/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@app/ui/components/ui/table";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { InviteTenantMemberDialog } from "@/components/forms/invite-tenant-member-dialog";
+import { TenantMemberRowActions } from "@/components/tenant-member-row-actions";
+import { requireAdminSession } from "@/lib/server/auth";
+import {
+  listTenantMembers,
+  TenantMemberApiError,
+} from "@/lib/server/tenant-members-client";
+import { listTenants } from "@/lib/server/tenants-client";
+
+type Role = MemberDto["role"];
+const ROLE_LABEL: Record<Role, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  member: "Member",
+  developer: "Developer",
+};
+const STATUS_STYLE: Record<MemberDto["status"], string> = {
+  active: "border-transparent bg-success/12 text-success",
+  invited: "border-transparent bg-warning/15 text-warning",
+  disabled: "border-transparent bg-muted text-muted-foreground",
+};
+
+function initials(value: string): string {
+  const source = value.trim();
+  const parts = source.includes(" ") ? source.split(" ") : source.split("@");
+  return parts
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+export default async function TenantDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const session = await requireAdminSession();
+  const canManage = session.permissions.includes("staff:write");
+  const { id } = await params;
+
+  // The staff tenant list is small; resolve the header from it rather than adding a get-one endpoint.
+  const tenant = (await listTenants()).tenants.find((t) => t.tenant_id === id);
+  if (!tenant) notFound();
+
+  let members: MemberDto[] = [];
+  let loadError = false;
+  try {
+    members = (await listTenantMembers(id)).members;
+  } catch (error) {
+    loadError = error instanceof TenantMemberApiError || error instanceof Error;
+  }
+
+  return (
+    <div className="mx-auto flex max-w-5xl flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Link
+          href="/"
+          className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Tenants
+        </Link>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <h1 className="font-display text-2xl font-semibold tracking-tight">
+              {tenant.name}
+            </h1>
+            <p className="font-mono text-sm text-muted-foreground">
+              {tenant.slug} · {tenant.plan} · {tenant.data_region}
+            </p>
+          </div>
+          <Badge variant="outline" className="capitalize">
+            {tenant.status}
+          </Badge>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Members</CardTitle>
+          <CardDescription>
+            {tenant.workos_organization_id
+              ? "People with access to this organisation."
+              : "This tenant has no WorkOS org yet — invites are unavailable."}
+          </CardDescription>
+          {canManage && tenant.workos_organization_id ? (
+            <CardAction>
+              <InviteTenantMemberDialog tenantId={id} />
+            </CardAction>
+          ) : null}
+        </CardHeader>
+        <CardContent>
+          {loadError ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Couldn&apos;t load members right now. Try again shortly.
+            </p>
+          ) : members.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No members yet.
+            </p>
+          ) : (
+            <section
+              className="overflow-x-auto"
+              tabIndex={0}
+              aria-label={`${tenant.name} members`}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Member</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead className="text-right">Status</TableHead>
+                    {canManage ? (
+                      <TableHead className="w-10 text-right">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    ) : null}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {members.map((m) => (
+                    <TableRow key={m.user_id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="size-8">
+                            <AvatarFallback>
+                              {initials(m.name ?? m.email)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              {m.name ?? m.email}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {m.email}
+                            </span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{ROLE_LABEL[m.role]}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant="outline"
+                          className={`capitalize ${STATUS_STYLE[m.status]}`}
+                        >
+                          {m.status}
+                        </Badge>
+                      </TableCell>
+                      {canManage ? (
+                        <TableCell className="text-right">
+                          {m.role !== "owner" ? (
+                            <TenantMemberRowActions
+                              tenantId={id}
+                              userId={m.user_id}
+                              email={m.email}
+                              label={m.name ?? m.email}
+                              role={m.role}
+                              status={m.status}
+                            />
+                          ) : null}
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </section>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
