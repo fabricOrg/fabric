@@ -242,3 +242,92 @@ resource "aws_secretsmanager_secret_version" "dashboard_cookie_password" {
   })
   secret_string_wo_version = 1
 }
+
+####################################################################################################
+# admin-console + dev-portal (mirror the dashboard secrets above). Both reuse the SHARED WorkOS app
+# (one client), so WORKOS_API_KEY/WORKOS_CLIENT_ID are identical to the dashboard's — but each app
+# gets its OWN secret container so its redirect URIs (derived from its own *_BASE_URL) and, for the
+# dev-portal, WORKOS_ORGANIZATION_ID stay independent. Cookie passwords are per-app + Terraform-
+# generated. The dev-portal reuses the dashboard's Fabric API key (same testing tenant); the admin-
+# console talks to the api only as the BFF (bff_internal_token), so it needs no tenant API key.
+####################################################################################################
+
+ephemeral "random_password" "admin_console_cookie_password" {
+  length  = 40
+  special = false
+}
+
+ephemeral "random_password" "dev_portal_cookie_password" {
+  length  = 40
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "admin_console_cookie_password" {
+  name                    = "fabric/testing/admin-console-cookie-password"
+  description             = "Seals the admin-console's WorkOS session cookie."
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "admin_console_cookie_password" {
+  secret_id = aws_secretsmanager_secret.admin_console_cookie_password.id
+  secret_string_wo = jsonencode({
+    WORKOS_COOKIE_PASSWORD = ephemeral.random_password.admin_console_cookie_password.result
+  })
+  secret_string_wo_version = 1
+}
+
+resource "aws_secretsmanager_secret" "dev_portal_cookie_password" {
+  name                    = "fabric/testing/dev-portal-cookie-password"
+  description             = "Seals the dev-portal's WorkOS session cookie."
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "dev_portal_cookie_password" {
+  secret_id = aws_secretsmanager_secret.dev_portal_cookie_password.id
+  secret_string_wo = jsonencode({
+    WORKOS_COOKIE_PASSWORD = ephemeral.random_password.dev_portal_cookie_password.result
+  })
+  secret_string_wo_version = 1
+}
+
+# Placeholder containers — populate the real values (shared WorkOS API key + client ID) manually
+# after apply. Terraform ignores drift so applies don't stomp what you set. Staff aren't org-scoped,
+# so the admin-console bundle carries no WORKOS_ORGANIZATION_ID.
+resource "aws_secretsmanager_secret" "admin_console_workos" {
+  name                    = "fabric/testing/admin-console-workos"
+  description             = "WorkOS AuthKit credentials for the admin-console (populate manually after apply)."
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "admin_console_workos" {
+  secret_id = aws_secretsmanager_secret.admin_console_workos.id
+  secret_string_wo = jsonencode({
+    WORKOS_API_KEY   = "REPLACE_ME"
+    WORKOS_CLIENT_ID = "REPLACE_ME"
+  })
+  secret_string_wo_version = 1
+
+  lifecycle {
+    ignore_changes = [secret_string_wo, secret_string_wo_version]
+  }
+}
+
+resource "aws_secretsmanager_secret" "dev_portal_workos" {
+  name                    = "fabric/testing/dev-portal-workos"
+  description             = "WorkOS AuthKit credentials for the dev-portal (populate manually after apply)."
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "dev_portal_workos" {
+  secret_id = aws_secretsmanager_secret.dev_portal_workos.id
+  secret_string_wo = jsonencode({
+    WORKOS_API_KEY         = "REPLACE_ME"
+    WORKOS_CLIENT_ID       = "REPLACE_ME"
+    WORKOS_ORGANIZATION_ID = "REPLACE_ME"
+  })
+  secret_string_wo_version = 1
+
+  lifecycle {
+    ignore_changes = [secret_string_wo, secret_string_wo_version]
+  }
+}
