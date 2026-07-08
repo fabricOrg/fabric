@@ -17,6 +17,15 @@ export const inviteMemberRequestSchema = z.object({
 });
 export type InviteMemberRequest = z.infer<typeof inviteMemberRequestSchema>;
 
+/**
+ * Change a member's role. `owner` is not assignable here (it's singular, set at provisioning) and an
+ * owner's role can't be changed through this path — see MembersService. Same role set as invite.
+ */
+export const updateMemberRequestSchema = z.object({
+  role: inviteMemberRoleSchema,
+});
+export type UpdateMemberRequest = z.infer<typeof updateMemberRequestSchema>;
+
 export const memberDtoSchema = z.object({
   user_id: z.string(),
   email: z.string(),

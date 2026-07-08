@@ -20,6 +20,7 @@ describeDb("member invites", () => {
   const organizationId = `org_${randomUUID()}`;
   const email = `teammate-${randomUUID()}@example.com`;
   const devEmail = `dev-${randomUUID()}@example.com`;
+  const ownerEmail = `owner-${randomUUID()}@example.com`;
   const sendInvitation = vi.fn(async () => ({}));
   const workos = {
     userManagement: { sendInvitation },
@@ -36,7 +37,7 @@ describeDb("member invites", () => {
   });
 
   afterAll(async () => {
-    for (const target of [email, devEmail]) {
+    for (const target of [email, devEmail, ownerEmail]) {
       const [user] = await db.db
         .select({ id: users.id })
         .from(users)
@@ -134,5 +135,66 @@ describeDb("member invites", () => {
       .innerJoin(users, eq(memberships.userId, users.id))
       .where(eq(users.email, devEmail));
     expect(membership).toMatchObject({ role: "developer" });
+  });
+
+  it("changes a member's role", async () => {
+    const [user] = await db.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, devEmail));
+    // biome-ignore lint/style/noNonNullAssertion: seeded by the developer-invite test
+    const updated = await service.updateRole(tenantId, user!.id, {
+      role: "member",
+    });
+    expect(updated).toMatchObject({ role: "member", email: devEmail });
+  });
+
+  it("soft-removes a member (membership disabled, reversible)", async () => {
+    const [user] = await db.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, devEmail));
+    // biome-ignore lint/style/noNonNullAssertion: seeded by the developer-invite test
+    await service.remove(tenantId, user!.id);
+    const [membership] = await db.db
+      .select({ status: memberships.status })
+      .from(memberships)
+      // biome-ignore lint/style/noNonNullAssertion: seeded above
+      .where(eq(memberships.userId, user!.id));
+    expect(membership).toMatchObject({ status: "disabled" });
+  });
+
+  it("refuses to change or remove the owner", async () => {
+    await db.db
+      .insert(users)
+      .values({ email: ownerEmail, status: "active" })
+      .onConflictDoNothing({ target: users.email });
+    const [owner] = await db.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, ownerEmail));
+    // biome-ignore lint/style/noNonNullAssertion: just inserted
+    const ownerId = owner!.id;
+    await db.db.insert(memberships).values({
+      tenantId,
+      userId: ownerId,
+      role: "owner",
+      status: "active",
+    });
+
+    await expect(
+      service.updateRole(tenantId, ownerId, { role: "admin" }),
+    ).rejects.toMatchObject({
+      response: { error: { code: "owner_immutable" } },
+    });
+    await expect(service.remove(tenantId, ownerId)).rejects.toMatchObject({
+      response: { error: { code: "owner_immutable" } },
+    });
+  });
+
+  it("fails closed removing a member that doesn't exist", async () => {
+    await expect(service.remove(tenantId, randomUUID())).rejects.toMatchObject({
+      response: { error: { code: "member_not_found" } },
+    });
   });
 });

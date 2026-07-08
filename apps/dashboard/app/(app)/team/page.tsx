@@ -19,6 +19,7 @@ import {
 } from "@app/ui/components/ui/table";
 import { Check } from "lucide-react";
 import { InviteMemberDialog } from "@/components/forms/invite-member-dialog";
+import { MemberRowActions } from "@/components/member-row-actions";
 import { BffError } from "@/lib/server/api-client";
 import { requireDashboardSession } from "@/lib/server/auth";
 import { listMembers } from "@/lib/server/members-client";
@@ -128,6 +129,11 @@ export default async function TeamPage() {
                       <TableHead>Member</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead className="text-right">Status</TableHead>
+                      {canInvite ? (
+                        <TableHead className="w-10 text-right">
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
+                      ) : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -156,6 +162,20 @@ export default async function TeamPage() {
                         <TableCell className="text-right">
                           <StatusBadge status={m.status} />
                         </TableCell>
+                        {canInvite ? (
+                          <TableCell className="text-right">
+                            {m.role !== "owner" &&
+                            m.user_id !== session.userId ? (
+                              <MemberRowActions
+                                userId={m.user_id}
+                                email={m.email}
+                                label={m.name ?? m.email}
+                                role={m.role}
+                                status={m.status}
+                              />
+                            ) : null}
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     ))}
                   </TableBody>
