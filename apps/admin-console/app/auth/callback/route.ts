@@ -4,6 +4,7 @@ import {
   AUTH_NOTICE_COOKIE,
   noticeCookieOptions,
   OAUTH_STATE_COOKIE,
+  redirectUrl,
   sessionCookieOptions,
   staffRealmConfig,
   WORKOS_COOKIE,
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (session && sealedCookie) {
-      const response = NextResponse.redirect(new URL("/", request.url));
+      const response = NextResponse.redirect(redirectUrl("/", request));
       response.cookies.set(WORKOS_COOKIE, sealedCookie, sessionCookieOptions());
       response.cookies.delete(OAUTH_STATE_COOKIE);
       response.cookies.delete(AUTH_NOTICE_COOKIE);
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
 
 function loginError(request: NextRequest, reason = "authentication") {
   const response = NextResponse.redirect(
-    new URL(`/login?error=${reason}`, request.url),
+    redirectUrl(`/login?error=${reason}`, request),
   );
   response.cookies.delete(OAUTH_STATE_COOKIE);
   return response;

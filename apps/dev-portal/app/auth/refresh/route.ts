@@ -2,6 +2,7 @@ import { refreshSession } from "@app/fe-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import {
   developerRealmConfig,
+  redirectUrl,
   sessionCookieOptions,
   WORKOS_COOKIE,
 } from "@/lib/server/auth";
@@ -12,11 +13,11 @@ export async function GET(request: NextRequest) {
     ? await refreshSession(developerRealmConfig(), sealedCookie)
     : null;
   if (!refreshed) {
-    const response = NextResponse.redirect(new URL("/login", request.url));
+    const response = NextResponse.redirect(redirectUrl("/login", request));
     response.cookies.delete(WORKOS_COOKIE);
     return response;
   }
-  const response = NextResponse.redirect(new URL("/", request.url));
+  const response = NextResponse.redirect(redirectUrl("/", request));
   response.cookies.set(
     WORKOS_COOKIE,
     refreshed.sealedCookie,

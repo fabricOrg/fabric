@@ -55,6 +55,16 @@ function appBaseUrl(): string {
   ).replace(/\/$/, "");
 }
 
+/**
+ * Absolute redirect target on this app's PUBLIC origin. Behind API Gateway + VPC Link the container
+ * sees its own internal host (0.0.0.0:3000) as `request.url`, so auth redirects built from it send
+ * users to an unreachable URL. Always resolve against the public base (DEV_PORTAL_BASE_URL in cloud,
+ * the dev port locally). `request` is accepted for call-site symmetry but not needed.
+ */
+export function redirectUrl(path: string, _request?: { url: string }): URL {
+  return new URL(path, appBaseUrl());
+}
+
 /** Org-scoped like the dashboard — a developer is a tenant member; BFF token gates the session call. */
 export function workosAuthConfigured(): boolean {
   return [

@@ -5,6 +5,7 @@ import {
   AUTH_NOTICE_COOKIE,
   developerRealmConfig,
   OAUTH_STATE_COOKIE,
+  redirectUrl,
   sessionCookieOptions,
 } from "@/lib/server/auth";
 
@@ -13,7 +14,7 @@ export function GET(request: NextRequest) {
   // Org-scoped like the dashboard — a developer signs into their tenant's WorkOS organization.
   const organizationId = process.env.WORKOS_ORGANIZATION_ID;
   if (!organizationId) {
-    return NextResponse.redirect(new URL("/login?error=config", request.url));
+    return NextResponse.redirect(redirectUrl("/login?error=config", request));
   }
   const authorizationUrl = buildAuthorizationUrl(developerRealmConfig(), {
     state,
