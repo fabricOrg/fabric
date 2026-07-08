@@ -17,6 +17,23 @@ import { resolveStaffSession } from "./staff-identity";
 export const DEVELOPMENT_COOKIE = "fabric-admin-development-session";
 export const WORKOS_COOKIE = "wos-admin-session";
 export const OAUTH_STATE_COOKIE = "fabric-admin-oauth-state";
+/**
+ * Short-lived flash cookie carrying a sign-in NOTICE ("access_denied" | "signed_out") across the
+ * WorkOS logout hop. A `?error=` query can't survive that external round-trip, so the reason rides a
+ * same-site cookie the /login page reads on the way back.
+ */
+export const AUTH_NOTICE_COOKIE = "fabric-admin-auth-notice";
+
+/** Cookie options for the flash notice — same-site so it survives the WorkOS logout redirect. */
+export function noticeCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: 60,
+  };
+}
 
 export function developmentAuthConfig(): DevelopmentSessionConfig {
   const runtime =

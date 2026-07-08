@@ -1,7 +1,9 @@
 import { buildLogout, handleCallback } from "@app/fe-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import {
+  AUTH_NOTICE_COOKIE,
   developerRealmConfig,
+  noticeCookieOptions,
   OAUTH_STATE_COOKIE,
   sessionCookieOptions,
   WORKOS_COOKIE,
@@ -23,11 +25,13 @@ export async function GET(request: NextRequest) {
       const response = NextResponse.redirect(new URL("/", request.url));
       response.cookies.set(WORKOS_COOKIE, sealedCookie, sessionCookieOptions());
       response.cookies.delete(OAUTH_STATE_COOKIE);
+      response.cookies.delete(AUTH_NOTICE_COOKIE);
       return response;
     }
 
     // Authenticated with WorkOS but not on the developer allowlist. END the WorkOS session so a retry
-    // re-prompts for a different account rather than silently replaying this identity.
+    // re-prompts for a different account rather than silently replaying this identity — and drop a
+    // flash notice so /login explains the denial instead of looking like a dead button.
     if (sealedCookie) {
       const { workosLogoutUrl } = await buildLogout(
         developerRealmConfig(),
@@ -36,6 +40,11 @@ export async function GET(request: NextRequest) {
       const response = NextResponse.redirect(workosLogoutUrl, 303);
       response.cookies.delete(OAUTH_STATE_COOKIE);
       response.cookies.delete(WORKOS_COOKIE);
+      response.cookies.set(
+        AUTH_NOTICE_COOKIE,
+        "access_denied",
+        noticeCookieOptions(),
+      );
       return response;
     }
 
