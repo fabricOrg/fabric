@@ -3,29 +3,60 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@app/ui/components/ui/alert";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { ContinueWithWorkOS } from "@/components/login/continue-with-workos";
-import { workosAuthConfigured } from "@/lib/server/auth";
+import {
+  AUTH_NOTICE_COOKIE,
+  readAdminSession,
+  workosAuthConfigured,
+} from "@/lib/server/auth";
 
-/** Staff sign-in — same Notion-style launchpad as the customer dashboard, ADMIN-branded. */
+/**
+ * Staff sign-in — same Notion-style launchpad as the customer dashboard, ADMIN-branded.
+ * `?error=` covers direct failures; a flash NOTICE cookie (access_denied / signed_out) carries the
+ * reason across the WorkOS logout hop so a denial explains itself instead of looking like a no-op.
+ */
 
-const ERROR_COPY: Record<string, { title: string; description: string }> = {
+type Banner = {
+  variant: "destructive" | "default";
+  title: string;
+  description: string;
+};
+
+const ERROR_COPY: Record<string, Banner> = {
   authentication: {
+    variant: "destructive",
     title: "Sign-in didn't complete",
     description:
       "We couldn't verify your session with the identity provider. Please try again.",
   },
   config: {
+    variant: "destructive",
     title: "Sign-in unavailable",
     description:
       "Authentication isn't configured right now. Contact platform ops.",
   },
   access_denied: {
+    variant: "destructive",
     title: "Access denied",
-    description: "This account isn't on the staff allowlist.",
+    description:
+      "You signed in, but this account isn't on the staff allowlist. Ask platform ops for access, or try a different account.",
   },
   session: {
+    variant: "destructive",
     title: "Session expired",
     description: "Your session ended. Sign in again to continue.",
+  },
+};
+
+/** Flash-cookie notices. `signed_out` is a calm confirmation, not a failure. */
+const NOTICE_COPY: Record<string, Banner> = {
+  access_denied: ERROR_COPY.access_denied as Banner,
+  signed_out: {
+    variant: "default",
+    title: "Signed out",
+    description: "You've been signed out. Sign in again to continue.",
   },
 };
 
@@ -43,14 +74,21 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  // Already signed in? Don't show a login button — send them into the console.
+  if (await readAdminSession()) redirect("/");
+
   const { error } = await searchParams;
   const workosEnabled = workosAuthConfigured();
-  const err = error
+  const notice = (await cookies()).get(AUTH_NOTICE_COOKIE)?.value;
+  const banner: Banner | null = error
     ? (ERROR_COPY[error] ?? {
+        variant: "destructive",
         title: "Something went wrong",
         description: "We couldn't sign you in. Please try again.",
       })
-    : null;
+    : notice
+      ? (NOTICE_COPY[notice] ?? null)
+      : null;
 
   return (
     <main className="relative flex min-h-screen flex-col bg-background">
@@ -66,14 +104,14 @@ export default async function LoginPage({
             </p>
           </div>
 
-          {err ? (
+          {banner ? (
             <Alert
-              variant="destructive"
+              variant={banner.variant}
               role="alert"
               className="mt-6 text-left"
             >
-              <AlertTitle>{err.title}</AlertTitle>
-              <AlertDescription>{err.description}</AlertDescription>
+              <AlertTitle>{banner.title}</AlertTitle>
+              <AlertDescription>{banner.description}</AlertDescription>
             </Alert>
           ) : null}
 

@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { buildAuthorizationUrl } from "@app/fe-auth";
 import { NextResponse } from "next/server";
 import {
+  AUTH_NOTICE_COOKIE,
   OAUTH_STATE_COOKIE,
   sessionCookieOptions,
   staffRealmConfig,
@@ -19,5 +20,6 @@ export function GET() {
     ...sessionCookieOptions(),
     maxAge: 10 * 60,
   });
+  response.cookies.delete(AUTH_NOTICE_COOKIE);
   return response;
 }
