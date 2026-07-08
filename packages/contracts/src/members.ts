@@ -4,10 +4,11 @@ import { customerRoleSchema } from "./identity.js";
 /**
  * Team-member management for a tenant (dashboard). Owners/admins invite teammates into their org.
  * `owner` is NOT invitable — it's the first admin created at tenant provisioning; new people join as
- * `admin` or `member`. An invite creates an `invited` user + `invited` membership (bound on first
- * sign-in) and sends a WorkOS organization invitation. See docs/PI-3/ORG-PROVISIONING.md.
+ * `admin`, `member`, or `developer` (API-focused: dev-portal access, no SMS/org-management). An
+ * invite creates an `invited` user + `invited` membership (bound on first sign-in) and sends a WorkOS
+ * organization invitation. See docs/PI-3/ORG-PROVISIONING.md.
  */
-export const inviteMemberRoleSchema = z.enum(["admin", "member"]);
+export const inviteMemberRoleSchema = z.enum(["admin", "member", "developer"]);
 
 export const inviteMemberRequestSchema = z.object({
   email: z.string().trim().email().max(320),

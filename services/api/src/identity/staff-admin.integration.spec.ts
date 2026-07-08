@@ -3,16 +3,29 @@ import { createProvisioningDb, staffUsers } from "@app/db";
 import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { StaffService } from "./staff.service.js";
+import type { WorkosClientProvider } from "./workos-client.provider.js";
 
 const superUrl = process.env.DATABASE_URL_SUPER;
 const describeDb = superUrl ? describe : describe.skip;
+
+// Records the org-less WorkOS invitations invite() attempts — no network. The invitation is
+// best-effort, so a throw here would be swallowed; we assert it's CALLED, not that it succeeds.
+const invited: string[] = [];
+const workosClient = (() => ({
+  userManagement: {
+    sendInvitation: async ({ email }: { email: string }) => {
+      invited.push(email);
+      return {};
+    },
+  },
+})) as unknown as WorkosClientProvider;
 
 // Lifecycle is exercised on an OPERATOR so the last-active-admin guard never fires — that guard
 // depends on the global admin count, which differs between a seeded local DB and a fresh CI DB, so
 // it isn't asserted here (it's a simple count check, covered by review).
 describeDb("staff management", () => {
   const db = createProvisioningDb(superUrl ?? "", { max: 1 });
-  const service = new StaffService(db);
+  const service = new StaffService(db, workosClient);
   const email = `operator-${randomUUID()}@example.com`;
 
   async function idFor(target: string): Promise<string> {
@@ -43,6 +56,8 @@ describeDb("staff management", () => {
       status: "active",
       bound: false,
     });
+    // Net-new staff get an org-less WorkOS onboarding invitation (best-effort).
+    expect(invited).toContain(email);
   });
 
   it("lists the staff member", async () => {

@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-export const customerRoleSchema = z.enum(["owner", "admin", "member"]);
+export const customerRoleSchema = z.enum([
+  "owner",
+  "admin",
+  "member",
+  // Least-privilege, API-focused role — dev-portal access without SMS/org-management rights.
+  "developer",
+]);
 
 const identifier = z.string().trim().min(1).max(255);
 const postgresUuid = z
@@ -64,8 +70,9 @@ export type ResolveStaffSessionResponse = z.infer<
 // ---- Staff management (admin-console) — allowlist a platform operator by email --------------------
 export const staffStatusSchema = z.enum(["active", "suspended"]);
 
-/** Add/allowlist a staff member. No WorkOS call: staff aren't org-scoped — they sign in with any
- *  WorkOS identity whose email matches, bound (external_subject_id) on first successful sign-in. */
+/** Add/allowlist a staff member by email + send an org-less WorkOS onboarding invitation (best-
+ *  effort). Staff aren't org-scoped: authz is the allowlist row; they bind external_subject_id on
+ *  first sign-in with any WorkOS identity whose email matches (invited or company-SSO). */
 export const inviteStaffRequestSchema = z.object({
   email: z.string().trim().email().max(320),
   name: z.string().trim().min(1).max(255).optional(),

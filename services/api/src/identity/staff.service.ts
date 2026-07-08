@@ -7,10 +7,14 @@ import type {
   UpdateStaffRequest,
 } from "@app/contracts";
 import { type ProvisioningDb, staffUsers } from "@app/db";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, asc, count, eq, ne } from "drizzle-orm";
 import { invalidRequest } from "../http/api-error.js";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
+import {
+  WORKOS_CLIENT,
+  type WorkosClientProvider,
+} from "./workos-client.provider.js";
 
 /** Staff authz is role-based against the platform staff_users table — not tenant permissions. */
 const STAFF_ROLE_PERMISSIONS = {
@@ -27,9 +31,13 @@ type Tx = Parameters<Parameters<ProvisioningDb["db"]["transaction"]>[0]>[0];
  */
 @Injectable()
 export class StaffService {
+  private readonly logger = new Logger(StaffService.name);
+
   constructor(
     @Inject(PROVISIONING_DB)
     private readonly provisioning: ProvisioningDb,
+    @Inject(WORKOS_CLIENT)
+    private readonly workosClient: WorkosClientProvider,
   ) {}
 
   /**
@@ -89,9 +97,12 @@ export class StaffService {
   }
 
   /**
-   * Allowlist a staff member by email (upsert). No WorkOS call — staff aren't org-scoped; they sign
-   * in with any WorkOS identity whose email matches, and resolveSession binds the subject on first
-   * login. Re-inviting re-activates + updates role, so this doubles as "reinstate / change role".
+   * Allowlist a staff member by email (upsert), then send an org-less WorkOS invitation so a net-new
+   * operator gets an onboarding email and can create a WorkOS identity. The allowlist row is the
+   * source of truth for authz; the invitation is BEST-EFFORT (logged, non-fatal) because a re-invite
+   * / role-change or an operator who signs in via a company SSO connection already has an identity —
+   * a "user already exists" error must not fail the allowlist write. Re-inviting doubles as
+   * "reinstate / change role". Staff are NOT org-scoped, so the invitation carries no organizationId.
    */
   async invite(request: InviteStaffRequest): Promise<StaffDto> {
     const email = request.email.trim().toLowerCase();
@@ -114,6 +125,18 @@ export class StaffService {
       })
       .returning(RETURNING);
     if (!staff) throw new Error("Staff upsert returned no row.");
+
+    try {
+      await this.workosClient().userManagement.sendInvitation({ email });
+    } catch (error) {
+      // Already invited / already a WorkOS user / SSO-managed — the allowlist row still stands.
+      this.logger.warn(
+        `Staff WorkOS invitation for ${email} not sent: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`,
+      );
+    }
+
     return toDto(staff);
   }
 

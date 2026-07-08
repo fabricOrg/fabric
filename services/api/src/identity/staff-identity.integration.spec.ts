@@ -2,6 +2,12 @@ import { createProvisioningDb, staffUsers } from "@app/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { StaffService } from "./staff.service.js";
+import type { WorkosClientProvider } from "./workos-client.provider.js";
+
+// resolveSession never calls WorkOS; this stub just satisfies the constructor.
+const workosClient = (() => ({
+  userManagement: { sendInvitation: async () => ({}) },
+})) as unknown as WorkosClientProvider;
 
 // Runs only when a real DB is configured (local docker / CI ephemeral); skipped otherwise.
 const superUrl = process.env.DATABASE_URL_SUPER;
@@ -17,7 +23,7 @@ const CLAIMS = {
 
 describeDb("staff identity resolve", () => {
   const db = createProvisioningDb(superUrl ?? "", { max: 1 });
-  const service = new StaffService(db);
+  const service = new StaffService(db, workosClient);
 
   // staff_users is GLOBAL platform config (no tenant) — the test owns its own rows.
   beforeAll(async () => {
