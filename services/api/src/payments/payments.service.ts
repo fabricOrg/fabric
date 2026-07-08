@@ -96,6 +96,48 @@ export class PaymentsService {
     return { authorization_url: init.authorizationUrl, reference };
   }
 
+  /**
+   * Start a customer collection for a Lighthouse flow (E4). Same Paystack hosted-checkout mechanism
+   * as a top-up, but the `flow-` reference lets the webhook complete the owning flow record after it
+   * credits. SANDBOX only (sk_test_); the platform.payments kill-switch gates it.
+   */
+  async startCollection(
+    tenantId: string,
+    p: { amountMinor: bigint; currency: string; email: string },
+  ): Promise<{ authorizationUrl: string; reference: string }> {
+    if (await this.killSwitch.isPaused("platform.payments")) {
+      throw invalidRequest("payments_paused", "Collections are paused.");
+    }
+    const creds = this.creds();
+    const reference = `flow-${randomUUID()}`;
+    await this.provisioning.db.insert(payments).values({
+      tenantId: tenantId as TenantId,
+      reference,
+      provider: "paystack",
+      amountMinor: p.amountMinor as MinorUnits,
+      currency: p.currency,
+      email: p.email,
+      status: "pending",
+    });
+    const base = this.config.get<string>("DASHBOARD_BASE_URL")?.trim();
+    const init = await this.provider.initCharge(
+      {
+        amountMinor: p.amountMinor,
+        currency: p.currency,
+        email: p.email,
+        reference,
+        ...(base ? { callbackUrl: `${base.replace(/\/$/, "")}/flows` } : {}),
+        metadata: { tenant_id: tenantId, flow: true },
+      },
+      creds,
+    );
+    await this.provisioning.db
+      .update(payments)
+      .set({ providerRef: init.providerRef, updatedAt: new Date() })
+      .where(eq(payments.reference, reference));
+    return { authorizationUrl: init.authorizationUrl, reference };
+  }
+
   /** Verify + process a Paystack webhook. Credits the wallet once, on charge.success. */
   async handleWebhook(
     rawBody: Buffer,
@@ -180,13 +222,42 @@ export class PaymentsService {
     // Credit under the tenant's RLS context; idempotent on the reference (topup-{uuid}).
     // idempotencyKey (topup-{uuid}) dedups a replayed webhook; referenceId is omitted — it's a uuid
     // FK to messages, not applicable to a top-up.
-    await this.appDb.withTenant(payment.tenantId, (tx) =>
-      credit(tx, {
+    await this.appDb.withTenant(payment.tenantId, async (tx) => {
+      await credit(tx, {
         currency: payment.currency,
         amountMinor: payment.amountMinor,
         idempotencyKey: payment.reference,
-      }),
-    );
+      });
+      // A `flow-` reference belongs to a Lighthouse flow → complete its charge + notify now that the
+      // collection cleared. No-op for top-ups (no matching flow_records row). Same tenant tx (RLS ok).
+      const entries = [
+        {
+          account: "payments:collection-clearing",
+          label: "Customer collection",
+          direction: "debit",
+          amount: {
+            currency: payment.currency,
+            minor: payment.amountMinor.toString(),
+          },
+        },
+        {
+          account: "wallet:available",
+          label: "Tenant wallet",
+          direction: "credit",
+          amount: {
+            currency: payment.currency,
+            minor: payment.amountMinor.toString(),
+          },
+        },
+      ];
+      await tx`
+        UPDATE flow_records SET
+          charge_status = 'done', charge_at = now(),
+          charge_entries = ${JSON.stringify(entries)}::jsonb,
+          notify_status = 'done', notify_message_id = ${`msg_${randomUUID().slice(0, 10)}`}, notify_at = now(),
+          status = 'complete', updated_at = now()
+        WHERE charge_reference = ${payment.reference} AND status <> 'complete'`;
+    });
     await this.provisioning.db
       .update(payments)
       .set({ status: "success", updatedAt: new Date() })

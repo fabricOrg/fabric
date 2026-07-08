@@ -80,10 +80,21 @@ export const startFlowResponse = z.object({
 });
 export type StartFlowResponse = z.infer<typeof startFlowResponse>;
 
-/** POST /v1/flows action:"confirm" — verify the OTP, then charge + notify (idempotent on the id). */
+/** POST /v1/flows action:"confirm" — verify the OTP, then initiate the customer collection. */
 export const confirmFlowRequest = z.object({
   action: z.literal("confirm"),
   correlationId: z.string().min(1),
   code: z.string().min(1),
 });
 export type ConfirmFlowRequest = z.infer<typeof confirmFlowRequest>;
+
+/**
+ * confirm result: the record (charge now `pending`) + the hosted-checkout URL to collect from the
+ * customer. The Paystack webhook credits the ledger + completes the charge/notify. `authorizationUrl`
+ * is null on an idempotent replay (collection already initiated).
+ */
+export const confirmFlowResponse = z.object({
+  record: transactionRecord,
+  authorizationUrl: z.string().url().nullable(),
+});
+export type ConfirmFlowResponse = z.infer<typeof confirmFlowResponse>;
