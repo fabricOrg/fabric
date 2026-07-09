@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import { requireTrustedOrigin } from "@/lib/server/origin";
 
 /**
  * Plugin registry BFF → the real staff endpoint /internal/plugins (backed by plugin_instances). No
@@ -81,6 +82,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = requireTrustedOrigin(request);
+  if (denied) return denied;
   if (!(await readAdminSessionWithRefresh())) return unauthorized();
   let body: Record<string, unknown>;
   try {

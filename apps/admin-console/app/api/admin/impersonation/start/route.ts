@@ -9,6 +9,7 @@ import {
   sessionCookieOptions,
 } from "@/lib/server/auth";
 import { recordImpersonationStart } from "@/lib/server/impersonation-client";
+import { requireTrustedOrigin } from "@/lib/server/origin";
 
 function fail(
   code: string,
@@ -21,6 +22,8 @@ function fail(
 
 /** Start impersonating a tenant: seal a time-boxed claim cookie + audit. staff:write only. */
 export async function POST(request: NextRequest) {
+  const denied = requireTrustedOrigin(request);
+  if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
   if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
   if (!session.permissions.includes("staff:write")) {
