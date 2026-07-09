@@ -1,7 +1,8 @@
 /**
  * Platform plugin registry client (control-plane). Staff enable/configure provider instances; the
- * product routes through what's enabled. TODO(BFF): wire the real staff endpoint GET/POST
- * /internal/plugins in services/api (backed by plugin_instances). See docs/PI-5/PLUGIN-REGISTRY.md.
+ * product routes through what's enabled. Talks to the LIVE staff BFF route (/api/admin/plugins →
+ * the api's /internal/plugins, backed by plugin_instances). A non-2xx body is the shared F8.3
+ * envelope — thrown for toastApiError (parseApiError never throws). See docs/PI-5/PLUGIN-REGISTRY.md.
  */
 export const CAPABILITIES = ["sms", "whatsapp", "payment", "identity"] as const;
 export type Capability = (typeof CAPABILITIES)[number];

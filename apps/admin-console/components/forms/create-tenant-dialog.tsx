@@ -31,13 +31,19 @@ import { useId, useState } from "react";
 import { toast } from "sonner";
 import { provisionTenant } from "@/lib/client/tenants-api";
 import { toastApiError } from "@/lib/error-toast";
-import type { Tenant } from "@/lib/mock-admin";
-import { PLANS, REGIONS, schema, slugify } from "./create-tenant-dialog.schema";
+import {
+  PLANS,
+  type Plan,
+  REGIONS,
+  schema,
+  slugify,
+} from "./create-tenant-dialog.schema";
 
 export function CreateTenantDialog({
   onCreated,
 }: {
-  onCreated: (tenant: Tenant) => void;
+  /** Fired after a successful provision — the Tenants page re-fetches the live list. */
+  onCreated: () => void;
 }) {
   const [open, setOpen] = useState(false);
   // The slug auto-derives from the name until the operator edits it — non-field UI state.
@@ -49,7 +55,7 @@ export function CreateTenantDialog({
       name: "",
       slug: "",
       region: REGIONS[0].value as string,
-      plan: "growth" as Tenant["plan"],
+      plan: "growth" as Plan,
       adminEmail: "",
     },
     validators: { onChange: schema },
@@ -62,9 +68,9 @@ export function CreateTenantDialog({
           plan: value.plan,
           adminEmail: value.adminEmail.trim(),
         });
-        onCreated(result.tenant);
+        onCreated();
         toast.success("Tenant provisioned", {
-          description: `WorkOS org created · invited ${result.invitedEmail} as admin.`,
+          description: `WorkOS org created · invited ${result.invited_email} as admin.`,
         });
         setOpen(false);
         setTimeout(reset, 150);
@@ -188,9 +194,7 @@ export function CreateTenantDialog({
                     <FieldLabel htmlFor={`${ids}-plan`}>Plan</FieldLabel>
                     <Select
                       value={field.state.value}
-                      onValueChange={(v) =>
-                        field.handleChange(v as Tenant["plan"])
-                      }
+                      onValueChange={(v) => field.handleChange(v as Plan)}
                     >
                       <SelectTrigger id={`${ids}-plan`} className="capitalize">
                         <SelectValue />

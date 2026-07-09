@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { Tenant } from "@/lib/mock-admin";
 
 export const REGIONS = [
   { value: "gh-accra", label: "Ghana · Accra" },
@@ -7,7 +6,8 @@ export const REGIONS = [
   { value: "ke-nairobi", label: "Kenya · Nairobi" },
 ] as const;
 
-export const PLANS: Tenant["plan"][] = ["free", "growth", "scale"];
+export const PLANS = ["free", "growth", "scale"] as const;
+export type Plan = (typeof PLANS)[number];
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
