@@ -51,3 +51,16 @@ export const listTenantsResponseSchema = z.object({
   next_cursor: z.string().nullable(),
 });
 export type ListTenantsResponse = z.infer<typeof listTenantsResponseSchema>;
+
+/**
+ * Tenant lifecycle change (staff control plane). Accounts SOFT-close — `closed` is terminal (never
+ * hard-delete), so the API rejects any transition out of it. `reason` is mandatory and audited
+ * (before→after), matching the staff-suspend governance pattern.
+ */
+export const updateTenantStatusRequestSchema = z.object({
+  status: z.enum(["active", "suspended", "closed"]),
+  reason: z.string().trim().min(8, "Give a reason (at least 8 characters)."),
+});
+export type UpdateTenantStatusRequest = z.infer<
+  typeof updateTenantStatusRequestSchema
+>;

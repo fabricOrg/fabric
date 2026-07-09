@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { AuditModule } from "../audit/audit.module.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { ProvisioningDbModule } from "../identity/provisioning-db.module.js";
 import {
@@ -11,7 +12,7 @@ import { TenantProvisioningService } from "./tenant-provisioning.service.js";
 
 /** Staff control-plane: ops-provisioned tenant onboarding (WorkOS org + account + admin invite). */
 @Module({
-  imports: [ProvisioningDbModule],
+  imports: [ProvisioningDbModule, AuditModule],
   controllers: [TenantProvisioningController],
   providers: [
     TenantProvisioningService,
