@@ -19,6 +19,7 @@ import { PluginsModule } from "./plugins/plugins.module.js";
 import { ProposalsModule } from "./proposals/proposals.module.js";
 import { SmsModule } from "./sms/sms.module.js";
 import { WalletModule } from "./wallet/wallet.module.js";
+import { WebhooksModule } from "./webhooks/webhooks.module.js";
 
 /**
  * Root module. ConfigModule (global) loads env (.env locally; Secrets Manager in cloud). DbModule
@@ -48,6 +49,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     ApiKeysModule,
     SmsModule,
     WalletModule,
+    WebhooksModule,
   ],
 })
 export class AppModule {}

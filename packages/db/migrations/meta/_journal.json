@@ -218,6 +218,20 @@
       "when": 1783585461436,
       "tag": "0030_api_idempotency_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1783606374592,
+      "tag": "0031_webhooks_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1783606420478,
+      "tag": "0032_webhooks_outbox_rls",
+      "breakpoints": true
     }
   ]
 }
