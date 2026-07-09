@@ -7,6 +7,7 @@ export type {
   TenantId,
   UserId,
 } from "./_shared.js";
+export * from "./api-idempotency.js";
 export * from "./api-keys.js";
 export * from "./audit.js";
 export * from "./auto-topup.js";
