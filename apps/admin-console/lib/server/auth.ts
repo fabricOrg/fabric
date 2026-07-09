@@ -8,6 +8,7 @@ import {
   readDevelopmentSession,
   readImpersonation,
   readSession,
+  refreshSession,
   sealDevelopmentSession,
 } from "@app/fe-auth";
 import { cookies } from "next/headers";
@@ -131,6 +132,39 @@ export async function readAdminSession(): Promise<AppSession | null> {
     developmentAuthConfig(),
     store.get(DEVELOPMENT_COOKIE)?.value,
   );
+}
+
+/**
+ * Refresh an expired WorkOS session from a route handler (BFF), where cookies are writable. The
+ * access token in the sealed cookie is short-lived; on expiry readAdminSession() fails closed and a
+ * BFF mutation would 401 ("Staff sign-in required") even though the user is still signed in. Here we
+ * swap the refresh token for a fresh access token, re-seal the cookie, and return the session.
+ * Returns null if there's no cookie or the refresh token is spent/revoked (→ genuine re-login).
+ */
+export async function refreshAdminSession(): Promise<AppSession | null> {
+  if (!workosAuthConfigured()) return null;
+  const store = await cookies();
+  const sealed = store.get(WORKOS_COOKIE)?.value;
+  if (!sealed) return null;
+  const refreshed = await refreshSession(staffRealmConfig(), sealed);
+  if (!refreshed) return null;
+  try {
+    store.set(WORKOS_COOKIE, refreshed.sealedCookie, sessionCookieOptions());
+  } catch {
+    // cookies() is read-only during a Server Component render; the refreshed session is still valid
+    // for THIS request, and the next request re-refreshes. Only route handlers persist the cookie.
+  }
+  return refreshed.session;
+}
+
+/**
+ * Session for BFF route handlers: read it, transparently refreshing an expired WorkOS access token
+ * so an in-page action (invite / remove / role-change) doesn't 401 just because the short-lived
+ * token lapsed since the page loaded. Page/Server-Component reads use requireAdminSession (which
+ * redirects to /auth/refresh instead).
+ */
+export async function readAdminSessionWithRefresh(): Promise<AppSession | null> {
+  return (await readAdminSession()) ?? (await refreshAdminSession());
 }
 
 export async function requireAdminSession(): Promise<AppSession> {

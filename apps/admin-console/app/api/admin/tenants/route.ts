@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { readAdminSession } from "@/lib/server/auth";
+import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 
 /**
  * Tenant-provisioning BFF → the real staff endpoint POST /internal/admin/tenants (WorkOS org →
@@ -39,7 +39,7 @@ interface Provisioned {
 export async function POST(request: NextRequest) {
   // Staff-session gated — this triggers a real WorkOS org create + invite; never reachable without
   // an authenticated staff session (the page guard alone doesn't protect this directly-hittable route).
-  if (!(await readAdminSession())) {
+  if (!(await readAdminSessionWithRefresh())) {
     return NextResponse.json(
       {
         error: {

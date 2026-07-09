@@ -1,6 +1,6 @@
 import { createProposalRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
-import { readAdminSession } from "@/lib/server/auth";
+import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import {
   createProposal,
   listProposals,
@@ -28,7 +28,7 @@ function errorResponse(error: unknown) {
 }
 
 export async function GET() {
-  if (!(await readAdminSession())) {
+  if (!(await readAdminSessionWithRefresh())) {
     return fail("invalid_session", "Staff sign-in required.", 401);
   }
   try {
@@ -39,7 +39,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await readAdminSession();
+  const session = await readAdminSessionWithRefresh();
   if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
   if (!session.permissions.includes("staff:write")) {
     return fail(

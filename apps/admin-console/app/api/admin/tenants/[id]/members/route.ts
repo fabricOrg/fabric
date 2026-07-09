@@ -1,6 +1,6 @@
 import { inviteMemberRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
-import { readAdminSession } from "@/lib/server/auth";
+import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import {
   inviteTenantMember,
   listTenantMembers,
@@ -36,7 +36,7 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await readAdminSession();
+  const session = await readAdminSessionWithRefresh();
   if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
   const { id } = await params;
   try {
@@ -50,7 +50,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await readAdminSession();
+  const session = await readAdminSessionWithRefresh();
   if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
   if (!session.permissions.includes("staff:write")) {
     return fail(

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { readAdminSession } from "@/lib/server/auth";
+import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 
 /**
  * Plugin registry BFF → the real staff endpoint /internal/plugins (backed by plugin_instances). No
@@ -61,7 +61,7 @@ function apiConfig(): { baseUrl: string; token: string } {
 }
 
 export async function GET() {
-  if (!(await readAdminSession())) return unauthorized();
+  if (!(await readAdminSessionWithRefresh())) return unauthorized();
   try {
     const { baseUrl, token } = apiConfig();
     const res = await fetch(new URL("/internal/plugins", baseUrl), {
@@ -81,7 +81,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await readAdminSession())) return unauthorized();
+  if (!(await readAdminSessionWithRefresh())) return unauthorized();
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;

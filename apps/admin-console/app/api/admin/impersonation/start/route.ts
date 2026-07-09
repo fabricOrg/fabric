@@ -5,7 +5,7 @@ import {
   IMPERSONATION_COOKIE,
   IMPERSONATION_WINDOW_SECONDS,
   impersonationCookiePassword,
-  readAdminSession,
+  readAdminSessionWithRefresh,
   sessionCookieOptions,
 } from "@/lib/server/auth";
 import { recordImpersonationStart } from "@/lib/server/impersonation-client";
@@ -21,7 +21,7 @@ function fail(
 
 /** Start impersonating a tenant: seal a time-boxed claim cookie + audit. staff:write only. */
 export async function POST(request: NextRequest) {
-  const session = await readAdminSession();
+  const session = await readAdminSessionWithRefresh();
   if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
   if (!session.permissions.includes("staff:write")) {
     return fail(
