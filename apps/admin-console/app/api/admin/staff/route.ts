@@ -33,12 +33,13 @@ function errorResponse(error: unknown) {
       );
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   if (!(await readAdminSessionWithRefresh())) {
     return fail("invalid_session", "Staff sign-in required.", 401);
   }
+  const cursor = request.nextUrl.searchParams.get("cursor") ?? undefined;
   try {
-    return NextResponse.json(await listStaff());
+    return NextResponse.json(await listStaff(cursor ? { cursor } : {}));
   } catch (error) {
     return errorResponse(error);
   }

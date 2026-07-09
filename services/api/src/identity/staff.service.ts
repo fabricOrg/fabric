@@ -6,7 +6,15 @@ import type {
   StaffDto,
   UpdateStaffRequest,
 } from "@app/contracts";
-import { type ProvisioningDb, staffUsers } from "@app/db";
+import {
+  clampLimit,
+  decodeCursor,
+  encodeCursor,
+  keysetWhere,
+  type ProvisioningDb,
+  staffUsers,
+  takePage,
+} from "@app/db";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, asc, count, eq, ne } from "drizzle-orm";
 import { invalidRequest } from "../http/api-error.js";
@@ -80,8 +88,18 @@ export class StaffService {
     });
   }
 
-  /** List all platform staff (admin-console management view). */
-  async list(): Promise<ListStaffResponse> {
+  /** List platform staff (admin-console management view). Standard keyset on (email ASC, id ASC). */
+  async list(
+    opts: { limit?: number; cursor?: string } = {},
+  ): Promise<ListStaffResponse> {
+    const pageSize = clampLimit(opts.limit);
+    const decoded = opts.cursor ? decodeCursor(opts.cursor) : null;
+    const keyset = keysetWhere(
+      staffUsers.email,
+      staffUsers.id,
+      "asc",
+      decoded ? { primaryValue: decoded.primary, id: decoded.id } : null,
+    );
     const rows = await this.provisioning.db
       .select({
         staff_user_id: staffUsers.id,
@@ -92,8 +110,13 @@ export class StaffService {
         externalSubjectId: staffUsers.externalSubjectId,
       })
       .from(staffUsers)
-      .orderBy(asc(staffUsers.email));
-    return { staff: rows.map(toDto) };
+      .where(keyset)
+      .orderBy(asc(staffUsers.email), asc(staffUsers.id))
+      .limit(pageSize + 1);
+    const { page, nextCursor } = takePage(rows, pageSize, (r) =>
+      encodeCursor(r.email, r.staff_user_id),
+    );
+    return { staff: page.map(toDto), next_cursor: nextCursor };
   }
 
   /**

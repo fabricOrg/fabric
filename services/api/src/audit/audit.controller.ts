@@ -1,4 +1,5 @@
-import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Query, UseGuards } from "@nestjs/common";
+import { pageOpts } from "../http/pagination.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { AuditService } from "./audit.service.js";
 
@@ -9,7 +10,7 @@ export class AuditController {
   constructor(@Inject(AuditService) private readonly audit: AuditService) {}
 
   @Get()
-  async list() {
-    return this.audit.list();
+  async list(@Query("limit") limit?: string, @Query("cursor") cursor?: string) {
+    return this.audit.list(pageOpts(limit, cursor));
   }
 }

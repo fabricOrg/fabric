@@ -1,5 +1,13 @@
 import type { ListAuditResponse } from "@app/contracts";
-import { auditEvents, type ProvisioningDb } from "@app/db";
+import {
+  auditEvents,
+  clampLimit,
+  decodeCursor,
+  encodeCursor,
+  keysetWhere,
+  type ProvisioningDb,
+  takePage,
+} from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { desc } from "drizzle-orm";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
@@ -38,7 +46,27 @@ export class AuditService {
     });
   }
 
-  async list(limit = 100): Promise<ListAuditResponse> {
+  /**
+   * Keyset-paginated newest-first. `cursor` (from a prior page's next_cursor) resumes strictly
+   * older than that (created_at, id) pair — keyset, not offset, so entries landing at the head
+   * while an operator pages can't shift the window and cause a skip/duplicate. Fetches one extra
+   * row to decide whether an older page exists.
+   */
+  async list(
+    opts: { limit?: number; cursor?: string } = {},
+  ): Promise<ListAuditResponse> {
+    const pageSize = clampLimit(opts.limit);
+    const decoded = opts.cursor ? decodeCursor(opts.cursor) : null;
+    // Standard keyset on (created_at DESC, id DESC) — id breaks created_at ties for a stable order.
+    const keyset = keysetWhere(
+      auditEvents.createdAt,
+      auditEvents.id,
+      "desc",
+      decoded
+        ? { primaryValue: new Date(decoded.primary), id: decoded.id }
+        : null,
+    );
+
     const rows = await this.provisioning.db
       .select({
         id: auditEvents.id,
@@ -52,14 +80,20 @@ export class AuditService {
         created_at: auditEvents.createdAt,
       })
       .from(auditEvents)
-      .orderBy(desc(auditEvents.createdAt))
-      .limit(Math.min(Math.max(limit, 1), 500));
+      .where(keyset)
+      .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
+      .limit(pageSize + 1);
+
+    const { page, nextCursor } = takePage(rows, pageSize, (r) =>
+      encodeCursor(r.created_at.toISOString(), r.id),
+    );
     return {
-      events: rows.map((r) => ({
+      events: page.map((r) => ({
         ...r,
         metadata: (r.metadata ?? {}) as Record<string, unknown>,
         created_at: r.created_at.toISOString(),
       })),
+      next_cursor: nextCursor,
     };
   }
 }

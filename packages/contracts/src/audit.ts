@@ -19,5 +19,9 @@ export type AuditEventDto = z.infer<typeof auditEventDtoSchema>;
 
 export const listAuditResponseSchema = z.object({
   events: z.array(auditEventDtoSchema),
+  /** Opaque keyset cursor for the NEXT (older) page; null when this is the last page. Pass it back
+   *  as `?cursor=` to continue. Keyset (not offset) so a page can't skip/duplicate rows as new
+   *  audit entries land at the head while an operator scrolls. */
+  next_cursor: z.string().nullable(),
 });
 export type ListAuditResponse = z.infer<typeof listAuditResponseSchema>;

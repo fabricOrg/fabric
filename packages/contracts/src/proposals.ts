@@ -29,6 +29,10 @@ export type ProposalDto = z.infer<typeof proposalDtoSchema>;
 
 export const listProposalsResponseSchema = z.object({
   proposals: z.array(proposalDtoSchema),
+  /** Standard keyset cursor field for cross-table consistency. Proposals sort compound
+   *  (status, created_at) — a single-column keyset can't express that, so this stays null until a
+   *  compound cursor is warranted; the pending queue is small by nature. */
+  next_cursor: z.string().nullable(),
 });
 export type ListProposalsResponse = z.infer<typeof listProposalsResponseSchema>;
 

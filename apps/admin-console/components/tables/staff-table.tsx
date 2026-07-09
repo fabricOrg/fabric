@@ -1,12 +1,25 @@
 "use client";
 
-import type { StaffDto } from "@app/contracts";
+import type { ListStaffResponse, StaffDto } from "@app/contracts";
 import { Avatar, AvatarFallback } from "@app/ui/components/ui/avatar";
 import { Badge } from "@app/ui/components/ui/badge";
 import { DataTable } from "@app/ui/components/ui/data-table";
+import { LoadMore } from "@app/ui/components/ui/load-more";
+import { useCursorPage } from "@app/ui/hooks/use-cursor-page";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { StaffRowActions } from "@/components/staff-row-actions";
+import { toastApiError } from "@/lib/error-toast";
+
+async function fetchStaffPage(cursor: string): Promise<ListStaffResponse> {
+  const response = await fetch(
+    `/api/admin/staff?cursor=${encodeURIComponent(cursor)}`,
+    { cache: "no-store" },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw payload;
+  return payload as ListStaffResponse;
+}
 
 type StaffRole = StaffDto["role"];
 
@@ -45,13 +58,24 @@ function StatusBadge({ status }: { status: StaffDto["status"] }) {
 
 export function StaffTable({
   staff,
+  nextCursor,
   canManage,
   selfId,
 }: {
   staff: readonly StaffDto[];
+  nextCursor: string | null;
   canManage: boolean;
   selfId: string;
 }) {
+  const { items, hasMore, loading, loadMore } = useCursorPage(
+    staff,
+    nextCursor,
+    async (cursor) => {
+      const page = await fetchStaffPage(cursor);
+      return { items: page.staff, next_cursor: page.next_cursor };
+    },
+    toastApiError,
+  );
   const columns = useMemo<ColumnDef<StaffDto>[]>(() => {
     const base: ColumnDef<StaffDto>[] = [
       {
@@ -138,11 +162,14 @@ export function StaffTable({
   }, [canManage, selfId]);
 
   return (
-    <DataTable
-      columns={columns}
-      data={staff as StaffDto[]}
-      ariaLabel="Staff members"
-      empty="No staff yet."
-    />
+    <div className="flex flex-col gap-4">
+      <DataTable
+        columns={columns}
+        data={items}
+        ariaLabel="Staff members"
+        empty="No staff yet."
+      />
+      <LoadMore hasMore={hasMore} loading={loading} onLoadMore={loadMore} />
+    </div>
   );
 }

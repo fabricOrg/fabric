@@ -3,7 +3,17 @@ import type {
   ProvisionTenantRequest,
   ProvisionTenantResponse,
 } from "@app/contracts";
-import { accounts, memberships, type ProvisioningDb, users } from "@app/db";
+import {
+  accounts,
+  clampLimit,
+  decodeCursor,
+  encodeCursor,
+  keysetWhere,
+  memberships,
+  type ProvisioningDb,
+  takePage,
+  users,
+} from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { desc, eq } from "drizzle-orm";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
@@ -26,8 +36,21 @@ export class TenantProvisioningService {
     @Inject(WORKOS_CLIENT) private readonly workosClient: WorkosClientProvider,
   ) {}
 
-  /** Staff control-plane list of every account. Runs on the provisioning connection (cross-tenant). */
-  async list(): Promise<ListTenantsResponse> {
+  /** Staff control-plane list of every account. Runs on the provisioning connection (cross-tenant).
+   *  Standard keyset pagination on (created_at DESC, id DESC). */
+  async list(
+    opts: { limit?: number; cursor?: string } = {},
+  ): Promise<ListTenantsResponse> {
+    const pageSize = clampLimit(opts.limit);
+    const decoded = opts.cursor ? decodeCursor(opts.cursor) : null;
+    const keyset = keysetWhere(
+      accounts.createdAt,
+      accounts.id,
+      "desc",
+      decoded
+        ? { primaryValue: new Date(decoded.primary), id: decoded.id }
+        : null,
+    );
     const rows = await this.provisioning.db
       .select({
         tenant_id: accounts.id,
@@ -40,12 +63,18 @@ export class TenantProvisioningService {
         created_at: accounts.createdAt,
       })
       .from(accounts)
-      .orderBy(desc(accounts.createdAt));
+      .where(keyset)
+      .orderBy(desc(accounts.createdAt), desc(accounts.id))
+      .limit(pageSize + 1);
+    const { page, nextCursor } = takePage(rows, pageSize, (r) =>
+      encodeCursor(r.created_at.toISOString(), r.tenant_id),
+    );
     return {
-      tenants: rows.map((r) => ({
+      tenants: page.map((r) => ({
         ...r,
         created_at: r.created_at.toISOString(),
       })),
+      next_cursor: nextCursor,
     };
   }
 

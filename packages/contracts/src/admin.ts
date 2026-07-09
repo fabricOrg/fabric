@@ -47,5 +47,7 @@ export type TenantSummaryDto = z.infer<typeof tenantSummaryDtoSchema>;
 
 export const listTenantsResponseSchema = z.object({
   tenants: z.array(tenantSummaryDtoSchema),
+  /** Standard keyset cursor for the next page; null on the last page (see @app/db pagination). */
+  next_cursor: z.string().nullable(),
 });
 export type ListTenantsResponse = z.infer<typeof listTenantsResponseSchema>;

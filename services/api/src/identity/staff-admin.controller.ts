@@ -11,9 +11,11 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import { invalidRequest, notFound } from "../http/api-error.js";
+import { pageOpts } from "../http/pagination.js";
 import { BffTokenGuard } from "./bff-token.guard.js";
 import { StaffService } from "./staff.service.js";
 
@@ -30,8 +32,8 @@ export class StaffAdminController {
   constructor(@Inject(StaffService) private readonly staff: StaffService) {}
 
   @Get()
-  async list() {
-    return this.staff.list();
+  async list(@Query("limit") limit?: string, @Query("cursor") cursor?: string) {
+    return this.staff.list(pageOpts(limit, cursor));
   }
 
   @Post()
