@@ -136,6 +136,13 @@ export class MaintenanceService {
         }
       }
 
+      // Purge expired client idempotency keys (replay window, not an archive). Cross-tenant DELETE
+      // on the provisioner via the scoped provisioner_purge policy (0030); served by the
+      // expires_at index, so it stays cheap at any volume.
+      await tx.execute(
+        sql`DELETE FROM api_idempotency_keys WHERE expires_at < now()`,
+      );
+
       return { locked: true, sweptTenants };
     });
   }
