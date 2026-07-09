@@ -13,6 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { RequestTenant } from "../api-keys/api-key.guard.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import { QueueService } from "../queue/queue.service.js";
 import { SmsController } from "../sms/sms.controller.js";
 import { SmsService } from "../sms/sms.service.js";
 import { IdempotencyService } from "./idempotency.service.js";
@@ -49,7 +50,14 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     maybeAutoTopUp: async () => undefined,
   } as unknown as AutoTopupService;
 
-  const sms = new SmsService(appDb, autoTopup, killSwitch, config);
+  // Queue disabled (no REDIS_QUEUE_URL) → inline send path, as before finding 7.
+  const sms = new SmsService(
+    appDb,
+    autoTopup,
+    killSwitch,
+    config,
+    new QueueService(config),
+  );
   const idempotency = new IdempotencyService(appDb);
   const controller = new SmsController(sms, idempotency);
 

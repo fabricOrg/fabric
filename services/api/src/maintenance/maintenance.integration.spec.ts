@@ -12,6 +12,7 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import { QueueService } from "../queue/queue.service.js";
 import { SmsService } from "../sms/sms.service.js";
 import { MaintenanceService } from "./maintenance.service.js";
 
@@ -48,7 +49,14 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
   // sweepStuck never touches auto-top-up; a bare stub keeps the test honest about what runs.
   const autoTopup = {} as AutoTopupService;
 
-  const sms = new SmsService(appDb, autoTopup, killSwitch, config);
+  // Queue disabled (no REDIS_QUEUE_URL) → inline send path; the sweeper never enqueues anyway.
+  const sms = new SmsService(
+    appDb,
+    autoTopup,
+    killSwitch,
+    config,
+    new QueueService(config),
+  );
   const maintenance = new MaintenanceService(provisioning, sms, config);
 
   const tenantId = randomUUID() as TenantId;

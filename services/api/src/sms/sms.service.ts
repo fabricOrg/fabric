@@ -10,9 +10,12 @@ import type { Creds, SmsSenderPlugin } from "@app/integrations";
 import { ArkeselSmsProvider } from "@app/integrations";
 import { FakeProvider } from "@app/integrations/testing";
 import {
+  dispatchSend as engineDispatchSend,
   ingestDlr as engineIngestDlr,
-  sendSms as engineSendSms,
+  prepareSend as enginePrepareSend,
   sweepExpired as engineSweepExpired,
+  type PreparedSend,
+  type SendInput,
   type SendResult,
 } from "@app/sms-engine";
 import { Inject, Injectable, Logger } from "@nestjs/common";
@@ -21,6 +24,18 @@ import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound, unauthorized } from "../http/api-error.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { AutoTopupService } from "../payments/auto-topup.service.js";
+import { QueueService } from "../queue/queue.service.js";
+
+/**
+ * The sms-send job payload: everything dispatch needs (tx1 already ran). Carries transient PII by
+ * design — jobs are trimmed on completion; Redis is transport, never storage.
+ */
+export interface SmsSendJob {
+  input: SendInput;
+  prepared: PreparedSend;
+}
+
+export const SMS_SEND_QUEUE = "sms-send";
 
 interface Row {
   tenant_id?: unknown;
@@ -45,6 +60,7 @@ export class SmsService {
     @Inject(AutoTopupService) private readonly autoTopup: AutoTopupService,
     @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
     @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(QueueService) private readonly queue: QueueService,
   ) {
     if (this.config.get<string>("SMS_PROVIDER") === "arkesel") {
       this.provider = new ArkeselSmsProvider();
@@ -101,22 +117,54 @@ export class SmsService {
         "SMS sending is temporarily paused.",
       );
     }
-    const result: SendResult = await engineSendSms(this.deps(), input);
-    // After-debit trigger: the send just reserved/committed against the wallet — check whether the
-    // balance has fallen to the auto-top-up threshold. Fire-and-forget: never block or fail the send.
+    // tx1 in-request EITHER way: insufficient funds must fail the request synchronously (a queue
+    // must never accept money it can't reserve).
+    const prepared = await enginePrepareSend(this.deps(), input);
+
+    let status: SendResult["status"];
+    if (this.queue.enabled) {
+      // Queued path: the provider call + tx2 run in the worker with retry/backoff. jobId =
+      // messageId → BullMQ dedupes, so an accidental double-enqueue is a no-op.
+      await this.queue
+        .queue(SMS_SEND_QUEUE)
+        .add("send", { input, prepared } satisfies SmsSendJob, {
+          jobId: prepared.messageId,
+          attempts: 5,
+          backoff: { type: "exponential", delay: 2_000 },
+          removeOnComplete: { count: 1_000 },
+          removeOnFail: { count: 5_000 },
+        });
+      status = "sending"; // truthful: reserved + persisted, provider outcome pending
+    } else {
+      // Inline fallback (no Redis configured): the pre-queue behavior, unchanged.
+      const result = await engineDispatchSend(this.deps(), input, prepared);
+      status = result.status;
+    }
+
+    // After-debit trigger: the send just reserved against the wallet — check whether the balance
+    // has fallen to the auto-top-up threshold. Fire-and-forget: never block or fail the send.
     void this.autoTopup.maybeAutoTopUp(input.tenantId).catch((error) => {
       this.logger.error(
         `maybeAutoTopUp failed post-send for ${input.tenantId}: ${error instanceof Error ? error.message : "unknown"}`,
       );
     });
-    const message = await this.get(input.tenantId, result.messageId);
+    const message = await this.get(input.tenantId, prepared.messageId);
     return {
       id: message.id,
-      status: result.status,
+      status,
       encoding: message.encoding,
       segments: message.segments,
       cost: message.cost,
     };
+  }
+
+  /**
+   * Worker entry for a queued send: provider call + tx2. Throwing propagates to BullMQ, which
+   * retries with backoff — safe because dispatchSend is retry-idempotent (terminal-freeze + B6)
+   * and the TTL sweeper refunds anything that never resolves.
+   */
+  async processQueuedSend(job: SmsSendJob): Promise<SendResult> {
+    return engineDispatchSend(this.deps(), job.input, job.prepared);
   }
 
   /**
