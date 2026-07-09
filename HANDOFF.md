@@ -20,7 +20,32 @@ OIDC→ECR→ECS Fargate behind API Gateway:
 for `aws`/`gh` calls with `/`-paths). Seeded testing staff admin: `dacsolo10@gmail.com` (via a
 `cloud-seed` ECS run-task).
 
-## Shipped this session (PRs #71–#90, squash-merged to dev)
+## Architecture-review remediation (2026-07-09, PRs #96–#111, squash-merged to dev)
+
+Worked an architecture + admin-console review to merged PRs, one finding per PR
+(`team/product-owner/ARCHITECTURE-FIXES-PROMPT.md` is the tracking doc):
+
+- **Money correctness:** scheduled reservation-sweeper + ledger-invariant job (#96); client
+  `Idempotency-Key` on `POST /v1/sms/send`, no double-charge on retry (#97).
+- **Data-plane hardening:** kill-switch TTL cache w/ last-known-good fallback (#98); pino
+  structured logging + request-id (#99); token-bucket rate limiting per key + per tenant (#102).
+- **Async spine (build-now):** BullMQ send pipeline — provider call + tx2 in an in-process worker,
+  tx1 stays in-request, inline fallback (#100); **ElastiCache Redis applied to testing** +
+  `REDIS_QUEUE_URL` on the api task-def (#101); transactional outbox + HMAC-signed tenant webhooks
+  (#105); provider kill-switch wired to the send path + dead switches pruned (#107).
+- **Admin console:** dropped `mock-admin` dead code + repointed at contracts + codified CLAUDE.md
+  §3 standards (#106); trusted-origin CSRF gate on every BFF mutation route (#103); single-flight
+  token refresh + typed failure semantics + dev-portal helper (#104); vitest bootstrap + first
+  tests (#108); tenant detail route keys on slug (#109); **standardized keyset pagination across
+  all control-plane tables** (#110); tenant lifecycle actions suspend/reinstate/soft-close (#111).
+- **Docs:** ARCHITECTURE §4/§5/§10 + IDENTITY §12.5 (invite-only) / §3.3 (SLO) reconciled to
+  as-built (this PR).
+
+**Still open:** A1 full act-as impersonation (plan approved, not built — largest item);
+back-channel SLO; MFA enforcement (env-gated); OTel tracing/metrics; admin-console
+component/e2e tests. Redis infra is the one applied `terraform apply` (human-confirmed).
+
+## Shipped in the prior session (PRs #71–#90, squash-merged to dev)
 
 Auto top-up · Arkesel SMS adapter + DLR (sandbox) · full UI standardization (PageHeader, shadcn
 date/time pickers, DataTable, Form kit, StatCard, chart skeletons, first-class states) · big-bang
