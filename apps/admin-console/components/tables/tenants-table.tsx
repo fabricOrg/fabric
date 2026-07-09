@@ -83,7 +83,7 @@ const columns: ColumnDef<TenantSummaryDto>[] = [
     cell: ({ row }) => (
       <div className="text-right">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/tenants/${row.original.tenant_id}`}>
+          <Link href={`/tenants/${row.original.slug}`}>
             Manage
             <ChevronRight data-icon="inline-end" />
           </Link>

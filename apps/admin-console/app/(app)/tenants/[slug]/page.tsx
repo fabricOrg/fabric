@@ -55,20 +55,22 @@ function initials(value: string): string {
 export default async function TenantDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
   const session = await requireAdminSession();
   const canManage = session.permissions.includes("staff:write");
-  const { id } = await params;
+  const { slug } = await params;
 
-  // The staff tenant list is small; resolve the header from it rather than adding a get-one endpoint.
-  const tenant = (await listTenants()).tenants.find((t) => t.tenant_id === id);
+  // The staff tenant list is small; resolve the tenant from it by SLUG (the human-readable URL
+  // key) rather than adding a get-one endpoint. Member ops below still key off tenant.tenant_id
+  // (the UUID the /internal endpoints expect).
+  const tenant = (await listTenants()).tenants.find((t) => t.slug === slug);
   if (!tenant) notFound();
 
   let members: MemberDto[] = [];
   let loadError = false;
   try {
-    members = (await listTenantMembers(id)).members;
+    members = (await listTenantMembers(tenant.tenant_id)).members;
   } catch (error) {
     loadError = error instanceof TenantMemberApiError || error instanceof Error;
   }
@@ -108,7 +110,7 @@ export default async function TenantDetailPage({
           </CardDescription>
           {canManage && tenant.workos_organization_id ? (
             <CardAction>
-              <InviteTenantMemberDialog tenantId={id} />
+              <InviteTenantMemberDialog tenantId={tenant.tenant_id} />
             </CardAction>
           ) : null}
         </CardHeader>
@@ -175,7 +177,7 @@ export default async function TenantDetailPage({
                         <TableCell className="text-right">
                           {m.role !== "owner" ? (
                             <TenantMemberRowActions
-                              tenantId={id}
+                              tenantId={tenant.tenant_id}
                               userId={m.user_id}
                               email={m.email}
                               label={m.name ?? m.email}
