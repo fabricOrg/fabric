@@ -5,12 +5,15 @@ import {
   Injectable,
 } from "@nestjs/common";
 import { forbidden, unauthorized } from "../http/api-error.js";
+import { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import { ApiKeyService } from "./api-keys.service.js";
 
 /** The tenant context a resolved key attaches to the request; handlers run data access via it. */
 export interface RequestTenant {
   readonly id: string;
   readonly scopes: string[];
+  /** Rate-limit bucket id for the presenting key (hash prefix — never raw key material). */
+  readonly keyId: string;
 }
 
 /** Minimal shape we read/attach — avoids coupling to a specific HTTP adapter's request type. */
@@ -30,7 +33,10 @@ interface AuthedRequest {
 export class ApiKeyGuard implements CanActivate {
   // Explicit @Inject(token) — NOT type-reflection DI — so injection works under the tsx dev runner
   // too (esbuild doesn't emit decorator metadata; matches DbModule's @Inject(APP_DB) discipline).
-  constructor(@Inject(ApiKeyService) private readonly apiKeys: ApiKeyService) {}
+  constructor(
+    @Inject(ApiKeyService) private readonly apiKeys: ApiKeyService,
+    @Inject(RateLimitService) private readonly rateLimit: RateLimitService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AuthedRequest>();
@@ -45,7 +51,14 @@ export class ApiKeyGuard implements CanActivate {
     if (resolved === null) {
       throw unauthorized("invalid_api_key", "Invalid or revoked API key.");
     }
-    req.tenant = { id: resolved.tenantId, scopes: resolved.scopes };
+    // Rate limit AFTER auth (unauthenticated traffic never reaches the counters, so garbage keys
+    // can't exhaust a tenant's budget) — throws 429 when the key's or tenant's bucket is empty.
+    await this.rateLimit.consume(resolved.keyId, resolved.tenantId);
+    req.tenant = {
+      id: resolved.tenantId,
+      scopes: resolved.scopes,
+      keyId: resolved.keyId,
+    };
     return true;
   }
 }

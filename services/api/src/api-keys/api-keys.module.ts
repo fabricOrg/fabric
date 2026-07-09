@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { RateLimitModule } from "../rate-limit/rate-limit.module.js";
 import { ApiContextController } from "./api-context.controller.js";
 import { ApiKeyGuard } from "./api-key.guard.js";
 import { ApiKeysController } from "./api-keys.controller.js";
@@ -12,8 +13,10 @@ import { OperatorTokenGuard } from "./operator-token.guard.js";
  * operator-token-gated separately until customer sessions land in F2.1.
  */
 @Module({
+  // RateLimitModule: ApiKeyGuard takes a token per request (per-key + per-tenant buckets).
+  imports: [RateLimitModule],
   controllers: [ApiKeysController, ApiContextController],
   providers: [ApiKeyService, ApiKeyGuard, OperatorTokenGuard],
-  exports: [ApiKeyService, ApiKeyGuard],
+  exports: [ApiKeyService, ApiKeyGuard, RateLimitModule],
 })
 export class ApiKeysModule {}

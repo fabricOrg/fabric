@@ -62,7 +62,11 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
   const controller = new SmsController(sms, idempotency);
 
   const tenantId = randomUUID() as TenantId;
-  const tenant: RequestTenant = { id: tenantId, scopes: ["sms:send"] };
+  const tenant: RequestTenant = {
+    id: tenantId,
+    scopes: ["sms:send"],
+    keyId: "abcdef0123456789",
+  };
   const req = { tenant };
   const CREDIT = 100_000n;
 
