@@ -102,6 +102,21 @@ async function resolveMessage(
       error_code = COALESCE(${opts.errorCode ?? null}, error_code),
       updated_at = now()
     WHERE id = ${messageId}`;
+  // Transactional outbox (finding 8): the domain event commits or rolls back WITH the status
+  // change — never an event for a transition that didn't happen, never a lost transition.
+  // Delivery to tenant-registered webhook endpoints is the poller/worker's job, not ours.
+  await tx`
+    INSERT INTO outbox_events (tenant_id, event_type, payload)
+    VALUES (
+      current_setting('app.tenant_id')::uuid,
+      'message.updated',
+      ${JSON.stringify({
+        message_id: messageId,
+        status: newStatus,
+        previous_status: prior,
+        ...(opts.errorCode ? { error_code: opts.errorCode } : {}),
+      })}::jsonb
+    )`;
   return newStatus;
 }
 
