@@ -98,10 +98,19 @@ resource "aws_ecs_task_definition" "api" {
         hostPort      = 3000
         protocol      = "tcp"
       }]
-      environment = [{
-        name  = "PORT"
-        value = "3000"
-      }]
+      environment = [
+        {
+          name  = "PORT"
+          value = "3000"
+        },
+        # BullMQ send queue (finding 7). Endpoint is infra topology, not a secret. NOTE: this
+        # task-def change reaches the RUNNING service only via a deploy (the workflow grafts the
+        # real image) — never `update-service` onto the raw terraform revision (bootstrap image).
+        {
+          name  = "REDIS_QUEUE_URL"
+          value = "redis://${aws_elasticache_cluster.redis_queue.cache_nodes[0].address}:6379"
+        },
+      ]
       secrets = [
         {
           name      = "DATABASE_URL_APP"
