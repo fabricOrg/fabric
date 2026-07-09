@@ -123,6 +123,13 @@ resource "aws_ecs_task_definition" "api" {
           name      = "DATABASE_URL_PROVISIONER"
           valueFrom = "${aws_secretsmanager_secret.database_provisioner.arn}:DATABASE_URL_PROVISIONER::"
         },
+        # StaffService + MembersService send WorkOS invitations from the api (org-less staff invite,
+        # org member invite). createWorkosClient needs only the API key. Reuses the shared WorkOS
+        # secret populated for the dashboard.
+        {
+          name      = "WORKOS_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.dashboard_workos.arn}:WORKOS_API_KEY::"
+        },
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -151,6 +158,7 @@ resource "aws_ecs_task_definition" "api" {
     aws_secretsmanager_secret_version.operator_token,
     aws_secretsmanager_secret_version.webhook_ingress_token,
     aws_secretsmanager_secret_version.bff_internal_token,
+    aws_secretsmanager_secret_version.dashboard_workos,
   ]
 }
 
