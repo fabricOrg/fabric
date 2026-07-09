@@ -1,33 +1,29 @@
-import type { Tenant } from "@/lib/mock-admin";
+import type { ProvisionTenantResponse } from "@app/contracts";
 
 /**
- * Tenant-provisioning client. Hits the mock BFF for now.
- * TODO(BFF): promote these DTOs to @app/contracts (zod) and point at the real staff-guarded
- * POST /internal/admin/tenants once services/api implements WorkOS-org + account + invite.
+ * Tenant-provisioning client → the live staff-guarded BFF route (POST /api/admin/tenants), which
+ * delegates to the api's /internal/admin/tenants (WorkOS org → account → first-admin invite).
+ * `region` is the market region the UI selects; the BFF maps it to accounts.dataRegion.
  */
-export interface ProvisionTenantRequest {
+export interface ProvisionTenantInput {
   name: string;
   slug: string;
   region: string;
-  plan: Tenant["plan"];
+  plan: "free" | "growth" | "scale";
   adminEmail: string;
 }
 
-export interface ProvisionTenantResult {
-  tenant: Tenant;
-  workosOrganizationId: string;
-  invitedEmail: string;
-}
-
 export async function provisionTenant(
-  input: ProvisionTenantRequest,
-): Promise<ProvisionTenantResult> {
+  input: ProvisionTenantInput,
+): Promise<ProvisionTenantResponse> {
   const response = await fetch("/api/admin/tenants", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
   const payload = (await response.json()) as unknown;
+  // Non-2xx bodies are the shared F8.3 error envelope — hand them to toastApiError (parseApiError
+  // never throws), so the caller's catch surfaces a user-safe message + request_id.
   if (!response.ok) throw payload;
-  return payload as ProvisionTenantResult;
+  return payload as ProvisionTenantResponse;
 }
