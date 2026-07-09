@@ -12,6 +12,8 @@ import {
 export interface ResolvedApiKey {
   readonly tenantId: string;
   readonly scopes: string[];
+  /** Stable per-key identifier for rate-limit buckets: a hash PREFIX, never raw key material. */
+  readonly keyId: string;
 }
 
 /** A newly created key — the raw secret is present ONCE here and never again. */
@@ -62,7 +64,12 @@ export class ApiKeyService {
     if (!row) return null; // unknown or revoked → the api_key_auth_lookup policy returned nothing
     const tenantId = String(row.tenant_id);
     void this.touch(tenantId, keyHash); // fire-and-forget; must never fail auth
-    return { tenantId, scopes: toScopes(row.scopes) };
+    // keyId = hash prefix: unique enough to bucket per key, reveals nothing about the raw secret.
+    return {
+      tenantId,
+      scopes: toScopes(row.scopes),
+      keyId: keyHash.slice(0, 16),
+    };
   }
 
   /** Bump last_used_at inside the tenant's own context — no RLS bypass (the tenant owns the key). */

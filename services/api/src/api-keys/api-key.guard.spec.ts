@@ -1,6 +1,7 @@
 import type { ApiErrorEnvelope } from "@app/contracts";
 import type { ExecutionContext } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
+import type { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import { ApiKeyGuard, extractBearer, requireScope } from "./api-key.guard.js";
 import type { ApiKeyService, ResolvedApiKey } from "./api-keys.service.js";
 
@@ -23,7 +24,11 @@ function ctxFor(headers: Record<string, string | undefined>): {
 function guardWithResolve(
   resolve: (raw: string) => Promise<ResolvedApiKey | null>,
 ): ApiKeyGuard {
-  return new ApiKeyGuard({ resolve } as unknown as ApiKeyService);
+  // Rate limit stub: consume() never throws — limiting behavior has its own spec.
+  const rateLimit = {
+    consume: async () => undefined,
+  } as unknown as RateLimitService;
+  return new ApiKeyGuard({ resolve } as unknown as ApiKeyService, rateLimit);
 }
 
 describe("extractBearer", () => {
@@ -50,6 +55,7 @@ describe("ApiKeyGuard (F2.3)", () => {
     const guard = guardWithResolve(async () => ({
       tenantId: "00000000-0000-0000-0000-0000000000a1",
       scopes: ["sms:send"],
+      keyId: "abcdef0123456789",
     }));
     const { ctx, req } = ctxFor({ authorization: "Bearer sk_test_valid" });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
@@ -89,6 +95,7 @@ describe("requireScope", () => {
   const tenant = {
     id: "00000000-0000-0000-0000-0000000000a1",
     scopes: ["sms:read"],
+    keyId: "abcdef0123456789",
   };
 
   it("returns a tenant with the required or wildcard scope", () => {

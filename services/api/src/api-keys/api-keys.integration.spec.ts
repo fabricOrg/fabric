@@ -12,8 +12,10 @@
 import type { ApiErrorEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import type { ExecutionContext } from "@nestjs/common";
+import type { ConfigService } from "@nestjs/config";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import { hashApiKey } from "./api-key.crypto.js";
 import { ApiKeyGuard } from "./api-key.guard.js";
 import { ApiKeyService } from "./api-keys.service.js";
@@ -29,7 +31,11 @@ if (!SUPER_URL || !APP_URL) {
 const owner = postgres(SUPER_URL, { max: 2 }); // superuser: seeds cross-tenant (bypasses FORCE RLS)
 const db = createAppDb(APP_URL, { max: 1 }); // app_runtime: RLS-enforced, the real service connection
 const svc = new ApiKeyService(db);
-const guard = new ApiKeyGuard(svc);
+// Real RateLimitService with no REDIS_QUEUE_URL → limiting disabled (pass-through).
+const guard = new ApiKeyGuard(
+  svc,
+  new RateLimitService({ get: () => undefined } as unknown as ConfigService),
+);
 
 const TENANT = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 const ACTIVE_RAW = `sk_test_${"c".repeat(32)}`;
@@ -75,7 +81,12 @@ afterAll(async () => {
 describe("ApiKeyService.resolve (integration, real RLS)", () => {
   it("resolves an active key → its tenant + scopes", async () => {
     const r = await svc.resolve(ACTIVE_RAW);
-    expect(r).toEqual({ tenantId: TENANT, scopes: ["sms:send"] });
+    expect(r).toEqual({
+      tenantId: TENANT,
+      scopes: ["sms:send"],
+      // keyId = sha-256 prefix of the presented key — per-key rate-limit bucket, no raw material.
+      keyId: expect.stringMatching(/^[0-9a-f]{16}$/),
+    });
   });
 
   it("returns null for a revoked key (api_key_auth_lookup filters status='active')", async () => {
@@ -95,7 +106,11 @@ describe("ApiKeyGuard (integration, real resolve)", () => {
   it("attaches req.tenant for a valid key", async () => {
     const { ctx, req } = ctxWithBearer(ACTIVE_RAW);
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
-    expect(req.tenant).toEqual({ id: TENANT, scopes: ["sms:send"] });
+    expect(req.tenant).toEqual({
+      id: TENANT,
+      scopes: ["sms:send"],
+      keyId: expect.stringMatching(/^[0-9a-f]{16}$/),
+    });
   });
 
   it("401s (F8.3 auth_error) for an unknown key", async () => {
