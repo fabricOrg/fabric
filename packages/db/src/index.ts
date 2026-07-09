@@ -3,6 +3,7 @@
 // from deep paths, so the package boundary stays a single, stable surface.
 
 export * from "./client.js";
+export * from "./ledger-invariant.js";
 export * from "./provisioning.js";
 export * from "./queries/customer-reads.js";
 export * from "./schema/index.js";

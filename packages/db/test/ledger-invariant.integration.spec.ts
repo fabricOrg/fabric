@@ -17,7 +17,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   checkLedgerInvariants,
   formatViolations,
-} from "./ledger-invariant.check.js";
+} from "../src/ledger-invariant.js";
 
 // Prod-faithful owner model (653b45d): the migration owner `app_migrator` is NON-super, so it's
 // subject to FORCE RLS like prod — it CANNOT seed cross-tenant rows or run a global (all-tenant)

@@ -2,10 +2,9 @@
 // LEDGER INVARIANT CHECK — the pinned money-correctness assertion (QA / adams)
 // Bound to contract `ledger-double-entry` v1.0.0 (newton's PROPOSAL §6/§7).
 //
-// PROPOSAL ARTIFACT — target location: packages/db/test/ledger-invariant.check.ts
-// (final path to be confirmed with newton against his migration). Framework-agnostic: it takes a
-// query executor, so BOTH the Vitest integration test AND the standing CI job import the same
-// assertions — one definition of "the ledger is correct", no drift.
+// Lives in src/ (exported from @app/db) so the API's scheduled maintenance job, the Vitest
+// integration test, AND the standing db:assert CLI all import the SAME assertions — one
+// definition of "the ledger is correct", no drift. Framework-agnostic: takes a query executor.
 //
 // THE TWO INVARIANTS (see PROPOSAL §6):
 //   1. Per-transaction trial balance:  for every txn_id,  Σ(credit) − Σ(debit) = 0.
