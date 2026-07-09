@@ -22,6 +22,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { InviteTenantMemberDialog } from "@/components/forms/invite-tenant-member-dialog";
 import { TenantMemberRowActions } from "@/components/tenant-member-row-actions";
+import { TenantStatusActions } from "@/components/tenant-status-actions";
 import { requireAdminSession } from "@/lib/server/auth";
 import {
   listTenantMembers,
@@ -94,9 +95,18 @@ export default async function TenantDetailPage({
               {tenant.slug} · {tenant.plan} · {tenant.data_region}
             </p>
           </div>
-          <Badge variant="outline" className="capitalize">
-            {tenant.status}
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="capitalize">
+              {tenant.status}
+            </Badge>
+            {canManage ? (
+              <TenantStatusActions
+                tenantId={tenant.tenant_id}
+                name={tenant.name}
+                status={tenant.status}
+              />
+            ) : null}
+          </div>
         </div>
       </div>
 
