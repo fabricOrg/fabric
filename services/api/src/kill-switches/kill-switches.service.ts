@@ -5,7 +5,7 @@ import type {
 } from "@app/contracts";
 import { killSwitches, type NewKillSwitch, type ProvisioningDb } from "@app/db";
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, notInArray } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 
@@ -24,23 +24,16 @@ const CATALOG: NewKillSwitch[] = [
       "Pause wallet top-ups and charges (collections/disbursements).",
     scope: "payments",
   },
+  // One switch per provider that ACTUALLY has an adapter — the SmsService gate reads
+  // `provider.<slug>` before every send (finding 9). Africa's Talking + Hubtel were seeded here
+  // with no adapter behind them: dead switches that advertised "route sends away" but did nothing.
+  // They're dropped (and cleaned from seeded DBs by migration 0033) until an adapter exists —
+  // adding a real provider re-adds its switch here.
   {
-    key: "provider.arkesel",
+    key: "provider.arkesel-sms",
     label: "Arkesel provider",
-    description: "Route sends away from Arkesel (failover / incident).",
-    scope: "provider",
-  },
-  {
-    key: "provider.africas-talking",
-    label: "Africa's Talking provider",
     description:
-      "Route sends away from Africa's Talking (failover / incident).",
-    scope: "provider",
-  },
-  {
-    key: "provider.hubtel",
-    label: "Hubtel provider",
-    description: "Route sends away from Hubtel (failover / incident).",
+      "Halt sends via Arkesel (incident). No failover target yet, so this refuses Arkesel sends rather than rerouting.",
     scope: "provider",
   },
 ];
@@ -78,6 +71,22 @@ export class KillSwitchService {
       .insert(killSwitches)
       .values(CATALOG)
       .onConflictDoNothing({ target: killSwitches.key });
+    // Prune dead PROVIDER switches — a `provider.*` row with no matching adapter in the current
+    // catalog (e.g. the retired africas-talking / hubtel / old arkesel keys, finding 9). Runs on
+    // the provisioner connection (kill_switches DML is provisioner-only — a migration can't do
+    // this, it runs as app_migrator which lacks the grant). Scoped to `provider.*` so a platform
+    // switch is never touched; self-healing on every read.
+    const providerKeys = CATALOG.filter((s) => s.scope === "provider").map(
+      (s) => s.key,
+    );
+    await this.provisioning.db
+      .delete(killSwitches)
+      .where(
+        and(
+          eq(killSwitches.scope, "provider"),
+          notInArray(killSwitches.key, providerKeys),
+        ),
+      );
   }
 
   async list(): Promise<ListKillSwitchesResponse> {

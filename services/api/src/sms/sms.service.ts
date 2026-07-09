@@ -117,6 +117,17 @@ export class SmsService {
         "SMS sending is temporarily paused.",
       );
     }
+    // Per-provider kill-switch (finding 9): halt the ACTIVE provider without pausing the platform.
+    // With a single real provider there's no failover target, so a paused provider fails CLOSED
+    // (never a silent send, never a faked success) — the honest behavior until a 2nd provider lands.
+    // The sandbox `fake-sms` provider has no switch. Gate here at send entry so we don't reserve +
+    // enqueue for a provider that can't run.
+    if (await this.killSwitch.isPaused(`provider.${this.provider.slug}`)) {
+      throw invalidRequest(
+        "provider_unavailable",
+        "The SMS provider is temporarily unavailable. Try again shortly.",
+      );
+    }
     // tx1 in-request EITHER way: insufficient funds must fail the request synchronously (a queue
     // must never accept money it can't reserve).
     const prepared = await enginePrepareSend(this.deps(), input);
