@@ -17,3 +17,4 @@ allowBuilds:
   sharp: true # Next.js image optimizer native binary; without it `next build` deps-check fails
   '@infisical/cli': false # deferred: build/bin linking is broken on Windows and we don't use the CLI yet
   '@nestjs/core': false # NestJS core's postinstall is a support/telemetry banner — not needed for the build
+  msgpackr-extract: false # bullmq → msgpackr optional native ext; pure-JS fallback is fine, skip the build script
