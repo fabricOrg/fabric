@@ -15,20 +15,26 @@ import { SmsService } from "../sms/sms.service.js";
  * SCHEDULED MAINTENANCE (ARCHITECTURE §10 made real) — two money-correctness jobs that previously
  * existed only as library code + tests, with NO production trigger:
  *
- *  1. Reservation sweeper: a crash between reserve (tx1) and the provider outcome (tx2) leaves a
- *     message stuck non-terminal with customer funds parked in reserved_clearing. The sweep
- *     resolves anything past the TTL as `expired` (refund if it never reached a billable status).
- *  2. Ledger invariant check: per-txn trial balance + per-account projection integrity, global.
- *     Drift is a page-worthy event — logged as an error with the full violation report.
+ *  1. Reservation sweeper (every 5 min): a crash between reserve (tx1) and the provider outcome
+ *     (tx2) leaves a message stuck non-terminal with customer funds parked in reserved_clearing.
+ *     The sweep resolves anything past the TTL as `expired` (refund if it never reached a billable
+ *     status). Time-sensitive — parked customer money — so it runs on the tight cadence. Its
+ *     discovery scan stays cheap forever via the partial non-terminal index (migration 0028).
+ *  2. Ledger invariant check (hourly): per-txn trial balance + per-account projection integrity,
+ *     global. Two full-ledger aggregates — O(all ledger rows) — so it deliberately runs on the
+ *     SLOW cadence: at 5 minutes the RDS cost would grow linearly with ledger history for a check
+ *     that almost never changes answer. Drift is a page-worthy event — logged as an error with the
+ *     full violation report.
  *
  * RLS shape: cross-tenant DISCOVERY (which tenants have stuck messages / the global invariant
  * read) runs on the provisioner connection, whose reach on messages/ledger_* is SELECT-ONLY
  * (migration 0027). The sweep MUTATION runs per-tenant through SmsService → withTenant on
  * app_runtime, so RLS still guards every write.
  *
- * Concurrency: pg_try_advisory_xact_lock makes overlapping runs (multiple ECS tasks, slow sweep
- * vs next tick) a no-op rather than duplicate work. The sweep itself is idempotent anyway
- * (commit/refund keys + the B6 exclusivity index), so the lock is an efficiency, not a guard.
+ * Concurrency: each job takes its own pg_try_advisory_xact_lock, so overlapping runs (multiple
+ * ECS tasks, slow run vs next tick) are a no-op rather than duplicate work. The sweep itself is
+ * idempotent anyway (commit/refund keys + the B6 exclusivity index) — the lock is an efficiency,
+ * not a guard.
  */
 @Injectable()
 export class MaintenanceService {
@@ -40,8 +46,9 @@ export class MaintenanceService {
     @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
-  /** Advisory lock key for the maintenance run (arbitrary but stable app-wide constant). */
-  private static readonly LOCK_KEY = 727_001;
+  /** Advisory lock keys (arbitrary but stable app-wide constants; one per job). */
+  private static readonly SWEEP_LOCK_KEY = 727_001;
+  private static readonly INVARIANT_LOCK_KEY = 727_002;
 
   /** Reservation TTL: how long a message may sit non-terminal before the sweeper expires it. */
   private ttlMinutes(): number {
@@ -56,34 +63,45 @@ export class MaintenanceService {
   }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
-  async tick(): Promise<void> {
+  async sweepTick(): Promise<void> {
     if (!this.cronEnabled()) return;
     try {
-      await this.runOnce();
+      await this.runSweep();
     } catch (error) {
       // Never let a maintenance failure crash the process; next tick retries.
       this.logger.error(
-        `maintenance run failed: ${error instanceof Error ? error.message : "unknown"}`,
+        `sweep run failed: ${error instanceof Error ? error.message : "unknown"}`,
+      );
+    }
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async invariantTick(): Promise<void> {
+    if (!this.cronEnabled()) return;
+    try {
+      await this.runInvariant();
+    } catch (error) {
+      this.logger.error(
+        `invariant run failed: ${error instanceof Error ? error.message : "unknown"}`,
       );
     }
   }
 
   /**
-   * One full maintenance pass (also the test entry point). Returns what happened so tests and
-   * callers can assert without scraping logs. `sweptTenants` maps tenantId → resolved count.
+   * One sweep pass (also the test entry point). Returns what happened so tests and callers can
+   * assert without scraping logs. `sweptTenants` maps tenantId → resolved count.
    */
-  async runOnce(): Promise<{
+  async runSweep(): Promise<{
     locked: boolean;
     sweptTenants: Record<string, number>;
-    invariant: LedgerInvariantResult | null;
   }> {
     return this.provisioning.db.transaction(async (tx) => {
       // Skip-if-running: the xact lock releases automatically when this transaction ends.
       const lockRows = (await tx.execute(
-        sql`SELECT pg_try_advisory_xact_lock(${MaintenanceService.LOCK_KEY}) AS locked`,
+        sql`SELECT pg_try_advisory_xact_lock(${MaintenanceService.SWEEP_LOCK_KEY}) AS locked`,
       )) as Array<{ locked: boolean }>;
       if (lockRows[0]?.locked !== true) {
-        return { locked: false, sweptTenants: {}, invariant: null };
+        return { locked: false, sweptTenants: {} };
       }
 
       const cutoffIso = new Date(
@@ -91,6 +109,7 @@ export class MaintenanceService {
       ).toISOString();
 
       // Discovery (provisioner, read-only): which tenants have stuck non-terminal messages.
+      // Served by the partial idx_messages_nonterminal_updated (0028) — near-empty when healthy.
       const stuckRows = (await tx.execute(
         sql`SELECT DISTINCT tenant_id FROM messages
             WHERE status IN ('queued','sending','accepted','sent')
@@ -117,7 +136,21 @@ export class MaintenanceService {
         }
       }
 
-      // Global invariant check (provisioner, read-only). Drift = page-worthy error log.
+      return { locked: true, sweptTenants };
+    });
+  }
+
+  /**
+   * One global invariant pass (also the test entry point). Returns the result, or null when
+   * another runner holds the lock. Drift = page-worthy error log.
+   */
+  async runInvariant(): Promise<LedgerInvariantResult | null> {
+    return this.provisioning.db.transaction(async (tx) => {
+      const lockRows = (await tx.execute(
+        sql`SELECT pg_try_advisory_xact_lock(${MaintenanceService.INVARIANT_LOCK_KEY}) AS locked`,
+      )) as Array<{ locked: boolean }>;
+      if (lockRows[0]?.locked !== true) return null;
+
       const invariant = await checkLedgerInvariants({
         query: async (q: string) => ({
           rows: (await tx.execute(sql.raw(q))) as Array<
@@ -130,8 +163,7 @@ export class MaintenanceService {
           `LEDGER INVARIANT VIOLATION\n${formatViolations(invariant)}`,
         );
       }
-
-      return { locked: true, sweptTenants, invariant };
+      return invariant;
     });
   }
 }

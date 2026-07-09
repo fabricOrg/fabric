@@ -38,7 +38,8 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
   const owner = postgres(superUrl ?? "", { max: 1 });
 
   const config = {
-    // Default provider (fake), default TTL (15m), cron gate irrelevant — tests call runOnce().
+    // Default provider (fake), default TTL (15m), cron gate irrelevant — tests call
+    // runSweep()/runInvariant() directly.
     get: () => undefined,
   } as unknown as ConfigService;
   const killSwitch = {
@@ -112,7 +113,7 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     const messageId = await seedStuckMessage();
     expect(await customerBalance()).toBe(CREDIT - COST);
 
-    const first = await maintenance.runOnce();
+    const first = await maintenance.runSweep();
     expect(first.locked).toBe(true);
     expect(first.sweptTenants[tenantId]).toBe(1);
 
@@ -123,7 +124,7 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     expect(await customerBalance()).toBe(CREDIT);
 
     // Second pass: message is terminal now — nothing to sweep, no double refund.
-    const second = await maintenance.runOnce();
+    const second = await maintenance.runSweep();
     expect(second.sweptTenants[tenantId] ?? 0).toBe(0);
     expect(await customerBalance()).toBe(CREDIT);
 
@@ -138,7 +139,7 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     const messageId = await seedStuckMessage();
     const before = await customerBalance();
 
-    await Promise.all([maintenance.runOnce(), maintenance.runOnce()]);
+    await Promise.all([maintenance.runSweep(), maintenance.runSweep()]);
     // Whatever interleaving happened (lock skip or serialized second pass), one refund landed.
     expect(await customerBalance()).toBe(before + COST);
     const refunds = await owner`
@@ -148,9 +149,8 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
   });
 
   it("reports the ledger invariant green on a healthy ledger", async () => {
-    const result = await maintenance.runOnce();
-    expect(result.locked).toBe(true);
-    expect(result.invariant?.ok).toBe(true);
+    const result = await maintenance.runInvariant();
+    expect(result?.ok).toBe(true);
   });
 
   it("detects seeded projection drift and reports the drifted account", async () => {
@@ -164,12 +164,10 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     await owner`
       UPDATE ledger_accounts SET balance_minor = balance_minor + 1 WHERE id = ${accountId}`;
     try {
-      const result = await maintenance.runOnce();
-      expect(result.invariant?.ok).toBe(false);
+      const result = await maintenance.runInvariant();
+      expect(result?.ok).toBe(false);
       expect(
-        result.invariant?.driftedAccounts.some(
-          (d) => d.accountId === accountId,
-        ),
+        result?.driftedAccounts.some((d) => d.accountId === accountId),
       ).toBe(true);
     } finally {
       await owner`
