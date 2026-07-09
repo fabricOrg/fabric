@@ -29,6 +29,7 @@ import {
   type RealmConfig,
   readSession,
   refreshSession,
+  refreshSessionDetailed,
 } from "./index.js";
 
 const appSession = {
@@ -165,5 +166,81 @@ describe("@app/fe-auth WorkOS flow", () => {
       workosLogoutUrl: "https://auth.example/logout",
       clearCookie: "",
     });
+  });
+});
+
+describe("refreshSessionDetailed (G2 hardening)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sdk.authenticateWithSessionCookie.mockResolvedValue(workosSession);
+    resolveSession.mockResolvedValue(appSession);
+  });
+
+  it("single-flight: concurrent refreshes with one cookie share ONE WorkOS call", async () => {
+    // Refresh tokens rotate — a second concurrent call with the same cookie would present a
+    // spent token. Both callers must join the same in-flight refresh.
+    let release: (v: unknown) => void = () => undefined;
+    sdk.refresh.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const cookie = `sf-${Date.now()}`; // unique per run: the flight map is module-level
+    const [a, b] = [
+      refreshSessionDetailed(config, cookie),
+      refreshSessionDetailed(config, cookie),
+    ];
+    release({ authenticated: true, sealedSession: "rotated-once" });
+    const [ra, rb] = await Promise.all([a, b]);
+    expect(sdk.refresh).toHaveBeenCalledTimes(1);
+    expect(ra).toEqual(rb);
+    expect(ra.status).toBe("refreshed");
+  });
+
+  it("classifies a WorkOS 4xx (spent/revoked token) as terminal", async () => {
+    sdk.refresh.mockRejectedValue(
+      Object.assign(new Error("invalid_grant"), { status: 400 }),
+    );
+    await expect(
+      refreshSessionDetailed(config, `t4-${Date.now()}`),
+    ).resolves.toEqual({ status: "terminal" });
+  });
+
+  it("classifies an unauthenticated refresh response as terminal", async () => {
+    sdk.refresh.mockResolvedValue({ authenticated: false });
+    await expect(
+      refreshSessionDetailed(config, `tf-${Date.now()}`),
+    ).resolves.toEqual({ status: "terminal" });
+  });
+
+  it("classifies network faults and WorkOS 5xx as transient (keep the cookie)", async () => {
+    sdk.refresh.mockRejectedValue(new Error("ECONNRESET"));
+    await expect(
+      refreshSessionDetailed(config, `tr1-${Date.now()}`),
+    ).resolves.toEqual({ status: "transient" });
+
+    sdk.refresh.mockRejectedValue(
+      Object.assign(new Error("upstream"), { status: 503 }),
+    );
+    await expect(
+      refreshSessionDetailed(config, `tr2-${Date.now()}`),
+    ).resolves.toEqual({ status: "transient" });
+  });
+
+  it("legacy refreshSession maps refreshed → pair and any failure → null", async () => {
+    sdk.refresh.mockResolvedValue({
+      authenticated: true,
+      sealedSession: "refreshed-session",
+    });
+    await expect(refreshSession(config, `lg1-${Date.now()}`)).resolves.toEqual({
+      session: appSession,
+      sealedCookie: "refreshed-session",
+    });
+
+    sdk.refresh.mockRejectedValue(new Error("ECONNRESET"));
+    await expect(
+      refreshSession(config, `lg2-${Date.now()}`),
+    ).resolves.toBeNull();
   });
 });

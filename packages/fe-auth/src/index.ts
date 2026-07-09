@@ -1,63 +1,13 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { WorkOS } from "@workos-inc/node";
+import type {
+  AppSession,
+  CallbackResult,
+  RealmConfig,
+  RefreshOutcome,
+} from "./types.js";
 
-export interface RealmConfig {
-  readonly realm: "customer" | "staff" | "developer";
-  readonly apiKey: string;
-  readonly clientId: string;
-  readonly cookieName: string;
-  readonly cookiePassword: string;
-  readonly redirectUri: string;
-  readonly logoutRedirectUri: string;
-  readonly cookieOptions: SessionCookieOptions;
-  readonly resolveSession: SessionResolver;
-}
-
-export interface SessionCookieOptions {
-  readonly httpOnly: true;
-  readonly secure: true;
-  readonly sameSite: "lax";
-  readonly path: "/";
-  readonly maxAge?: number;
-}
-
-/** Local claims trusted by Fabric after WorkOS identity is mapped to a Postgres tenant. */
-export interface AppSession {
-  readonly userId: string;
-  readonly orgId: string;
-  readonly role: string;
-  readonly permissions: readonly string[];
-  readonly sessionId: string;
-  /** The signed-in identity's email (from WorkOS). Used for audit-actor attribution + display. */
-  readonly email?: string;
-  readonly stepUpAt?: number;
-  readonly impersonation?: ImpersonationClaim;
-}
-
-export interface ImpersonationClaim {
-  readonly targetTenantId: string;
-  readonly targetLabel?: string;
-  readonly expiresAt: number;
-  readonly reason: string;
-}
-
-export type AccountLivenessCheck = (session: AppSession) => Promise<boolean>;
-
-/** Validated WorkOS claims passed to the application-owned tenant resolver. */
-export interface WorkOSSessionClaims {
-  readonly externalUserId: string;
-  readonly organizationId: string;
-  readonly email: string;
-  readonly name: string | null;
-  readonly userUpdatedAt: string;
-  readonly role: string;
-  readonly permissions: readonly string[];
-  readonly sessionId: string;
-}
-
-export type SessionResolver = (
-  claims: WorkOSSessionClaims,
-) => Promise<AppSession | null>;
+export * from "./types.js";
 
 export function buildAuthorizationUrl(
   cfg: RealmConfig,
@@ -75,17 +25,6 @@ export function buildAuthorizationUrl(
     ...(opts.screenHint ? { screenHint: opts.screenHint } : {}),
     ...(opts.organizationId ? { organizationId: opts.organizationId } : {}),
   });
-}
-
-/**
- * Outcome of the OAuth callback. `session` is null when the identity authenticated with WorkOS but
- * ISN'T authorized here (e.g. not invited) — `sealedCookie` is still present so the caller can end
- * the WorkOS session (letting a retry re-prompt for a different account). Both null = the exchange
- * couldn't even establish a WorkOS session (bad/expired state or code).
- */
-export interface CallbackResult {
-  readonly session: AppSession | null;
-  readonly sealedCookie: string | null;
 }
 
 export function handleCallback(
@@ -111,12 +50,69 @@ export function readSession(
   return authenticateAndResolve(cfg, sealedCookie).catch(() => null);
 }
 
-/** Refresh-token expiry, reuse, or revoked membership fails closed. */
-export function refreshSession(
+/**
+ * SINGLE-FLIGHT: refresh tokens ROTATE on use, so two concurrent refreshes with the same sealed
+ * cookie race — the loser presents a spent token and gets terminally rejected, bouncing a
+ * signed-in user to login (classic: several parallel BFF fetches after the access token lapses).
+ * Concurrent callers with the same cookie therefore share ONE in-flight refresh (and its one new
+ * cookie). Keyed by cookie hash; entries clear on settle.
+ */
+const inFlightRefreshes = new Map<string, Promise<RefreshOutcome>>();
+
+function refreshFlightKey(cfg: RealmConfig, sealedCookie: string): string {
+  return createHash("sha256")
+    .update(`${cfg.realm}:${sealedCookie}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+/** Refresh with typed failure semantics + single-flight de-duplication. */
+export function refreshSessionDetailed(
+  cfg: RealmConfig,
+  sealedCookie: string,
+): Promise<RefreshOutcome> {
+  const key = refreshFlightKey(cfg, sealedCookie);
+  const inFlight = inFlightRefreshes.get(key);
+  if (inFlight) return inFlight;
+  const flight = refreshAndClassify(cfg, sealedCookie).finally(() => {
+    inFlightRefreshes.delete(key);
+  });
+  inFlightRefreshes.set(key, flight);
+  return flight;
+}
+
+async function refreshAndClassify(
+  cfg: RealmConfig,
+  sealedCookie: string,
+): Promise<RefreshOutcome> {
+  try {
+    const refreshed = await refreshAndResolve(cfg, sealedCookie);
+    if (refreshed === null) return { status: "terminal" };
+    return { status: "refreshed", ...refreshed };
+  } catch (error) {
+    // WorkOS rejects a spent/revoked/invalid token with a 4xx — retrying cannot succeed.
+    // Anything else (network fault, WorkOS 5xx, timeout) is transient: keep the cookie.
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number" && status >= 400 && status < 500) {
+      return { status: "terminal" };
+    }
+    return { status: "transient" };
+  }
+}
+
+/**
+ * Legacy null-shape wrapper (kept for existing callers): refreshed → the pair, ANY failure →
+ * null. Prefer {@link refreshSessionDetailed} where terminal-vs-transient changes the response
+ * (e.g. whether to clear the cookie). Shares the same single-flight.
+ */
+export async function refreshSession(
   cfg: RealmConfig,
   sealedCookie: string,
 ): Promise<{ session: AppSession; sealedCookie: string } | null> {
-  return refreshAndResolve(cfg, sealedCookie).catch(() => null);
+  const outcome = await refreshSessionDetailed(cfg, sealedCookie);
+  return outcome.status === "refreshed"
+    ? { session: outcome.session, sealedCookie: outcome.sealedCookie }
+    : null;
 }
 
 export function buildLogout(
