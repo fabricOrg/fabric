@@ -1,6 +1,6 @@
 import { updateMemberRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
-import { readAdminSession } from "@/lib/server/auth";
+import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import {
   removeTenantMember,
   TenantMemberApiError,
@@ -29,7 +29,7 @@ function errorResponse(error: unknown) {
 }
 
 async function authorize() {
-  const session = await readAdminSession();
+  const session = await readAdminSessionWithRefresh();
   if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
   if (!session.permissions.includes("staff:write")) {
     return fail(

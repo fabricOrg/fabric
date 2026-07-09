@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readAdminSession } from "@/lib/server/auth";
+import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import {
   KillSwitchApiError,
   listKillSwitches,
@@ -7,7 +7,7 @@ import {
 
 /** List kill switches. Any staff session may view. */
 export async function GET() {
-  if (!(await readAdminSession())) {
+  if (!(await readAdminSessionWithRefresh())) {
     return NextResponse.json(
       {
         error: {
