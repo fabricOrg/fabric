@@ -143,6 +143,12 @@ its own short-lived session from it. New app, same session → no second login.
 Logout at the IdP invalidates the SSO session and notifies every app (back-channel logout) to
 tear down their local sessions. Log out once → logged out everywhere.
 
+> **As-built (2026-07-09).** Back-channel SLO is **not wired** yet. Logout ends the initiating
+> app's sealed-cookie session + the WorkOS SSO session; other apps discover it only when their
+> short-lived access token next fails to refresh (≤ ~5 min, the access-token lifetime). Accepted
+> trade-off for now — the exposure window is one token lifetime, on internal staff/customer apps,
+> not a public surface. Back-channel logout is a follow-up when a second customer app ships.
+
 ---
 
 ## 4. Tokens & sessions — what lives where
@@ -440,7 +446,18 @@ WorkOS access token (JWKS-signed) carries exactly what §5 needs:
   **API keys / M2M** rather than user tokens — your `sk_live_*` developer keys (the
   `api-keys` module) remain unchanged for customer server-to-server traffic.
 
-### 12.5 Self-serve sign-up + JIT provisioning policy
+### 12.5 Provisioning policy — INVITE-ONLY (as-built, supersedes the self-serve design)
+
+> **As-built (2026-07-09).** Fabric shipped **invite-only**, not self-serve sign-up — a stronger
+> posture. A user + membership must be **provisioned by email first** (staff provision a tenant in
+> the admin console → WorkOS org + `accounts` row + an `invited` owner membership; customer/dev
+> members via the dashboard Team page). `resolve()` (`services/api/src/identity`) only **binds** the
+> WorkOS subject on first login and **activates** the invite; an identity with no pre-existing
+> membership is **denied** — access is never JIT-created. The WorkOS `user.created` /
+> `organization_membership.*` webhooks are **UPDATE-ONLY reconcilers** (they never create access),
+> so a webhook can't bypass the invite gate. `screen_hint: 'sign-up'` is not used.
+
+The original self-serve design (kept for context; NOT what shipped):
 
 - Hosted AuthKit handles registration + email verification (`screen_hint: 'sign-up'`).
 - On first callback, **JIT-provision** a `users` row keyed by `user.id` (the `sub`).
