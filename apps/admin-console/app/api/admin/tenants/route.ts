@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import { requireTrustedOrigin } from "@/lib/server/origin";
 
 /**
  * Tenant-provisioning BFF → the real staff endpoint POST /internal/admin/tenants (WorkOS org →
@@ -37,6 +38,8 @@ interface Provisioned {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = requireTrustedOrigin(request);
+  if (denied) return denied;
   // Staff-session gated — this triggers a real WorkOS org create + invite; never reachable without
   // an authenticated staff session (the page guard alone doesn't protect this directly-hittable route).
   if (!(await readAdminSessionWithRefresh())) {

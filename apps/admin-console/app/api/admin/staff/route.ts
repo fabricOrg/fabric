@@ -1,6 +1,7 @@
 import { inviteStaffRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   inviteStaff,
   listStaff,
@@ -44,6 +45,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = requireTrustedOrigin(request);
+  if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
   if (!session) {
     return fail("invalid_session", "Staff sign-in required.", 401);

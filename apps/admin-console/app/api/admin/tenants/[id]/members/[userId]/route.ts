@@ -1,6 +1,7 @@
 import { updateMemberRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   removeTenantMember,
   TenantMemberApiError,
@@ -45,6 +46,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; userId: string }> },
 ) {
+  const badOrigin = requireTrustedOrigin(request);
+  if (badOrigin) return badOrigin;
   const denied = await authorize();
   if (denied) return denied;
   const { id, userId } = await params;
@@ -67,9 +70,11 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; userId: string }> },
 ) {
+  const badOrigin = requireTrustedOrigin(request);
+  if (badOrigin) return badOrigin;
   const denied = await authorize();
   if (denied) return denied;
   const { id, userId } = await params;

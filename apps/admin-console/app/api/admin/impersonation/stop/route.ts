@@ -5,9 +5,12 @@ import {
   readImpersonationClaim,
 } from "@/lib/server/auth";
 import { recordImpersonationStop } from "@/lib/server/impersonation-client";
+import { requireTrustedOrigin } from "@/lib/server/origin";
 
 /** Stop impersonating: clear the claim cookie + audit. Any staff session may end their own window. */
-export async function POST() {
+export async function POST(request: Request) {
+  const denied = requireTrustedOrigin(request);
+  if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
   if (!session) {
     return NextResponse.json(
