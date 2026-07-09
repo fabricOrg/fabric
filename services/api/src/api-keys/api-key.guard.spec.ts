@@ -62,6 +62,7 @@ describe("ApiKeyGuard (F2.3)", () => {
     expect(req.tenant).toEqual({
       id: "00000000-0000-0000-0000-0000000000a1",
       scopes: ["sms:send"],
+      keyId: "abcdef0123456789",
     });
   });
 
