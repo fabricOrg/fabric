@@ -20,7 +20,7 @@ import postgres from "postgres";
 import {
   checkLedgerInvariants,
   formatViolations,
-} from "../test/ledger-invariant.check.js";
+} from "../src/ledger-invariant.js";
 import {
   checkSecurityLayerApplied,
   formatSecurityViolations,

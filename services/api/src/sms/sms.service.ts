@@ -12,6 +12,7 @@ import { FakeProvider } from "@app/integrations/testing";
 import {
   ingestDlr as engineIngestDlr,
   sendSms as engineSendSms,
+  sweepExpired as engineSweepExpired,
   type SendResult,
 } from "@app/sms-engine";
 import { Inject, Injectable, Logger } from "@nestjs/common";
@@ -116,6 +117,16 @@ export class SmsService {
       segments: message.segments,
       cost: message.cost,
     };
+  }
+
+  /**
+   * Reservation sweeper entry for the scheduled maintenance job: resolve this tenant's messages
+   * stuck non-terminal past the TTL (crash between reserve and the provider outcome). Runs inside
+   * `withTenant` on app_runtime — the engine's resolveMessage decides commit/refund idempotently,
+   * so concurrent/repeated sweeps are safe. Returns how many messages were resolved.
+   */
+  async sweepStuck(tenantId: string, olderThanIso: string): Promise<number> {
+    return engineSweepExpired(this.deps(), tenantId, olderThanIso);
   }
 
   async list(tenantId: string): Promise<MessageSummary[]> {
