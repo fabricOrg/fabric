@@ -1,6 +1,15 @@
 import { provisionTenantRequestSchema } from "@app/contracts";
-import { Body, Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { invalidRequest } from "../http/api-error.js";
+import { pageOpts } from "../http/pagination.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { TenantProvisioningService } from "./tenant-provisioning.service.js";
 
@@ -17,8 +26,8 @@ export class TenantProvisioningController {
   ) {}
 
   @Get("tenants")
-  async list() {
-    return this.provisioning.list();
+  async list(@Query("limit") limit?: string, @Query("cursor") cursor?: string) {
+    return this.provisioning.list(pageOpts(limit, cursor));
   }
 
   @Post("tenants")

@@ -5,6 +5,39 @@ import {
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import { requireTrustedOrigin } from "@/lib/server/origin";
+import { listTenants, TenantApiError } from "@/lib/server/tenants-client";
+
+/** Keyset page of tenants for the "Load more" control (a read — no origin/CSRF gate). */
+export async function GET(request: NextRequest) {
+  if (!(await readAdminSessionWithRefresh())) {
+    return NextResponse.json(
+      {
+        error: {
+          type: "auth_error",
+          code: "invalid_session",
+          message: "Staff sign-in required.",
+        },
+      },
+      { status: 401 },
+    );
+  }
+  const cursor = request.nextUrl.searchParams.get("cursor") ?? undefined;
+  try {
+    return NextResponse.json(await listTenants(cursor ? { cursor } : {}));
+  } catch (error) {
+    const status = error instanceof TenantApiError ? error.status : 502;
+    return NextResponse.json(
+      {
+        error: {
+          type: "api_error",
+          code: "tenants_unavailable",
+          message: "Tenant service is unavailable right now.",
+        },
+      },
+      { status },
+    );
+  }
+}
 
 /**
  * Tenant-provisioning BFF → the real staff endpoint POST /internal/admin/tenants (WorkOS org →

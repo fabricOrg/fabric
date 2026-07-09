@@ -14,9 +14,12 @@ export default async function AuditPage() {
   await requireAdminSession();
 
   let events: AuditEventDto[] = [];
+  let nextCursor: string | null = null;
   let loadError = false;
   try {
-    events = (await listAudit()).events;
+    const page = await listAudit();
+    events = page.events;
+    nextCursor = page.next_cursor;
   } catch (error) {
     loadError = error instanceof AuditApiError || error instanceof Error;
   }
@@ -45,7 +48,7 @@ export default async function AuditPage() {
               Couldn&apos;t load the audit log right now. Try again shortly.
             </p>
           ) : (
-            <AuditTable events={events} />
+            <AuditTable events={events} nextCursor={nextCursor} />
           )}
         </CardContent>
       </Card>

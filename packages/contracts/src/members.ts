@@ -37,5 +37,7 @@ export type MemberDto = z.infer<typeof memberDtoSchema>;
 
 export const listMembersResponseSchema = z.object({
   members: z.array(memberDtoSchema),
+  /** Standard keyset cursor for the next page; null on the last page (see @app/db pagination). */
+  next_cursor: z.string().nullable(),
 });
 export type ListMembersResponse = z.infer<typeof listMembersResponseSchema>;

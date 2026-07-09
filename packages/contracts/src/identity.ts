@@ -92,6 +92,8 @@ export type StaffDto = z.infer<typeof staffDtoSchema>;
 
 export const listStaffResponseSchema = z.object({
   staff: z.array(staffDtoSchema),
+  /** Standard keyset cursor for the next page; null on the last page (see @app/db pagination). */
+  next_cursor: z.string().nullable(),
 });
 export type ListStaffResponse = z.infer<typeof listStaffResponseSchema>;
 

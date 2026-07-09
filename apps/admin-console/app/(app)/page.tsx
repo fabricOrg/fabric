@@ -8,9 +8,12 @@ export default async function TenantsPage() {
   await requireAdminSession();
 
   let tenants: TenantSummaryDto[] = [];
+  let nextCursor: string | null = null;
   let loadError = false;
   try {
-    tenants = (await listTenants()).tenants;
+    const page = await listTenants();
+    tenants = page.tenants;
+    nextCursor = page.next_cursor;
   } catch (error) {
     loadError = error instanceof TenantApiError || error instanceof Error;
   }
@@ -30,7 +33,11 @@ export default async function TenantsPage() {
         <NewTenantButton />
       </div>
 
-      <TenantsTable tenants={tenants} loadError={loadError} />
+      <TenantsTable
+        tenants={tenants}
+        nextCursor={nextCursor}
+        loadError={loadError}
+      />
     </div>
   );
 }

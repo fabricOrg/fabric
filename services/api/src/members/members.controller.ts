@@ -12,9 +12,11 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import { invalidRequest } from "../http/api-error.js";
+import { pageOpts } from "../http/pagination.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { MembersService } from "./members.service.js";
 
@@ -32,11 +34,15 @@ export class MembersController {
   ) {}
 
   @Get(":tenantId/members")
-  async list(@Param("tenantId") tenantId: string) {
+  async list(
+    @Param("tenantId") tenantId: string,
+    @Query("limit") limit?: string,
+    @Query("cursor") cursor?: string,
+  ) {
     if (!UUID.test(tenantId)) {
       throw invalidRequest("invalid_tenant_id", "Invalid tenant id.");
     }
-    return this.members.list(tenantId);
+    return this.members.list(tenantId, pageOpts(limit, cursor));
   }
 
   @Post(":tenantId/members")

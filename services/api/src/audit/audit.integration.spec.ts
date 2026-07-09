@@ -40,4 +40,41 @@ describeDb("audit log", () => {
     expect(found?.metadata).toEqual({ before: true, after: false });
     expect(typeof found?.created_at).toBe("string");
   });
+
+  it("keyset-paginates newest-first with no skips or duplicates", async () => {
+    const tag = randomUUID();
+    // Seed more than one page-worth for THIS tag so paging is exercised in isolation.
+    for (let i = 0; i < 5; i++) {
+      await service.record({
+        action: "test.page",
+        targetType: "pagination",
+        targetId: tag,
+        summary: `event ${i}`,
+      });
+    }
+
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    let pages = 0;
+    // Page size 2 → walk the whole log 2 at a time, collecting only this tag's rows.
+    do {
+      const res = await service.list({
+        limit: 2,
+        ...(cursor ? { cursor } : {}),
+      });
+      expect(res.events.length).toBeLessThanOrEqual(2);
+      for (const e of res.events) {
+        if (e.target_id === tag) seen.push(e.id);
+      }
+      cursor = res.next_cursor ?? undefined;
+      pages++;
+      if (pages > 100) throw new Error("pagination did not terminate");
+    } while (cursor);
+
+    // All 5 seeded rows seen exactly once (Set size === array length → no duplicates).
+    expect(seen.length).toBe(5);
+    expect(new Set(seen).size).toBe(5);
+
+    await db.db.delete(auditEvents).where(eq(auditEvents.targetId, tag));
+  });
 });

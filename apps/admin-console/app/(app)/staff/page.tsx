@@ -17,9 +17,12 @@ export default async function StaffPage() {
   const selfId = session.userId;
 
   let staff: StaffDto[] = [];
+  let nextCursor: string | null = null;
   let loadError = false;
   try {
-    staff = (await listStaff()).staff;
+    const page = await listStaff();
+    staff = page.staff;
+    nextCursor = page.next_cursor;
   } catch (error) {
     loadError = error instanceof StaffApiError || error instanceof Error;
   }
@@ -54,7 +57,12 @@ export default async function StaffPage() {
               Couldn&apos;t load staff right now. Try again shortly.
             </p>
           ) : (
-            <StaffTable staff={staff} canManage={canManage} selfId={selfId} />
+            <StaffTable
+              staff={staff}
+              nextCursor={nextCursor}
+              canManage={canManage}
+              selfId={selfId}
+            />
           )}
         </CardContent>
       </Card>

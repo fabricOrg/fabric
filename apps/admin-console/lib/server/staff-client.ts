@@ -32,9 +32,13 @@ function backendConfiguration() {
   return { baseUrl, bffToken };
 }
 
-export async function listStaff(): Promise<ListStaffResponse> {
+export async function listStaff(
+  opts: { cursor?: string } = {},
+): Promise<ListStaffResponse> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(new URL("/internal/admin/staff", baseUrl), {
+  const url = new URL("/internal/admin/staff", baseUrl);
+  if (opts.cursor) url.searchParams.set("cursor", opts.cursor);
+  const response = await fetch(url, {
     cache: "no-store",
     headers: { "x-bff-token": bffToken },
   });

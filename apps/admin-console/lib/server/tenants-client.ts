@@ -18,13 +18,17 @@ export class TenantApiError extends Error {
   }
 }
 
-export async function listTenants(): Promise<ListTenantsResponse> {
+export async function listTenants(
+  opts: { cursor?: string } = {},
+): Promise<ListTenantsResponse> {
   const baseUrl = process.env.API_BASE_URL;
   const bffToken = process.env.BFF_INTERNAL_TOKEN;
   if (!baseUrl || !bffToken) {
     throw new Error("API_BASE_URL and BFF_INTERNAL_TOKEN are required.");
   }
-  const response = await fetch(new URL("/internal/admin/tenants", baseUrl), {
+  const url = new URL("/internal/admin/tenants", baseUrl);
+  if (opts.cursor) url.searchParams.set("cursor", opts.cursor);
+  const response = await fetch(url, {
     cache: "no-store",
     headers: { "x-bff-token": bffToken },
   });
