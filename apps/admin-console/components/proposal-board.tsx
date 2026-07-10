@@ -40,6 +40,7 @@ import { toast } from "sonner";
 
 const KIND_LABEL: Record<ProposalDto["kind"], string> = {
   wallet_adjustment: "Wallet adjustment",
+  go_live: "Go-live (sandbox → live)",
   plan_change: "Plan change",
   refund: "Refund",
 };
