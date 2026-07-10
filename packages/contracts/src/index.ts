@@ -32,6 +32,7 @@ export * from "./members.js";
 export * from "./message-status.js";
 // Money (exact, minor-unit strings) + SMS/wallet response DTOs — consumed by the dashboard/SDK.
 export * from "./money.js";
+export * from "./opt-outs.js";
 // Platform plugin registry (control-plane) — provider instances per capability.
 export * from "./plugins.js";
 // Maker-checker — two-person control for consequential tenant changes.

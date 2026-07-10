@@ -158,6 +158,8 @@ export default function SendPage() {
           to: recipient,
           senderId,
           body: previewBody,
+          // Console sends are transactional-style tests; campaign/promo tooling declares its own class.
+          class: "transactional",
         });
         await simulateDeliveredDlr(result.id);
         results.push(result);

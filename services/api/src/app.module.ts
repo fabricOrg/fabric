@@ -5,6 +5,7 @@ import { LoggerModule } from "nestjs-pino";
 import { AdminModule } from "./admin/admin.module.js";
 import { ApiKeysModule } from "./api-keys/api-keys.module.js";
 import { AuditModule } from "./audit/audit.module.js";
+import { ConsentModule } from "./consent/consent.module.js";
 import { DbModule } from "./db/db.module.js";
 import { FlowsModule } from "./flows/flows.module.js";
 import { HealthModule } from "./health/health.module.js";
@@ -49,6 +50,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     PluginsModule,
     ProposalsModule,
     ApiKeysModule,
+    ConsentModule,
     SendersModule,
     SmsModule,
     VerifyModule,
