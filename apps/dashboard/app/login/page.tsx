@@ -127,6 +127,15 @@ export default async function LoginPage({
               <p className="text-center text-xs text-muted-foreground">
                 Secured by WorkOS · access is managed by your organization.
               </p>
+              <p className="mt-2 text-center text-sm text-muted-foreground">
+                New to Fabric?{" "}
+                <a
+                  href="/auth/login?screen_hint=sign-up"
+                  className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+                >
+                  Create a workspace
+                </a>
+              </p>
             </div>
           ) : (
             <Alert role="alert" className="mt-8 text-left">

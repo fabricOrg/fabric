@@ -1,10 +1,15 @@
 import "server-only";
 
 import {
+  organizationForUserResponseSchema,
   type ResolveIdentitySessionResponse,
   resolveIdentitySessionResponseSchema,
 } from "@app/contracts";
-import type { AppSession, WorkOSSessionClaims } from "@app/fe-auth";
+import type {
+  AppSession,
+  OrglessSessionClaims,
+  WorkOSSessionClaims,
+} from "@app/fe-auth";
 
 /**
  * Developer identity — a developer IS a customer-realm tenant member, so this resolves against the
@@ -64,6 +69,46 @@ export async function resolveDeveloperSession(
     return null;
   }
   return toAppSession(resolved);
+}
+
+/**
+ * ADR-0002: org-less developer login → resolve the org an EXISTING membership points at.
+ * `allow_provision: false` — the dev-portal never creates tenants; a stranger signs up on the
+ * dashboard first. 403 = no workspace → null → the normal access-denied path.
+ */
+export async function resolveDeveloperOrganization(
+  claims: OrglessSessionClaims,
+): Promise<string | null> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL("/internal/identity/organization-for-user", baseUrl),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-bff-token": bffToken,
+      },
+      body: JSON.stringify({
+        external_user_id: claims.externalUserId,
+        email: claims.email,
+        name: claims.name,
+        user_updated_at: claims.userUpdatedAt,
+        email_verified: claims.emailVerified,
+        allow_provision: false,
+      }),
+    },
+  );
+  if (!response.ok) {
+    if (response.status !== 403) {
+      console.error(
+        `Developer organization resolution failed with status ${response.status}.`,
+      );
+    }
+    return null;
+  }
+  return organizationForUserResponseSchema.parse(await response.json())
+    .workos_organization_id;
 }
 
 function toAppSession(response: ResolveIdentitySessionResponse): AppSession {

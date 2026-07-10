@@ -1,10 +1,15 @@
 import "server-only";
 
 import {
+  organizationForUserResponseSchema,
   type ResolveIdentitySessionResponse,
   resolveIdentitySessionResponseSchema,
 } from "@app/contracts";
-import type { AppSession, WorkOSSessionClaims } from "@app/fe-auth";
+import type {
+  AppSession,
+  OrglessSessionClaims,
+  WorkOSSessionClaims,
+} from "@app/fe-auth";
 
 function backendConfiguration() {
   const baseUrl = process.env.API_BASE_URL;
@@ -47,6 +52,47 @@ export async function resolveWorkOSSession(
     resolveIdentitySessionResponseSchema.parse(await response.json()),
     claims.email,
   );
+}
+
+/**
+ * ADR-0002: org-less login (fresh sign-up / unpinned sign-in) → which organization? The API
+ * resolves an existing membership's org, or — dashboard only (`allow_provision`) — provisions a
+ * sandbox tenant for a verified stranger. 403 = no workspace and signup didn't apply → null →
+ * the normal access-denied path.
+ */
+export async function resolveOrganizationForUser(
+  claims: OrglessSessionClaims,
+): Promise<string | null> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL("/internal/identity/organization-for-user", baseUrl),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-bff-token": bffToken,
+      },
+      body: JSON.stringify({
+        external_user_id: claims.externalUserId,
+        email: claims.email,
+        name: claims.name,
+        user_updated_at: claims.userUpdatedAt,
+        email_verified: claims.emailVerified,
+        allow_provision: true,
+      }),
+    },
+  );
+  if (!response.ok) {
+    if (response.status !== 403) {
+      console.error(
+        `Organization resolution failed with status ${response.status}.`,
+      );
+    }
+    return null;
+  }
+  const parsed = organizationForUserResponseSchema.parse(await response.json());
+  return parsed.workos_organization_id;
 }
 
 function toAppSession(

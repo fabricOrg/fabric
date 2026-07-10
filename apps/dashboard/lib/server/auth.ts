@@ -11,7 +11,10 @@ import {
 } from "@app/fe-auth";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { resolveWorkOSSession } from "./identity-client";
+import {
+  resolveOrganizationForUser,
+  resolveWorkOSSession,
+} from "./identity-client";
 
 export const DEVELOPMENT_COOKIE = "fabric-development-session";
 export const WORKOS_COOKIE = "wos-session";
@@ -60,11 +63,12 @@ function appBaseUrl(): string {
 }
 
 export function workosAuthConfigured(): boolean {
+  // WORKOS_ORGANIZATION_ID is no longer required: logins are unpinned (ADR-0002) and the org is
+  // resolved per identity — existing membership or self-serve sandbox provisioning.
   return [
     "WORKOS_API_KEY",
     "WORKOS_CLIENT_ID",
     "WORKOS_COOKIE_PASSWORD",
-    "WORKOS_ORGANIZATION_ID",
     "BFF_INTERNAL_TOKEN",
   ].every((name) => Boolean(process.env[name]));
 }
@@ -90,6 +94,7 @@ export function customerRealmConfig(): RealmConfig {
       maxAge: 7 * 24 * 60 * 60,
     },
     resolveSession: resolveWorkOSSession,
+    resolveOrganization: resolveOrganizationForUser,
   };
 }
 

@@ -110,6 +110,12 @@ resource "aws_ecs_task_definition" "api" {
           name  = "REDIS_QUEUE_URL"
           value = "redis://${aws_elasticache_cluster.redis_queue.cache_nodes[0].address}:6379"
         },
+        # ADR-0002: self-serve sandbox sign-up is ON in the testing environment (fail closed
+        # elsewhere — the api treats anything but "true" as OFF).
+        {
+          name  = "SELF_SERVE_SIGNUP_ENABLED"
+          value = "true"
+        },
       ]
       secrets = [
         {

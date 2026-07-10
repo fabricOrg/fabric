@@ -13,6 +13,13 @@ export interface RealmConfig {
   readonly logoutRedirectUri: string;
   readonly cookieOptions: SessionCookieOptions;
   readonly resolveSession: SessionResolver;
+  /**
+   * ADR-0002: an AuthKit login can come back WITHOUT an organization (fresh sign-up, or an
+   * unpinned sign-in). When set, the callback asks the app which organization this identity
+   * belongs to (possibly provisioning a sandbox tenant server-side), then refreshes the WorkOS
+   * session into that organization. Realms without this (staff) keep denying org-less sessions.
+   */
+  readonly resolveOrganization?: OrganizationResolver;
 }
 
 export interface SessionCookieOptions {
@@ -60,6 +67,20 @@ export interface WorkOSSessionClaims {
 export type SessionResolver = (
   claims: WorkOSSessionClaims,
 ) => Promise<AppSession | null>;
+
+/** Claims available from an org-less authenticated WorkOS session (pre-organization). */
+export interface OrglessSessionClaims {
+  readonly externalUserId: string;
+  readonly email: string;
+  readonly name: string | null;
+  readonly userUpdatedAt: string;
+  readonly emailVerified: boolean;
+}
+
+/** Returns the WorkOS organization id to refresh the session into, or null to deny. */
+export type OrganizationResolver = (
+  claims: OrglessSessionClaims,
+) => Promise<string | null>;
 
 /**
  * Outcome of the OAuth callback. `session` is null when the identity authenticated with WorkOS but

@@ -1,24 +1,19 @@
 import { randomBytes } from "node:crypto";
 import { buildAuthorizationUrl } from "@app/fe-auth";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import {
   AUTH_NOTICE_COOKIE,
   developerRealmConfig,
   OAUTH_STATE_COOKIE,
-  redirectUrl,
   sessionCookieOptions,
 } from "@/lib/server/auth";
 
-export function GET(request: NextRequest) {
+export function GET() {
   const state = randomBytes(32).toString("base64url");
-  // Org-scoped like the dashboard — a developer signs into their tenant's WorkOS organization.
-  const organizationId = process.env.WORKOS_ORGANIZATION_ID;
-  if (!organizationId) {
-    return NextResponse.redirect(redirectUrl("/login?error=config", request));
-  }
+  // ADR-0002: unpinned like the dashboard — the developer's org resolves from their membership
+  // on the callback. Sign-in only: workspaces are created on the dashboard, never here.
   const authorizationUrl = buildAuthorizationUrl(developerRealmConfig(), {
     state,
-    organizationId,
     screenHint: "sign-in",
   });
   const response = NextResponse.redirect(authorizationUrl);
