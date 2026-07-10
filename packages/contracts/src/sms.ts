@@ -41,11 +41,20 @@ export const messageDetail = messageSummary.extend({
 });
 export type MessageDetail = z.infer<typeof messageDetail>;
 
+/** Traffic classification (E10-S5 / NCC 2442). Promotional traffic is DND-filtered and
+ *  quiet-hours-bound; transactional (OTP, receipts, alerts) bypasses both 24/7. Declared by the
+ *  sender — misclassification is a compliance violation on the CUSTOMER, and it's audited. */
+export const messageClass = z.enum(["transactional", "promotional"]);
+export type MessageClass = z.infer<typeof messageClass>;
+
 /** POST /v1/sms/send request. Server re-computes segments/cost — client estimate is advisory. */
 export const sendSmsRequest = z.object({
   to: z.string(), // E.164
   senderId: z.string(),
   body: z.string().min(1),
+  // Defaults to transactional: the platform's wedge traffic is OTP/receipts. Promotional MUST
+  // be declared to get its (stricter) treatment.
+  class: messageClass.default("transactional"),
 });
 export type SendSmsRequest = z.infer<typeof sendSmsRequest>;
 

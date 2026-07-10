@@ -15,6 +15,7 @@ export * from "./flows.js";
 export * from "./identity.js";
 export * from "./integrations.js";
 export * from "./kill-switches.js";
+export * from "./opt-outs.js";
 export * from "./payment-authorizations.js";
 export * from "./payments.js";
 export * from "./privacy.js";

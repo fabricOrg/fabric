@@ -2,6 +2,7 @@ import type { AppDb } from "@app/db";
 import { HttpException } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import { describe, expect, it, vi } from "vitest";
+import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import type { QueueService } from "../queue/queue.service.js";
@@ -31,6 +32,9 @@ const queue = { enabled: false } as unknown as QueueService;
 const senderStub = {
   isActiveSender: async () => true,
 } as unknown as SendersService;
+const consentStub = {
+  isSuppressed: async () => false,
+} as unknown as ConsentService;
 
 function serviceWithSwitch(paused: Record<string, boolean>): {
   svc: SmsService;
@@ -39,7 +43,15 @@ function serviceWithSwitch(paused: Record<string, boolean>): {
   const isPaused = vi.fn(async (key: string) => paused[key] ?? false);
   const killSwitch = { isPaused } as unknown as KillSwitchService;
   return {
-    svc: new SmsService(db, autoTopup, killSwitch, config, queue, senderStub),
+    svc: new SmsService(
+      db,
+      autoTopup,
+      killSwitch,
+      config,
+      queue,
+      senderStub,
+      consentStub,
+    ),
     isPaused,
   };
 }

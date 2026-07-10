@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
+import { ConsentModule } from "../consent/consent.module.js";
 import { IdempotencyModule } from "../idempotency/idempotency.module.js";
 import { KillSwitchModule } from "../kill-switches/kill-switches.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
@@ -25,6 +26,8 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
     QueueModule,
     // E10-S4: the live send path enforces active sender-id registrations.
     SendersModule,
+    // E10-S5: DND/consent + promotional quiet hours on the same path.
+    ConsentModule,
   ],
   controllers: [SmsController, DlrController],
   // SmsSendWorker consumes the sms-send queue in-process when REDIS_QUEUE_URL is set.

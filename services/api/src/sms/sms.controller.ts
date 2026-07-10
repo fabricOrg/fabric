@@ -66,12 +66,19 @@ export class SmsController {
     @Headers("idempotency-key") idempotencyKey?: string,
   ): Promise<SendSmsApiResponse> {
     const tenant = requireScope(req.tenant, "sms:send");
+    // E10-S5: promotional MUST be declared to receive its stricter DND/quiet-hours treatment;
+    // anything else (or absence) is transactional — the platform's wedge traffic.
+    const messageClass =
+      (body as { class?: unknown }).class === "promotional"
+        ? ("promotional" as const)
+        : ("transactional" as const);
     const input = {
       tenantId: tenant.id,
       to: requireString(body.to, "to"),
       senderId: requireString(body.sender_id, "sender_id"),
       body: requireString(body.body, "body"),
       currency: requireString(body.currency, "currency"),
+      messageClass,
     };
 
     // No header → the un-keyed path (a client that doesn't retry-protect gets today's behavior).
@@ -86,6 +93,7 @@ export class SmsController {
       sender_id: input.senderId,
       body: input.body,
       currency: input.currency,
+      class: input.messageClass,
     });
     const claim = await this.idempotency.begin(
       tenant.id,
@@ -112,6 +120,7 @@ export class SmsController {
     senderId: string;
     body: string;
     currency: string;
+    messageClass: "transactional" | "promotional";
   }): Promise<SendSmsApiResponse> {
     const result = await this.sms.send(input);
     return {
