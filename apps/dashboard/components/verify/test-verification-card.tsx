@@ -33,7 +33,6 @@ import { CheckCircle2, KeyRound, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   checkVerification,
-  DEMO_OK_CODE,
   startVerification,
   type Verification,
   type VerifyChannel,
@@ -74,6 +73,7 @@ export function TestVerificationCard({
   const [channel, setChannel] = useState<VerifyChannelName | "">("");
   const [pending, setPending] = useState<Verification | null>(null);
   const [code, setCode] = useState("");
+  const [debugCode, setDebugCode] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Verification | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -85,6 +85,7 @@ export function TestVerificationCard({
     setStep("input");
     setPending(null);
     setCode("");
+    setDebugCode(null);
     setOutcome(null);
   }
 
@@ -96,8 +97,9 @@ export function TestVerificationCard({
         msisdn: msisdn.trim(),
         channel: chosen,
       });
-      setPending(started);
-      onStarted?.(started);
+      setPending(started.verification);
+      setDebugCode(started.debugCode ?? null);
+      onStarted?.(started.verification);
       setStep("code");
     } catch (payload) {
       toastApiError(payload);
@@ -239,11 +241,18 @@ export function TestVerificationCard({
                 </InputGroupAddon>
               </InputGroup>
               <FieldDescription>
-                Demo: enter{" "}
-                <span className="font-mono text-foreground">
-                  {DEMO_OK_CODE}
-                </span>{" "}
-                to simulate success.
+                {debugCode ? (
+                  <>
+                    Sandbox code:{" "}
+                    <span className="font-mono text-foreground">
+                      {debugCode}
+                    </span>{" "}
+                    — shown here because this workspace routes to the test
+                    provider.
+                  </>
+                ) : (
+                  <>Enter the code sent to the phone.</>
+                )}
               </FieldDescription>
             </Field>
             <Button
