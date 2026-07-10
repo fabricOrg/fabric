@@ -8,11 +8,11 @@ import { NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
-/** The coded promotional window, displayed: quiet 20:00–08:00 local (GH UTC+0 / NG UTC+1). */
+/** The coded promotional window, displayed (strictest-reading GH rule incl. Sundays). */
 const QUIET_HOURS = {
-  start: "20:00",
+  start: "19:00",
   end: "08:00",
-  timezone: "Local (GH UTC+0 · NG UTC+1)",
+  timezone: "GH 08:00–19:00 (no Sundays) · NG 08:00–20:00 WAT",
   enabled: true,
 } as const;
 
@@ -23,7 +23,7 @@ const RULES = [
     dndFiltered: true,
     quietHoursEnforced: true,
     description:
-      "Marketing and campaign traffic. Blocked for opted-out recipients and only delivered inside the allowed window (08:00–20:00 local).",
+      "Marketing and campaign traffic. Blocked for opted-out recipients and only delivered inside the allowed window — GH 08:00–19:00 (never Sundays), NG 08:00–20:00 WAT.",
   },
   {
     category: "transactional",
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
             type: "invalid_request_error",
             code: "not_configurable",
             message:
-              "The promotional window is platform policy (08:00–20:00 local) and can't be changed per workspace yet.",
+              "The promotional window is platform policy (GH 08:00–19:00 no Sundays; NG 08:00–20:00 WAT) and can't be changed per workspace yet.",
           },
         },
         { status: 400 },

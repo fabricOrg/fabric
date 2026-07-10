@@ -52,7 +52,7 @@ export async function assertSendCompliant(opts: {
   ) {
     throw invalidRequest(
       "promo_quiet_hours",
-      "Promotional messages may only be sent 08:00-20:00 local time. Send later or mark genuinely transactional traffic as such.",
+      "Promotional messages are outside the allowed window (GH 08:00-19:00, never Sundays; NG 08:00-20:00 WAT). Send later or mark genuinely transactional traffic as such.",
       "class",
     );
   }
