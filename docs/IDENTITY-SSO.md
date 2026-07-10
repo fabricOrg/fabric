@@ -448,6 +448,13 @@ WorkOS access token (JWKS-signed) carries exactly what §5 needs:
 
 ### 12.5 Provisioning policy — INVITE-ONLY (as-built, supersedes the self-serve design)
 
+> **Superseded for customers (2026-07-10):**
+> [`decisions/0002-self-serve-sandbox-onboarding.md`](./decisions/0002-self-serve-sandbox-onboarding.md)
+> reinstates self-serve sign-up landing in a **sandbox-gated tenant** (go-live stays
+> ops-approved). The invite flow below remains valid for high-touch provisioning and is still
+> the **only** path for staff. The as-built description below reflects what is currently
+> deployed until ADR-0002 ships.
+
 > **As-built (2026-07-09).** Fabric shipped **invite-only**, not self-serve sign-up — a stronger
 > posture. A user + membership must be **provisioned by email first** (staff provision a tenant in
 > the admin console → WorkOS org + `accounts` row + an `invited` owner membership; customer/dev
