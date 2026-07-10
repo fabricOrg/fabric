@@ -1,19 +1,18 @@
-// Verify (OTP) BFF stub. Mock-first: no real backend — this route synthesizes coherent JSON so the
-// dashboard's Verify screen renders end-to-end. GET returns the channel matrix + recent log + funnel
-// stats; POST drives the test-verification flow (start → check) and persists the channel matrix.
+// Verify (OTP) BFF. start/check are REAL (V1: /v1/verify + /v1/verify/check — SMS channel).
+// The channel matrix, recent log, funnel stats and trend remain synthesized until the V2 Verify
+// dashboard surface lands — GET is display-only and clearly V2 scope; the ACTIONS are live.
 // Mirrors the shared errorResponse envelope + trusted-origin guard used by the SMS routes.
-// TODO(BFF): replace mock with dashboardApi("/v1/verify", ...) once the OTP epic ships.
 
+import type { VerifyCheckResponse, VerifyStartResponse } from "@app/contracts";
 import { NextResponse } from "next/server";
 import {
   checkVerificationRequest,
-  DEMO_OK_CODE,
   saveChannelsRequest,
   startVerificationRequest,
   type Verification,
   type VerifyChannelName,
 } from "@/lib/client/verify-api";
-import { BffError } from "@/lib/server/api-client";
+import { BffError, dashboardApi } from "@/lib/server/api-client";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
 const MINUTE = 60_000;
@@ -163,31 +162,57 @@ export async function POST(request: Request) {
 
     if (raw.action === "start") {
       const { msisdn, channel } = startVerificationRequest.parse(raw);
-      const now = Date.now();
-      const started: Verification = {
-        id: `ver_${now.toString(36)}`,
-        msisdn,
-        channel,
-        status: "pending",
-        createdAt: new Date(now).toISOString(),
+      // V1 is SMS-only. No mock success for other channels — an honest structured error.
+      if (channel !== "sms") {
+        return NextResponse.json(
+          {
+            error: {
+              type: "invalid_request_error",
+              code: "channel_not_available",
+              message:
+                "Only the SMS channel is live. Voice/WhatsApp/Email arrive as Verify fallbacks later.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+      const started = await dashboardApi<VerifyStartResponse>(
+        "/v1/verify",
+        "sms:send",
+        { method: "POST", body: JSON.stringify({ to: msisdn }) },
+      );
+      const verification: Verification = {
+        id: started.id,
+        msisdn: started.to, // masked by the API — the raw number is never echoed
+        channel: "sms",
+        status: started.status,
+        createdAt: new Date().toISOString(),
         verifiedAt: null,
       };
-      return NextResponse.json({ verification: started });
+      // debug_code: sandbox tenants only (the API withholds it on live plans) — lets the test
+      // flow complete without a real phone.
+      return NextResponse.json({
+        verification,
+        ...(started.debug_code ? { debugCode: started.debug_code } : {}),
+      });
     }
 
     if (raw.action === "check") {
       const { id, code } = checkVerificationRequest.parse(raw);
-      const ok = code.trim() === DEMO_OK_CODE;
-      const now = Date.now();
-      const checked: Verification = {
-        id,
+      const checked = await dashboardApi<VerifyCheckResponse>(
+        "/v1/verify/check",
+        "sms:send",
+        { method: "POST", body: JSON.stringify({ id, code }) },
+      );
+      const verification: Verification = {
+        id: checked.id,
         msisdn: "",
         channel: "sms",
-        status: ok ? "verified" : "failed",
-        createdAt: new Date(now).toISOString(),
-        verifiedAt: ok ? new Date(now).toISOString() : null,
+        status: checked.status,
+        createdAt: new Date().toISOString(),
+        verifiedAt: checked.verified_at,
       };
-      return NextResponse.json({ verification: checked });
+      return NextResponse.json({ verification });
     }
 
     if (raw.action === "save-channels") {

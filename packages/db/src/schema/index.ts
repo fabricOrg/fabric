@@ -20,5 +20,6 @@ export * from "./payments.js";
 export * from "./privacy.js";
 export * from "./proposals.js";
 export * from "./sms.js";
+export * from "./verify.js";
 export * from "./wallet.js";
 export * from "./webhooks.js";

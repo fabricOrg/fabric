@@ -232,6 +232,20 @@
       "when": 1783606420478,
       "tag": "0032_webhooks_outbox_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1783669234798,
+      "tag": "0033_simple_doorman",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1783669248718,
+      "tag": "0034_verifications_rls",
+      "breakpoints": true
     }
   ]
 }
