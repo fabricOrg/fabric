@@ -1,6 +1,7 @@
 import {
   createProposalRequestSchema,
   decideProposalRequestSchema,
+  goLiveRequestSchema,
 } from "@app/contracts";
 import {
   Body,
@@ -50,6 +51,38 @@ export class ProposalController {
       email: actorEmail,
       staffId: actorStaffId ?? null,
     });
+  }
+
+  /**
+   * ADR-0002 F4 — customer go-live (dashboard BFF). The BFF supplies the tenant id from the
+   * authenticated session (x-tenant-id) and the requester email (x-actor-email); the body is
+   * only the business info. BffTokenGuard is the service credential, same trust as /session.
+   */
+  @Post("go-live")
+  async requestGoLive(
+    @Body() body: unknown,
+    @Headers("x-tenant-id") tenantId?: string,
+    @Headers("x-actor-email") actorEmail?: string,
+  ) {
+    if (!tenantId || !actorEmail) {
+      throw unauthorized("missing_actor", "Tenant and requester are required.");
+    }
+    const parsed = goLiveRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest(
+        "invalid_go_live_request",
+        parsed.error.issues[0]?.message ?? "The go-live request is invalid.",
+      );
+    }
+    return this.proposals.requestGoLive(tenantId, parsed.data, actorEmail);
+  }
+
+  @Get("go-live/status")
+  async goLiveStatus(@Headers("x-tenant-id") tenantId?: string) {
+    if (!tenantId) {
+      throw unauthorized("missing_actor", "Tenant is required.");
+    }
+    return this.proposals.goLiveStatus(tenantId);
   }
 
   @Post(":id/decide")
