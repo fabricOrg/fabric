@@ -66,7 +66,11 @@ export class IdentityService {
     return this.provisioning.db.transaction(async (tx) => {
       // 1. The WorkOS organization must map to an existing, active account.
       const [account] = await tx
-        .select({ id: accounts.id, status: accounts.status })
+        .select({
+          id: accounts.id,
+          status: accounts.status,
+          plan: accounts.plan,
+        })
         .from(accounts)
         .where(eq(accounts.workosOrganizationId, request.organization_id))
         .limit(1);
@@ -161,6 +165,7 @@ export class IdentityService {
         role: membership.role,
         permissions: [...ROLE_PERMISSIONS[membership.role]],
         session_id: request.session_id,
+        plan: account.plan,
       };
     });
   }

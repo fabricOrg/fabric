@@ -118,5 +118,6 @@ function toAppSession(response: ResolveIdentitySessionResponse): AppSession {
     role: response.role,
     permissions: response.permissions,
     sessionId: response.session_id,
+    plan: response.plan,
   };
 }

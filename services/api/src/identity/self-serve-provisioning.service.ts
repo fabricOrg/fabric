@@ -3,11 +3,19 @@ import type {
   OrganizationForUserRequest,
   OrganizationForUserResponse,
 } from "@app/contracts";
-import { accounts, memberships, type ProvisioningDb, users } from "@app/db";
-import { Inject, Injectable } from "@nestjs/common";
+import {
+  type AppDb,
+  accounts,
+  memberships,
+  type ProvisioningDb,
+  users,
+} from "@app/db";
+import { credit } from "@app/wallet";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
+import { APP_DB } from "../db/db.module.js";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
 import {
   WORKOS_CLIENT,
@@ -16,6 +24,10 @@ import {
 
 /** Sandbox tenants are a PLAN state, not a separate environment (ADR-0002 / F3). */
 export const SANDBOX_PLAN = "sandbox";
+
+/** F3: play money for the fake provider — GHS 50.00, enough for hundreds of test segments. */
+const SANDBOX_SEED_CURRENCY = "GHS";
+const SANDBOX_SEED_MINOR = 5_000n;
 
 // Best-effort signup throttle: single-instance in-memory sliding window. Enough for the current
 // one-task api service; move to the Redis rate-limit buckets when the api scales out.
@@ -48,9 +60,12 @@ function throttled(email: string): boolean {
  */
 @Injectable()
 export class SelfServeProvisioningService {
+  private readonly logger = new Logger(SelfServeProvisioningService.name);
+
   constructor(
     @Inject(PROVISIONING_DB)
     private readonly provisioning: ProvisioningDb,
+    @Inject(APP_DB) private readonly appDb: AppDb,
     @Inject(WORKOS_CLIENT) private readonly workosClient: WorkosClientProvider,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(ConfigService) private readonly config: ConfigService,
@@ -194,6 +209,23 @@ export class SelfServeProvisioningService {
         });
         return created;
       });
+
+      // F3: seed ledgered test credits (idempotent on the tenant) so the first sandbox send
+      // works immediately. Best-effort — a seeding hiccup must not fail the signup; the tenant
+      // just starts at zero and support can re-seed.
+      try {
+        await this.appDb.withTenant(account.id, (tx) =>
+          credit(tx, {
+            currency: SANDBOX_SEED_CURRENCY,
+            amountMinor: SANDBOX_SEED_MINOR,
+            idempotencyKey: `signup-seed-${account.id}`,
+          }),
+        );
+      } catch (error) {
+        this.logger.error(
+          `sandbox credit seeding failed for ${account.id}: ${error instanceof Error ? error.message : "unknown"}`,
+        );
+      }
 
       await this.audit.record({
         actorStaffId: null,

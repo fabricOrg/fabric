@@ -1,6 +1,7 @@
 import type { AppDb } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
+import { invalidRequest } from "../http/api-error.js";
 import {
   type ApiKeyEnv,
   generateApiKey,
@@ -90,6 +91,22 @@ export class ApiKeyService {
     tenantId: string,
     input: { name?: string; env: ApiKeyEnv; scopes?: string[] },
   ): Promise<CreatedApiKey> {
+    // ADR-0002 F3: a sandbox-plan tenant can only hold sk_test_ keys — live keys arrive with the
+    // go-live approval (F4), never before. Enforced here so every caller (operator console today,
+    // customer session later) hits the same wall.
+    if (input.env === "live") {
+      const rows = (await this.db.withTenant(
+        tenantId,
+        (tx) => tx`SELECT plan FROM accounts WHERE id = ${tenantId}`,
+      )) as Array<{ plan?: unknown }>;
+      if (rows[0]?.plan === "sandbox") {
+        throw invalidRequest(
+          "sandbox_no_live_keys",
+          "Sandbox workspaces can only mint test keys. Request go-live to unlock live keys.",
+          "env",
+        );
+      }
+    }
     const k = generateApiKey(input.env);
     const scopes = input.scopes ?? [];
     const rows = await this.db.withTenant(
