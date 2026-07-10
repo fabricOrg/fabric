@@ -113,6 +113,41 @@ export async function verifyConfiguredTenant(expectedTenantId: string) {
   return context;
 }
 
+/** Raw variant for non-JSON payloads (CSV statement): same session + permission + tenant-token
+ *  path, returns the upstream Response for streaming through. */
+export async function dashboardApiRaw(
+  path: string,
+  permission: string,
+): Promise<Response> {
+  const session =
+    (await readDashboardSession()) ?? (await refreshDashboardSession());
+  if (!session) {
+    throw new BffError(401, {
+      error: {
+        type: "auth_error",
+        code: "invalid_session",
+        message: "Sign in again to continue.",
+      },
+    });
+  }
+  requirePermission(session, permission);
+  const { baseUrl } = apiConfiguration();
+  let response = await fetch(new URL(path, baseUrl), {
+    cache: "no-store",
+    headers: { authorization: `Bearer ${await tenantToken(session.orgId)}` },
+  });
+  if (response.status === 401) {
+    tenantTokens.delete(session.orgId);
+    response = await fetch(new URL(path, baseUrl), {
+      cache: "no-store",
+      headers: {
+        authorization: `Bearer ${await mintTenantToken(session.orgId)}`,
+      },
+    });
+  }
+  return response;
+}
+
 export async function dashboardApi<T>(
   path: string,
   permission: string,

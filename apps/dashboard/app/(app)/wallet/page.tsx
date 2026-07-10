@@ -97,13 +97,21 @@ function LedgerKindBadge({ type }: { type: LedgerEntryType }) {
 
 function PageHeader() {
   return (
-    <div className="flex flex-col gap-1">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">
-        Wallet &amp; Billing
-      </h1>
-      <p className="text-sm text-muted-foreground">
-        Balances, top-ups, and your double-entry transaction history.
-      </p>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col gap-1">
+        <h1 className="font-display text-2xl font-semibold tracking-tight">
+          Wallet &amp; Billing
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Balances, top-ups, and your double-entry transaction history.
+        </p>
+      </div>
+      {/* B1: the auditable statement — every line a ledger leg, opening/closing balanced. */}
+      <Button asChild variant="outline" size="sm">
+        <a href="/api/dashboard/wallet/statement" download>
+          Export statement (CSV)
+        </a>
+      </Button>
     </div>
   );
 }
