@@ -10,6 +10,7 @@ import { credit, reserve } from "@app/wallet";
 import type { ConfigService } from "@nestjs/config";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -18,6 +19,10 @@ import { SmsService } from "../sms/sms.service.js";
 import { MaintenanceService } from "./maintenance.service.js";
 
 // E10-S4: sender enforcement has its own spec — these flows always pass the gate.
+// E10-S5: consent enforcement has its own spec — nobody is opted out here.
+const consentAllowAll = {
+  isSuppressed: async () => false,
+} as unknown as ConsentService;
 const sendersAlwaysActive = {
   isActiveSender: async () => true,
 } as unknown as SendersService;
@@ -63,6 +68,7 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     config,
     new QueueService(config),
     sendersAlwaysActive,
+    consentAllowAll,
   );
   const maintenance = new MaintenanceService(provisioning, sms, config);
 

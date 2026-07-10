@@ -260,6 +260,20 @@
       "when": 1783673223169,
       "tag": "0036_senders_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1783675033870,
+      "tag": "0037_burly_crystal",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1783675038464,
+      "tag": "0038_opt_outs_rls",
+      "breakpoints": true
     }
   ]
 }

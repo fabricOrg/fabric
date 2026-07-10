@@ -16,12 +16,14 @@ import {
 } from "@app/sms-engine";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound, unauthorized } from "../http/api-error.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { AutoTopupService } from "../payments/auto-topup.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import { SendersService } from "../senders/senders.service.js";
+import { assertSendCompliant } from "./sms-compliance.js";
 import { buildSmsProviders } from "./sms-providers.js";
 import { getMessage, listMessages } from "./sms-read.js";
 
@@ -67,6 +69,7 @@ export class SmsService {
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(QueueService) private readonly queue: QueueService,
     @Inject(SendersService) private readonly senders: SendersService,
+    @Inject(ConsentService) private readonly consent: ConsentService,
   ) {
     const wired = buildSmsProviders(this.config, this.logger);
     this.provider = wired.provider;
@@ -112,6 +115,8 @@ export class SmsService {
     senderId: string;
     body: string;
     currency: string;
+    /** E10-S5: absent = transactional (OTP/receipts). Promotional must be declared. */
+    messageClass?: "transactional" | "promotional";
   }): Promise<SendSmsResponse> {
     // Global kill-switch: staff can halt ALL sending (incident, abuse, vendor outage) in one flip.
     if (await this.killSwitch.isPaused("platform.sms_sending")) {
@@ -135,26 +140,18 @@ export class SmsService {
         "The SMS provider is temporarily unavailable. Try again shortly.",
       );
     }
-    // E10-S4: LIVE sends require an ACTIVE sender-id registration for the destination country —
-    // in Nigeria the carrier rejects unregistered ids outright, so blocking here is honest, not
-    // strict. Compliance gate → fails CLOSED (a registry outage must not push non-compliant
-    // traffic). Sandbox skips it: the fake provider reaches no carrier and the quickstart keeps
-    // its default sender.
-    if (!sandbox) {
-      const country = destinationCountry(input.to);
-      const registered = await this.senders.isActiveSender(
-        input.tenantId,
-        input.senderId,
-        country,
-      );
-      if (!registered) {
-        throw invalidRequest(
-          "sender_not_registered",
-          `Sender id '${input.senderId}' is not registered (active) for ${country}. Register it under Senders first.`,
-          "senderId",
-        );
-      }
-    }
+    // E10-S4/S5: compliance gates (sender registration, opt-outs, promo window) — see
+    // sms-compliance.ts for the ordering + postures.
+    const messageClass = input.messageClass ?? "transactional";
+    await assertSendCompliant({
+      senders: this.senders,
+      consent: this.consent,
+      tenantId: input.tenantId,
+      to: input.to,
+      senderId: input.senderId,
+      messageClass,
+      sandbox,
+    });
     // tx1 in-request EITHER way: insufficient funds must fail the request synchronously (a queue
     // must never accept money it can't reserve).
     const prepared = await enginePrepareSend(this.deps(sandbox), input);
@@ -287,11 +284,4 @@ export class SmsService {
       ),
     };
   }
-}
-
-/** Destination country from the E.164 prefix — the two launch markets; anything else maps to GH
- *  until more corridors open (a send there will simply require a GH registration). */
-function destinationCountry(to: string): string {
-  if (to.startsWith("+234")) return "NG";
-  return "GH";
 }
