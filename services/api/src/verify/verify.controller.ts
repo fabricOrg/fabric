@@ -1,5 +1,13 @@
 import { verifyCheckRequest, verifyStartRequest } from "@app/contracts";
-import { Body, Controller, Inject, Post, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Post,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import {
   ApiKeyGuard,
   type RequestTenant,
@@ -34,6 +42,12 @@ export class VerifyController {
       );
     }
     return this.verify.start(tenant.id, parsed.data);
+  }
+
+  @Get("overview")
+  async overview(@Req() req: AuthedRequest) {
+    const tenant = requireScope(req.tenant, "sms:read");
+    return this.verify.overview(tenant.id);
   }
 
   @Post("check")

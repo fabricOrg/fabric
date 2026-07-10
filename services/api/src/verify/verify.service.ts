@@ -11,6 +11,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import { SmsService } from "../sms/sms.service.js";
+import { verifyOverview } from "./verify-read.js";
 
 const CODE_TTL_SECONDS = 300;
 const RESEND_THROTTLE_MS = 30_000;
@@ -187,6 +188,10 @@ export class VerifyService {
           "code",
         );
     }
+  }
+
+  async overview(tenantId: string) {
+    return verifyOverview(this.db, tenantId);
   }
 
   private async assertNotThrottled(
