@@ -17,25 +17,23 @@ const API_ACCESS_PERMISSIONS = ["api_keys:read", "api_keys:write"];
 
 function backendConfiguration() {
   const baseUrl = process.env.API_BASE_URL;
-  const apiKey = process.env.DASHBOARD_API_KEY;
   const bffToken = process.env.BFF_INTERNAL_TOKEN;
-  if (!baseUrl || !apiKey || !bffToken) {
-    throw new Error(
-      "API_BASE_URL, DASHBOARD_API_KEY, and BFF_INTERNAL_TOKEN are required.",
-    );
+  if (!baseUrl || !bffToken) {
+    throw new Error("API_BASE_URL and BFF_INTERNAL_TOKEN are required.");
   }
-  return { baseUrl, apiKey, bffToken };
+  return { baseUrl, bffToken };
 }
 
 export async function resolveDeveloperSession(
   claims: WorkOSSessionClaims,
 ): Promise<AppSession | null> {
-  const { baseUrl, apiKey, bffToken } = backendConfiguration();
+  const { baseUrl, bffToken } = backendConfiguration();
+  // ADR-0003: no tenant API key — the API resolves the tenant from organization_id, which the
+  // BFF took from the sealed WorkOS session it verified server-side.
   const response = await fetch(new URL("/internal/identity/session", baseUrl), {
     method: "POST",
     cache: "no-store",
     headers: {
-      authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
       "x-bff-token": bffToken,
     },

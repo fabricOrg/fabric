@@ -54,26 +54,24 @@ export class IdentityService {
    * (provisioned by email at tenant creation); we only BIND the WorkOS subject on first login and
    * ACTIVATE the invite. An identity with no pre-provisioned membership in this org is denied — we
    * never JIT-create access. Role/permissions come from the Fabric membership, not WorkOS claims.
+   *
+   * ADR-0003: the tenant is resolved HERE from the WorkOS organization the (BFF-verified) sealed
+   * session was issued for — `workos_organization_id` is unique — instead of from a tenant-bound
+   * API key, so runtime-provisioned tenants work without any pre-shared per-tenant credential.
    */
   async resolve(
-    tenantId: string,
     request: ResolveIdentitySessionRequest,
   ): Promise<ResolveIdentitySessionResponse | null> {
-    const scopedTenantId = tenantId as TenantId;
     const email = request.email.trim().toLowerCase();
     return this.provisioning.db.transaction(async (tx) => {
-      // 1. The org must exist, be active, and match the WorkOS organization the token was issued for.
+      // 1. The WorkOS organization must map to an existing, active account.
       const [account] = await tx
         .select({ id: accounts.id, status: accounts.status })
         .from(accounts)
-        .where(
-          and(
-            eq(accounts.id, scopedTenantId),
-            eq(accounts.workosOrganizationId, request.organization_id),
-          ),
-        )
+        .where(eq(accounts.workosOrganizationId, request.organization_id))
         .limit(1);
       if (!account || account.status !== "active") return null;
+      const scopedTenantId = account.id as TenantId;
 
       const now = new Date();
       const sourceUpdatedAt = new Date(request.user_updated_at);
@@ -165,5 +163,16 @@ export class IdentityService {
         session_id: request.session_id,
       };
     });
+  }
+
+  /** True only for an existing, ACTIVE tenant — gates tenant-token minting (ADR-0003), so a
+   *  suspended/closed tenant stops getting fresh BFF credentials within one token TTL. */
+  async isActiveTenant(tenantId: string): Promise<boolean> {
+    const [account] = await this.provisioning.db
+      .select({ status: accounts.status })
+      .from(accounts)
+      .where(eq(accounts.id, tenantId as TenantId))
+      .limit(1);
+    return account?.status === "active";
   }
 }

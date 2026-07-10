@@ -4,10 +4,10 @@
 # VPC, and ECS-tasks security group (already opens 3000 from the shared VPC Link SG). No load
 # balancer, no NAT — same cost stance as the rest of this stack.
 #
-# WORKOS_ORGANIZATION_ID / WORKOS_REDIRECT_URI / WORKOS_LOGOUT_REDIRECT_URI / DASHBOARD_API_KEY are
-# only knowable AFTER this stack is applied (they depend on this API's real URL + a tenant provisioned
-# against the testing database) — see database.tf's placeholder secrets and
-# docs/PI-3/PATH-TO-TESTING.md for the exact order of operations.
+# WORKOS_ORGANIZATION_ID / WORKOS_REDIRECT_URI / WORKOS_LOGOUT_REDIRECT_URI are only knowable
+# AFTER this stack is applied (they depend on this API's real URL) — see database.tf's placeholder
+# secrets and docs/PI-3/PATH-TO-TESTING.md for the exact order of operations. The BFF's data-plane
+# credential is a short-lived tenant token minted by the api (ADR-0003) — no per-tenant key here.
 ####################################################################################################
 
 resource "aws_ecr_repository" "dashboard" {
@@ -87,10 +87,6 @@ resource "aws_ecs_task_definition" "dashboard" {
       ]
       secrets = [
         {
-          name      = "DASHBOARD_API_KEY"
-          valueFrom = "${aws_secretsmanager_secret.dashboard_api_key.arn}:DASHBOARD_API_KEY::"
-        },
-        {
           name      = "BFF_INTERNAL_TOKEN"
           valueFrom = "${aws_secretsmanager_secret.bff_internal_token.arn}:BFF_INTERNAL_TOKEN::"
         },
@@ -144,7 +140,6 @@ resource "aws_ecs_task_definition" "dashboard" {
   ])
 
   depends_on = [
-    aws_secretsmanager_secret_version.dashboard_api_key,
     aws_secretsmanager_secret_version.bff_internal_token,
     aws_secretsmanager_secret_version.dashboard_cookie_password,
     aws_secretsmanager_secret_version.dashboard_workos,

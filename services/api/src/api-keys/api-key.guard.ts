@@ -7,6 +7,10 @@ import {
 import { forbidden, unauthorized } from "../http/api-error.js";
 import { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import { ApiKeyService } from "./api-keys.service.js";
+import {
+  TENANT_TOKEN_PREFIX,
+  TenantTokenService,
+} from "./tenant-token.service.js";
 
 /** The tenant context a resolved key attaches to the request; handlers run data access via it. */
 export interface RequestTenant {
@@ -36,6 +40,8 @@ export class ApiKeyGuard implements CanActivate {
   constructor(
     @Inject(ApiKeyService) private readonly apiKeys: ApiKeyService,
     @Inject(RateLimitService) private readonly rateLimit: RateLimitService,
+    @Inject(TenantTokenService)
+    private readonly tenantTokens: TenantTokenService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -46,6 +52,21 @@ export class ApiKeyGuard implements CanActivate {
         "missing_api_key",
         "Missing or malformed Authorization header. Use: Authorization: Bearer sk_test_…",
       );
+    }
+    // ADR-0003: the BFF authenticates with a short-lived signed tenant token instead of a
+    // stored key. Wildcard scopes = tenant containment only — the BFF already enforced the
+    // user's membership permissions before calling; customer sk_* keys keep granular scopes.
+    if (raw.startsWith(TENANT_TOKEN_PREFIX)) {
+      const token = this.tenantTokens.verify(raw);
+      if (token === null) {
+        throw unauthorized(
+          "invalid_tenant_token",
+          "Invalid or expired tenant token.",
+        );
+      }
+      await this.rateLimit.consume(token.keyId, token.tenantId);
+      req.tenant = { id: token.tenantId, scopes: ["*"], keyId: token.keyId };
+      return true;
     }
     const resolved = await this.apiKeys.resolve(raw);
     if (resolved === null) {

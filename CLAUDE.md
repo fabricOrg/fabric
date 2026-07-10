@@ -26,7 +26,8 @@ identity for Ghana / Nigeria (West Africa). Region `eu-west-1` (af-south-1 unava
   the realm logic; sessions are sealed cookies. Authorization is the **local membership role**, never
   WorkOS claims.
 - **BFF pattern**: a browser never calls the API directly. Next route handler → server-only client →
-  NestJS `/internal/*` guarded by `BFF_INTERNAL_TOKEN` (+ a tenant API key for customer/dev). The BFF
+  NestJS `/internal/*` guarded by `BFF_INTERNAL_TOKEN`; data-plane `/v1/*` calls use a short-lived
+  minted tenant token (ADR-0003), customer integrations use `sk_*` keys. The BFF
   supplies the tenant id from the authenticated session, never from the client, and enforces the
   role gate before calling the API.
 

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { mintTenantTokenResponseSchema } from "@app/contracts";
 import type { AppSession } from "@app/fe-auth";
 import { readDashboardSession, refreshDashboardSession } from "./auth";
 
@@ -12,26 +13,73 @@ export class BffError extends Error {
   }
 }
 
-function apiConfiguration(): { baseUrl: string; apiKey: string } {
+function apiConfiguration(): { baseUrl: string; bffToken: string } {
   const baseUrl = process.env.API_BASE_URL;
-  const apiKey = process.env.DASHBOARD_API_KEY;
-  if (!baseUrl || !apiKey) {
-    throw new Error("API_BASE_URL and DASHBOARD_API_KEY are required.");
+  const bffToken = process.env.BFF_INTERNAL_TOKEN;
+  if (!baseUrl || !bffToken) {
+    throw new Error("API_BASE_URL and BFF_INTERNAL_TOKEN are required.");
   }
-  return { baseUrl, apiKey };
+  return { baseUrl, bffToken };
 }
 
-async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const { baseUrl, apiKey } = apiConfiguration();
-  const response = await fetch(new URL(path, baseUrl), {
-    ...init,
-    cache: "no-store",
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-      ...init.headers,
+// ADR-0003: the data-plane credential is a short-lived tenant token minted on demand — no
+// stored per-tenant secret. Cached per tenant in process memory; refreshed 30s before expiry.
+const tenantTokens = new Map<string, { token: string; expiresAt: number }>();
+
+async function mintTenantToken(tenantId: string): Promise<string> {
+  const { baseUrl, bffToken } = apiConfiguration();
+  const response = await fetch(
+    new URL("/internal/identity/tenant-token", baseUrl),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-bff-token": bffToken,
+      },
+      body: JSON.stringify({ tenant_id: tenantId }),
     },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw new BffError(response.status, payload);
+  const minted = mintTenantTokenResponseSchema.parse(payload);
+  tenantTokens.set(tenantId, {
+    token: minted.token,
+    expiresAt: Date.now() + minted.expires_in * 1000,
   });
+  return minted.token;
+}
+
+async function tenantToken(tenantId: string): Promise<string> {
+  const cached = tenantTokens.get(tenantId);
+  if (cached && cached.expiresAt - 30_000 > Date.now()) return cached.token;
+  return mintTenantToken(tenantId);
+}
+
+async function apiRequest<T>(
+  path: string,
+  tenantId: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const { baseUrl } = apiConfiguration();
+  const request = async (token: string): Promise<Response> =>
+    fetch(new URL(path, baseUrl), {
+      ...init,
+      cache: "no-store",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        ...init.headers,
+      },
+    });
+
+  let response = await request(await tenantToken(tenantId));
+  // A 401 can mean the cached token just expired (or the signing secret rotated) — mint a
+  // fresh one and retry ONCE; anything else surfaces as-is.
+  if (response.status === 401) {
+    tenantTokens.delete(tenantId);
+    response = await request(await mintTenantToken(tenantId));
+  }
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new BffError(response.status, payload);
   return payload as T;
@@ -49,15 +97,17 @@ function requirePermission(session: AppSession, permission: string): void {
   }
 }
 
+/** Development-login sanity check: the configured tenant must exist + be active + be reachable
+ *  with a freshly minted tenant token. */
 export async function verifyConfiguredTenant(expectedTenantId: string) {
   const context = await apiRequest<{
     tenant_id: string;
     scopes: string[];
     request_id: string;
-  }>("/v1/context");
+  }>("/v1/context", expectedTenantId);
   if (context.tenant_id !== expectedTenantId) {
     throw new Error(
-      "The dashboard API key does not belong to the configured development tenant.",
+      "The minted tenant token does not resolve to the configured development tenant.",
     );
   }
   return context;
@@ -82,5 +132,6 @@ export async function dashboardApi<T>(
     });
   }
   requirePermission(session, permission);
-  return apiRequest<T>(path, init);
+  // The tenant id comes from the resolved session — never from the client request.
+  return apiRequest<T>(path, session.orgId, init);
 }

@@ -71,6 +71,7 @@ REDIS_CACHE_URL=redis://localhost:6379/1
 OPERATOR_TOKEN=<local-operator-token>
 WEBHOOK_INGRESS_TOKEN=<local-fake-provider-webhook-token>
 BFF_INTERNAL_TOKEN=<local-dashboard-to-api-token>
+TENANT_TOKEN_SECRET=<api-only HMAC secret for BFF tenant tokens (ADR-0003)>
 
 DEV_AUTH_ENABLED=true
 DEV_TENANT_ID=00000000-0000-0000-0000-0000000000d1

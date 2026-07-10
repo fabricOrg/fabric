@@ -1,9 +1,11 @@
 import type { ApiErrorEnvelope } from "@app/contracts";
 import type { ExecutionContext } from "@nestjs/common";
+import type { ConfigService } from "@nestjs/config";
 import { describe, expect, it } from "vitest";
 import type { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import { ApiKeyGuard, extractBearer, requireScope } from "./api-key.guard.js";
 import type { ApiKeyService, ResolvedApiKey } from "./api-keys.service.js";
+import { TenantTokenService } from "./tenant-token.service.js";
 
 // Minimal fake ExecutionContext wrapping a request with the given headers.
 function ctxFor(headers: Record<string, string | undefined>): {
@@ -20,6 +22,14 @@ function ctxFor(headers: Record<string, string | undefined>): {
   return { ctx, req };
 }
 
+/** Real TenantTokenService with a fixed test secret — token behavior is deterministic. */
+function tenantTokens(secret = "guard-spec-secret"): TenantTokenService {
+  const config = {
+    get: (key: string) => (key === "TENANT_TOKEN_SECRET" ? secret : undefined),
+  } as ConfigService;
+  return new TenantTokenService(config);
+}
+
 /** Stub ApiKeyService with a canned resolve result. */
 function guardWithResolve(
   resolve: (raw: string) => Promise<ResolvedApiKey | null>,
@@ -28,7 +38,11 @@ function guardWithResolve(
   const rateLimit = {
     consume: async () => undefined,
   } as unknown as RateLimitService;
-  return new ApiKeyGuard({ resolve } as unknown as ApiKeyService, rateLimit);
+  return new ApiKeyGuard(
+    { resolve } as unknown as ApiKeyService,
+    rateLimit,
+    tenantTokens(),
+  );
 }
 
 describe("extractBearer", () => {
@@ -89,6 +103,45 @@ describe("ApiKeyGuard (F2.3)", () => {
     const { ctx } = ctxFor({});
     await expect(guard.canActivate(ctx)).rejects.toMatchObject({ status: 401 });
     expect(called).toBe(false); // rejected before touching the service
+  });
+
+  it("accepts a minted bfft_ tenant token with wildcard scopes (ADR-0003)", async () => {
+    let keyResolveCalled = false;
+    const guard = guardWithResolve(async () => {
+      keyResolveCalled = true;
+      return null;
+    });
+    const tenantId = "00000000-0000-0000-0000-0000000000a1";
+    const { token } = tenantTokens().mint(tenantId);
+    const { ctx, req } = ctxFor({ authorization: `Bearer ${token}` });
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    expect(req.tenant).toEqual({
+      id: tenantId,
+      scopes: ["*"],
+      keyId: `bfft_${tenantId.slice(0, 12)}`,
+    });
+    expect(keyResolveCalled).toBe(false); // token path never hits the key lookup
+  });
+
+  it("401s a forged/expired bfft_ token without consulting the key service", async () => {
+    let keyResolveCalled = false;
+    const guard = guardWithResolve(async () => {
+      keyResolveCalled = true;
+      return null;
+    });
+    // Signed under a DIFFERENT secret → signature mismatch for the guard's service.
+    const { token } = tenantTokens("other-secret").mint(
+      "00000000-0000-0000-0000-0000000000a1",
+    );
+    const { ctx } = ctxFor({ authorization: `Bearer ${token}` });
+    await expect(guard.canActivate(ctx)).rejects.toMatchObject({ status: 401 });
+    try {
+      await guard.canActivate(ctx);
+    } catch (e) {
+      const body = (e as { getResponse(): ApiErrorEnvelope }).getResponse();
+      expect(body.error.code).toBe("invalid_tenant_token");
+    }
+    expect(keyResolveCalled).toBe(false);
   });
 });
 
