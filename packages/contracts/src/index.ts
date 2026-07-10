@@ -36,6 +36,7 @@ export * from "./money.js";
 export * from "./plugins.js";
 // Maker-checker — two-person control for consequential tenant changes.
 export * from "./proposals.js";
+export * from "./senders.js";
 export * from "./sms.js";
 // Wallet top-up (E4) — initiate a provider charge; the webhook credits the ledger.
 export * from "./topup.js";

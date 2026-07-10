@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import type { QueueService } from "../queue/queue.service.js";
+import type { SendersService } from "../senders/senders.service.js";
 import { SmsService } from "./sms.service.js";
 
 /**
@@ -26,6 +27,10 @@ const autoTopup = {
 } as unknown as AutoTopupService;
 const config = { get: () => undefined } as unknown as ConfigService; // provider = fake-sms
 const queue = { enabled: false } as unknown as QueueService;
+// E10-S4: sender enforcement has its own spec — always registered here.
+const senderStub = {
+  isActiveSender: async () => true,
+} as unknown as SendersService;
 
 function serviceWithSwitch(paused: Record<string, boolean>): {
   svc: SmsService;
@@ -34,7 +39,7 @@ function serviceWithSwitch(paused: Record<string, boolean>): {
   const isPaused = vi.fn(async (key: string) => paused[key] ?? false);
   const killSwitch = { isPaused } as unknown as KillSwitchService;
   return {
-    svc: new SmsService(db, autoTopup, killSwitch, config, queue),
+    svc: new SmsService(db, autoTopup, killSwitch, config, queue, senderStub),
     isPaused,
   };
 }

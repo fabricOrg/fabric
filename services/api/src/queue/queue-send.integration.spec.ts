@@ -11,9 +11,15 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import type { SendersService } from "../senders/senders.service.js";
 import { SMS_SEND_QUEUE, SmsService } from "../sms/sms.service.js";
 import { SmsSendWorker } from "../sms/sms-send.worker.js";
 import { QueueService } from "./queue.service.js";
+
+// E10-S4: sender enforcement has its own spec — these flows always pass the gate.
+const sendersAlwaysActive = {
+  isActiveSender: async () => true,
+} as unknown as SendersService;
 
 /**
  * QUEUED SEND PIPELINE — integration spec (finding 7 PR A). Real Postgres + REAL Redis (the
@@ -54,6 +60,7 @@ describeDb("queued send pipeline (BullMQ)", () => {
     killSwitch,
     configStub({}),
     queueOn,
+    sendersAlwaysActive,
   );
   const smsInline = new SmsService(
     appDb,
@@ -61,6 +68,7 @@ describeDb("queued send pipeline (BullMQ)", () => {
     killSwitch,
     configStub({}),
     queueOff,
+    sendersAlwaysActive,
   );
 
   const tenantId = randomUUID() as TenantId;
