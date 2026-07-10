@@ -224,6 +224,29 @@ describe("Verify V1 (golden path core)", () => {
     );
   });
 
+  it("overview: real funnel + recent list, masked recipients (V2 surface)", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/verify/overview",
+      headers: { authorization: `Bearer ${SANDBOX_KEY}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const overview = res.json() as {
+      recent: Array<{ msisdn: string; status: string }>;
+      stats: { sent: number; delivered: number; verified: number };
+      trend: Array<{ attempts: number; verified: number }>;
+    };
+    // The suite above started several verifications and verified one — the funnel reflects it.
+    expect(overview.stats.sent).toBeGreaterThanOrEqual(3);
+    expect(overview.stats.verified).toBeGreaterThanOrEqual(1);
+    expect(overview.stats.verified).toBeLessThanOrEqual(overview.stats.sent);
+    expect(overview.recent.length).toBeGreaterThanOrEqual(3);
+    for (const row of overview.recent) {
+      expect(row.msisdn).toContain("•"); // masked — never a raw number
+    }
+    expect(overview.trend.length).toBeGreaterThanOrEqual(1);
+  });
+
   it("NEVER leaks debug_code to a live-plan tenant", async () => {
     const started = await post(LIVE_KEY, "/v1/verify", {
       to: `+23324${SUFFIX}4`,

@@ -54,3 +54,34 @@ export const verifyCheckResponse = z.object({
   verified_at: z.string().nullable(),
 });
 export type VerifyCheckResponse = z.infer<typeof verifyCheckResponse>;
+
+// ---- Dashboard overview (V2 surface) — real rollups replacing the mock matrix ------------------
+export const verificationSummary = z.object({
+  id: z.string().uuid(),
+  /** Masked recipient — raw numbers never leave the API. */
+  msisdn: z.string(),
+  channel: z.literal("sms"),
+  status: verificationStatus,
+  created_at: z.string(),
+  verified_at: z.string().nullable(),
+});
+export type VerificationSummary = z.infer<typeof verificationSummary>;
+
+export const verifyTrendPoint = z.object({
+  /** ISO date (UTC day bucket). */
+  date: z.string(),
+  attempts: z.number().int().nonnegative(),
+  verified: z.number().int().nonnegative(),
+});
+
+export const verifyOverviewResponse = z.object({
+  recent: z.array(verificationSummary),
+  /** Funnel: verified ≤ delivered ≤ sent (sent = verifications started). */
+  stats: z.object({
+    sent: z.number().int().nonnegative(),
+    delivered: z.number().int().nonnegative(),
+    verified: z.number().int().nonnegative(),
+  }),
+  trend: z.array(verifyTrendPoint),
+});
+export type VerifyOverviewResponse = z.infer<typeof verifyOverviewResponse>;
