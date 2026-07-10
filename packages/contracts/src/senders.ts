@@ -38,6 +38,19 @@ export const createSenderRequestSchema = z.object({
 });
 export type CreateSenderRequest = z.infer<typeof createSenderRequestSchema>;
 
+/** Staff review queue row — the customer DTO plus the owning tenant. */
+export const adminSenderDtoSchema = senderDtoSchema.extend({
+  tenant_id: z.string().uuid(),
+});
+export type AdminSenderDto = z.infer<typeof adminSenderDtoSchema>;
+
+export const listAdminSendersResponseSchema = z.object({
+  senders: z.array(adminSenderDtoSchema),
+});
+export type ListAdminSendersResponse = z.infer<
+  typeof listAdminSendersResponseSchema
+>;
+
 /** Staff decision on a registration (admin console / ops). */
 export const decideSenderRequestSchema = z.object({
   status: z.enum(["active", "rejected"]),
