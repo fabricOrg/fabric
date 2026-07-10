@@ -57,10 +57,20 @@ async function seedTenant(id: string, plan: string, rawKey: string) {
       idempotencyKey: `topup:routing-seed-${id}`,
     }),
   );
+  // E10-S4: the live tenant must clear the sender gate so this spec asserts ROUTING, not senders.
+  if (plan !== "sandbox") {
+    await owner.unsafe(
+      `INSERT INTO senders (tenant_id, sender_id, country, use_case, status)
+       VALUES ($1, 'FABRIC', 'GH', 'routing integration', 'active')
+       ON CONFLICT ON CONSTRAINT uniq_sender_tenant_id_country DO NOTHING`,
+      [id],
+    );
+  }
 }
 
 async function cleanTenant(id: string) {
   for (const table of [
+    "senders",
     "ledger_entries",
     "ledger_transactions",
     "ledger_accounts",

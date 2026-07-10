@@ -246,6 +246,20 @@
       "when": 1783669248718,
       "tag": "0034_verifications_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1783673218703,
+      "tag": "0035_cuddly_bishop",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1783673223169,
+      "tag": "0036_senders_rls",
+      "breakpoints": true
     }
   ]
 }

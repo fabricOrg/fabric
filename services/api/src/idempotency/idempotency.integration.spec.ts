@@ -14,9 +14,15 @@ import type { RequestTenant } from "../api-keys/api-key.guard.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import { QueueService } from "../queue/queue.service.js";
+import type { SendersService } from "../senders/senders.service.js";
 import { SmsController } from "../sms/sms.controller.js";
 import { SmsService } from "../sms/sms.service.js";
 import { IdempotencyService } from "./idempotency.service.js";
+
+// E10-S4: sender enforcement has its own spec — these flows always pass the gate.
+const sendersAlwaysActive = {
+  isActiveSender: async () => true,
+} as unknown as SendersService;
 
 /**
  * CLIENT IDEMPOTENCY — integration spec (finding 3 of the architecture remediation).
@@ -57,6 +63,7 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     killSwitch,
     config,
     new QueueService(config),
+    sendersAlwaysActive,
   );
   const idempotency = new IdempotencyService(appDb);
   const controller = new SmsController(sms, idempotency);
