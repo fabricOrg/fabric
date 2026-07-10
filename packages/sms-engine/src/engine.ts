@@ -102,18 +102,43 @@ async function resolveMessage(
       error_code = COALESCE(${opts.errorCode ?? null}, error_code),
       updated_at = now()
     WHERE id = ${messageId}`;
+  // Transactional outbox (finding 8): the domain event commits or rolls back WITH the status
+  // change — never an event for a transition that didn't happen, never a lost transition.
+  // Delivery to tenant-registered webhook endpoints is the poller/worker's job, not ours.
+  await tx`
+    INSERT INTO outbox_events (tenant_id, event_type, payload)
+    VALUES (
+      current_setting('app.tenant_id')::uuid,
+      'message.updated',
+      ${JSON.stringify({
+        message_id: messageId,
+        status: newStatus,
+        previous_status: prior,
+        ...(opts.errorCode ? { error_code: opts.errorCode } : {}),
+      })}::jsonb
+    )`;
   return newStatus;
 }
 
-/** POST /v1/sms/send core: segment → rate → reserve+persist(sending) → send → resolve. */
-export async function sendSms(
+/** The persisted-and-reserved message tx1 produced — everything dispatch needs later. */
+export interface PreparedSend {
+  messageId: string;
+  encoding: "gsm7" | "ucs2";
+  segments: number;
+}
+
+/**
+ * tx1 — segment → rate → persist as `sending` + reserve, atomically, BEFORE any network call (B2).
+ * Kept separate from {@link dispatchSend} so the API can run THIS in-request (insufficient funds
+ * still fails the request synchronously) and hand the provider call to a queue worker.
+ */
+export async function prepareSend(
   deps: EngineDeps,
   input: SendInput,
-): Promise<SendResult> {
+): Promise<PreparedSend> {
   const seg = encodeAndSegment(input.body);
   const cost = rateSegments(seg.segments, input.currency, deps.rates);
 
-  // tx1 — persist as `sending` + reserve, atomically, BEFORE the network call (B2).
   const messageId = await deps.db.withTenant(input.tenantId, async (tx) => {
     const rows = (await tx`
       INSERT INTO messages (tenant_id, subject_id, sender_id, status, status_rank, encoding, segments, cost_minor, currency, provider_slug)
@@ -128,27 +153,50 @@ export async function sendSms(
     });
     return id;
   });
+  return { messageId, encoding: seg.encoding, segments: seg.segments };
+}
 
+/**
+ * Provider call + tx2 — runs inline (no queue) or in a worker (queued path). SAFE TO RETRY: a
+ * crash after the provider accepted but before tx2 leaves the message `sending`; the retry's
+ * resolveMessage is idempotent (FOR UPDATE + terminal-freeze + B6 commit/refund exclusivity),
+ * and a re-send to the provider carries the same messageId for provider-side dedupe. A retry
+ * that never succeeds is ultimately resolved by the TTL sweeper (refund).
+ */
+export async function dispatchSend(
+  deps: EngineDeps,
+  input: SendInput,
+  prepared: PreparedSend,
+): Promise<SendResult> {
   // send() OUTSIDE any open transaction.
   const result = await deps.provider.send(
     {
-      messageId,
+      messageId: prepared.messageId,
       to: input.to,
       senderId: input.senderId,
       body: input.body,
-      encoding: seg.encoding,
-      segments: seg.segments,
+      encoding: prepared.encoding,
+      segments: prepared.segments,
     },
     deps.creds ?? {},
   );
 
   // tx2 — apply the provider's outcome (commit on `accepted`, refund on submit-fault, else pending).
   const status = await deps.db.withTenant(input.tenantId, (tx) =>
-    resolveMessage(deps, tx, messageId, result.status, {
+    resolveMessage(deps, tx, prepared.messageId, result.status, {
       providerRef: result.providerRef,
     }),
   );
-  return { messageId, status };
+  return { messageId: prepared.messageId, status };
+}
+
+/** POST /v1/sms/send inline core: prepare (tx1) → dispatch (send + tx2), one call. */
+export async function sendSms(
+  deps: EngineDeps,
+  input: SendInput,
+): Promise<SendResult> {
+  const prepared = await prepareSend(deps, input);
+  return dispatchSend(deps, input, prepared);
 }
 
 /** DLR webhook core: parse → reconcile (out-of-order tolerant) → commit/refund per the billing basis. */

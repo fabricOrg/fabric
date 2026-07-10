@@ -1,6 +1,21 @@
-import { provisionTenantRequestSchema } from "@app/contracts";
-import { Body, Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
+import {
+  provisionTenantRequestSchema,
+  updateTenantStatusRequestSchema,
+} from "@app/contracts";
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { invalidRequest } from "../http/api-error.js";
+import { pageOpts } from "../http/pagination.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { TenantProvisioningService } from "./tenant-provisioning.service.js";
 
@@ -17,8 +32,8 @@ export class TenantProvisioningController {
   ) {}
 
   @Get("tenants")
-  async list() {
-    return this.provisioning.list();
+  async list(@Query("limit") limit?: string, @Query("cursor") cursor?: string) {
+    return this.provisioning.list(pageOpts(limit, cursor));
   }
 
   @Post("tenants")
@@ -31,5 +46,27 @@ export class TenantProvisioningController {
       );
     }
     return this.provisioning.provision(parsed.data);
+  }
+
+  /** Suspend / reinstate / soft-close a tenant. Actor attested by the BFF via x-actor-* headers
+   *  (it gates the staff session + staff:write first); recorded to the audit log. */
+  @Patch("tenants/:id")
+  async updateStatus(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("x-actor-email") actorEmail?: string,
+    @Headers("x-actor-staff-id") actorStaffId?: string,
+  ) {
+    const parsed = updateTenantStatusRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest(
+        "invalid_status_request",
+        "Provide a valid status and a reason (at least 8 characters).",
+      );
+    }
+    return this.provisioning.updateStatus(id, parsed.data, {
+      email: actorEmail ?? null,
+      staffId: actorStaffId ?? null,
+    });
   }
 }

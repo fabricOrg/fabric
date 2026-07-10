@@ -1,6 +1,7 @@
 import type { AppDb } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
+import { invalidRequest } from "../http/api-error.js";
 import {
   type ApiKeyEnv,
   generateApiKey,
@@ -12,6 +13,8 @@ import {
 export interface ResolvedApiKey {
   readonly tenantId: string;
   readonly scopes: string[];
+  /** Stable per-key identifier for rate-limit buckets: a hash PREFIX, never raw key material. */
+  readonly keyId: string;
 }
 
 /** A newly created key — the raw secret is present ONCE here and never again. */
@@ -62,7 +65,12 @@ export class ApiKeyService {
     if (!row) return null; // unknown or revoked → the api_key_auth_lookup policy returned nothing
     const tenantId = String(row.tenant_id);
     void this.touch(tenantId, keyHash); // fire-and-forget; must never fail auth
-    return { tenantId, scopes: toScopes(row.scopes) };
+    // keyId = hash prefix: unique enough to bucket per key, reveals nothing about the raw secret.
+    return {
+      tenantId,
+      scopes: toScopes(row.scopes),
+      keyId: keyHash.slice(0, 16),
+    };
   }
 
   /** Bump last_used_at inside the tenant's own context — no RLS bypass (the tenant owns the key). */
@@ -83,6 +91,22 @@ export class ApiKeyService {
     tenantId: string,
     input: { name?: string; env: ApiKeyEnv; scopes?: string[] },
   ): Promise<CreatedApiKey> {
+    // ADR-0002 F3: a sandbox-plan tenant can only hold sk_test_ keys — live keys arrive with the
+    // go-live approval (F4), never before. Enforced here so every caller (operator console today,
+    // customer session later) hits the same wall.
+    if (input.env === "live") {
+      const rows = (await this.db.withTenant(
+        tenantId,
+        (tx) => tx`SELECT plan FROM accounts WHERE id = ${tenantId}`,
+      )) as Array<{ plan?: unknown }>;
+      if (rows[0]?.plan === "sandbox") {
+        throw invalidRequest(
+          "sandbox_no_live_keys",
+          "Sandbox workspaces can only mint test keys. Request go-live to unlock live keys.",
+          "env",
+        );
+      }
+    }
     const k = generateApiKey(input.env);
     const scopes = input.scopes ?? [];
     const rows = await this.db.withTenant(

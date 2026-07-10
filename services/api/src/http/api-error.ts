@@ -69,3 +69,8 @@ export function invalidRequest(
 export function notFound(code: string, message: string): HttpException {
   return apiError({ type: "not_found_error", code, message, status: 404 });
 }
+
+/** 429 in the F8.3 envelope (`type: "rate_limit_error"`) — back off and retry. */
+export function tooManyRequests(code: string, message: string): HttpException {
+  return apiError({ type: "rate_limit_error", code, message, status: 429 });
+}

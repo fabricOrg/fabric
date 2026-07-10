@@ -105,7 +105,7 @@ describeDb("WorkOS identity lifecycle", () => {
     expect(revoked?.status).toBe("disabled");
 
     await expect(
-      new IdentityService(db).resolve(tenantId, {
+      new IdentityService(db).resolve({
         external_user_id: externalUserId,
         organization_id: organizationId,
         email: remoteUser.email,

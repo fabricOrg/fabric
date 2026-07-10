@@ -22,10 +22,20 @@ import { getWalletSnapshot } from "@/lib/server/dashboard-data";
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await requireDashboardSession();
   const primaryBalance = (await getWalletSnapshot()).balances[0]?.balance;
+  const isSandbox = session.plan === "sandbox";
   return (
     <SidebarProvider>
       <AppSidebar role={session.role} />
       <SidebarInset>
+        {isSandbox ? (
+          <div className="flex h-8 shrink-0 items-center justify-center gap-2 bg-amber-500/15 px-4 text-xs font-medium text-amber-700 dark:text-amber-400">
+            <span className="rounded-sm bg-amber-500/25 px-1.5 py-0.5 font-semibold tracking-wide">
+              SANDBOX
+            </span>
+            Messages route to the test provider and never reach a real phone.
+            Request go-live to send real traffic.
+          </div>
+        ) : null}
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
           <SidebarTrigger className="-ml-1" />
           <Separator

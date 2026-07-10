@@ -3,6 +3,9 @@ import "server-only";
 import {
   type ListTenantsResponse,
   listTenantsResponseSchema,
+  type TenantSummaryDto,
+  tenantSummaryDtoSchema,
+  type UpdateTenantStatusRequest,
 } from "@app/contracts";
 
 /**
@@ -18,17 +21,50 @@ export class TenantApiError extends Error {
   }
 }
 
-export async function listTenants(): Promise<ListTenantsResponse> {
+export async function listTenants(
+  opts: { cursor?: string } = {},
+): Promise<ListTenantsResponse> {
   const baseUrl = process.env.API_BASE_URL;
   const bffToken = process.env.BFF_INTERNAL_TOKEN;
   if (!baseUrl || !bffToken) {
     throw new Error("API_BASE_URL and BFF_INTERNAL_TOKEN are required.");
   }
-  const response = await fetch(new URL("/internal/admin/tenants", baseUrl), {
+  const url = new URL("/internal/admin/tenants", baseUrl);
+  if (opts.cursor) url.searchParams.set("cursor", opts.cursor);
+  const response = await fetch(url, {
     cache: "no-store",
     headers: { "x-bff-token": bffToken },
   });
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new TenantApiError(response.status, payload);
   return listTenantsResponseSchema.parse(payload);
+}
+
+export async function updateTenantStatus(
+  tenantId: string,
+  request: UpdateTenantStatusRequest,
+  actor: { email: string; staffId: string },
+): Promise<TenantSummaryDto> {
+  const baseUrl = process.env.API_BASE_URL;
+  const bffToken = process.env.BFF_INTERNAL_TOKEN;
+  if (!baseUrl || !bffToken) {
+    throw new Error("API_BASE_URL and BFF_INTERNAL_TOKEN are required.");
+  }
+  const response = await fetch(
+    new URL(`/internal/admin/tenants/${tenantId}`, baseUrl),
+    {
+      method: "PATCH",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-bff-token": bffToken,
+        "x-actor-email": actor.email,
+        "x-actor-staff-id": actor.staffId,
+      },
+      body: JSON.stringify(request),
+    },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw new TenantApiError(response.status, payload);
+  return tenantSummaryDtoSchema.parse(payload);
 }

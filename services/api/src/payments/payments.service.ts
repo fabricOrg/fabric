@@ -223,11 +223,26 @@ export class PaymentsService {
     // idempotencyKey (topup-{uuid}) dedups a replayed webhook; referenceId is omitted — it's a uuid
     // FK to messages, not applicable to a top-up.
     await this.appDb.withTenant(payment.tenantId, async (tx) => {
-      await credit(tx, {
+      const credited = await credit(tx, {
         currency: payment.currency,
         amountMinor: payment.amountMinor,
         idempotencyKey: payment.reference,
       });
+      // Transactional outbox (finding 8): emit only when money actually moved THIS call — a
+      // replayed webhook (credited.replayed) must not fan out a duplicate event.
+      if (!credited.replayed) {
+        await tx`
+          INSERT INTO outbox_events (tenant_id, event_type, payload)
+          VALUES (
+            current_setting('app.tenant_id')::uuid,
+            'topup.succeeded',
+            ${JSON.stringify({
+              reference: payment.reference,
+              amount_minor: payment.amountMinor.toString(),
+              currency: payment.currency,
+            })}::jsonb
+          )`;
+      }
       // A `flow-` reference belongs to a Lighthouse flow → complete its charge + notify now that the
       // collection cleared. No-op for top-ups (no matching flow_records row). Same tenant tx (RLS ok).
       const entries = [

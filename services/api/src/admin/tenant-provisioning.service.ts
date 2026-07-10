@@ -2,15 +2,35 @@ import type {
   ListTenantsResponse,
   ProvisionTenantRequest,
   ProvisionTenantResponse,
+  TenantSummaryDto,
+  UpdateTenantStatusRequest,
 } from "@app/contracts";
-import { accounts, memberships, type ProvisioningDb, users } from "@app/db";
+import {
+  accounts,
+  clampLimit,
+  decodeCursor,
+  encodeCursor,
+  keysetWhere,
+  memberships,
+  type ProvisioningDb,
+  type TenantId,
+  takePage,
+  users,
+} from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { desc, eq } from "drizzle-orm";
+import { AuditService } from "../audit/audit.service.js";
+import { invalidRequest, notFound } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import {
   WORKOS_CLIENT,
   type WorkosClientProvider,
 } from "../identity/workos-client.provider.js";
+
+interface Actor {
+  readonly staffId?: string | null;
+  readonly email?: string | null;
+}
 
 /**
  * Ops-provisioned tenant onboarding (docs/PI-3/ORG-PROVISIONING.md):
@@ -24,10 +44,88 @@ export class TenantProvisioningService {
   constructor(
     @Inject(PROVISIONING_DB) private readonly provisioning: ProvisioningDb,
     @Inject(WORKOS_CLIENT) private readonly workosClient: WorkosClientProvider,
+    @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
-  /** Staff control-plane list of every account. Runs on the provisioning connection (cross-tenant). */
-  async list(): Promise<ListTenantsResponse> {
+  /**
+   * Change a tenant's lifecycle status (suspend / reinstate / soft-close). Staff-gated at the BFF.
+   * `closed` is TERMINAL (accounts soft-close, never hard-delete) — a transition out of it is
+   * rejected. A no-op (same status) is rejected too. Every change is audited before→after + reason,
+   * matching the staff-suspend governance pattern. Direct + audited, NOT maker-checker: maker-checker
+   * decide() records intent but does not execute, so routing status here through it would be a dead
+   * action — dual-control on tenant status is a separate epic (make decide() apply changes).
+   */
+  async updateStatus(
+    tenantId: string,
+    request: UpdateTenantStatusRequest,
+    actor: Actor,
+  ): Promise<TenantSummaryDto> {
+    const [current] = await this.provisioning.db
+      .select({ status: accounts.status, name: accounts.name })
+      .from(accounts)
+      .where(eq(accounts.id, tenantId as TenantId))
+      .limit(1);
+    if (!current) {
+      throw notFound("tenant_not_found", "No tenant with that id.");
+    }
+    if (current.status === "closed") {
+      throw invalidRequest(
+        "tenant_closed",
+        "This account is closed (soft-close is terminal) and can't change status.",
+      );
+    }
+    if (current.status === request.status) {
+      throw invalidRequest(
+        "no_status_change",
+        `The account is already ${request.status}.`,
+      );
+    }
+
+    const [updated] = await this.provisioning.db
+      .update(accounts)
+      .set({ status: request.status, updatedAt: new Date() })
+      .where(eq(accounts.id, tenantId as TenantId))
+      .returning({
+        tenant_id: accounts.id,
+        name: accounts.name,
+        slug: accounts.slug,
+        plan: accounts.plan,
+        status: accounts.status,
+        data_region: accounts.dataRegion,
+        workos_organization_id: accounts.workosOrganizationId,
+        created_at: accounts.createdAt,
+      });
+    if (!updated) throw new Error("tenant status update returned no row");
+
+    await this.audit.record({
+      actorStaffId: actor.staffId ?? null,
+      actorEmail: actor.email ?? null,
+      action: "tenant.status_change",
+      targetType: "tenant",
+      targetId: tenantId,
+      summary: `${current.name} ${request.status === "closed" ? "CLOSED" : request.status}`,
+      reason: request.reason,
+      metadata: { before: current.status, after: request.status },
+    });
+
+    return { ...updated, created_at: updated.created_at.toISOString() };
+  }
+
+  /** Staff control-plane list of every account. Runs on the provisioning connection (cross-tenant).
+   *  Standard keyset pagination on (created_at DESC, id DESC). */
+  async list(
+    opts: { limit?: number; cursor?: string } = {},
+  ): Promise<ListTenantsResponse> {
+    const pageSize = clampLimit(opts.limit);
+    const decoded = opts.cursor ? decodeCursor(opts.cursor) : null;
+    const keyset = keysetWhere(
+      accounts.createdAt,
+      accounts.id,
+      "desc",
+      decoded
+        ? { primaryValue: new Date(decoded.primary), id: decoded.id }
+        : null,
+    );
     const rows = await this.provisioning.db
       .select({
         tenant_id: accounts.id,
@@ -40,12 +138,18 @@ export class TenantProvisioningService {
         created_at: accounts.createdAt,
       })
       .from(accounts)
-      .orderBy(desc(accounts.createdAt));
+      .where(keyset)
+      .orderBy(desc(accounts.createdAt), desc(accounts.id))
+      .limit(pageSize + 1);
+    const { page, nextCursor } = takePage(rows, pageSize, (r) =>
+      encodeCursor(r.created_at.toISOString(), r.tenant_id),
+    );
     return {
-      tenants: rows.map((r) => ({
+      tenants: page.map((r) => ({
         ...r,
         created_at: r.created_at.toISOString(),
       })),
+      next_cursor: nextCursor,
     };
   }
 

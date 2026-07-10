@@ -1,7 +1,7 @@
-// Verify (OTP) product client + app-local DTOs. Mock-first: these zod schemas live in the app
-// (not @app/contracts yet) and validate the BFF stub's JSON so the UI never trusts an unshaped body.
-// Verify is one API that fans an OTP across channels (SMS/Voice/WhatsApp/Email) with failover order.
-// TODO(BFF): promote to @app/contracts + wire /v1/verify (mirror messages/wallet contracts).
+// Verify (OTP) product client + app-local DTOs. start/check hit the REAL /v1/verify API through
+// the BFF (V1, SMS channel); the channel matrix + overview stats remain display-only until the V2
+// Verify dashboard surface. Wire shapes for the actions live in @app/contracts; these app-local
+// schemas validate the BFF's UI-shaped JSON so the components never trust an unshaped body.
 
 import { z } from "zod";
 
@@ -87,11 +87,12 @@ export const saveChannelsRequest = z.object({
 });
 export type SaveChannelsRequest = z.infer<typeof saveChannelsRequest>;
 
-const verificationResponse = z.object({ verification });
+const verificationResponse = z.object({
+  verification,
+  /** SANDBOX tenants only: the OTP, so the test flow completes without a real phone. */
+  debugCode: z.string().optional(),
+});
 const saveChannelsResponse = z.object({ channels: z.array(verifyChannel) });
-
-/** The 6-digit code that simulates a successful verification in the mock BFF (demo aid). */
-export const DEMO_OK_CODE = "123456";
 
 /** Mirrors the shared BFF fetch: throws the raw error payload so callers route it through toastApiError. */
 async function bffRequest(path: string, init?: RequestInit): Promise<unknown> {
@@ -112,14 +113,17 @@ export async function getVerifyOverview(): Promise<VerifyOverview> {
 
 export async function startVerification(
   input: Omit<StartVerificationRequest, "action">,
-): Promise<Verification> {
+): Promise<{ verification: Verification; debugCode?: string }> {
   const parsed = verificationResponse.parse(
     await bffRequest("/api/dashboard/verify", {
       method: "POST",
       body: JSON.stringify({ action: "start", ...input }),
     }),
   );
-  return parsed.verification;
+  return {
+    verification: parsed.verification,
+    ...(parsed.debugCode ? { debugCode: parsed.debugCode } : {}),
+  };
 }
 
 export async function checkVerification(

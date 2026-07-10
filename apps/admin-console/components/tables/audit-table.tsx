@@ -1,9 +1,23 @@
 "use client";
 
-import type { AuditEventDto } from "@app/contracts";
+import type { AuditEventDto, ListAuditResponse } from "@app/contracts";
 import { Badge } from "@app/ui/components/ui/badge";
 import { DataTable } from "@app/ui/components/ui/data-table";
+import { LoadMore } from "@app/ui/components/ui/load-more";
+import { useCursorPage } from "@app/ui/hooks/use-cursor-page";
 import type { ColumnDef } from "@tanstack/react-table";
+import { toastApiError } from "@/lib/error-toast";
+
+/** Fetch the next audit page from the staff BFF route (keyset cursor). */
+async function fetchAuditPage(cursor: string): Promise<ListAuditResponse> {
+  const response = await fetch(
+    `/api/admin/audit?cursor=${encodeURIComponent(cursor)}`,
+    { cache: "no-store" },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw payload;
+  return payload as ListAuditResponse;
+}
 
 function formatTime(iso: string): string {
   // Stable UTC render (avoids SSR/client locale drift): "2026-07-07 02:31".
@@ -72,13 +86,33 @@ const columns: ColumnDef<AuditEventDto>[] = [
   },
 ];
 
-export function AuditTable({ events }: { events: readonly AuditEventDto[] }) {
+export function AuditTable({
+  events,
+  nextCursor,
+}: {
+  events: readonly AuditEventDto[];
+  nextCursor: string | null;
+}) {
+  // First page server-rendered; the shared keyset hook appends older pages via the BFF route.
+  const { items, hasMore, loading, loadMore } = useCursorPage(
+    events,
+    nextCursor,
+    async (cursor) => {
+      const page = await fetchAuditPage(cursor);
+      return { items: page.events, next_cursor: page.next_cursor };
+    },
+    toastApiError,
+  );
+
   return (
-    <DataTable
-      columns={columns}
-      data={events as AuditEventDto[]}
-      ariaLabel="Audit log"
-      empty="No activity recorded yet."
-    />
+    <div className="flex flex-col gap-4">
+      <DataTable
+        columns={columns}
+        data={items}
+        ariaLabel="Audit log"
+        empty="No activity recorded yet."
+      />
+      <LoadMore hasMore={hasMore} loading={loading} onLoadMore={loadMore} />
+    </div>
   );
 }

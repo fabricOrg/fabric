@@ -5,12 +5,19 @@ import {
   Injectable,
 } from "@nestjs/common";
 import { forbidden, unauthorized } from "../http/api-error.js";
+import { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import { ApiKeyService } from "./api-keys.service.js";
+import {
+  TENANT_TOKEN_PREFIX,
+  TenantTokenService,
+} from "./tenant-token.service.js";
 
 /** The tenant context a resolved key attaches to the request; handlers run data access via it. */
 export interface RequestTenant {
   readonly id: string;
   readonly scopes: string[];
+  /** Rate-limit bucket id for the presenting key (hash prefix — never raw key material). */
+  readonly keyId: string;
 }
 
 /** Minimal shape we read/attach — avoids coupling to a specific HTTP adapter's request type. */
@@ -30,7 +37,12 @@ interface AuthedRequest {
 export class ApiKeyGuard implements CanActivate {
   // Explicit @Inject(token) — NOT type-reflection DI — so injection works under the tsx dev runner
   // too (esbuild doesn't emit decorator metadata; matches DbModule's @Inject(APP_DB) discipline).
-  constructor(@Inject(ApiKeyService) private readonly apiKeys: ApiKeyService) {}
+  constructor(
+    @Inject(ApiKeyService) private readonly apiKeys: ApiKeyService,
+    @Inject(RateLimitService) private readonly rateLimit: RateLimitService,
+    @Inject(TenantTokenService)
+    private readonly tenantTokens: TenantTokenService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AuthedRequest>();
@@ -41,11 +53,33 @@ export class ApiKeyGuard implements CanActivate {
         "Missing or malformed Authorization header. Use: Authorization: Bearer sk_test_…",
       );
     }
+    // ADR-0003: the BFF authenticates with a short-lived signed tenant token instead of a
+    // stored key. Wildcard scopes = tenant containment only — the BFF already enforced the
+    // user's membership permissions before calling; customer sk_* keys keep granular scopes.
+    if (raw.startsWith(TENANT_TOKEN_PREFIX)) {
+      const token = this.tenantTokens.verify(raw);
+      if (token === null) {
+        throw unauthorized(
+          "invalid_tenant_token",
+          "Invalid or expired tenant token.",
+        );
+      }
+      await this.rateLimit.consume(token.keyId, token.tenantId);
+      req.tenant = { id: token.tenantId, scopes: ["*"], keyId: token.keyId };
+      return true;
+    }
     const resolved = await this.apiKeys.resolve(raw);
     if (resolved === null) {
       throw unauthorized("invalid_api_key", "Invalid or revoked API key.");
     }
-    req.tenant = { id: resolved.tenantId, scopes: resolved.scopes };
+    // Rate limit AFTER auth (unauthenticated traffic never reaches the counters, so garbage keys
+    // can't exhaust a tenant's budget) — throws 429 when the key's or tenant's bucket is empty.
+    await this.rateLimit.consume(resolved.keyId, resolved.tenantId);
+    req.tenant = {
+      id: resolved.tenantId,
+      scopes: resolved.scopes,
+      keyId: resolved.keyId,
+    };
     return true;
   }
 }

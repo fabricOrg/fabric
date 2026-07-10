@@ -5,6 +5,7 @@ import {
   KillSwitchApiError,
   toggleKillSwitch,
 } from "@/lib/server/kill-switch-client";
+import { requireTrustedOrigin } from "@/lib/server/origin";
 
 function fail(
   code: string,
@@ -20,6 +21,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ key: string }> },
 ) {
+  const denied = requireTrustedOrigin(request);
+  if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
   if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
   if (!session.permissions.includes("staff:write")) {

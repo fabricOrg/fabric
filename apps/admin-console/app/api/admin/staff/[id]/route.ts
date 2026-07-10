@@ -1,6 +1,7 @@
 import { updateStaffRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   removeStaff,
   StaffApiError,
@@ -61,6 +62,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const denied = requireTrustedOrigin(request);
+  if (denied) return denied;
   const { id } = await params;
   const { error } = await authorize(id);
   if (error) return error;
@@ -87,9 +90,11 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const denied = requireTrustedOrigin(request);
+  if (denied) return denied;
   const { id } = await params;
   const { error } = await authorize(id);
   if (error) return error;

@@ -86,11 +86,6 @@ resource "aws_ecs_task_definition" "dev_portal" {
           name      = "BFF_INTERNAL_TOKEN"
           valueFrom = "${aws_secretsmanager_secret.bff_internal_token.arn}:BFF_INTERNAL_TOKEN::"
         },
-        # Reuses the dashboard's API key — same testing tenant.
-        {
-          name      = "DASHBOARD_API_KEY"
-          valueFrom = "${aws_secretsmanager_secret.dashboard_api_key.arn}:DASHBOARD_API_KEY::"
-        },
         {
           name      = "WORKOS_COOKIE_PASSWORD"
           valueFrom = "${aws_secretsmanager_secret.dev_portal_cookie_password.arn}:WORKOS_COOKIE_PASSWORD::"
@@ -131,7 +126,6 @@ resource "aws_ecs_task_definition" "dev_portal" {
 
   depends_on = [
     aws_secretsmanager_secret_version.bff_internal_token,
-    aws_secretsmanager_secret_version.dashboard_api_key,
     aws_secretsmanager_secret_version.dev_portal_cookie_password,
     aws_secretsmanager_secret_version.dev_portal_workos,
   ]

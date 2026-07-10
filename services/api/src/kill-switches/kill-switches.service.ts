@@ -4,8 +4,8 @@ import type {
   ToggleKillSwitchRequest,
 } from "@app/contracts";
 import { killSwitches, type NewKillSwitch, type ProvisioningDb } from "@app/db";
-import { Inject, Injectable } from "@nestjs/common";
-import { asc, eq } from "drizzle-orm";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { and, asc, eq, notInArray } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 
@@ -24,23 +24,16 @@ const CATALOG: NewKillSwitch[] = [
       "Pause wallet top-ups and charges (collections/disbursements).",
     scope: "payments",
   },
+  // One switch per provider that ACTUALLY has an adapter — the SmsService gate reads
+  // `provider.<slug>` before every send (finding 9). Africa's Talking + Hubtel were seeded here
+  // with no adapter behind them: dead switches that advertised "route sends away" but did nothing.
+  // They're dropped (and cleaned from seeded DBs by migration 0033) until an adapter exists —
+  // adding a real provider re-adds its switch here.
   {
-    key: "provider.arkesel",
+    key: "provider.arkesel-sms",
     label: "Arkesel provider",
-    description: "Route sends away from Arkesel (failover / incident).",
-    scope: "provider",
-  },
-  {
-    key: "provider.africas-talking",
-    label: "Africa's Talking provider",
     description:
-      "Route sends away from Africa's Talking (failover / incident).",
-    scope: "provider",
-  },
-  {
-    key: "provider.hubtel",
-    label: "Hubtel provider",
-    description: "Route sends away from Hubtel (failover / incident).",
+      "Halt sends via Arkesel (incident). No failover target yet, so this refuses Arkesel sends rather than rerouting.",
     scope: "provider",
   },
 ];
@@ -50,8 +43,24 @@ interface Actor {
   readonly staffId?: string | null;
 }
 
+/** One cached switch read: the value + when it was fetched. */
+interface CachedState {
+  readonly paused: boolean;
+  readonly fetchedAt: number;
+}
+
+/**
+ * How long a cached kill-switch state may serve reads before a fresh DB fetch. A flip lands
+ * within this window on other instances (the toggling instance invalidates immediately).
+ */
+const CACHE_TTL_MS = 30_000;
+
 @Injectable()
 export class KillSwitchService {
+  private readonly logger = new Logger(KillSwitchService.name);
+  /** key → last-known-good state. Also the fallback when the control-plane DB read fails. */
+  private readonly cache = new Map<string, CachedState>();
+
   constructor(
     @Inject(PROVISIONING_DB) private readonly provisioning: ProvisioningDb,
     @Inject(AuditService) private readonly audit: AuditService,
@@ -62,6 +71,22 @@ export class KillSwitchService {
       .insert(killSwitches)
       .values(CATALOG)
       .onConflictDoNothing({ target: killSwitches.key });
+    // Prune dead PROVIDER switches — a `provider.*` row with no matching adapter in the current
+    // catalog (e.g. the retired africas-talking / hubtel / old arkesel keys, finding 9). Runs on
+    // the provisioner connection (kill_switches DML is provisioner-only — a migration can't do
+    // this, it runs as app_migrator which lacks the grant). Scoped to `provider.*` so a platform
+    // switch is never touched; self-healing on every read.
+    const providerKeys = CATALOG.filter((s) => s.scope === "provider").map(
+      (s) => s.key,
+    );
+    await this.provisioning.db
+      .delete(killSwitches)
+      .where(
+        and(
+          eq(killSwitches.scope, "provider"),
+          notInArray(killSwitches.key, providerKeys),
+        ),
+      );
   }
 
   async list(): Promise<ListKillSwitchesResponse> {
@@ -73,15 +98,41 @@ export class KillSwitchService {
     return { switches: rows.map(toDto) };
   }
 
-  /** Runtime guard for send/charge paths: true when the capability is PAUSED (or the key is unknown
-   *  we treat as operational — an unseeded switch never blocks). */
+  /**
+   * Runtime guard for send/charge paths: true when the capability is PAUSED (or the key is unknown
+   * we treat as operational — an unseeded switch never blocks).
+   *
+   * Reads through a short in-memory TTL cache (ARCHITECTURE Principle #7: the control plane is
+   * NEVER in the data plane's hot path). Two consequences, both deliberate:
+   *   - one cheap Map hit per send instead of a control-plane DB query; a flip propagates to
+   *     other instances within CACHE_TTL_MS (this instance invalidates on toggle()).
+   *   - if the control-plane DB read FAILS, we serve the last-known-good value rather than
+   *     failing the send — a control-plane outage must never take down the data plane. With no
+   *     cached value at all we default to operational (matching the unknown-key semantics).
+   */
   async isPaused(key: string): Promise<boolean> {
-    const [row] = await this.provisioning.db
-      .select({ enabled: killSwitches.enabled })
-      .from(killSwitches)
-      .where(eq(killSwitches.key, key))
-      .limit(1);
-    return row ? !row.enabled : false;
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+      return cached.paused;
+    }
+    try {
+      const [row] = await this.provisioning.db
+        .select({ enabled: killSwitches.enabled })
+        .from(killSwitches)
+        .where(eq(killSwitches.key, key))
+        .limit(1);
+      const paused = row ? !row.enabled : false;
+      this.cache.set(key, { paused, fetchedAt: Date.now() });
+      return paused;
+    } catch (error) {
+      this.logger.error(
+        `kill-switch read failed for '${key}' — serving ${
+          cached ? "last-known-good" : "default (operational)"
+        }: ${error instanceof Error ? error.message : "unknown"}`,
+      );
+      // Stale beats down: last-known-good if we ever read one, else operational.
+      return cached ? cached.paused : false;
+    }
   }
 
   async toggle(
@@ -108,6 +159,9 @@ export class KillSwitchService {
       .where(eq(killSwitches.key, key))
       .returning();
     if (!updated) return null;
+
+    // This instance sees the flip immediately; peers converge within CACHE_TTL_MS.
+    this.cache.set(key, { paused: !updated.enabled, fetchedAt: Date.now() });
 
     await this.audit.record({
       actorStaffId: actor.staffId ?? null,

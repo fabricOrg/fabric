@@ -1,7 +1,7 @@
 # Fabric dev-portal — Next.js standalone image (mirrors apps/dashboard/Dockerfile).
 # next.config sets output:"standalone" + outputFileTracingRoot at the repo root.
 # Runtime env (ECS task def / AWS Secrets Manager, never baked in): WORKOS_*, *_COOKIE_PASSWORD,
-# API_BASE_URL, BFF_INTERNAL_TOKEN, DASHBOARD_API_KEY.
+# API_BASE_URL, BFF_INTERNAL_TOKEN.
 FROM node:22-bookworm-slim AS build
 
 ENV PNPM_HOME=/pnpm

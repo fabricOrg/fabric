@@ -190,6 +190,62 @@
       "when": 1783538313782,
       "tag": "0026_membership_role_developer",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1783583495085,
+      "tag": "0027_provisioner_maintenance_read",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1783584453039,
+      "tag": "0028_messages_nonterminal_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1783585433153,
+      "tag": "0029_api_idempotency_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1783585461436,
+      "tag": "0030_api_idempotency_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1783606374592,
+      "tag": "0031_webhooks_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1783606420478,
+      "tag": "0032_webhooks_outbox_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1783669234798,
+      "tag": "0033_simple_doorman",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1783669248718,
+      "tag": "0034_verifications_rls",
+      "breakpoints": true
     }
   ]
 }

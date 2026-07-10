@@ -24,12 +24,15 @@ export class ProposalService {
   ) {}
 
   async list(): Promise<ListProposalsResponse> {
-    // Pending first, then most-recently decided.
+    // Pending first, then most-recently decided — a compound (status, created_at) sort a
+    // single-column keyset can't express, so this stays single-page (next_cursor: null) for the
+    // cross-table field standard. The pending queue is small by nature (items awaiting a second
+    // operator); revisit with a compound cursor only if decided-history volume demands it.
     const rows = await this.provisioning.db
       .select()
       .from(proposals)
       .orderBy(asc(proposals.status), desc(proposals.createdAt));
-    return { proposals: rows.map(toDto) };
+    return { proposals: rows.map(toDto), next_cursor: null };
   }
 
   async create(

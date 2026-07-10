@@ -23,6 +23,86 @@ export interface ApiEndpoint {
 
 export const REFERENCE_ENDPOINTS: readonly ApiEndpoint[] = [
   {
+    id: "verify-start",
+    method: "POST",
+    path: "/v1/verify",
+    summary:
+      "Start a verification: sends a 6-digit OTP over SMS (5-min expiry, 30s resend throttle). Sandbox workspaces get debug_code back so you can complete the flow without a real phone.",
+    params: [
+      {
+        name: "to",
+        type: "string",
+        required: true,
+        description: "Recipient in E.164, e.g. +233545227189.",
+      },
+      {
+        name: "sender_id",
+        type: "string",
+        required: false,
+        description:
+          "Sender id on the OTP SMS (defaults to the platform sender).",
+      },
+    ],
+    samples: {
+      curl: `curl https://api.fabric.africa/v1/verify \
+  -H "Authorization: Bearer {{TEST_KEY}}" \
+  -H "Content-Type: application/json" \
+  -d '{"to":"+233545227189"}'`,
+      node: `import Fabric from "@fabric/sdk";
+const fabric = new Fabric("{{TEST_KEY}}");
+const v = await fabric.verify.start({ to: "+233545227189" });
+// sandbox workspaces: v.debug_code holds the OTP`,
+      python: `import fabric
+client = fabric.Client("{{TEST_KEY}}")
+v = client.verify.start(to="+233545227189")
+# sandbox workspaces: v.debug_code holds the OTP`,
+    },
+    response: `{
+  "id": "1f0e2d3c-…",
+  "status": "pending",
+  "to": "+23354•••7189",
+  "channel": "sms",
+  "expires_in": 300,
+  "debug_code": "482915"
+}`,
+  },
+  {
+    id: "verify-check",
+    method: "POST",
+    path: "/v1/verify/check",
+    summary:
+      "Check the code the user typed. 5 attempts, then the verification burns; structured errors: verification_invalid_code / _exhausted / _expired.",
+    params: [
+      {
+        name: "id",
+        type: "string",
+        required: true,
+        description: "The verification id from the start call.",
+      },
+      {
+        name: "code",
+        type: "string",
+        required: true,
+        description: "The 4-8 digit code the user entered.",
+      },
+    ],
+    samples: {
+      curl: `curl https://api.fabric.africa/v1/verify/check \
+  -H "Authorization: Bearer {{TEST_KEY}}" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"1f0e2d3c-…","code":"482915"}'`,
+      node: `const result = await fabric.verify.check({ id: v.id, code: "482915" });
+// result.status === "verified"`,
+      python: `result = client.verify.check(id=v.id, code="482915")
+# result.status == "verified"`,
+    },
+    response: `{
+  "id": "1f0e2d3c-…",
+  "status": "verified",
+  "verified_at": "2026-07-10T08:00:00.000Z"
+}`,
+  },
+  {
     id: "send-sms",
     method: "POST",
     path: "/v1/sms/send",

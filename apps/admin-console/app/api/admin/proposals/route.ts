@@ -1,6 +1,7 @@
 import { createProposalRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   createProposal,
   listProposals,
@@ -39,6 +40,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = requireTrustedOrigin(request);
+  if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
   if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
   if (!session.permissions.includes("staff:write")) {

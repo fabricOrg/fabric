@@ -34,10 +34,59 @@ export const resolveIdentitySessionResponseSchema = z.object({
   role: customerRoleSchema,
   permissions: z.array(identifier),
   session_id: identifier,
+  /** Tenant plan — the dashboard renders sandbox state from it (ADR-0002 F3). */
+  plan: identifier,
 });
 
 export type ResolveIdentitySessionResponse = z.infer<
   typeof resolveIdentitySessionResponseSchema
+>;
+
+// ---- Organization resolution for an org-less WorkOS session (ADR-0002 self-serve) ---------------
+// A fresh AuthKit sign-up (or a returning user whose login wasn't org-pinned) authenticates
+// WITHOUT an organization. The BFF asks the API which organization this identity belongs to;
+// with `allow_provision` (dashboard only) a verified stranger gets a sandbox tenant instead of
+// a denial. The staff realm never calls this.
+export const organizationForUserRequestSchema = z.object({
+  external_user_id: identifier,
+  email: z.string().trim().email().max(320),
+  name: z.string().trim().min(1).max(255).nullable(),
+  user_updated_at: z.string().datetime({ offset: true }),
+  email_verified: z.boolean(),
+  allow_provision: z.boolean(),
+});
+
+export type OrganizationForUserRequest = z.infer<
+  typeof organizationForUserRequestSchema
+>;
+
+export const organizationForUserResponseSchema = z.object({
+  workos_organization_id: identifier,
+  tenant_id: postgresUuid,
+  provisioned: z.boolean(),
+});
+
+export type OrganizationForUserResponse = z.infer<
+  typeof organizationForUserResponseSchema
+>;
+
+// ---- BFF tenant tokens (ADR-0003) — short-lived data-plane credential minted per tenant ---------
+export const mintTenantTokenRequestSchema = z.object({
+  tenant_id: postgresUuid,
+});
+
+export type MintTenantTokenRequest = z.infer<
+  typeof mintTenantTokenRequestSchema
+>;
+
+export const mintTenantTokenResponseSchema = z.object({
+  token: z.string().min(1),
+  /** Seconds until expiry — the BFF refreshes its cache before this elapses. */
+  expires_in: z.number().int().positive(),
+});
+
+export type MintTenantTokenResponse = z.infer<
+  typeof mintTenantTokenResponseSchema
 >;
 
 // ---- Staff (platform operators) — resolved against staff_users, not a tenant membership ----------
@@ -92,6 +141,8 @@ export type StaffDto = z.infer<typeof staffDtoSchema>;
 
 export const listStaffResponseSchema = z.object({
   staff: z.array(staffDtoSchema),
+  /** Standard keyset cursor for the next page; null on the last page (see @app/db pagination). */
+  next_cursor: z.string().nullable(),
 });
 export type ListStaffResponse = z.infer<typeof listStaffResponseSchema>;
 

@@ -6,11 +6,15 @@ import {
   type RealmConfig,
   readDevelopmentSession,
   readSession,
+  refreshSession,
   sealDevelopmentSession,
 } from "@app/fe-auth";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { resolveDeveloperSession } from "./developer-identity";
+import {
+  resolveDeveloperOrganization,
+  resolveDeveloperSession,
+} from "./developer-identity";
 
 export const DEVELOPMENT_COOKIE = "fabric-dev-development-session";
 export const WORKOS_COOKIE = "wos-dev-session";
@@ -65,13 +69,13 @@ export function redirectUrl(path: string, _request?: { url: string }): URL {
   return new URL(path, appBaseUrl());
 }
 
-/** Org-scoped like the dashboard — a developer is a tenant member; BFF token gates the session call. */
+/** A developer is a tenant member; BFF token gates the session call. WORKOS_ORGANIZATION_ID is no
+ * longer required — logins are unpinned (ADR-0002) and the org resolves from the membership. */
 export function workosAuthConfigured(): boolean {
   return [
     "WORKOS_API_KEY",
     "WORKOS_CLIENT_ID",
     "WORKOS_COOKIE_PASSWORD",
-    "WORKOS_ORGANIZATION_ID",
     "BFF_INTERNAL_TOKEN",
   ].every((name) => Boolean(process.env[name]));
 }
@@ -97,6 +101,7 @@ export function developerRealmConfig(): RealmConfig {
       maxAge: 7 * 24 * 60 * 60,
     },
     resolveSession: resolveDeveloperSession,
+    resolveOrganization: resolveDeveloperOrganization,
   };
 }
 
@@ -130,6 +135,37 @@ export async function readDeveloperSession(): Promise<AppSession | null> {
     developmentAuthConfig(),
     store.get(DEVELOPMENT_COOKIE)?.value,
   );
+}
+
+/**
+ * Refresh an expired WorkOS session from a route handler (BFF), where cookies are writable.
+ * Mirrors the dashboard/admin helpers (G2 hardening): without it, the first dev-portal BFF data
+ * route would reach for plain readDeveloperSession() and reintroduce the it-401s-after-token-
+ * expiry bug class (#94). Returns null when there's no cookie or the refresh is terminal.
+ */
+export async function refreshDeveloperSession(): Promise<AppSession | null> {
+  if (!workosAuthConfigured()) return null;
+  const store = await cookies();
+  const sealed = store.get(WORKOS_COOKIE)?.value;
+  if (!sealed) return null;
+  const refreshed = await refreshSession(developerRealmConfig(), sealed);
+  if (!refreshed) return null;
+  try {
+    store.set(WORKOS_COOKIE, refreshed.sealedCookie, sessionCookieOptions());
+  } catch {
+    // cookies() is read-only during a Server Component render; the refreshed session is still
+    // valid for THIS request. Only route handlers persist the cookie.
+  }
+  return refreshed.session;
+}
+
+/**
+ * Session for BFF route handlers: read, transparently refreshing an expired access token.
+ * Pages/Server Components use requireDeveloperSession (redirects to /auth/refresh) instead.
+ * A plain readDeveloperSession() in a mutation route is a bug (CLAUDE.md §4).
+ */
+export async function readDeveloperSessionWithRefresh(): Promise<AppSession | null> {
+  return (await readDeveloperSession()) ?? (await refreshDeveloperSession());
 }
 
 export async function requireDeveloperSession(): Promise<AppSession> {

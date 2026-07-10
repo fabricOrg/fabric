@@ -2,7 +2,7 @@
 # next.config sets output:"standalone" + outputFileTracingRoot at the repo root, so the build emits a
 # self-contained server under apps/dashboard/.next/standalone (traced monorepo node_modules included).
 # Runtime env (set by the ECS task definition, values from AWS Secrets Manager — never baked in):
-#   API_BASE_URL, DASHBOARD_API_KEY, BFF_INTERNAL_TOKEN, WORKOS_* , *_COOKIE_PASSWORD, WORKOS_REDIRECT_URI…
+#   API_BASE_URL, BFF_INTERNAL_TOKEN, WORKOS_* , *_COOKIE_PASSWORD, WORKOS_REDIRECT_URI…
 FROM node:22-bookworm-slim AS build
 
 ENV PNPM_HOME=/pnpm

@@ -6,9 +6,14 @@ import type {
 } from "@app/contracts";
 import {
   accounts,
+  clampLimit,
+  decodeCursor,
+  encodeCursor,
+  keysetWhere,
   memberships,
   type ProvisioningDb,
   type TenantId,
+  takePage,
   type UserId,
   users,
 } from "@app/db";
@@ -39,7 +44,19 @@ export class MembersService {
     @Inject(WORKOS_CLIENT) private readonly workosClient: WorkosClientProvider,
   ) {}
 
-  async list(tenantId: string): Promise<ListMembersResponse> {
+  async list(
+    tenantId: string,
+    opts: { limit?: number; cursor?: string } = {},
+  ): Promise<ListMembersResponse> {
+    const pageSize = clampLimit(opts.limit);
+    const decoded = opts.cursor ? decodeCursor(opts.cursor) : null;
+    // Standard keyset on (email ASC, user id ASC), within the tenant filter.
+    const keyset = keysetWhere(
+      users.email,
+      users.id,
+      "asc",
+      decoded ? { primaryValue: decoded.primary, id: decoded.id } : null,
+    );
     const rows = await this.provisioning.db
       .select({
         user_id: users.id,
@@ -50,9 +67,13 @@ export class MembersService {
       })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
-      .where(eq(memberships.tenantId, tenantId as TenantId))
-      .orderBy(asc(users.email));
-    return { members: rows };
+      .where(and(eq(memberships.tenantId, tenantId as TenantId), keyset))
+      .orderBy(asc(users.email), asc(users.id))
+      .limit(pageSize + 1);
+    const { page, nextCursor } = takePage(rows, pageSize, (r) =>
+      encodeCursor(r.email, r.user_id),
+    );
+    return { members: page, next_cursor: nextCursor };
   }
 
   async invite(

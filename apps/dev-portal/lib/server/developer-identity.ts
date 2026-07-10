@@ -1,10 +1,15 @@
 import "server-only";
 
 import {
+  organizationForUserResponseSchema,
   type ResolveIdentitySessionResponse,
   resolveIdentitySessionResponseSchema,
 } from "@app/contracts";
-import type { AppSession, WorkOSSessionClaims } from "@app/fe-auth";
+import type {
+  AppSession,
+  OrglessSessionClaims,
+  WorkOSSessionClaims,
+} from "@app/fe-auth";
 
 /**
  * Developer identity — a developer IS a customer-realm tenant member, so this resolves against the
@@ -17,25 +22,23 @@ const API_ACCESS_PERMISSIONS = ["api_keys:read", "api_keys:write"];
 
 function backendConfiguration() {
   const baseUrl = process.env.API_BASE_URL;
-  const apiKey = process.env.DASHBOARD_API_KEY;
   const bffToken = process.env.BFF_INTERNAL_TOKEN;
-  if (!baseUrl || !apiKey || !bffToken) {
-    throw new Error(
-      "API_BASE_URL, DASHBOARD_API_KEY, and BFF_INTERNAL_TOKEN are required.",
-    );
+  if (!baseUrl || !bffToken) {
+    throw new Error("API_BASE_URL and BFF_INTERNAL_TOKEN are required.");
   }
-  return { baseUrl, apiKey, bffToken };
+  return { baseUrl, bffToken };
 }
 
 export async function resolveDeveloperSession(
   claims: WorkOSSessionClaims,
 ): Promise<AppSession | null> {
-  const { baseUrl, apiKey, bffToken } = backendConfiguration();
+  const { baseUrl, bffToken } = backendConfiguration();
+  // ADR-0003: no tenant API key — the API resolves the tenant from organization_id, which the
+  // BFF took from the sealed WorkOS session it verified server-side.
   const response = await fetch(new URL("/internal/identity/session", baseUrl), {
     method: "POST",
     cache: "no-store",
     headers: {
-      authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
       "x-bff-token": bffToken,
     },
@@ -68,6 +71,46 @@ export async function resolveDeveloperSession(
   return toAppSession(resolved);
 }
 
+/**
+ * ADR-0002: org-less developer login → resolve the org an EXISTING membership points at.
+ * `allow_provision: false` — the dev-portal never creates tenants; a stranger signs up on the
+ * dashboard first. 403 = no workspace → null → the normal access-denied path.
+ */
+export async function resolveDeveloperOrganization(
+  claims: OrglessSessionClaims,
+): Promise<string | null> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL("/internal/identity/organization-for-user", baseUrl),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-bff-token": bffToken,
+      },
+      body: JSON.stringify({
+        external_user_id: claims.externalUserId,
+        email: claims.email,
+        name: claims.name,
+        user_updated_at: claims.userUpdatedAt,
+        email_verified: claims.emailVerified,
+        allow_provision: false,
+      }),
+    },
+  );
+  if (!response.ok) {
+    if (response.status !== 403) {
+      console.error(
+        `Developer organization resolution failed with status ${response.status}.`,
+      );
+    }
+    return null;
+  }
+  return organizationForUserResponseSchema.parse(await response.json())
+    .workos_organization_id;
+}
+
 function toAppSession(response: ResolveIdentitySessionResponse): AppSession {
   return {
     userId: response.user_id,
@@ -75,5 +118,6 @@ function toAppSession(response: ResolveIdentitySessionResponse): AppSession {
     role: response.role,
     permissions: response.permissions,
     sessionId: response.session_id,
+    plan: response.plan,
   };
 }

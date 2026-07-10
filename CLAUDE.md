@@ -26,7 +26,8 @@ identity for Ghana / Nigeria (West Africa). Region `eu-west-1` (af-south-1 unava
   the realm logic; sessions are sealed cookies. Authorization is the **local membership role**, never
   WorkOS claims.
 - **BFF pattern**: a browser never calls the API directly. Next route handler → server-only client →
-  NestJS `/internal/*` guarded by `BFF_INTERNAL_TOKEN` (+ a tenant API key for customer/dev). The BFF
+  NestJS `/internal/*` guarded by `BFF_INTERNAL_TOKEN`; data-plane `/v1/*` calls use a short-lived
+  minted tenant token (ADR-0003), customer integrations use `sk_*` keys. The BFF
   supplies the tenant id from the authenticated session, never from the client, and enforces the
   role gate before calling the API.
 
@@ -55,7 +56,24 @@ no secret in logs/prose, respect RLS + the redlines below.
 - **Comments explain _why_, not _what_.** The non-obvious constraint (RLS, the API-Gateway host quirk,
   an idempotency guard) gets a sentence. Match the surrounding file's density and idiom.
 - **No mock that masks reality.** A fallback that fakes success (e.g. a provisioning "OK" that creates
-  nothing) is worse than a clear "not configured" error. Delete such fallbacks.
+  nothing) is worse than a clear "not configured" error. Delete such fallbacks. And **no stale
+  code or lying comment**: once a path is live, delete the mock data + the "TODO: wire real
+  endpoint" comment, and don't let a mock-shaped type (`@/lib/mock-*`) leak into a real flow — a
+  comment or type that contradicts the running code is a defect, not documentation.
+- **Availability posture — the data plane never dies because a dependency did.** The control plane
+  is never in the hot path (Principle #7): a per-request check against control-plane state
+  (kill-switch, rate limit, entitlement) reads through a short TTL cache and, on store failure,
+  **serves last-known-good or fails open** — a provisioning/Redis outage must not fail every send.
+  The exception is money: the wallet path **fails closed** (no reserve → no send). Know which
+  posture a given check needs and say so in a comment.
+- **Ship the trigger, not just the capability.** A scheduled/queued job (reservation sweeper,
+  ledger-invariant check, outbox delivery) that exists only as library code + a test **is not
+  shipped** — it needs a production caller (cron/worker) and a test that drives that caller. Money
+  correctness that only holds in a unit test doesn't hold in prod.
+- **Cross-boundary events go through the transactional outbox.** A domain event that a webhook or
+  another system must see is INSERTed in the **same transaction** as the write it describes, then
+  delivered by the poller/worker (at-least-once, signed, retried) — never a fire-and-forget
+  `void promise` that a crash loses.
 - **Tested against the real thing.** Business logic gets integration tests on a **real Postgres**
   (`*.integration.spec.ts`, run via `test:integration`, needs `DATABASE_URL_SUPER` + `DATABASE_URL_APP`).
   Assert the invariant (balance, idempotency, RLS denial), not just the happy call.

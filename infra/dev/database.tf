@@ -28,6 +28,11 @@ ephemeral "random_password" "bff_internal_token" {
   special = false
 }
 
+ephemeral "random_password" "tenant_token_secret" {
+  length  = 48
+  special = false
+}
+
 ephemeral "random_password" "dashboard_cookie_password" {
   length  = 40
   special = false
@@ -126,6 +131,14 @@ resource "aws_secretsmanager_secret" "bff_internal_token" {
   recovery_window_in_days = 0
 }
 
+# ADR-0003: api-only HMAC secret signing the short-lived bfft_ tenant tokens the BFFs use as their
+# data-plane credential (replaces the manually minted dashboard API key). Symmetric — we generate it.
+resource "aws_secretsmanager_secret" "tenant_token_secret" {
+  name                    = "fabric/testing/tenant-token-secret"
+  description             = "HMAC secret for BFF tenant tokens (ADR-0003). Read by the api only."
+  recovery_window_in_days = 0
+}
+
 # Seals/verifies the dashboard's WorkOS session cookie. Symmetric, dashboard-only — we generate it.
 resource "aws_secretsmanager_secret" "dashboard_cookie_password" {
   name                    = "fabric/testing/dashboard-cookie-password"
@@ -151,26 +164,6 @@ resource "aws_secretsmanager_secret_version" "dashboard_workos" {
     WORKOS_ORGANIZATION_ID     = "REPLACE_ME"
     WORKOS_REDIRECT_URI        = "REPLACE_ME"
     WORKOS_LOGOUT_REDIRECT_URI = "REPLACE_ME"
-  })
-  secret_string_wo_version = 1
-
-  lifecycle {
-    ignore_changes = [secret_string_wo, secret_string_wo_version]
-  }
-}
-
-# Minted post-deploy via the real POST /v1/api-keys (OPERATOR_TOKEN-gated) against a provisioned
-# testing tenant, then populated here manually — never a Terraform-generated value.
-resource "aws_secretsmanager_secret" "dashboard_api_key" {
-  name                    = "fabric/testing/dashboard-api-key"
-  description             = "Fabric API key the dashboard BFF authenticates with (populate manually after apply)."
-  recovery_window_in_days = 0
-}
-
-resource "aws_secretsmanager_secret_version" "dashboard_api_key" {
-  secret_id = aws_secretsmanager_secret.dashboard_api_key.id
-  secret_string_wo = jsonencode({
-    DASHBOARD_API_KEY = "REPLACE_ME"
   })
   secret_string_wo_version = 1
 
@@ -235,6 +228,14 @@ resource "aws_secretsmanager_secret_version" "bff_internal_token" {
   secret_string_wo_version = 1
 }
 
+resource "aws_secretsmanager_secret_version" "tenant_token_secret" {
+  secret_id = aws_secretsmanager_secret.tenant_token_secret.id
+  secret_string_wo = jsonencode({
+    TENANT_TOKEN_SECRET = ephemeral.random_password.tenant_token_secret.result
+  })
+  secret_string_wo_version = 1
+}
+
 resource "aws_secretsmanager_secret_version" "dashboard_cookie_password" {
   secret_id = aws_secretsmanager_secret.dashboard_cookie_password.id
   secret_string_wo = jsonencode({
@@ -248,8 +249,8 @@ resource "aws_secretsmanager_secret_version" "dashboard_cookie_password" {
 # (one client), so WORKOS_API_KEY/WORKOS_CLIENT_ID are identical to the dashboard's — but each app
 # gets its OWN secret container so its redirect URIs (derived from its own *_BASE_URL) and, for the
 # dev-portal, WORKOS_ORGANIZATION_ID stay independent. Cookie passwords are per-app + Terraform-
-# generated. The dev-portal reuses the dashboard's Fabric API key (same testing tenant); the admin-
-# console talks to the api only as the BFF (bff_internal_token), so it needs no tenant API key.
+# generated. All three apps talk to the api only as the BFF (bff_internal_token) — the data-plane
+# credential is a short-lived tenant token minted by the api per request (ADR-0003), no tenant API key.
 ####################################################################################################
 
 ephemeral "random_password" "admin_console_cookie_password" {

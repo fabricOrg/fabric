@@ -1,6 +1,6 @@
 "use client";
 
-import type { TenantSummaryDto } from "@app/contracts";
+import type { ListTenantsResponse, TenantSummaryDto } from "@app/contracts";
 import { Badge } from "@app/ui/components/ui/badge";
 import { Button } from "@app/ui/components/ui/button";
 import {
@@ -12,10 +12,23 @@ import {
 } from "@app/ui/components/ui/card";
 import { DataTable } from "@app/ui/components/ui/data-table";
 import { Input } from "@app/ui/components/ui/input";
+import { LoadMore } from "@app/ui/components/ui/load-more";
+import { useCursorPage } from "@app/ui/hooks/use-cursor-page";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { toastApiError } from "@/lib/error-toast";
+
+async function fetchTenantsPage(cursor: string): Promise<ListTenantsResponse> {
+  const response = await fetch(
+    `/api/admin/tenants?cursor=${encodeURIComponent(cursor)}`,
+    { cache: "no-store" },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw payload;
+  return payload as ListTenantsResponse;
+}
 
 type Status = TenantSummaryDto["status"];
 
@@ -83,7 +96,7 @@ const columns: ColumnDef<TenantSummaryDto>[] = [
     cell: ({ row }) => (
       <div className="text-right">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/tenants/${row.original.tenant_id}`}>
+          <Link href={`/tenants/${row.original.slug}`}>
             Manage
             <ChevronRight data-icon="inline-end" />
           </Link>
@@ -95,21 +108,33 @@ const columns: ColumnDef<TenantSummaryDto>[] = [
 
 export function TenantsTable({
   tenants,
+  nextCursor,
   loadError,
 }: {
   tenants: readonly TenantSummaryDto[];
+  nextCursor: string | null;
   loadError: boolean;
 }) {
   const [query, setQuery] = useState("");
+  const { items, hasMore, loading, loadMore } = useCursorPage(
+    tenants,
+    nextCursor,
+    async (cursor) => {
+      const page = await fetchTenantsPage(cursor);
+      return { items: page.tenants, next_cursor: page.next_cursor };
+    },
+    toastApiError,
+  );
 
+  // Search filters the rows loaded so far (control-plane scale). "Load more" pulls older pages.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return tenants;
-    return tenants.filter(
+    if (!q) return items;
+    return items.filter(
       (t) =>
         t.name.toLowerCase().includes(q) || t.slug.toLowerCase().includes(q),
     );
-  }, [tenants, query]);
+  }, [items, query]);
 
   return (
     <Card>
@@ -130,16 +155,26 @@ export function TenantsTable({
             Couldn&apos;t load tenants right now. Try again shortly.
           </p>
         ) : (
-          <DataTable
-            columns={columns}
-            data={filtered as TenantSummaryDto[]}
-            ariaLabel="Tenants"
-            empty={
-              tenants.length === 0
-                ? "No tenants yet."
-                : "No tenants match this search."
-            }
-          />
+          <>
+            <DataTable
+              columns={columns}
+              data={filtered as TenantSummaryDto[]}
+              ariaLabel="Tenants"
+              empty={
+                items.length === 0
+                  ? "No tenants yet."
+                  : "No tenants match this search."
+              }
+            />
+            {/* Only when not narrowing by a search term — "Load more" pages the full list. */}
+            {query.trim() === "" ? (
+              <LoadMore
+                hasMore={hasMore}
+                loading={loading}
+                onLoadMore={loadMore}
+              />
+            ) : null}
+          </>
         )}
       </CardContent>
     </Card>

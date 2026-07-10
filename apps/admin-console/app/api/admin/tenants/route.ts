@@ -1,5 +1,43 @@
+import {
+  type ProvisionTenantResponse,
+  provisionTenantResponseSchema,
+} from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import { requireTrustedOrigin } from "@/lib/server/origin";
+import { listTenants, TenantApiError } from "@/lib/server/tenants-client";
+
+/** Keyset page of tenants for the "Load more" control (a read — no origin/CSRF gate). */
+export async function GET(request: NextRequest) {
+  if (!(await readAdminSessionWithRefresh())) {
+    return NextResponse.json(
+      {
+        error: {
+          type: "auth_error",
+          code: "invalid_session",
+          message: "Staff sign-in required.",
+        },
+      },
+      { status: 401 },
+    );
+  }
+  const cursor = request.nextUrl.searchParams.get("cursor") ?? undefined;
+  try {
+    return NextResponse.json(await listTenants(cursor ? { cursor } : {}));
+  } catch (error) {
+    const status = error instanceof TenantApiError ? error.status : 502;
+    return NextResponse.json(
+      {
+        error: {
+          type: "api_error",
+          code: "tenants_unavailable",
+          message: "Tenant service is unavailable right now.",
+        },
+      },
+      { status },
+    );
+  }
+}
 
 /**
  * Tenant-provisioning BFF → the real staff endpoint POST /internal/admin/tenants (WorkOS org →
@@ -29,14 +67,9 @@ function fail(message: string, status = 422) {
   );
 }
 
-interface Provisioned {
-  tenant_id: string;
-  workos_organization_id: string;
-  slug: string;
-  invited_email: string;
-}
-
 export async function POST(request: NextRequest) {
+  const denied = requireTrustedOrigin(request);
+  if (denied) return denied;
   // Staff-session gated — this triggers a real WorkOS org create + invite; never reachable without
   // an authenticated staff session (the page guard alone doesn't protect this directly-hittable route).
   if (!(await readAdminSessionWithRefresh())) {
@@ -73,21 +106,6 @@ export async function POST(request: NextRequest) {
   if (!EMAIL.test(adminEmail)) return fail("Enter a valid admin email.");
 
   const dataRegion = DATA_REGION[region] ?? "af-south-1";
-  const tenantFor = (id: string, workosOrganizationId: string) => ({
-    tenant: {
-      id,
-      name,
-      slug,
-      plan,
-      status: "active" as const,
-      balance: { currency: "GHS" as const, minor: "0" },
-      region,
-      createdAt: new Date().toISOString().slice(0, 10),
-    },
-    workosOrganizationId,
-    invitedEmail: adminEmail,
-  });
-
   const apiBaseUrl = process.env.API_BASE_URL;
   const bffToken = process.env.BFF_INTERNAL_TOKEN;
   if (!apiBaseUrl || !bffToken) {
@@ -108,14 +126,15 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({ name, slug, plan, adminEmail, dataRegion }),
       },
     );
-    const payload = (await response.json()) as Provisioned | unknown;
+    const payload = (await response.json()) as unknown;
     if (!response.ok)
       return NextResponse.json(payload, { status: response.status });
-    const provisioned = payload as Provisioned;
-    return NextResponse.json(
-      tenantFor(provisioned.tenant_id, provisioned.workos_organization_id),
-      { status: 201 },
-    );
+    // Pass the contract shape straight through — no fabricated balance/createdAt (the earlier
+    // wrapper invented a `balance:0` + today's date the backend never returned). The Tenants
+    // page re-fetches the real list on success anyway.
+    const provisioned: ProvisionTenantResponse =
+      provisionTenantResponseSchema.parse(payload);
+    return NextResponse.json(provisioned, { status: 201 });
   } catch {
     return fail("Provisioning service is unavailable. Try again shortly.", 502);
   }

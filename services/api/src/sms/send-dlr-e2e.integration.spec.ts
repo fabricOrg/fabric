@@ -52,6 +52,9 @@ if (!SUPER_URL || !APP_URL) {
 // The app's DbModule reads DATABASE_URL_APP off the environment — ensure the factory sees it.
 process.env.DATABASE_URL_APP = APP_URL;
 process.env.WEBHOOK_INGRESS_TOKEN = "integration-webhook-token";
+// Pin the INLINE send path: this capstone asserts synchronous provider outcomes (accepted/failed
+// in-response). The queued path (REDIS_QUEUE_URL set) has its own e2e — queue-send.integration.spec.
+process.env.REDIS_QUEUE_URL = "";
 
 // Distinct tenant id so this spec's rows never collide with the other integration specs' fixtures.
 const TENANT = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";

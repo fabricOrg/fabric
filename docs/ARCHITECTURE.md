@@ -132,6 +132,16 @@ You design for shared, allow dedicated as a deployment variant — not a code fo
 Each module owns its tables, exposes a service interface, and **never** reaches into
 another module's tables directly. This is what makes later extraction mechanical.
 
+> **As-built (2026-07-09).** The tree below is the *conceptual* boundary map. On disk the API is a
+> flat NestJS layout — `services/api/src/{identity,api-keys,wallet,sms,payments,kill-switches,
+> audit,proposals,impersonation,members,plugins,flows,maintenance,queue,rate-limit,idempotency,
+> webhooks,http,db}` — with the shared domain split into packages (`@app/db`, `@app/wallet`,
+> `@app/domain`, `@app/sms-engine`, `@app/integrations`, `@app/contracts`). The dependency rule
+> below still holds; the folder names differ. The BullMQ queue + in-process worker (`queue/`,
+> `sms/sms-send.worker.ts`), the scheduled sweeper + ledger-invariant + outbox-delivery jobs
+> (`maintenance/`, `webhooks/`), rate limiting (`rate-limit/`), and client idempotency
+> (`idempotency/`) all landed in the 2026-07 remediation.
+
 ```
 src/
 ├─ platform/                  # SHARED CORE (extract-later candidates)
@@ -186,6 +196,16 @@ Never store a mutable `balance` you `UPDATE`. Store an **append-only ledger**; b
 is a derived (and cached) projection. Every movement is two entries that sum to zero.
 
 ### Core tables (sketch)
+
+> **As-built (2026-07-09).** Shipped as a chart of accounts, not a `wallets` row: `ledger_accounts`
+> `(id, tenant_id, currency, kind ∈ {customer, reserved_clearing, revenue, gateway_clearing}, `
+> `balance_minor)` + append-only `ledger_entries` + `ledger_transactions`. `balance_minor` is
+> maintained WRITE-TIME by the `ledger_apply_entry` trigger (so the cached projection can't drift
+> from the legs), a per-txn balanced-legs constraint trigger enforces double-entry, and the
+> reserve→commit/refund lifecycle uses `SELECT … FOR UPDATE` on the customer account. The `version`
+> optimistic column below was **dropped** (review B4 — `FOR UPDATE` alone is correct and simpler).
+> The invariant check (`SUM(credits) − SUM(debits) == balance_minor`, per-txn trial balance) runs
+> as a scheduled job (`maintenance/`), not only in CI.
 
 ```sql
 -- One wallet per (tenant, currency) — MULTI-CURRENCY from day one (resolved).
@@ -373,6 +393,13 @@ tenant, within the entitlement bounds the control plane sets.
 ---
 
 ## 10. Observability & ops
+
+> **As-built (2026-07-09).** **Logs** are live: pino JSON, a `request_id` on every request
+> (honors inbound `x-request-id`, else mints one, echoed in the response header), `tenant_id`
+> bound once the api-key guard resolves it, secret headers redacted. The **ledger-invariant** +
+> **reservation-sweeper** run as scheduled jobs (`maintenance/`, advisory-locked); a drift is an
+> error-level log today (alarm wiring is the remaining piece — no pager yet). **OpenTelemetry
+> tracing** and the metrics feed are still TODO.
 
 - **Tracing:** OpenTelemetry; one `trace_id` from API edge → engine → provider → DLR.
 - **Metrics:** send throughput, accept/deliver/fail rates per provider, queue depth,
