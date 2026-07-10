@@ -5,10 +5,16 @@
 // ============================================================================================
 
 import { randomUUID } from "node:crypto";
-import { accounts, createProvisioningDb, memberships, users } from "@app/db";
+import {
+  accounts,
+  createAppDb,
+  createProvisioningDb,
+  memberships,
+  users,
+} from "@app/db";
 import type { ConfigService } from "@nestjs/config";
 import type { WorkOS } from "@workos-inc/node";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import type { AuditService } from "../audit/audit.service.js";
 import { IdentityService } from "./identity.service.js";
@@ -18,7 +24,8 @@ import {
 } from "./self-serve-provisioning.service.js";
 
 const superUrl = process.env.DATABASE_URL_SUPER;
-const describeDb = superUrl ? describe : describe.skip;
+const appUrl = process.env.DATABASE_URL_APP;
+const describeDb = superUrl && appUrl ? describe : describe.skip;
 
 /** In-memory WorkOS fake: real org ids, deletions tracked (compensation assertions). */
 function fakeWorkos() {
@@ -60,10 +67,12 @@ function configWith(enabled: boolean): ConfigService {
 
 describeDb("self-serve sandbox provisioning (ADR-0002)", () => {
   const db = createProvisioningDb(superUrl ?? "", { max: 1 });
+  const appDb = createAppDb(appUrl ?? "", { max: 1 });
   const audit = { record: async () => undefined } as unknown as AuditService;
   const workos = fakeWorkos();
   const service = new SelfServeProvisioningService(
     db,
+    appDb,
     () => workos.client,
     audit,
     configWith(true),
@@ -96,10 +105,22 @@ describeDb("self-serve sandbox provisioning (ADR-0002)", () => {
       await db.db.delete(users).where(inArray(users.id, userIds));
     }
     if (createdTenantIds.length > 0) {
+      for (const table of [
+        "ledger_entries",
+        "ledger_transactions",
+        "ledger_accounts",
+      ]) {
+        for (const tenantId of createdTenantIds) {
+          await db.db.execute(
+            sql.raw(`DELETE FROM ${table} WHERE tenant_id = '${tenantId}'`),
+          );
+        }
+      }
       await db.db
         .delete(accounts)
         .where(inArray(accounts.id, createdTenantIds as never[]));
     }
+    await appDb.end();
     await db.end();
   });
 
@@ -148,6 +169,14 @@ describeDb("self-serve sandbox provisioning (ADR-0002)", () => {
         userId: sub,
       }),
     );
+    // F3: the sandbox wallet was seeded with ledgered test credits (balanced by trigger).
+    const bal = await db.db.execute(
+      sql.raw(
+        `SELECT balance_minor::text AS b FROM ledger_accounts WHERE tenant_id = '${result.tenant_id}' AND kind = 'customer' AND currency = 'GHS'`,
+      ),
+    );
+    expect((bal as unknown as Array<{ b: string }>)[0]?.b).toBe("5000");
+
     // The provisioned identity now resolves a normal session (returning-login path).
     await expect(
       identity.resolve({
@@ -199,6 +228,7 @@ describeDb("self-serve sandbox provisioning (ADR-0002)", () => {
   it("fails closed when SELF_SERVE_SIGNUP_ENABLED is off — but still resolves existing users", async () => {
     const disabled = new SelfServeProvisioningService(
       db,
+      appDb,
       () => workos.client,
       audit,
       configWith(false),

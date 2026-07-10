@@ -34,6 +34,8 @@ export const resolveIdentitySessionResponseSchema = z.object({
   role: customerRoleSchema,
   permissions: z.array(identifier),
   session_id: identifier,
+  /** Tenant plan — the dashboard renders sandbox state from it (ADR-0002 F3). */
+  plan: identifier,
 });
 
 export type ResolveIdentitySessionResponse = z.infer<

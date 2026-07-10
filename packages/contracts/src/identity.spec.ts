@@ -10,6 +10,7 @@ describe("identity session contract", () => {
         role: "owner",
         permissions: ["sms:send"],
         session_id: "session_test",
+        plan: "free",
       }).success,
     ).toBe(true);
   });
@@ -22,6 +23,7 @@ describe("identity session contract", () => {
         role: "owner",
         permissions: [],
         session_id: "session_test",
+        plan: "free",
       }).success,
     ).toBe(false);
   });

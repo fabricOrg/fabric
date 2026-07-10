@@ -106,5 +106,6 @@ function toAppSession(
     permissions: response.permissions,
     sessionId: response.session_id,
     email,
+    plan: response.plan,
   };
 }

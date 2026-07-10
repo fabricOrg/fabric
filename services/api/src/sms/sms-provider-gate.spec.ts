@@ -15,7 +15,12 @@ import { SmsService } from "./sms.service.js";
  * short-circuits — so no DB is needed.
  */
 
-const db = {} as AppDb;
+// F3: send() first reads the tenant plan to route sandbox tenants at the fake provider. A LIVE
+// plan keeps this spec exercising the provider kill-switch gate (sandbox skips it — the fake
+// provider has nothing risky to halt).
+const db = {
+  withTenant: async () => [{ plan: "free" }],
+} as unknown as AppDb;
 const autoTopup = {
   maybeAutoTopUp: async () => undefined,
 } as unknown as AutoTopupService;

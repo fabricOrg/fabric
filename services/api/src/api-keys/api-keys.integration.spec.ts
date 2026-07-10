@@ -105,6 +105,30 @@ describe("ApiKeyService.resolve (integration, real RLS)", () => {
   });
 });
 
+describe("sandbox key minting (ADR-0002 F3)", () => {
+  const SANDBOX = "cccccccc-dddd-4ddd-8ddd-cccccccccccc";
+
+  beforeAll(async () => {
+    await owner.unsafe(
+      "INSERT INTO accounts (id, name, slug, plan) VALUES ($1, 'Sandbox C', 'sandbox-c-f3', 'sandbox') ON CONFLICT (id) DO NOTHING",
+      [SANDBOX],
+    );
+  });
+
+  afterAll(async () => {
+    await owner.unsafe("DELETE FROM api_keys WHERE tenant_id = $1", [SANDBOX]);
+    await owner.unsafe("DELETE FROM accounts WHERE id = $1", [SANDBOX]);
+  });
+
+  it("refuses a live key for a sandbox-plan tenant; test keys still mint", async () => {
+    await expect(svc.create(SANDBOX, { env: "live" })).rejects.toMatchObject({
+      status: 400,
+    });
+    const created = await svc.create(SANDBOX, { env: "test" });
+    expect(created.raw.startsWith("sk_test_")).toBe(true);
+  });
+});
+
 describe("ApiKeyGuard (integration, real resolve)", () => {
   it("attaches req.tenant for a valid key", async () => {
     const { ctx, req } = ctxWithBearer(ACTIVE_RAW);
