@@ -64,7 +64,7 @@ describeDb("identity provisioning (invite-only)", () => {
   });
 
   it("binds the WorkOS subject and activates the invite on first login", async () => {
-    const resolved = await service.resolve(tenantId, {
+    const resolved = await service.resolve({
       external_user_id: externalUserId,
       organization_id: organizationId,
       email,
@@ -109,7 +109,7 @@ describeDb("identity provisioning (invite-only)", () => {
   });
 
   it("resolves a returning (already-bound) login", async () => {
-    const resolved = await service.resolve(tenantId, {
+    const resolved = await service.resolve({
       external_user_id: externalUserId,
       organization_id: organizationId,
       email,
@@ -124,7 +124,7 @@ describeDb("identity provisioning (invite-only)", () => {
 
   it("fails closed for an identity with no invite in this org", async () => {
     await expect(
-      service.resolve(tenantId, {
+      service.resolve({
         external_user_id: `user_${randomUUID()}`,
         organization_id: organizationId,
         email: `stranger-${randomUUID()}@example.com`,
@@ -137,9 +137,9 @@ describeDb("identity provisioning (invite-only)", () => {
     ).resolves.toBeNull();
   });
 
-  it("fails closed for a different WorkOS organization", async () => {
+  it("fails closed for an unknown WorkOS organization", async () => {
     await expect(
-      service.resolve(tenantId, {
+      service.resolve({
         external_user_id: externalUserId,
         organization_id: "org_wrong",
         email,
@@ -150,5 +150,31 @@ describeDb("identity provisioning (invite-only)", () => {
         session_id: "session_test",
       }),
     ).resolves.toBeNull();
+  });
+
+  it("isActiveTenant gates tenant-token minting on account status (ADR-0003)", async () => {
+    await expect(service.isActiveTenant(tenantId)).resolves.toBe(true);
+    await db.db
+      .update(accounts)
+      .set({ status: "suspended" })
+      .where(eq(accounts.id, tenantId));
+    await expect(service.isActiveTenant(tenantId)).resolves.toBe(false);
+    // A suspended tenant's members can't resolve a session either.
+    await expect(
+      service.resolve({
+        external_user_id: externalUserId,
+        organization_id: organizationId,
+        email,
+        name: "Owner",
+        user_updated_at: "2026-07-06T10:00:00.000Z",
+        role: "member",
+        permissions: [],
+        session_id: "session_test_3",
+      }),
+    ).resolves.toBeNull();
+    await db.db
+      .update(accounts)
+      .set({ status: "active" })
+      .where(eq(accounts.id, tenantId));
   });
 });

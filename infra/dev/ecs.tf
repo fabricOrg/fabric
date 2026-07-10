@@ -36,7 +36,7 @@ data "aws_iam_policy_document" "ecs_secret_access" {
       aws_secretsmanager_secret.bff_internal_token.arn,
       aws_secretsmanager_secret.dashboard_cookie_password.arn,
       aws_secretsmanager_secret.dashboard_workos.arn,
-      aws_secretsmanager_secret.dashboard_api_key.arn,
+      aws_secretsmanager_secret.tenant_token_secret.arn,
       aws_secretsmanager_secret.admin_console_cookie_password.arn,
       aws_secretsmanager_secret.admin_console_workos.arn,
       aws_secretsmanager_secret.dev_portal_cookie_password.arn,
@@ -128,6 +128,11 @@ resource "aws_ecs_task_definition" "api" {
           name      = "BFF_INTERNAL_TOKEN"
           valueFrom = "${aws_secretsmanager_secret.bff_internal_token.arn}:BFF_INTERNAL_TOKEN::"
         },
+        # ADR-0003: signs/verifies the short-lived bfft_ tenant tokens the BFFs use on /v1/*.
+        {
+          name      = "TENANT_TOKEN_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.tenant_token_secret.arn}:TENANT_TOKEN_SECRET::"
+        },
         {
           name      = "DATABASE_URL_PROVISIONER"
           valueFrom = "${aws_secretsmanager_secret.database_provisioner.arn}:DATABASE_URL_PROVISIONER::"
@@ -167,6 +172,7 @@ resource "aws_ecs_task_definition" "api" {
     aws_secretsmanager_secret_version.operator_token,
     aws_secretsmanager_secret_version.webhook_ingress_token,
     aws_secretsmanager_secret_version.bff_internal_token,
+    aws_secretsmanager_secret_version.tenant_token_secret,
     aws_secretsmanager_secret_version.dashboard_workos,
   ]
 }

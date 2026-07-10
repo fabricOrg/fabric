@@ -5,6 +5,7 @@ import { ApiKeyGuard } from "./api-key.guard.js";
 import { ApiKeysController } from "./api-keys.controller.js";
 import { ApiKeyService } from "./api-keys.service.js";
 import { OperatorTokenGuard } from "./operator-token.guard.js";
+import { TenantTokenService } from "./tenant-token.service.js";
 
 /**
  * API-keys feature module (F2.3, L2). Provides + exports the resolver/issuer service and the guard.
@@ -16,7 +17,12 @@ import { OperatorTokenGuard } from "./operator-token.guard.js";
   // RateLimitModule: ApiKeyGuard takes a token per request (per-key + per-tenant buckets).
   imports: [RateLimitModule],
   controllers: [ApiKeysController, ApiContextController],
-  providers: [ApiKeyService, ApiKeyGuard, OperatorTokenGuard],
-  exports: [ApiKeyService, ApiKeyGuard, RateLimitModule],
+  providers: [
+    ApiKeyService,
+    ApiKeyGuard,
+    OperatorTokenGuard,
+    TenantTokenService,
+  ],
+  exports: [ApiKeyService, ApiKeyGuard, RateLimitModule, TenantTokenService],
 })
 export class ApiKeysModule {}

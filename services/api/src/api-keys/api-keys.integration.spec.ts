@@ -19,6 +19,7 @@ import { RateLimitService } from "../rate-limit/rate-limit.service.js";
 import { hashApiKey } from "./api-key.crypto.js";
 import { ApiKeyGuard } from "./api-key.guard.js";
 import { ApiKeyService } from "./api-keys.service.js";
+import { TenantTokenService } from "./tenant-token.service.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
@@ -35,6 +36,8 @@ const svc = new ApiKeyService(db);
 const guard = new ApiKeyGuard(
   svc,
   new RateLimitService({ get: () => undefined } as unknown as ConfigService),
+  // No TENANT_TOKEN_SECRET here — bfft_ tokens are rejected (fail closed); key paths unaffected.
+  new TenantTokenService({ get: () => undefined } as unknown as ConfigService),
 );
 
 const TENANT = "cccccccc-cccc-cccc-cccc-cccccccccccc";
@@ -126,5 +129,31 @@ describe("ApiKeyGuard (integration, real resolve)", () => {
       expect(ex.getStatus()).toBe(401);
       expect(ex.getResponse().error.type).toBe("auth_error");
     }
+  });
+
+  // ADR-0003 / F1 acceptance: a tenant that exists only as a DB row (no minted key, exactly like a
+  // runtime-provisioned org) is reachable through the guard with a freshly minted tenant token —
+  // the full BFF data-plane round-trip minus HTTP framing.
+  it("accepts a minted bfft_ tenant token for a provisioned tenant with NO api key", async () => {
+    const secretConfig = {
+      get: (key: string) =>
+        key === "TENANT_TOKEN_SECRET" ? "integration-secret" : undefined,
+    } as unknown as ConfigService;
+    const tokens = new TenantTokenService(secretConfig);
+    const tokenGuard = new ApiKeyGuard(
+      svc,
+      new RateLimitService({
+        get: () => undefined,
+      } as unknown as ConfigService),
+      tokens,
+    );
+    const { token } = tokens.mint(TENANT);
+    const { ctx, req } = ctxWithBearer(token);
+    await expect(tokenGuard.canActivate(ctx)).resolves.toBe(true);
+    expect(req.tenant).toEqual({
+      id: TENANT,
+      scopes: ["*"],
+      keyId: `bfft_${TENANT.slice(0, 12)}`,
+    });
   });
 });

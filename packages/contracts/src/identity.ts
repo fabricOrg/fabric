@@ -40,6 +40,25 @@ export type ResolveIdentitySessionResponse = z.infer<
   typeof resolveIdentitySessionResponseSchema
 >;
 
+// ---- BFF tenant tokens (ADR-0003) — short-lived data-plane credential minted per tenant ---------
+export const mintTenantTokenRequestSchema = z.object({
+  tenant_id: postgresUuid,
+});
+
+export type MintTenantTokenRequest = z.infer<
+  typeof mintTenantTokenRequestSchema
+>;
+
+export const mintTenantTokenResponseSchema = z.object({
+  token: z.string().min(1),
+  /** Seconds until expiry — the BFF refreshes its cache before this elapses. */
+  expires_in: z.number().int().positive(),
+});
+
+export type MintTenantTokenResponse = z.infer<
+  typeof mintTenantTokenResponseSchema
+>;
+
 // ---- Staff (platform operators) — resolved against staff_users, not a tenant membership ----------
 export const staffRoleSchema = z.enum(["operator", "admin"]);
 
