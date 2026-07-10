@@ -95,14 +95,21 @@ export class ConsentService {
 }
 
 /**
- * Promotional window (E10-S5): NCC bounds promo traffic to 08:00–20:00 LOCAL time; Ghana follows
- * the same daytime convention. Pure function — the clock is a parameter so tests own time.
- * GH = UTC+0, NG (WAT) = UTC+1.
+ * Promotional window (E10-S5/S6). Per-country, strictest-reading posture until primary texts
+ * are fully verified (docs/PI-4/GHANA-NCA-FINDINGS.md):
+ *   NG (NCC 2442): 08:00–20:00 WAT (UTC+1), any day.
+ *   GH (NCA UEC):  08:00–19:00 local (UTC+0), and NO promotional SMS on Sundays.
+ * Pure function — the clock is a parameter so tests own time.
  */
 export function promoWindowOpen(now: Date, country: string): boolean {
-  const offsetHours = country === "NG" ? 1 : 0;
-  const localHour = (now.getUTCHours() + offsetHours) % 24;
-  return localHour >= 8 && localHour < 20;
+  if (country === "NG") {
+    const watHour = (now.getUTCHours() + 1) % 24;
+    return watHour >= 8 && watHour < 20;
+  }
+  // GH is UTC+0 — UTC day-of-week/hour ARE local.
+  if (now.getUTCDay() === 0) return false; // Sunday
+  const hour = now.getUTCHours();
+  return hour >= 8 && hour < 19;
 }
 
 function sha256(value: string): string {
