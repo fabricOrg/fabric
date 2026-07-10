@@ -4,6 +4,7 @@ import { IdempotencyModule } from "../idempotency/idempotency.module.js";
 import { KillSwitchModule } from "../kill-switches/kill-switches.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
 import { QueueModule } from "../queue/queue.module.js";
+import { SendersModule } from "../senders/senders.module.js";
 import { DlrController } from "./dlr.controller.js";
 import { SmsController } from "./sms.controller.js";
 import { SmsService } from "./sms.service.js";
@@ -22,6 +23,8 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
     PaymentsModule,
     KillSwitchModule,
     QueueModule,
+    // E10-S4: the live send path enforces active sender-id registrations.
+    SendersModule,
   ],
   controllers: [SmsController, DlrController],
   // SmsSendWorker consumes the sms-send queue in-process when REDIS_QUEUE_URL is set.

@@ -90,6 +90,13 @@ beforeAll(async () => {
      ON CONFLICT (key_hash) DO NOTHING`,
     [TENANT, hashApiKey(ACTIVE_RAW)],
   );
+  // E10-S4: this is a LIVE-plan tenant, so its sender id must be registered + active.
+  await owner.unsafe(
+    `INSERT INTO senders (tenant_id, sender_id, country, use_case, status)
+     VALUES ($1, 'JOJO', 'GH', 'walking-skeleton e2e', 'active')
+     ON CONFLICT ON CONSTRAINT uniq_sender_tenant_id_country DO NOTHING`,
+    [TENANT],
+  );
 
   // 3. fund via a real double-entry top-up (debit gateway_clearing / credit customer) — the balance
   //    is maintained by the write-time trigger, so the invariant holds without any hand-set balance.
@@ -125,6 +132,7 @@ afterAll(async () => {
     TENANT,
   ]);
   await owner.unsafe("DELETE FROM messages WHERE tenant_id = $1", [TENANT]);
+  await owner.unsafe("DELETE FROM senders WHERE tenant_id = $1", [TENANT]);
   await owner.unsafe("DELETE FROM api_keys WHERE tenant_id = $1", [TENANT]);
   await owner.unsafe("DELETE FROM accounts WHERE id = $1", [TENANT]);
   await owner.end();

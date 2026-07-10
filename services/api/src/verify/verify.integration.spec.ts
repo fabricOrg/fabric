@@ -29,7 +29,10 @@ const SANDBOX_TENANT = "abcdabcd-2222-4222-8222-0000000000e6";
 const LIVE_TENANT = "abcdabcd-3333-4333-8333-0000000000e6";
 const SANDBOX_KEY = `sk_test_${"9".repeat(40)}`;
 const LIVE_KEY = `sk_test_${"8".repeat(40)}`;
-const PHONE = "+233545227189";
+// Randomized per run: a resend-throttle row left by a crashed previous run (afterAll skipped)
+// must never bleed into this one.
+const SUFFIX = `${Math.floor(Math.random() * 900000) + 100000}`;
+const PHONE = `+23354${SUFFIX}1`;
 
 const owner = postgres(SUPER_URL, { max: 2 });
 const db = createAppDb(APP_URL, { max: 2 });
@@ -53,10 +56,20 @@ async function seedTenant(id: string, plan: string, rawKey: string) {
       idempotencyKey: `topup:verify-seed-${id}`,
     }),
   );
+  // E10-S4: live-plan tenants need an active sender for the default OTP sender id.
+  if (plan !== "sandbox") {
+    await owner.unsafe(
+      `INSERT INTO senders (tenant_id, sender_id, country, use_case, status)
+       VALUES ($1, 'FABRIC', 'GH', 'verify integration', 'active')
+       ON CONFLICT ON CONSTRAINT uniq_sender_tenant_id_country DO NOTHING`,
+      [id],
+    );
+  }
 }
 
 async function cleanTenant(id: string) {
   for (const table of [
+    "senders",
     "verifications",
     "ledger_entries",
     "ledger_transactions",
@@ -166,8 +179,9 @@ describe("Verify V1 (golden path core)", () => {
 
   it("exhausts after max wrong attempts and rejects further checks", async () => {
     const started = await post(SANDBOX_KEY, "/v1/verify", {
-      to: "+233240000001",
+      to: `+23324${SUFFIX}2`,
     });
+    expect(started.statusCode).toBe(201); // a throttled/failed start would cascade confusingly
     const { id, debug_code } = started.json() as {
       id: string;
       debug_code: string;
@@ -189,8 +203,9 @@ describe("Verify V1 (golden path core)", () => {
 
   it("rejects an expired code (expiry forced in the DB)", async () => {
     const started = await post(SANDBOX_KEY, "/v1/verify", {
-      to: "+233240000002",
+      to: `+23324${SUFFIX}3`,
     });
+    expect(started.statusCode).toBe(201);
     const { id, debug_code } = started.json() as {
       id: string;
       debug_code: string;
@@ -210,7 +225,9 @@ describe("Verify V1 (golden path core)", () => {
   });
 
   it("NEVER leaks debug_code to a live-plan tenant", async () => {
-    const started = await post(LIVE_KEY, "/v1/verify", { to: "+233240000003" });
+    const started = await post(LIVE_KEY, "/v1/verify", {
+      to: `+23324${SUFFIX}4`,
+    });
     expect(started.statusCode).toBe(201);
     expect(
       (started.json() as { debug_code?: string }).debug_code,
