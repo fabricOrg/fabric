@@ -1,147 +1,53 @@
-// Verify (OTP) BFF. start/check are REAL (V1: /v1/verify + /v1/verify/check — SMS channel).
-// The channel matrix, recent log, funnel stats and trend remain synthesized until the V2 Verify
-// dashboard surface lands — GET is display-only and clearly V2 scope; the ACTIONS are live.
-// Mirrors the shared errorResponse envelope + trusted-origin guard used by the SMS routes.
+// Verify (OTP) BFF — fully REAL (V1 actions + V2 overview): GET returns the tenant's actual
+// recent verifications, funnel and 14-day trend from /v1/verify/overview; the channel matrix is
+// the HONEST platform state (SMS live; voice/whatsapp/email arrive as Verify fallbacks later,
+// so they render disabled). POST drives /v1/verify + /v1/verify/check.
 
-import type { VerifyCheckResponse, VerifyStartResponse } from "@app/contracts";
+import type {
+  VerifyCheckResponse,
+  VerifyOverviewResponse,
+  VerifyStartResponse,
+} from "@app/contracts";
 import { NextResponse } from "next/server";
 import {
   checkVerificationRequest,
   saveChannelsRequest,
   startVerificationRequest,
   type Verification,
-  type VerifyChannelName,
 } from "@/lib/client/verify-api";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
-const MINUTE = 60_000;
-
-/** Default channel matrix: SMS + Voice live, WhatsApp staged (off), Email off. Order = failover rank. */
+/** Honest channel state: only SMS is live. Order = future failover rank. */
 const CHANNELS = [
   { channel: "sms" as const, enabled: true, order: 1 },
-  { channel: "voice" as const, enabled: true, order: 2 },
+  { channel: "voice" as const, enabled: false, order: 2 },
   { channel: "whatsapp" as const, enabled: false, order: 3 },
   { channel: "email" as const, enabled: false, order: 4 },
 ];
 
-/** 9 recent verifications across channels + a realistic status mix (mostly verified, some drop-off). */
-function recentVerifications(now: number): Verification[] {
-  const rows: Array<{
-    msisdn: string;
-    channel: VerifyChannelName;
-    status: Verification["status"];
-    ageMin: number;
-    tookSec: number | null;
-  }> = [
-    {
-      msisdn: "+233201234567",
-      channel: "sms",
-      status: "verified",
-      ageMin: 2,
-      tookSec: 21,
-    },
-    {
-      msisdn: "+234803******12",
-      channel: "sms",
-      status: "verified",
-      ageMin: 6,
-      tookSec: 34,
-    },
-    {
-      msisdn: "+233559876543",
-      channel: "voice",
-      status: "verified",
-      ageMin: 11,
-      tookSec: 48,
-    },
-    {
-      msisdn: "+233241112233",
-      channel: "sms",
-      status: "pending",
-      ageMin: 1,
-      tookSec: null,
-    },
-    {
-      msisdn: "+2547001234**",
-      channel: "whatsapp",
-      status: "verified",
-      ageMin: 18,
-      tookSec: 12,
-    },
-    {
-      msisdn: "+233207654321",
-      channel: "sms",
-      status: "expired",
-      ageMin: 27,
-      tookSec: null,
-    },
-    {
-      msisdn: "+233501239876",
-      channel: "voice",
-      status: "failed",
-      ageMin: 33,
-      tookSec: null,
-    },
-    {
-      msisdn: "+233244556677",
-      channel: "sms",
-      status: "verified",
-      ageMin: 41,
-      tookSec: 29,
-    },
-    {
-      msisdn: "+233559988776",
-      channel: "whatsapp",
-      status: "verified",
-      ageMin: 52,
-      tookSec: 17,
-    },
-  ];
-  return rows.map((r, i) => {
-    const createdAt = new Date(now - r.ageMin * MINUTE).toISOString();
-    const verifiedAt =
-      r.status === "verified" && r.tookSec !== null
-        ? new Date(now - r.ageMin * MINUTE + r.tookSec * 1000).toISOString()
-        : null;
-    return {
-      id: `ver_${(now - i).toString(36)}`,
-      msisdn: r.msisdn,
-      channel: r.channel,
-      status: r.status,
-      createdAt,
-      verifiedAt,
-    };
-  });
-}
-
-// Last 14 days: attempts started vs successfully verified (verified ≤ attempts). TODO(BFF): real rollup.
-const TREND = [
-  { date: "Jun 22", attempts: 92, verified: 74 },
-  { date: "Jun 23", attempts: 108, verified: 89 },
-  { date: "Jun 24", attempts: 86, verified: 71 },
-  { date: "Jun 25", attempts: 124, verified: 103 },
-  { date: "Jun 26", attempts: 117, verified: 96 },
-  { date: "Jun 27", attempts: 71, verified: 58 },
-  { date: "Jun 28", attempts: 64, verified: 51 },
-  { date: "Jun 29", attempts: 103, verified: 86 },
-  { date: "Jun 30", attempts: 119, verified: 99 },
-  { date: "Jul 1", attempts: 138, verified: 117 },
-  { date: "Jul 2", attempts: 129, verified: 108 },
-  { date: "Jul 3", attempts: 112, verified: 91 },
-  { date: "Jul 4", attempts: 141, verified: 120 },
-  { date: "Jul 5", attempts: 78, verified: 63 },
-];
-
-export function GET() {
-  const now = Date.now();
-  return NextResponse.json({
-    channels: CHANNELS,
-    recent: recentVerifications(now),
-    // Coherent funnel: verified ≤ delivered ≤ sent.
-    stats: { sent: 1284, delivered: 1207, verified: 1043 },
-    trend: TREND,
-  });
+export async function GET() {
+  try {
+    const overview = await dashboardApi<VerifyOverviewResponse>(
+      "/v1/verify/overview",
+      "sms:read",
+    );
+    return NextResponse.json({
+      channels: CHANNELS,
+      recent: overview.recent.map((v) => ({
+        id: v.id,
+        msisdn: v.msisdn,
+        channel: v.channel,
+        status: v.status,
+        createdAt: v.created_at,
+        verifiedAt: v.verified_at,
+      })),
+      stats: overview.stats,
+      trend: overview.trend,
+    });
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
 
 export async function POST(request: Request) {
