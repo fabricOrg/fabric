@@ -11,7 +11,10 @@ import {
 } from "@app/fe-auth";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { resolveDeveloperSession } from "./developer-identity";
+import {
+  resolveDeveloperOrganization,
+  resolveDeveloperSession,
+} from "./developer-identity";
 
 export const DEVELOPMENT_COOKIE = "fabric-dev-development-session";
 export const WORKOS_COOKIE = "wos-dev-session";
@@ -66,13 +69,13 @@ export function redirectUrl(path: string, _request?: { url: string }): URL {
   return new URL(path, appBaseUrl());
 }
 
-/** Org-scoped like the dashboard — a developer is a tenant member; BFF token gates the session call. */
+/** A developer is a tenant member; BFF token gates the session call. WORKOS_ORGANIZATION_ID is no
+ * longer required — logins are unpinned (ADR-0002) and the org resolves from the membership. */
 export function workosAuthConfigured(): boolean {
   return [
     "WORKOS_API_KEY",
     "WORKOS_CLIENT_ID",
     "WORKOS_COOKIE_PASSWORD",
-    "WORKOS_ORGANIZATION_ID",
     "BFF_INTERNAL_TOKEN",
   ].every((name) => Boolean(process.env[name]));
 }
@@ -98,6 +101,7 @@ export function developerRealmConfig(): RealmConfig {
       maxAge: 7 * 24 * 60 * 60,
     },
     resolveSession: resolveDeveloperSession,
+    resolveOrganization: resolveDeveloperOrganization,
   };
 }
 

@@ -40,6 +40,34 @@ export type ResolveIdentitySessionResponse = z.infer<
   typeof resolveIdentitySessionResponseSchema
 >;
 
+// ---- Organization resolution for an org-less WorkOS session (ADR-0002 self-serve) ---------------
+// A fresh AuthKit sign-up (or a returning user whose login wasn't org-pinned) authenticates
+// WITHOUT an organization. The BFF asks the API which organization this identity belongs to;
+// with `allow_provision` (dashboard only) a verified stranger gets a sandbox tenant instead of
+// a denial. The staff realm never calls this.
+export const organizationForUserRequestSchema = z.object({
+  external_user_id: identifier,
+  email: z.string().trim().email().max(320),
+  name: z.string().trim().min(1).max(255).nullable(),
+  user_updated_at: z.string().datetime({ offset: true }),
+  email_verified: z.boolean(),
+  allow_provision: z.boolean(),
+});
+
+export type OrganizationForUserRequest = z.infer<
+  typeof organizationForUserRequestSchema
+>;
+
+export const organizationForUserResponseSchema = z.object({
+  workos_organization_id: identifier,
+  tenant_id: postgresUuid,
+  provisioned: z.boolean(),
+});
+
+export type OrganizationForUserResponse = z.infer<
+  typeof organizationForUserResponseSchema
+>;
+
 // ---- BFF tenant tokens (ADR-0003) — short-lived data-plane credential minted per tenant ---------
 export const mintTenantTokenRequestSchema = z.object({
   tenant_id: postgresUuid,

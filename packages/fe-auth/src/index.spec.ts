@@ -40,7 +40,9 @@ const appSession = {
   sessionId: "session_1",
 };
 
-const resolveSession = vi.fn(async () => appSession);
+const resolveSession = vi.fn(
+  async (): Promise<typeof appSession | null> => appSession,
+);
 const config: RealmConfig = {
   realm: "customer",
   apiKey: "sk_test_example",
