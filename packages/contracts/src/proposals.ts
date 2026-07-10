@@ -8,7 +8,27 @@ export const proposalKindSchema = z.enum([
   "wallet_adjustment",
   "plan_change",
   "refund",
+  // ADR-0002 F4: customer-initiated sandbox → live request. The ONLY kind decide() EXECUTES
+  // (plan flip) — the others still record intent only.
+  "go_live",
 ]);
+
+/** Customer-side go-live request (dashboard → BFF → api). Creates a `go_live` proposal for the
+ *  admin-console queue; the tenant comes from the session, never this body. */
+export const goLiveRequestSchema = z.object({
+  business_name: z.string().trim().min(2).max(200),
+  registration_number: z.string().trim().max(100).optional(),
+  use_case: z.string().trim().min(10).max(1000),
+});
+export type GoLiveRequest = z.infer<typeof goLiveRequestSchema>;
+
+export const goLiveStatusSchema = z.object({
+  /** none = never requested; pending/approved/rejected mirror the proposal. */
+  status: z.enum(["none", "pending", "approved", "rejected"]),
+  decided_reason: z.string().nullable(),
+  requested_at: z.string().nullable(),
+});
+export type GoLiveStatus = z.infer<typeof goLiveStatusSchema>;
 
 export const proposalDtoSchema = z.object({
   id: z.string(),

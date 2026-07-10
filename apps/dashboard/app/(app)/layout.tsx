@@ -33,7 +33,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               SANDBOX
             </span>
             Messages route to the test provider and never reach a real phone.
-            Request go-live to send real traffic.
+            <Link
+              href="/go-live"
+              className="font-semibold underline underline-offset-2 hover:text-amber-600 dark:hover:text-amber-300"
+            >
+              Request go-live
+            </Link>
           </div>
         ) : null}
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
