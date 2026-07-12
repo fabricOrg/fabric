@@ -10,6 +10,11 @@ virtual delivery. Approved live tenants may switch between virtual delivery and 
 
 - Validation, consent, quiet hours, segmentation, wallet reservation, message persistence,
   idempotency, delivery events, and reporting run before or around both providers identically.
+- Virtual delivery is **credit-free**: it reserves against the wallet exactly as live does (so
+  "no funds → no send" stays honest and testable), then refunds at the terminal delivery event, and
+  the ledger nets to zero. Superseded the original "the normal wallet lifecycle executes" reading,
+  which billed a live tenant real money for a message that never left the building — see
+  [`VIRTUAL-PHONE-TEST-MODE.md`](./VIRTUAL-PHONE-TEST-MODE.md) D1 and E13-S3 AC1.
 - A send records its resolved delivery mode and provider permanently.
 - Virtual delivery never contacts a carrier and terminates in the tenant-scoped Virtual Phone inbox.
 - Live delivery requires an approved sender ID and uses Arkesel.
@@ -38,4 +43,8 @@ virtual delivery. Approved live tenants may switch between virtual delivery and 
 
 - Media assets and virtual image messages with explicit Arkesel capability rejection.
 - Persisted campaigns executed through canonical sends.
-- Multiple virtual devices, read state, and inbox reset controls.
+- Multiple virtual devices.
+
+Inbound/STOP, deterministic fault simulation, credit-free billing, key rotation, retention, and
+inbox pagination are specified in [`VIRTUAL-PHONE-TEST-MODE.md`](./VIRTUAL-PHONE-TEST-MODE.md)
+(backlog E13-S4 … E13-S9).
