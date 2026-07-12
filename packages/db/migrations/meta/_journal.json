@@ -316,6 +316,20 @@
       "when": 1783844149980,
       "tag": "0044_silent_vargas",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1783851321649,
+      "tag": "0045_cool_franklin_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1783851321650,
+      "tag": "0046_applications_environments_rls",
+      "breakpoints": true
     }
   ]
 }

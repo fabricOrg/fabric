@@ -1,7 +1,32 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-07-08. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-07-12. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
+
+## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
+
+Product direction pivoted to a **self-service developer platform** (Stripe/Twilio/Resend-class).
+Self-serve sign-up becomes the **primary** onboarding; ops-provisioning is demoted to an
+**enterprise exception**; **dev-portal merges into the customer dashboard**; admin-console
+tenant-invite-as-primary is removed. Plan: `docs/PI-6/PLAN.md`. Baseline: ~60-70% already exists
+(PI-4 verify-first + ADR-0002 self-serve sandbox + ADR-0003 BFF tokens).
+
+**Locked decisions (2026-07-12):** build a real **Workspace → Application → Environment** hierarchy
+(**ADR-0004**, supersedes ADR-0002's flat sandbox-entitlement); landing = a **separate marketing
+app**; SDKs **Node + Python** first; **Email + AI assistant deferred** to later PIs.
+
+**Branch `feature/e14-workspace-hierarchy`** (off the E13 tip — depends on E13 landing in `dev`
+first; then rebases). **Local commits only, NO push until the program is done** (user directive).
+Milestones so far:
+- ADR-0004 + PI-6 plan committed (`2301adc`).
+- Foundation schema: `applications` + `environments` tables (migration `0045`) + RLS/grants
+  (`0046`, provisioner + tenant_isolation). RLS boundary stays the workspace/tenant.
+
+**Next (foundation, tasks #4–#8):** app/env contracts; backfill flat→hierarchy; re-key
+api_keys/webhooks to application+environment; converge self-serve+ops provisioning; re-key routing +
+go-live + E13 virtual-phone onto `environment.type`. Then Phases 1–5 per `docs/PI-6/PLAN.md`.
+
+_Milestone rule (user directive 2026-07-12): update this HANDOFF.md at every milestone._
 
 ## Where things stand
 
