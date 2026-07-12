@@ -1,6 +1,6 @@
 "use client";
 
-import type { VirtualPhoneMessage } from "@app/contracts";
+import type { VirtualPhoneInbox } from "@app/contracts";
 import {
   Alert,
   AlertDescription,
@@ -13,10 +13,10 @@ import {
   LoadingRows,
 } from "@app/ui/components/ui/states";
 import { cn } from "@app/ui/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Info, Smartphone } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Handset } from "@/components/virtual-phone/handset";
 import { MessageInspector } from "@/components/virtual-phone/message-inspector";
 import { ThreadRail } from "@/components/virtual-phone/thread-rail";
@@ -30,35 +30,35 @@ import {
   type VirtualThread,
 } from "@/lib/virtual-phone/threads";
 
+const INBOX_KEY = ["virtual-phone-inbox"] as const;
+
 export default function VirtualPhonePage() {
   const settingsQuery = useQuery({
     queryKey: ["messaging-settings"],
     queryFn: getMessagingSettings,
   });
   const settings = settingsQuery.data;
-  const [messages, setMessages] = useState<VirtualPhoneMessage[] | null>(null);
+  const queryClient = useQueryClient();
   const [selectedKey, setSelectedKey] = useState<string>();
   const [selectedMessageId, setSelectedMessageId] = useState<string>();
   const [query, setQuery] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (quiet = false) => {
-    if (!quiet) setError(null);
-    try {
-      const inbox = await getVirtualPhone();
-      setMessages(inbox.messages);
-    } catch (cause) {
-      if (!quiet) setError(errorMessage(cause));
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void load(true);
-    }, 5_000);
-    return () => window.clearInterval(timer);
-  }, [load]);
+  // TanStack Query owns the polling (CLAUDE.md §4): it dedupes in-flight requests, pauses while the
+  // tab is hidden, and keeps the last good page on screen during a refetch — all of which the
+  // hand-rolled setInterval had to fake, and the "keep last good data" part it never did.
+  const inboxQuery = useQuery({
+    queryKey: INBOX_KEY,
+    queryFn: getVirtualPhone,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
+    placeholderData: (previous) => previous,
+  });
+  const messages = inboxQuery.data?.messages ?? null;
+  const error = inboxQuery.isError ? errorMessage(inboxQuery.error) : null;
+  const reload = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: INBOX_KEY }),
+    [queryClient],
+  );
 
   const threads = useMemo(
     () => groupVirtualThreads(messages ?? []),
@@ -85,20 +85,24 @@ export default function VirtualPhonePage() {
     const unread = thread.messages.filter(
       (message) => message.read_at === null,
     );
-    if (unread.length > 0) {
-      const readAt = new Date().toISOString();
-      setMessages(
-        (current) =>
-          current?.map((message) =>
-            unread.some((item) => item.id === message.id)
-              ? { ...message, read_at: readAt }
-              : message,
-          ) ?? null,
-      );
-      void Promise.all(
-        unread.map((message) => markVirtualMessageRead(message.id)),
-      ).catch(() => void load(true));
-    }
+    if (unread.length === 0) return;
+
+    // Optimistic: mark read in the cache immediately so the badge clears on tap, then reconcile.
+    const readAt = new Date().toISOString();
+    queryClient.setQueryData<VirtualPhoneInbox>(INBOX_KEY, (current) =>
+      current
+        ? {
+            messages: current.messages.map((message) =>
+              unread.some((item) => item.id === message.id)
+                ? { ...message, read_at: readAt }
+                : message,
+            ),
+          }
+        : current,
+    );
+    void Promise.all(
+      unread.map((message) => markVirtualMessageRead(message.id)),
+    ).catch(() => void reload());
   }
 
   return (
@@ -114,7 +118,7 @@ export default function VirtualPhonePage() {
       </div>
 
       {error ? (
-        <ErrorState message={error} onRetry={() => void load()} />
+        <ErrorState message={error} onRetry={() => void reload()} />
       ) : null}
       {settings?.delivery_mode === "live" ? (
         <Alert>

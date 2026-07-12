@@ -63,7 +63,11 @@ export class PiiVaultService {
     const found = existing[0]?.subject_id;
     if (found) return String(found);
 
-    const subjectId = await this.db.withTenant(tenantId, async (tx) => {
+    // Subject + DEK + the number itself land in ONE transaction. Splitting them left a window where
+    // a crash between the two produced a subject with a key but no phone in the vault — and because
+    // the lookup above then finds that subject and returns early, the number would never be stored.
+    // The inbox would render "[erased]" for someone who was never erased. All or nothing.
+    return this.db.withTenant(tenantId, async (tx) => {
       const inserted = (await tx`
         INSERT INTO data_subjects (tenant_id, phone_hash)
         VALUES (current_setting('app.tenant_id')::uuid, ${index})
@@ -81,21 +85,42 @@ export class PiiVaultService {
       // Fail loudly rather than stringifying `undefined` into a uuid column.
       if (!raced) throw new Error("Could not resolve a data subject for send.");
       const id = String(raced);
-      const dek = newDek();
       await tx`
         INSERT INTO dek_keys (tenant_id, subject_id, wrapped_dek, status)
         VALUES (
           current_setting('app.tenant_id')::uuid, ${id},
-          ${wrapDek(this.masterKey(), dek, tenantId, id)}, 'active'
+          ${wrapDek(this.masterKey(), newDek(), tenantId, id)}, 'active'
         )
         ON CONFLICT (subject_id) DO NOTHING`;
+
+      // Re-read rather than trusting the DEK we just generated: if we lost the race, the winner's
+      // key is the real one and ours was discarded by the ON CONFLICT.
+      const keys = (await tx`
+        SELECT dek_id, wrapped_dek FROM dek_keys
+        WHERE subject_id = ${id} AND status = 'active'
+        LIMIT 1`) as Row[];
+      const key = keys[0];
+      if (!key?.wrapped_dek) {
+        throw new Error("No active DEK for a freshly created data subject.");
+      }
+      const dek = unwrapDek(
+        this.masterKey(),
+        toBuffer(key.wrapped_dek),
+        tenantId,
+        id,
+      );
+      // The number is PII: it goes in the vault under the subject's own DEK, so erasure reaches it.
+      // The blind index stays behind — one-way, it identifies without revealing. WHERE NOT EXISTS so
+      // the race loser does not write a second copy.
+      await tx`
+        INSERT INTO pii_vault (tenant_id, subject_id, kind, ciphertext, dek_id)
+        SELECT current_setting('app.tenant_id')::uuid, ${id}, 'phone',
+               ${encryptPii(dek, e164, tenantId, id, "phone")}, ${String(key.dek_id)}
+        WHERE NOT EXISTS (
+          SELECT 1 FROM pii_vault WHERE subject_id = ${id} AND kind = 'phone'
+        )`;
       return id;
     });
-
-    // The number itself is PII: store it in the vault under the subject's own DEK, so erasure
-    // reaches it. The blind index stays behind — it is one-way and identifies, it does not reveal.
-    await this.put(tenantId, subjectId, "phone", e164);
-    return subjectId;
   }
 
   /** Seal one piece of PII under the subject's DEK. Returns the vault row id to reference. */

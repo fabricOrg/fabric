@@ -8,23 +8,36 @@
  * ones that still need moving; new sends already write to the vault.
  *
  * Re-runnable: a row already carrying a subject_id is skipped, so an interrupted run resumes safely.
- * It never deletes the old ciphertext — a follow-up migration drops those columns once this has run
- * everywhere and the result has been eyeballed.
  *
- * Usage (needs BOTH keys — the old one to read, the new one to write):
- *   DATABASE_URL_SUPER=… VIRTUAL_PHONE_ENCRYPTION_KEY=… PII_MASTER_KEY=… \
- *     pnpm tsx scripts/ops/migrate-virtual-deliveries-to-vault.ts [--commit]
+ * It CLEARS the legacy ciphertext in the same transaction that writes the vault rows. Leaving the old
+ * copy behind would keep the PII readable under the platform-wide key — the very exposure this exists
+ * to close — so a half-migrated row is not an acceptable resting state. Atomic: either the vault holds
+ * the data and the old copy is gone, or nothing changed.
+ *
+ * If a number was ALREADY erased, its legacy ciphertext is destroyed rather than migrated: that data
+ * is what the person asked us to forget, and moving it into a fresh subject would un-erase them.
+ *
+ * WHERE IT RUNS: the deployed database is not publicly reachable, so this ships inside the api image
+ * and runs as an in-VPC ECS task (`fabric-api-testing-pii-backfill`) — the only way to hand it the two
+ * keys, since ECS run-task overrides can set `environment` but NOT `secrets`.
+ *
+ * Needs BOTH keys: the legacy one to READ the old rows, the master one to WRITE the vault.
+ *   local:  DATABASE_URL_SUPER=… VIRTUAL_PHONE_ENCRYPTION_KEY=… PII_MASTER_KEY=… \
+ *             pnpm tsx packages/db/src/cloud-backfill-pii-vault.ts [--commit]
+ *   cloud:  aws ecs run-task … --overrides '{"containerOverrides":[{"name":"backfill","command":[
+ *             "node","node_modules/@app/db/dist/cloud-backfill-pii-vault.js","--commit"]}]}'
  *
  * Defaults to a DRY RUN: it reports what it would move and changes nothing. Pass --commit to write.
  */
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  createHmac,
-  randomBytes,
-} from "node:crypto";
+import { createDecipheriv, createHash } from "node:crypto";
 import postgres from "postgres";
+import {
+  encryptPii,
+  newDek,
+  phoneBlindIndex,
+  unwrapDek,
+  wrapDek,
+} from "./pii-envelope.js";
 
 // Owner role in the cloud (the migration task uses the same); SUPER is the local equivalent.
 const databaseUrl =
@@ -76,19 +89,6 @@ function decryptLegacy(
   ]).toString("utf8");
 }
 
-/** Vault envelope: iv ‖ tag ‖ ciphertext — must match services/api/src/privacy/pii-crypto.ts. */
-function seal(key: Buffer, plaintext: Buffer, aad: string): Buffer {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  cipher.setAAD(Buffer.from(aad, "utf8"));
-  const body = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-  return Buffer.concat([iv, cipher.getAuthTag(), body]);
-}
-
-function normalize(value: string): string {
-  return value.replace(/[^\d+]/g, "");
-}
-
 async function main(url: string) {
   const sql = postgres(url, { max: 1 });
   let moved = 0;
@@ -131,15 +131,42 @@ async function main(url: string) {
         }
 
         await sql.begin(async (tx) => {
-          const phoneHash = createHmac("sha256", indexKey)
-            .update(`${row.tenant_id}:${normalize(to)}`)
-            .digest("hex");
+          const phoneHash = phoneBlindIndex(indexKey, row.tenant_id, to);
 
-          // Find-or-create the subject + its DEK, mirroring PiiVaultService.subjectForPhone.
-          const [existing] = await tx<Array<{ subject_id: string }>>`
+          // HONOUR AN ERASURE THAT ALREADY HAPPENED. If this number has been erased and not since
+          // re-contacted, its legacy ciphertext is data the person asked us to destroy — and it is
+          // still readable under the old platform key, which is the very gap this backfill exists to
+          // close. Migrating it into a fresh subject would UN-ERASE them. So: destroy it instead.
+          const [erasedSubject] = await tx<Array<{ subject_id: string }>>`
             SELECT subject_id FROM data_subjects
-            WHERE tenant_id = ${row.tenant_id} AND phone_hash = ${phoneHash} LIMIT 1`;
-          let subjectId = existing?.subject_id;
+            WHERE tenant_id = ${row.tenant_id} AND phone_hash = ${phoneHash}
+              AND erased_at IS NOT NULL
+            ORDER BY erased_at DESC LIMIT 1`;
+          const [liveSubject] = await tx<Array<{ subject_id: string }>>`
+            SELECT subject_id FROM data_subjects
+            WHERE tenant_id = ${row.tenant_id} AND phone_hash = ${phoneHash}
+              AND erased_at IS NULL
+            LIMIT 1`;
+
+          if (erasedSubject && !liveSubject) {
+            // Point the delivery at the erased subject (so history resolves) and drop the plaintext
+            // path entirely. No vault rows are written: there is no key to write them under, and the
+            // person asked to be forgotten.
+            await tx`
+              UPDATE virtual_deliveries
+              SET subject_id = ${erasedSubject.subject_id},
+                  recipient_ciphertext = NULL,
+                  body_ciphertext = NULL,
+                  updated_at = now()
+              WHERE message_id = ${row.message_id}`;
+            await tx`
+              UPDATE messages SET subject_id = ${erasedSubject.subject_id}
+              WHERE id = ${row.message_id} AND subject_id IS NULL`;
+            return;
+          }
+
+          // Find-or-create the LIVE subject + its DEK, mirroring PiiVaultService.subjectForPhone.
+          let subjectId = liveSubject?.subject_id;
           let dekId: string;
           let dek: Buffer;
 
@@ -151,13 +178,12 @@ async function main(url: string) {
               WHERE subject_id = ${subjectId} AND status = 'active' LIMIT 1`;
             if (!key) throw new Error(`subject ${subjectId} has no active DEK`);
             dekId = key.dek_id;
-            const sealed = Buffer.from(key.wrapped_dek);
-            const iv = sealed.subarray(0, 12);
-            const tag = sealed.subarray(12, 28);
-            const d = createDecipheriv("aes-256-gcm", masterKey, iv);
-            d.setAAD(Buffer.from(`dek:${row.tenant_id}:${subjectId}`));
-            d.setAuthTag(tag);
-            dek = Buffer.concat([d.update(sealed.subarray(28)), d.final()]);
+            dek = unwrapDek(
+              masterKey,
+              Buffer.from(key.wrapped_dek),
+              row.tenant_id,
+              subjectId,
+            );
           } else {
             const [created] = await tx<Array<{ subject_id: string }>>`
               INSERT INTO data_subjects (tenant_id, phone_hash)
@@ -165,12 +191,12 @@ async function main(url: string) {
               RETURNING subject_id`;
             if (!created) throw new Error("subject insert returned no row");
             subjectId = created.subject_id;
-            dek = randomBytes(32);
+            dek = newDek();
             const [key] = await tx<Array<{ dek_id: string }>>`
               INSERT INTO dek_keys (tenant_id, subject_id, wrapped_dek, status)
               VALUES (
                 ${row.tenant_id}, ${subjectId},
-                ${seal(masterKey, dek, `dek:${row.tenant_id}:${subjectId}`)}, 'active'
+                ${wrapDek(masterKey, dek, row.tenant_id, subjectId)}, 'active'
               )
               RETURNING dek_id`;
             if (!key) throw new Error("dek insert returned no row");
@@ -180,7 +206,7 @@ async function main(url: string) {
               INSERT INTO pii_vault (tenant_id, subject_id, kind, ciphertext, dek_id)
               VALUES (
                 ${row.tenant_id}, ${subjectId}, 'phone',
-                ${seal(dek, Buffer.from(to, "utf8"), `${row.tenant_id}:${subjectId}:phone`)},
+                ${encryptPii(dek, to, row.tenant_id, subjectId, "phone")},
                 ${dekId}
               )`;
           }
@@ -189,15 +215,21 @@ async function main(url: string) {
             INSERT INTO pii_vault (tenant_id, subject_id, kind, ciphertext, dek_id)
             VALUES (
               ${row.tenant_id}, ${subjectId}, 'body',
-              ${seal(dek, Buffer.from(body, "utf8"), `${row.tenant_id}:${subjectId}:body`)},
+              ${encryptPii(dek, body, row.tenant_id, subjectId, "body")},
               ${dekId}
             )
             RETURNING id`;
           if (!bodyRow) throw new Error("body insert returned no row");
 
+          // Drop the legacy ciphertext in the SAME transaction that writes the vault rows. Leaving it
+          // behind would keep this PII readable under the platform-wide key — the exact exposure this
+          // backfill exists to close — so a half-migrated row is not an acceptable resting state.
+          // Atomic: either the vault holds it and the old copy is gone, or nothing changed.
           await tx`
             UPDATE virtual_deliveries
-            SET subject_id = ${subjectId}, body_pii_id = ${bodyRow.id}, updated_at = now()
+            SET subject_id = ${subjectId}, body_pii_id = ${bodyRow.id},
+                recipient_ciphertext = NULL, body_ciphertext = NULL,
+                updated_at = now()
             WHERE message_id = ${row.message_id}`;
 
           // The canonical message must reference the subject too — that is the whole surrogate rule.
