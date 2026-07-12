@@ -1,13 +1,7 @@
 import type { ApplicationDto, EnvironmentDto } from "@app/contracts";
 import { PageContainer } from "@app/ui/components/ui/app-shell";
 import { Badge } from "@app/ui/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@app/ui/components/ui/card";
+import { Card } from "@app/ui/components/ui/card";
 import {
   PageHeader,
   PageHeaderActions,
@@ -16,6 +10,7 @@ import {
   PageHeaderTitle,
 } from "@app/ui/components/ui/page-header";
 import { ErrorState, TableEmptyState } from "@app/ui/components/ui/states";
+import { Boxes, Layers } from "lucide-react";
 import { CreateApplicationDialog } from "@/components/forms/create-application-dialog";
 import { BffError } from "@/lib/server/api-client";
 import { listApplications } from "@/lib/server/applications-client";
@@ -49,25 +44,39 @@ function ApplicationCard({ application }: { application: ApplicationDto }) {
     year: "numeric",
   });
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{application.name}</CardTitle>
-        <CardDescription>
-          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-            {application.slug}
-          </code>
-          <span className="ml-2 text-xs text-muted-foreground">
-            Created {created}
-          </span>
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-1.5">
-          {envs.map((env) => (
-            <EnvironmentBadge key={env.id} env={env} />
-          ))}
+    <Card className="flex flex-col gap-4 p-5">
+      {/* Header: icon tile + name over its slug (the app's stable identifier). */}
+      <div className="flex items-start gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+          <Boxes className="size-5" />
         </div>
-      </CardContent>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-semibold leading-tight">
+            {application.name}
+          </h3>
+          <p className="truncate text-sm text-muted-foreground">
+            {application.slug}
+          </p>
+        </div>
+      </div>
+
+      {/* Environment status — a sandbox always, a live env locked until go-live (ADR-0004). */}
+      <div className="flex flex-wrap gap-1.5">
+        {envs.map((env) => (
+          <EnvironmentBadge key={env.id} env={env} />
+        ))}
+      </div>
+
+      {/* Footer: environment count + created date, split by a divider. */}
+      <div className="flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <Layers className="size-3.5" />
+          {envs.length} {envs.length === 1 ? "Environment" : "Environments"}
+        </span>
+        <span>
+          Created <span className="font-medium text-foreground">{created}</span>
+        </span>
+      </div>
     </Card>
   );
 }
