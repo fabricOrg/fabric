@@ -10,36 +10,48 @@ flowchart LR
   client[API clients]
 
   subgraph aws[AWS testing account]
+    edge[CloudFront edge<br/>global WAF, rate limit, managed rules]
     apigw[API Gateway HTTP API<br/>TLS, routing, throttling]
-    apilogs[CloudWatch API access logs<br/>14-day retention]
+    apilogs[CloudWatch API access logs<br/>90-day retention]
 
-    subgraph vpc[Default VPC across three Availability Zones]
+    subgraph vpc[Dedicated testing VPC across three Availability Zones]
+      public[Public subnets<br/>internet gateway and NAT gateways]
+      private[Private subnets<br/>ECS tasks and VPC Link]
+      database[Database subnets<br/>RDS only]
       vpclink[API Gateway VPC Link<br/>managed ENIs]
       cloudmap[Cloud Map private namespace<br/>SRV service discovery]
 
       subgraph ecs_sg[ECS task security group]
-        api[ECS Fargate service<br/>NestJS API, 0.25 vCPU / 0.5 GB]
+        api[ECS Fargate service<br/>NestJS API, 0.5 vCPU / 1 GB<br/>autoscaled 1-3 tasks]
         migration[One-off Fargate migration task<br/>Drizzle migrations and role checks]
       end
 
       subgraph db_sg[Database security group]
-        rds[RDS PostgreSQL 16<br/>encrypted, private, Single-AZ]
+        rds[RDS PostgreSQL 16<br/>encrypted, private, Multi-AZ]
+      end
+
+      subgraph redis_sg[Redis security groups]
+        queue[ElastiCache Redis queue<br/>Multi-AZ failover]
+        cache[ElastiCache Redis cache<br/>Multi-AZ failover]
       end
     end
 
     ecr[ECR private repository<br/>immutable tree-hash images]
-    secrets[Secrets Manager<br/>DB URLs and ingress tokens]
+    secrets[Secrets Manager<br/>DB URLs, ingress tokens, WorkOS, Paystack, SMS]
     applogs[CloudWatch application logs<br/>API and migration streams]
-    alarms[CloudWatch alarms<br/>API 5xx, DB CPU, DB storage]
+    alarms[CloudWatch alarms + SNS<br/>gateway 5xx, WAF blocks, ECS saturation, DB health]
   end
 
-  client -->|HTTPS| apigw
+  client -->|HTTPS| edge
+  edge --> apigw
   apigw --> apilogs
   apigw -.->|DiscoverInstances| cloudmap
   apigw -->|private integration| vpclink
   vpclink -->|TCP 3000 only| api
   api -->|register healthy task IP and port| cloudmap
   api -->|TLS PostgreSQL 5432<br/>app_runtime with RLS| rds
+  api -->|Redis 6379<br/>BullMQ and cache/rate-limit state| queue
+  api -->|Redis 6379<br/>cache and rate-limit state| cache
   migration -->|TLS PostgreSQL 5432<br/>admin, owner, runtime verification| rds
   ecr -->|image pull| api
   ecr -->|image pull| migration
@@ -55,8 +67,10 @@ Only API Gateway is an inbound public entry point. The ECS security group accept
 from the VPC Link security group. RDS is not publicly accessible and accepts port 5432 only from
 the ECS task security group.
 
-ECS tasks currently run in default public subnets with public IP addresses for outbound AWS API and
-image access. Their security group does not permit public inbound traffic.
+ECS tasks run in private subnets without public IP addresses. NAT gateways provide outbound image,
+AWS API, and provider access. CloudFront injects an origin-lock header for the API; direct raw
+execute-api requests without that header are rejected by the API before tenant or provider handlers
+run.
 
 ## Delivery and control flow
 
@@ -117,30 +131,34 @@ Deployment order is enforced:
 | Service or role           | Responsibility                                                                                                              |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | API Gateway HTTP API      | Public HTTPS endpoint, request routing, VPC integration, access logs, and basic throttling.                                 |
+| CloudFront + AWS WAF      | Public edge protection in front of each testing HTTP API with IP rate limiting and AWS managed rule groups.                 |
 | API Gateway VPC Link      | Carries API traffic from API Gateway into VPC network interfaces.                                                           |
 | Cloud Map                 | Supplies private SRV discovery records for healthy ECS task IPs and ports.                                                  |
-| ECS cluster and service   | Runs the long-lived NestJS API on Fargate and performs circuit-breaker rollback.                                            |
+| ECS cluster and service   | Runs the long-lived services on Fargate with circuit-breaker rollback and Application Auto Scaling.                         |
 | ECS migration task        | Runs schema migrations and verifies the least-privilege database roles before service deployment.                           |
 | ECR                       | Stores immutable API images keyed by Git tree hash plus the first-deployment rollback tag.                                  |
-| RDS PostgreSQL            | Stores application data in an encrypted, non-public PostgreSQL instance.                                                    |
-| Secrets Manager           | Stores admin, migration-owner, and runtime database URLs plus operator and webhook tokens.                                  |
+| RDS PostgreSQL            | Stores application data in an encrypted, non-public Multi-AZ PostgreSQL instance with deletion protection.                  |
+| ElastiCache Redis         | Separates queue durability from cache/rate-limit workloads using encrypted Multi-AZ Redis replication groups.               |
+| Secrets Manager           | Stores database URLs, operator and webhook tokens, WorkOS placeholders, Paystack, and SMS provider credentials.             |
 | ECS execution role        | Allows the ECS agent to pull ECR images, fetch specific secrets, and write container logs.                                  |
 | ECS application task role | Runtime identity for future AWS API access; it currently has no additional permissions.                                     |
 | GitHub OIDC provider      | Exchanges GitHub identity tokens for short-lived AWS credentials without access keys.                                       |
 | GitHub deployment role    | Pushes images, registers task definitions, runs migrations, updates the testing service, and passes only the two ECS roles. |
-| CloudWatch Logs           | Retains API, migration, and API Gateway access logs for 14 days.                                                            |
-| CloudWatch alarms         | Detects API 5xx responses, high database CPU, and low database storage.                                                     |
+| CloudWatch Logs           | Retains API, app, and API Gateway access logs for 90 days.                                                                  |
+| CloudWatch alarms         | Detects gateway 5xx responses, global WAF block spikes, ECS saturation, high database CPU, and low database storage.        |
 | S3 Terraform backend      | Stores encrypted, versioned Terraform state with native lockfiles and public access blocked.                                |
 
 ## Current testing limitations
 
-- RDS is Single-AZ with one-day backups and no deletion protection.
-- ECS has one fixed task and no autoscaling.
-- Default public subnets are used; there are no VPC endpoints or NAT gateway.
-- Container Insights is disabled.
-- CloudWatch alarms have no notification destination.
-- API Gateway has throttling but no WAF or customer identity authorizer.
+- The AWS account plan currently caps RDS automated backup retention at one day. Upgrade the account
+  plan before raising retention to the desired staging/production value.
+- Customer identity authorization still needs final production policy hardening on the public API
+  surface; testing uses API keys, BFF tokens, and operator/webhook shared secrets where implemented.
+- `testing_alarm_email` must be set and the subscription confirmed for email alert delivery.
+- Testing is wired to the real Arkesel SMS provider path. Live-send drills need approved test
+  recipients, populated provider credentials, and operational monitoring of spend and delivery
+  outcomes.
 
-These choices control testing cost. Staging and production require separate AWS accounts,
-purpose-built private networking, stronger database recovery controls, actionable alert delivery,
-autoscaling, and production-grade edge protection.
+Staging and production still require separate AWS accounts, production backup retention and restore
+tests, autoscaling, WAF/edge protection, customer auth enforcement, and production incident
+management.

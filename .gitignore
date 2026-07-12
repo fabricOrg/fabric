@@ -24,6 +24,9 @@ dist/
 a2a-cli.js
 **/a2a-cli.js
 
+# Codex CLI local config — holds live a2a bearer tokens + run logs (security)
+.codex/
+
 # ephemeral review artifacts (screenshots, etc.)
 _review_shots/
 test-results/
