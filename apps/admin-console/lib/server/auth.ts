@@ -2,20 +2,16 @@ import "server-only";
 
 import {
   type AppSession,
-  type DevelopmentSessionConfig,
   type ImpersonationClaim,
   type RealmConfig,
-  readDevelopmentSession,
   readImpersonation,
   readSession,
   refreshSession,
-  sealDevelopmentSession,
 } from "@app/fe-auth";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { resolveStaffSession } from "./staff-identity";
 
-export const DEVELOPMENT_COOKIE = "fabric-admin-development-session";
 export const WORKOS_COOKIE = "wos-admin-session";
 export const OAUTH_STATE_COOKIE = "fabric-admin-oauth-state";
 /**
@@ -33,20 +29,6 @@ export function noticeCookieOptions() {
     sameSite: "lax" as const,
     path: "/",
     maxAge: 60,
-  };
-}
-
-export function developmentAuthConfig(): DevelopmentSessionConfig {
-  const runtime =
-    process.env.NODE_ENV === "production"
-      ? "production"
-      : process.env.NODE_ENV === "test"
-        ? "test"
-        : "development";
-  return {
-    enabled: process.env.DEV_AUTH_ENABLED === "true",
-    runtime,
-    cookiePassword: process.env.DEV_SESSION_PASSWORD ?? "",
   };
 }
 
@@ -102,36 +84,12 @@ export function staffRealmConfig(): RealmConfig {
   };
 }
 
-export function configuredDevelopmentSession(): AppSession {
-  return {
-    userId: "development-staff",
-    orgId: "",
-    role: "staff",
-    permissions: ["staff:*"],
-    sessionId: "development-staff-session",
-  };
-}
-
-export function issueDevelopmentSession(): string {
-  return sealDevelopmentSession(
-    developmentAuthConfig(),
-    configuredDevelopmentSession(),
-  );
-}
-
 export async function readAdminSession(): Promise<AppSession | null> {
+  if (!workosAuthConfigured()) return null;
   const store = await cookies();
-  if (workosAuthConfigured()) {
-    const workosCookie = store.get(WORKOS_COOKIE)?.value;
-    if (workosCookie) {
-      const session = await readSession(staffRealmConfig(), workosCookie);
-      if (session) return session;
-    }
-  }
-  return readDevelopmentSession(
-    developmentAuthConfig(),
-    store.get(DEVELOPMENT_COOKIE)?.value,
-  );
+  const workosCookie = store.get(WORKOS_COOKIE)?.value;
+  if (!workosCookie) return null;
+  return readSession(staffRealmConfig(), workosCookie);
 }
 
 /**

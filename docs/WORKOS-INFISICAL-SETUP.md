@@ -5,14 +5,10 @@ their AWS accounts are ready.
 
 ## Scope
 
-Fabric uses WorkOS for customer SSO and Infisical for development secret delivery. Development auth
-remains available as an explicit local fallback:
-
-```env
-DEV_AUTH_ENABLED=true
-```
-
-Set this to `false` when testing WorkOS-only behavior.
+Fabric uses WorkOS AuthKit for authentication (email+password / Google / passkeys, SSO optional) and
+Infisical for development secret delivery. There is **no local dev-login bypass** — every
+environment, including local, signs in through the WorkOS Test env. Enable the sign-in methods in the
+WorkOS dashboard and register `http://localhost:3100/auth/callback` + `/login` as redirect URIs.
 
 ## WorkOS Customer Realm
 
@@ -73,9 +69,6 @@ WEBHOOK_INGRESS_TOKEN=<local-fake-provider-webhook-token>
 BFF_INTERNAL_TOKEN=<local-dashboard-to-api-token>
 TENANT_TOKEN_SECRET=<api-only HMAC secret for BFF tenant tokens (ADR-0003)>
 
-DEV_AUTH_ENABLED=true
-DEV_TENANT_ID=00000000-0000-0000-0000-0000000000d1
-DEV_SESSION_PASSWORD=<local-only-32-plus-character-password>
 DASHBOARD_API_KEY=<local-dashboard-api-key>
 API_BASE_URL=http://localhost:3000
 DASHBOARD_BASE_URL=http://localhost:3100
