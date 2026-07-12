@@ -129,13 +129,15 @@ describe("Verify V1 (golden path core)", () => {
     // Sandbox quickstart affordance: the OTP is visible without a real phone.
     expect(startBody.debug_code).toMatch(/^\d{6}$/);
 
-    // The OTP rode the real send pipeline: a message exists, pinned to the fake provider, and
-    // its reserve/commit ledger entries ARE the verification's billing record.
+    // The OTP rode the real send pipeline: a message exists, pinned to the SANDBOX provider, and
+    // its reserve/commit ledger entries ARE the verification's billing record. A sandbox tenant is
+    // pinned to the virtual phone (ADR-0002 F3) — an OTP for a sandbox workspace must never be able
+    // to reach a carrier, whatever SMS_PROVIDER says.
     const [msg] = (await owner.unsafe(
       "SELECT id, provider_slug FROM messages WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
       [SANDBOX_TENANT],
     )) as Array<{ id: string; provider_slug: string }>;
-    expect(msg?.provider_slug).toBe("fake-sms");
+    expect(msg?.provider_slug).toBe("virtual-phone");
     const ledger = (await owner.unsafe(
       "SELECT count(*)::int AS n FROM ledger_transactions WHERE tenant_id = $1 AND reference_id = $2",
       [SANDBOX_TENANT, msg?.id ?? ""],

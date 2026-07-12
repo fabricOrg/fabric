@@ -4,7 +4,7 @@ import type {
   VirtualPhoneInbox,
 } from "@app/contracts";
 import type { AppDb } from "@app/db";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { HttpException, Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AuditService } from "../audit/audit.service.js";
 import { APP_DB } from "../db/db.module.js";
@@ -45,21 +45,30 @@ export class VirtualPhoneService {
       }
       const settings = isObject(account.settings) ? account.settings : {};
       const messaging = isObject(settings.messaging) ? settings.messaging : {};
+      // A non-sandbox workspace defaults to LIVE and opts IN to the virtual phone — never the other
+      // way round. Defaulting to virtual would silently divert every existing tenant's traffic away
+      // from the carrier into a test inbox, and would bypass the E10-S4 sender-ID gate (which
+      // virtual mode legitimately skips, since no carrier is involved). Sandbox is forced virtual
+      // above; that is the only implicit virtual routing there is.
       return {
-        delivery_mode: messaging.delivery_mode === "live" ? "live" : "virtual",
+        delivery_mode:
+          messaging.delivery_mode === "virtual" ? "virtual" : "live",
         locked: false,
         reason: null,
       };
     } catch (error) {
-      if (error instanceof Error && error.name === "HttpException") throw error;
+      if (error instanceof HttpException) throw error;
+      // FAIL CLOSED. The old fallback quietly routed to `virtual` when this lookup failed, which —
+      // now that live is the default — would divert a real send into a test inbox and report it as
+      // delivered. That is a faked success: the customer's message never reaches the human, and they
+      // are never told. No send is strictly better than a send that silently went nowhere.
       this.logger.error(
-        `delivery mode lookup failed for ${tenantId}; failing toward virtual: ${error instanceof Error ? error.message : "unknown"}`,
+        `delivery mode lookup failed for ${tenantId}: ${error instanceof Error ? error.message : "unknown"}`,
       );
-      return {
-        delivery_mode: "virtual",
-        locked: true,
-        reason: "Delivery settings are temporarily unavailable.",
-      };
+      throw invalidRequest(
+        "delivery_settings_unavailable",
+        "Delivery settings are temporarily unavailable. Try again shortly.",
+      );
     }
   }
 
