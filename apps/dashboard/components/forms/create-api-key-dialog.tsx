@@ -19,6 +19,13 @@ import {
 import { Field, FieldLabel } from "@app/ui/components/ui/field";
 import { FieldError, fieldInvalid } from "@app/ui/components/ui/form";
 import { Input } from "@app/ui/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@app/ui/components/ui/select";
 import { useForm } from "@tanstack/react-form";
 import { Check, Copy, Plus, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -32,7 +39,16 @@ const AVAILABLE_SCOPES = ["sms:send", "sms:read", "wallet:read"] as const;
 const schema = z.object({
   name: z.string().trim().min(1, "Name your key."),
   scopes: z.array(z.string()).min(1, "Pick at least one scope."),
+  expiresInDays: z.number(), // 0 = never expires
 });
+
+/** Key lifetime options. 0 = never — a long-lived key is a deliberate choice, not the only one. */
+const EXPIRY_OPTIONS = [
+  { value: "0", label: "Never" },
+  { value: "30", label: "30 days" },
+  { value: "60", label: "60 days" },
+  { value: "90", label: "90 days" },
+] as const;
 
 interface CreatedKey {
   secret?: unknown;
@@ -58,7 +74,11 @@ export function CreateApiKeyDialog({
   const [copied, setCopied] = useState(false);
 
   const form = useForm({
-    defaultValues: { name: "", scopes: ["sms:send"] as string[] },
+    defaultValues: {
+      name: "",
+      scopes: ["sms:send"] as string[],
+      expiresInDays: 0,
+    },
     validators: { onChange: schema },
     onSubmit: async ({ value }) => {
       try {
@@ -70,6 +90,7 @@ export function CreateApiKeyDialog({
             env,
             scopes: value.scopes,
             application_id: applicationId,
+            expires_in_days: value.expiresInDays,
           }),
         });
         const payload = (await response.json().catch(() => null)) as
@@ -180,6 +201,29 @@ export function CreateApiKeyDialog({
                     </Field>
                   );
                 }}
+              </form.Field>
+
+              <form.Field name="expiresInDays">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor="key-expiry">Expires</FieldLabel>
+                    <Select
+                      value={String(field.state.value)}
+                      onValueChange={(v) => field.handleChange(Number(v))}
+                    >
+                      <SelectTrigger id="key-expiry">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {EXPIRY_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
               </form.Field>
             </div>
             <DialogFooter>

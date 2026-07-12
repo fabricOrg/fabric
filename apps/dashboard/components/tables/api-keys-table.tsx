@@ -99,6 +99,15 @@ export function ApiKeysTable({ keys }: { keys: readonly ApiKey[] }) {
       ),
     },
     {
+      accessorKey: "expiresAt",
+      header: "Expires",
+      cell: ({ row }) => (
+        <span className="tabular-nums text-muted-foreground">
+          {formatTimestamp(row.original.expiresAt ?? null)}
+        </span>
+      ),
+    },
+    {
       accessorKey: "status",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Status" />

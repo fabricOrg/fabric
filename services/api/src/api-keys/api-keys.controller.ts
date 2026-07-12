@@ -46,6 +46,7 @@ export class ApiKeysController {
     const b = (body ?? {}) as Record<string, unknown>;
     const tenantId = resolveTenantId(req, b.tenantId);
     const name = typeof b.name === "string" ? b.name : "";
+    const expiresInDays = optionalExpiryDays(b.expires_in_days);
     const created = await this.svc.create(tenantId, {
       env: requireEnv(b.env),
       scopes: requireScopes(b.scopes),
@@ -53,6 +54,7 @@ export class ApiKeysController {
       ...(b.application_id !== undefined
         ? { applicationId: requireUuid(b.application_id, "application_id") }
         : {}),
+      ...(expiresInDays !== undefined ? { expiresInDays } : {}),
     });
     // The ONLY time the full secret crosses the wire. The listed record keeps only the prefix; the
     // authoritative created_at/last_used_at come from the DB on the next list (client re-fetches).
@@ -66,6 +68,7 @@ export class ApiKeysController {
         status: "active",
         createdAt: new Date().toISOString(),
         lastUsedAt: null,
+        expiresAt: created.expiresAt,
       },
       secret: created.raw,
     };
@@ -114,6 +117,19 @@ function resolveTenantId(req: AuthedRequest, supplied: unknown): string {
 function requireUuid(value: unknown, param: string): string {
   if (typeof value !== "string" || !UUID_RE.test(value)) {
     throw invalidRequest("invalid_uuid", `${param} must be a uuid.`, param);
+  }
+  return value;
+}
+
+/** Optional key lifetime in days: absent/null → never expires; anything else must be a positive int. */
+function optionalExpiryDays(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw invalidRequest(
+      "invalid_expiry",
+      "expires_in_days must be a positive integer.",
+      "expires_in_days",
+    );
   }
   return value;
 }

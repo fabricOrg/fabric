@@ -23,6 +23,7 @@ function controllerWith(over: Partial<SvcMocks> = {}): {
       env: "test",
       scopes: [],
       raw: "sk_test_raw",
+      expiresAt: null,
     })),
     list: vi.fn(async () => []),
     revoke: vi.fn(async () => true),

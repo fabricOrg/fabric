@@ -58,6 +58,9 @@ export const apiKeys = pgTable(
     status: apiKeyStatus("status").notNull().default("active"),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    // Optional expiry (NULL = never). The auth lookup treats a past expires_at like a revoked key,
+    // so an expired key stops authenticating without a status change.
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
     ...timestamps,
   },
   // Array form (drizzle 0.45). The possession-scoped auth lookup rides the key_hash equality index.

@@ -28,17 +28,25 @@ export async function listApiKeys(applicationId?: string): Promise<ApiKey[]> {
   return listResponseSchema.parse(payload);
 }
 
-/** Create a key inside a specific application's environment (ADR-0004). */
+/** Create a key inside a specific application's environment (ADR-0004). `expiresInDays` omitted =
+ *  never expires. */
 export async function createApiKey(
-  request: CreateApiKeyRequest & { applicationId: string },
+  request: CreateApiKeyRequest & {
+    applicationId: string;
+    expiresInDays?: number;
+  },
 ): Promise<CreateApiKeyResult> {
-  const { applicationId, ...rest } = request;
+  const { applicationId, expiresInDays, ...rest } = request;
   const payload = await dashboardApi<unknown>(
     "/v1/api-keys",
     "api_keys:write",
     {
       method: "POST",
-      body: JSON.stringify({ ...rest, application_id: applicationId }),
+      body: JSON.stringify({
+        ...rest,
+        application_id: applicationId,
+        ...(expiresInDays ? { expires_in_days: expiresInDays } : {}),
+      }),
     },
   );
   return createApiKeyResultSchema.parse(payload);

@@ -27,6 +27,7 @@ export interface CreatedApiKey {
   readonly env: ApiKeyEnv;
   readonly scopes: string[];
   readonly raw: string; // show once; never stored, never returned again
+  readonly expiresAt: string | null;
 }
 
 /** A key as listed to its tenant — never includes the raw key or the hash. */
@@ -39,6 +40,7 @@ export interface ApiKeySummary {
   readonly status: "active" | "revoked";
   readonly lastUsedAt: string | null;
   readonly createdAt: string;
+  readonly expiresAt: string | null;
 }
 
 /**
@@ -60,7 +62,10 @@ export class ApiKeyService {
     const rows = await this.db.withApiKeyLookup(
       keyHash,
       (tx) =>
-        tx`SELECT tenant_id, scopes, application_id, environment_id FROM api_keys WHERE status = 'active'` as Promise<
+        // An expired key (expires_at in the past) stops authenticating — treated like a revoked key,
+        // no status change needed. NULL expires_at = never expires.
+        tx`SELECT tenant_id, scopes, application_id, environment_id FROM api_keys
+           WHERE status = 'active' AND (expires_at IS NULL OR expires_at > now())` as Promise<
           Array<{
             tenant_id: string;
             scopes: unknown;
@@ -104,10 +109,16 @@ export class ApiKeyService {
       env: ApiKeyEnv;
       scopes?: string[];
       applicationId?: string;
+      /** Days until the key expires; omitted / ≤0 = never expires. */
+      expiresInDays?: number;
     },
   ): Promise<CreatedApiKey> {
     const k = generateApiKey(input.env);
     const scopes = input.scopes ?? [];
+    const expiresAt =
+      input.expiresInDays && input.expiresInDays > 0
+        ? new Date(Date.now() + input.expiresInDays * 86_400_000)
+        : null;
     // ADR-0004: a key is minted INTO a specific application's environment. When the caller names an
     // application (the dashboard's app-detail page), mint into IT; otherwise the workspace's
     // `default` app (operator / legacy path). The env is chosen by the requested key type
@@ -154,13 +165,20 @@ export class ApiKeyService {
         );
       }
       const rows = (await tx`
-        INSERT INTO api_keys (tenant_id, application_id, environment_id, name, prefix, key_hash, env, scopes)
-        VALUES (${tenantId}, (SELECT application_id FROM environments WHERE id = ${env.id}), ${env.id}, ${input.name ?? ""}, ${k.prefix}, ${k.keyHash}, ${k.env}, ${JSON.stringify(scopes)}::jsonb)
+        INSERT INTO api_keys (tenant_id, application_id, environment_id, name, prefix, key_hash, env, scopes, expires_at)
+        VALUES (${tenantId}, (SELECT application_id FROM environments WHERE id = ${env.id}), ${env.id}, ${input.name ?? ""}, ${k.prefix}, ${k.keyHash}, ${k.env}, ${JSON.stringify(scopes)}::jsonb, ${expiresAt ? expiresAt.toISOString() : null})
         RETURNING id`) as Array<{ id: string }>;
       return rows[0]?.id;
     });
     if (!id) throw new Error("api key insert returned no id");
-    return { id: String(id), prefix: k.prefix, env: k.env, scopes, raw: k.raw };
+    return {
+      id: String(id),
+      prefix: k.prefix,
+      env: k.env,
+      scopes,
+      raw: k.raw,
+      expiresAt: expiresAt ? expiresAt.toISOString() : null,
+    };
   }
 
   /** List a tenant's keys (never the hash/raw) — RLS scopes to the caller's tenant; an optional
@@ -173,9 +191,9 @@ export class ApiKeyService {
       tenantId,
       (tx) =>
         (applicationId
-          ? tx`SELECT id, name, prefix, env, scopes, status, last_used_at, created_at
+          ? tx`SELECT id, name, prefix, env, scopes, status, last_used_at, created_at, expires_at
              FROM api_keys WHERE application_id = ${applicationId} ORDER BY created_at DESC`
-          : tx`SELECT id, name, prefix, env, scopes, status, last_used_at, created_at
+          : tx`SELECT id, name, prefix, env, scopes, status, last_used_at, created_at, expires_at
              FROM api_keys ORDER BY created_at DESC`) as Promise<
           Array<Record<string, unknown>>
         >,
@@ -189,6 +207,7 @@ export class ApiKeyService {
       status: r.status === "revoked" ? "revoked" : "active",
       lastUsedAt: r.last_used_at ? String(r.last_used_at) : null,
       createdAt: String(r.created_at),
+      expiresAt: r.expires_at ? String(r.expires_at) : null,
     }));
   }
 

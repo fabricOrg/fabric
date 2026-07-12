@@ -50,7 +50,15 @@ export async function POST(request: Request) {
       );
     }
     // Keys are scoped to an application-environment (ADR-0004); the id comes from the app-detail page.
-    const result = await createApiKey({ ...parsed.data, applicationId });
+    const expiresInDays =
+      typeof raw?.expires_in_days === "number"
+        ? raw.expires_in_days
+        : undefined;
+    const result = await createApiKey({
+      ...parsed.data,
+      applicationId,
+      ...(expiresInDays ? { expiresInDays } : {}),
+    });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     return error instanceof BffError

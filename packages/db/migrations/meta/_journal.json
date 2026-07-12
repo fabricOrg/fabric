@@ -337,6 +337,13 @@
       "when": 1783852560464,
       "tag": "0047_chemical_fat_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1783862254762,
+      "tag": "0048_dazzling_grandmaster",
+      "breakpoints": true
     }
   ]
 }

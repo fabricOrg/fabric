@@ -134,6 +134,18 @@ describe("ApiKeyService.resolve (integration, real RLS)", () => {
   it("returns null for a malformed (non-sk_) key without touching the DB", async () => {
     expect(await svc.resolve("not-a-key")).toBeNull();
   });
+
+  it("a future-expiry key resolves; once expires_at is in the past it stops authenticating", async () => {
+    const key = await svc.create(TENANT, { env: "test", expiresInDays: 30 });
+    expect(key.expiresAt).not.toBeNull();
+    expect(await svc.resolve(key.raw)).toMatchObject({ tenantId: TENANT });
+    // Expire it (no status change) — the auth lookup's `expires_at > now()` filter drops it.
+    await owner.unsafe(
+      "UPDATE api_keys SET expires_at = now() - interval '1 day' WHERE key_hash = $1",
+      [hashApiKey(key.raw)],
+    );
+    expect(await svc.resolve(key.raw)).toBeNull();
+  });
 });
 
 describe("sandbox key minting (ADR-0002 F3)", () => {
