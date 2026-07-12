@@ -68,7 +68,9 @@ async function apiRequest<T>(
       cache: "no-store",
       headers: {
         authorization: `Bearer ${token}`,
-        "content-type": "application/json",
+        // Only declare a JSON body when there IS one: a DELETE (no body) with content-type
+        // application/json trips Fastify's empty-body parser → 400 (FST_ERR_CTP_EMPTY_JSON_BODY).
+        ...(init.body ? { "content-type": "application/json" } : {}),
         ...init.headers,
       },
     });

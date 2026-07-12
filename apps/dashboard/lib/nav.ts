@@ -45,7 +45,8 @@ export const navGroups: readonly NavGroup[] = [
     label: "Developers",
     items: [
       // ADR-0004: applications are the workspace's top-level structure; each carries a sandbox and a
-      // live environment. This is where the dev-portal surfaces (keys/webhooks/logs) land under W-B.
+      // live environment, and OWNS its API keys (+ webhooks/logs under W-B). Those live on the
+      // application-detail page (/applications/[slug]), not a flat top-level list.
       { title: "Applications", href: "/applications", icon: Boxes },
     ],
   },

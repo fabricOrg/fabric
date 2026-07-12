@@ -1,7 +1,6 @@
 import type { ApplicationDto, EnvironmentDto } from "@app/contracts";
 import { PageContainer } from "@app/ui/components/ui/app-shell";
 import { Badge } from "@app/ui/components/ui/badge";
-import { Card } from "@app/ui/components/ui/card";
 import {
   PageHeader,
   PageHeaderActions,
@@ -11,6 +10,7 @@ import {
 } from "@app/ui/components/ui/page-header";
 import { ErrorState, TableEmptyState } from "@app/ui/components/ui/states";
 import { Boxes, Layers } from "lucide-react";
+import Link from "next/link";
 import { CreateApplicationDialog } from "@/components/forms/create-application-dialog";
 import { BffError } from "@/lib/server/api-client";
 import { listApplications } from "@/lib/server/applications-client";
@@ -35,16 +35,21 @@ function EnvironmentBadge({ env }: { env: EnvironmentDto }) {
 }
 
 function ApplicationCard({ application }: { application: ApplicationDto }) {
-  const envs = [...application.environments].sort((a, b) =>
-    a.type.localeCompare(b.type),
-  );
+  // Show only ACTIVE environments — a live env stays locked (and hidden) until go-live, so a
+  // sandbox-only app reads as one environment, not two (matches the app-detail page).
+  const envs = application.environments
+    .filter((e) => e.status === "active")
+    .sort((a, b) => a.type.localeCompare(b.type));
   const created = new Date(application.created_at).toLocaleDateString("en", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
   return (
-    <Card className="flex flex-col gap-4 p-5">
+    <Link
+      href={`/applications/${application.slug}`}
+      className="flex flex-col gap-4 rounded-xl border bg-card p-5 text-card-foreground shadow-sm transition-colors hover:border-ring/40 hover:bg-accent/40"
+    >
       {/* Header: icon tile + name over its slug (the app's stable identifier). */}
       <div className="flex items-start gap-3">
         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
@@ -77,7 +82,7 @@ function ApplicationCard({ application }: { application: ApplicationDto }) {
           Created <span className="font-medium text-foreground">{created}</span>
         </span>
       </div>
-    </Card>
+    </Link>
   );
 }
 

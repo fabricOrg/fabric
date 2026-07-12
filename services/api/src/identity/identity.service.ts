@@ -23,6 +23,8 @@ const ROLE_PERMISSIONS = {
     "wallet:read",
     "applications:read",
     "applications:write",
+    "api_keys:read",
+    "api_keys:write",
   ],
   admin: [
     "sms:send",
@@ -30,6 +32,8 @@ const ROLE_PERMISSIONS = {
     "wallet:read",
     "applications:read",
     "applications:write",
+    "api_keys:read",
+    "api_keys:write",
   ],
   member: ["sms:send", "sms:read", "wallet:read", "applications:read"],
 } as const;

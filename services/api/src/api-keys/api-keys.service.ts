@@ -99,26 +99,47 @@ export class ApiKeyService {
   /** Mint a key for a tenant. Returns the raw secret ONCE; only the hash + prefix are persisted. */
   async create(
     tenantId: string,
-    input: { name?: string; env: ApiKeyEnv; scopes?: string[] },
+    input: {
+      name?: string;
+      env: ApiKeyEnv;
+      scopes?: string[];
+      applicationId?: string;
+    },
   ): Promise<CreatedApiKey> {
     const k = generateApiKey(input.env);
     const scopes = input.scopes ?? [];
-    // ADR-0004: a key is minted INTO an application-environment. Default application for now (the
-    // API doesn't surface app selection yet); the env is chosen by the requested key type
-    // (test -> sandbox, live -> live). The environment row is the single source of truth for whether
+    // ADR-0004: a key is minted INTO a specific application's environment. When the caller names an
+    // application (the dashboard's app-detail page), mint into IT; otherwise the workspace's
+    // `default` app (operator / legacy path). The env is chosen by the requested key type
+    // (test -> sandbox, live -> live); the environment row is the single source of truth for whether
     // live keys are allowed — superseding the old accounts.plan check.
     const envType = input.env === "live" ? "live" : "sandbox";
     const id = await this.db.withTenant(tenantId, async (tx) => {
-      const envRows = (await tx`
+      const envRows = (await (input.applicationId
+        ? tx`
+        SELECT e.id, e.status
+        FROM environments e
+        JOIN applications a ON a.id = e.application_id
+        WHERE a.tenant_id = ${tenantId} AND a.id = ${input.applicationId} AND e.type = ${envType}
+        LIMIT 1`
+        : tx`
         SELECT e.id, e.status
         FROM environments e
         JOIN applications a ON a.id = e.application_id
         WHERE a.tenant_id = ${tenantId} AND a.slug = 'default' AND e.type = ${envType}
-        LIMIT 1`) as Array<{ id: string; status: string }>;
+        LIMIT 1`)) as Array<{ id: string; status: string }>;
       const env = envRows[0];
       if (!env) {
-        // No default app/env means the workspace was never provisioned into the hierarchy — a bug,
-        // not a user error (provisioning + the backfill both create it). Fail loud.
+        // A named application that has no such env → the caller referenced an app that isn't in this
+        // workspace (RLS already scopes the join). Without one, the default app is missing — a
+        // provisioning bug (provisioning + the backfill both create it), so fail loud.
+        if (input.applicationId) {
+          throw invalidRequest(
+            "application_not_found",
+            "No such application in this workspace.",
+            "application_id",
+          );
+        }
         throw new Error(
           `workspace ${tenantId} has no default '${envType}' environment`,
         );
@@ -142,13 +163,20 @@ export class ApiKeyService {
     return { id: String(id), prefix: k.prefix, env: k.env, scopes, raw: k.raw };
   }
 
-  /** List a tenant's keys (never the hash/raw) — RLS scopes this to the caller's tenant. */
-  async list(tenantId: string): Promise<ApiKeySummary[]> {
+  /** List a tenant's keys (never the hash/raw) — RLS scopes to the caller's tenant; an optional
+   *  applicationId narrows to a single application (the dashboard's app-detail page). */
+  async list(
+    tenantId: string,
+    applicationId?: string,
+  ): Promise<ApiKeySummary[]> {
     const rows = await this.db.withTenant(
       tenantId,
       (tx) =>
-        tx`SELECT id, name, prefix, env, scopes, status, last_used_at, created_at
-           FROM api_keys ORDER BY created_at DESC` as Promise<
+        (applicationId
+          ? tx`SELECT id, name, prefix, env, scopes, status, last_used_at, created_at
+             FROM api_keys WHERE application_id = ${applicationId} ORDER BY created_at DESC`
+          : tx`SELECT id, name, prefix, env, scopes, status, last_used_at, created_at
+             FROM api_keys ORDER BY created_at DESC`) as Promise<
           Array<Record<string, unknown>>
         >,
     );
