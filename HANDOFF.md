@@ -105,8 +105,14 @@ parser → 400 and revoke silently failed; now set only when there's a body. **B
 end-to-end (create → once-only secret; revoke → 200 → Revoked). **Key expiry/TTL added (`86bebae`,
 migration 0048):** `api_keys.expires_at`; `resolve()` rejects expired keys (auth lookup gains
 `expires_at IS NULL OR > now()`); create dialog Expires select (Never/30/60/90d) + table Expires
-column. Integration-proven (future-expiry resolves; expired → null). Follow-ups: webhooks + request
-logs (next W-B slices, still mock in dev-portal).
+column. Integration-proven (future-expiry resolves; expired → null).
+
+**W-B slice 2 — webhooks (`a84977b`):** real webhook endpoints under an application, per environment.
+`WebhooksService.create/list` app/env-scoped; `WebhookEndpointDto` gains `env` (joined from
+environments.type). App-detail page now uses **Tabs (API keys | Webhooks)** per active env, each a
+standard Card-wrapped table; webhooks tab has Add-endpoint (url+description → once-only whsec_) +
+delete. Fixed `apiRequest` to not parse a 204 body (webhook DELETE). Integration-proven (5/5).
+Follow-up: request logs (next W-B slice, still mock in dev-portal).
 
 ⚠️ **Running API dev server was serving STALE code this session** (didn't hot-reload the api-keys
 controller/service edits — a live create wrote NULL expiry despite correct, integration-proven code;
