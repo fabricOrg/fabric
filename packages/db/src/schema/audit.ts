@@ -18,7 +18,9 @@ export const auditEvents = pgTable("audit_events", {
   summary: text("summary").notNull(), // human-readable one-liner for the log
   reason: text("reason"),
   metadata: jsonb("metadata").notNull().default({}),
-  createdAt: timestamp("created_at", { withTimezone: true })
+  // JavaScript Date and the public cursor preserve milliseconds. Matching the database precision
+  // keeps (created_at, id) keyset pagination lossless when several events land in the same ms.
+  createdAt: timestamp("created_at", { withTimezone: true, precision: 3 })
     .notNull()
     .defaultNow(),
 });

@@ -358,6 +358,13 @@
       "when": 1783865300000,
       "tag": "0050_request_logs_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1783889766273,
+      "tag": "0051_panoramic_solo",
+      "breakpoints": true
     }
   ]
 }
