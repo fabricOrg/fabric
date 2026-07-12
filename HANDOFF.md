@@ -23,11 +23,15 @@ Milestones so far:
   (`0046`, provisioner + tenant_isolation). RLS boundary stays the workspace/tenant. Cross-tenant
   read/write denial + fail-closed proven — full db integration suite green, 34 tests (`337ae79`).
 - Application/environment zod contracts in `@app/contracts` (`c537739`).
+- Backfill flat→hierarchy: `cloud-backfill-app-env.ts` (in-image, runs as `app_provisioner` — the
+  only cross-tenant role, since FORCE RLS binds even the owner and nothing has BYPASSRLS) + its
+  in-VPC ECS task-def. Verified on real Postgres: sandbox acct → live env locked, live acct → live
+  env active, idempotent re-run. Dry-run by default; `--commit` to write.
 
-**Next (foundation, tasks #5–#8):** backfill flat→hierarchy (each account → default app → sandbox
-env + live env locked/active); re-key api_keys/webhooks to application+environment (+ auth lookup +
-their DTO extensions); converge self-serve+ops provisioning onto one workspace→app→env core; re-key
-routing + go-live + E13 virtual-phone onto `environment.type`. Then Phases 1–5 per `docs/PI-6/PLAN.md`.
+**Next (foundation, tasks #6–#8):** re-key api_keys/webhooks to application+environment (+ auth
+lookup resolves tenant/app/env + their DTO extensions); converge self-serve+ops provisioning onto one
+workspace→app→env core; re-key routing + go-live + E13 virtual-phone onto `environment.type`. Then
+Phases 1–5 per `docs/PI-6/PLAN.md`.
 
 _Milestone rule (user directive 2026-07-12): update this HANDOFF.md at every milestone._
 

@@ -369,6 +369,61 @@ resource "aws_ecs_task_definition" "pii_backfill" {
   ]
 }
 
+# One-off backfill (ADR-0004): give every existing workspace the Workspace -> Application ->
+# Environment hierarchy that new signups get at provision time — a default application + a sandbox
+# and a live environment (live locked unless the account is already live).
+#
+# Runs as app_provisioner (DATABASE_URL_PROVISIONER): FORCE RLS binds even the table owner and no
+# role has BYPASSRLS, so cross-tenant enumeration/writes go through the one role with permissive
+# provisioner_all policies (0013 accounts, 0046 applications/environments). The DB is not publicly
+# reachable, so this runs in-VPC. Runs ONLY after a deploy applies migrations 0045/0046. Dry-run by
+# default; pass --commit in the command override to write. Delete once the backfill has run.
+resource "aws_ecs_task_definition" "app_env_backfill" {
+  family                   = "fabric-api-testing-app-env-backfill"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.api_task.arn
+
+  runtime_platform {
+    cpu_architecture        = "X86_64"
+    operating_system_family = "LINUX"
+  }
+
+  container_definitions = jsonencode([
+    {
+      name      = "backfill"
+      image     = local.bootstrap_image
+      essential = true
+      # Dry run by default — an accidental task launch must not write data.
+      command = [
+        "node",
+        "node_modules/@app/db/dist/cloud-backfill-app-env.js",
+      ]
+      secrets = [
+        {
+          name      = "DATABASE_URL_PROVISIONER"
+          valueFrom = "${aws_secretsmanager_secret.database_provisioner.arn}:DATABASE_URL_PROVISIONER::"
+        },
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "app-env-backfill"
+        }
+      }
+    },
+  ])
+
+  depends_on = [
+    aws_secretsmanager_secret_version.database_provisioner,
+  ]
+}
+
 resource "aws_service_discovery_private_dns_namespace" "testing" {
   name = "testing.fabric.internal"
   vpc  = aws_vpc.testing.id
