@@ -79,6 +79,8 @@ describe("ApiKeyGuard (F2.3)", () => {
       id: "00000000-0000-0000-0000-0000000000a1",
       scopes: ["sms:send"],
       keyId: "abcdef0123456789",
+      applicationId: null,
+      environmentId: null,
     });
   });
 
@@ -121,6 +123,8 @@ describe("ApiKeyGuard (F2.3)", () => {
       id: tenantId,
       scopes: ["*"],
       keyId: `bfft_${tenantId.slice(0, 12)}`,
+      applicationId: null,
+      environmentId: null,
     });
     expect(keyResolveCalled).toBe(false); // token path never hits the key lookup
   });
