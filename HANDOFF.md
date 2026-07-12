@@ -121,6 +121,15 @@ MaintenanceService (default 30d, advisory-locked). owner/admin gain `request_log
 a third **Logs** tab per env section (colour-coded status, latency, request_id, time, "Load more").
 Integration-proven (4/4: env-scoped keyset, record() fail-open, retention sweep).
 
+**App-detail UX refinements (feedback-driven):** removed the per-page env switcher — the **topbar
+Virtual/Live toggle is the ONE env selector** (env is workspace-wide: delivery mode + go-live are
+per-workspace, no per-app exception), page follows `session.plan`. The **API keys tab** has its own
+**Test/Live switch** (in the card header beside Create key, `ApiKeysPanel`) shown only post-go-live —
+you manage both key sets independent of delivery mode. Application card footer shows the **API-key
+count** (matches the table, incl. revoked) not the env count (`api_key_count` on ApplicationDto).
+Dropped the sidebar "DASHBOARD" badge (ProductMark `showBadge`, dashboard-only). Standard empty
+states + Card-wrapped tables throughout.
+
 ⚠️ **Local migration drift:** `__drizzle_migrations` tracks through 0046, but 0047–0050 are applied
 to the local DB (0047/0048 out-of-band from prior sessions; 0049/0050 applied directly this session
 because `drizzle-kit migrate` re-runs the untracked 0047 and errors). Migration FILES are correct +
