@@ -49,6 +49,6 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
   ],
   // Exported for the maintenance module: the scheduled sweeper resolves stuck reservations
   // through SmsService (same EngineDeps + provider billing basis as the live send path).
-  exports: [SmsService],
+  exports: [SmsService, VirtualPhoneService],
 })
 export class SmsModule {}

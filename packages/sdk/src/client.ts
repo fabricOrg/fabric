@@ -6,7 +6,7 @@ import { VerifyResource } from "./verify.js";
 import { WalletResource } from "./wallet.js";
 import { WebhooksResource } from "./webhooks.js";
 
-const VERSION = "0.1.0-beta.1";
+const VERSION = "0.1.0-beta.2";
 const DEFAULT_BASE_URL = "https://api.fabric.africa";
 
 export interface FabricConfig {

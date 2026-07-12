@@ -123,6 +123,21 @@ export class PiiVaultService {
     });
   }
 
+  async findSubjectForPhone(
+    tenantId: string,
+    e164: string,
+  ): Promise<string | null> {
+    const index = phoneBlindIndex(this.indexKey(), tenantId, e164);
+    const rows = (await this.db.withTenant(
+      tenantId,
+      (tx) => tx`
+      SELECT subject_id FROM data_subjects
+      WHERE phone_hash = ${index} AND erased_at IS NULL
+      LIMIT 1`,
+    )) as Row[];
+    return rows[0]?.subject_id ? String(rows[0].subject_id) : null;
+  }
+
   /** Seal one piece of PII under the subject's DEK. Returns the vault row id to reference. */
   async put(
     tenantId: string,

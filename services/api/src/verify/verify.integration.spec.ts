@@ -212,10 +212,12 @@ describe("Verify V1 (golden path core)", () => {
       id: string;
       debug_code: string;
     };
-    await owner.unsafe(
-      "UPDATE verifications SET expires_at = now() - interval '1 second' WHERE id = $1",
+    const expired = (await owner.unsafe(
+      "UPDATE verifications SET expires_at = now() - interval '1 minute' WHERE id = $1 RETURNING expires_at",
       [id],
-    );
+    )) as Array<{ expires_at: Date }>;
+    expect(expired).toHaveLength(1);
+    expect(expired[0]?.expires_at.getTime()).toBeLessThan(Date.now());
     const res = await post(SANDBOX_KEY, "/v1/verify/check", {
       id,
       code: debug_code,

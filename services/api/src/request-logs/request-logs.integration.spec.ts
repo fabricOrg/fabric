@@ -19,6 +19,7 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MaintenanceService } from "../maintenance/maintenance.service.js";
 import type { SmsService } from "../sms/sms.service.js";
+import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
 import { RequestLogService } from "./request-log.service.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
@@ -151,6 +152,7 @@ describeDb("request logs (real RLS)", () => {
     const maintenance = new MaintenanceService(
       provisioning,
       {} as SmsService,
+      { purgeExpired: async () => 0 } as unknown as VirtualPhoneService,
       config,
     );
     // Backdate one row well past the window.
