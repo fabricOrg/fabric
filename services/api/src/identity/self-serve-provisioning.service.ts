@@ -14,10 +14,10 @@ import {
 } from "@app/db";
 import { credit } from "@app/wallet";
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { APP_DB } from "../db/db.module.js";
+import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
 import {
   WORKOS_CLIENT,
@@ -70,7 +70,7 @@ export class SelfServeProvisioningService {
     @Inject(APP_DB) private readonly appDb: AppDb,
     @Inject(WORKOS_CLIENT) private readonly workosClient: WorkosClientProvider,
     @Inject(AuditService) private readonly audit: AuditService,
-    @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
   ) {}
 
   async organizationForUser(
@@ -80,16 +80,13 @@ export class SelfServeProvisioningService {
     const existing = await this.findExisting(request.external_user_id, email);
     if (existing) return { ...existing, provisioned: false };
 
-    // Stranger. Provisioning is triple-gated: env flag (fail closed), the calling realm
-    // (dashboard sends allow_provision, dev-portal doesn't), and a WorkOS-verified email.
-    if (!this.signupEnabled()) return null;
+    // Stranger. Provisioning is triple-gated: the platform.signup kill-switch (fails closed, flipped
+    // live from the admin console — NOT an env flag / deploy), the calling realm (dashboard sends
+    // allow_provision, dev-portal doesn't), and a WorkOS-verified email.
+    if (!(await this.killSwitch.signupEnabled())) return null;
     if (!request.allow_provision || !request.email_verified) return null;
     if (throttled(email)) return null;
     return this.provisionSandboxTenant(request, email);
-  }
-
-  private signupEnabled(): boolean {
-    return this.config.get<string>("SELF_SERVE_SIGNUP_ENABLED") === "true";
   }
 
   /** A membership (active or still-invited) in a non-closed account wins over provisioning. */

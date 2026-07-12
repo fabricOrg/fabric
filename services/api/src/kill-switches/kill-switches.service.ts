@@ -24,6 +24,19 @@ const CATALOG: NewKillSwitch[] = [
       "Pause wallet top-ups and charges (collections/disbursements).",
     scope: "payments",
   },
+  // PI-6 self-serve signup gate. Seeded OFF (enabled:false) — unlike every other switch, which
+  // starts operational — because opening the platform to stranger sign-ups is safe only once the
+  // abuse/fraud controls (Phase-5 ops) exist. An operator turns it on from the admin console; the
+  // provisioning check FAILS CLOSED (see signupEnabled()). OFF = new accounts denied; existing
+  // users unaffected.
+  {
+    key: "platform.signup",
+    label: "Self-serve signup",
+    description:
+      "Allow a verified stranger to self-provision a workspace on first sign-in. Keep OFF until abuse/fraud controls are in place — OFF denies new accounts; existing users are unaffected.",
+    scope: "platform",
+    enabled: false,
+  },
   // One switch per provider that ACTUALLY has an adapter — the SmsService gate reads
   // `provider.<slug>` before every send (finding 9). Africa's Talking + Hubtel were seeded here
   // with no adapter behind them: dead switches that advertised "route sends away" but did nothing.
@@ -132,6 +145,40 @@ export class KillSwitchService {
       );
       // Stale beats down: last-known-good if we ever read one, else operational.
       return cached ? cached.paused : false;
+    }
+  }
+
+  /**
+   * Self-serve signup gate (PI-6 / ADR-0004). The ONE switch that FAILS CLOSED, unlike the
+   * send/charge breakers above: opening a workspace to a stranger is an abuse/fraud/cost action, not
+   * an availability-critical one — so an unknown/unseeded/unreadable switch means signup is DISABLED
+   * (a control-plane blip must never open the front door). Seeded OFF (`platform.signup`); an
+   * operator flips it on from the admin console once abuse controls land. Shares isPaused's TTL cache
+   * so it's a Map hit per signup, not a control-plane query.
+   */
+  async signupEnabled(): Promise<boolean> {
+    const key = "platform.signup";
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+      return !cached.paused;
+    }
+    try {
+      const [row] = await this.provisioning.db
+        .select({ enabled: killSwitches.enabled })
+        .from(killSwitches)
+        .where(eq(killSwitches.key, key))
+        .limit(1);
+      // Unseeded/unknown → DISABLED (fail closed). ensureCatalog (list/toggle) seeds it enabled:false.
+      const enabled = row?.enabled ?? false;
+      this.cache.set(key, { paused: !enabled, fetchedAt: Date.now() });
+      return enabled;
+    } catch (error) {
+      this.logger.error(
+        `signup kill-switch read failed — failing CLOSED (signup disabled): ${
+          error instanceof Error ? error.message : "unknown"
+        }`,
+      );
+      return cached ? !cached.paused : false;
     }
   }
 

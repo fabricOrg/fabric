@@ -86,16 +86,18 @@ it's being deleted in W-B, don't invest.
 - **Stripe-style LOOK is WorkOS-dashboard config (EXTERNAL — human):** enable Email+Password /
   Google / Passkeys, apply Fabric branding + one-screen layout, optional custom auth domain; confirm
   each `<APP>_BASE_URL/auth/callback` + `/login` redirect URIs.
-- **"Access denied" after sign-in = `SELF_SERVE_SIGNUP_ENABLED` gate OFF** (a new WorkOS account
-  isn't auto-provisioned a workspace). Flipping it = **W-A**, testing-only, staging/prod human-gated
-  redline. Enabling locally to test the full sign-up→workspace flow is a pending decision.
+- **"Access denied" after sign-in = self-serve signup gate OFF.** Now the **`platform.signup`
+  kill-switch** (not an env flag) — fails closed, seeded OFF, toggled live from the admin console
+  (`4bf5a4c`… converted in a later commit). A new WorkOS account isn't auto-provisioned a workspace
+  until it's flipped on. Flipping it = **W-A**, testing-only; staging/prod human-gated redline (and
+  gated on Phase-5 abuse controls existing first).
 
 **Next — Phases 1–5** per `docs/PI-6/PLAN.md` (frontend-heavy): global environment SWITCHER (chrome
 control that pins the selected app/env into subsequent calls — keys, sends; tied to task #9 moving
 `delivery_mode` onto the environment); **W-B dev-portal→dashboard merge** — real-wire the still-MOCK
 developer surfaces (`apps/dev-portal` keys/reference/webhooks/logs use `@/lib/mock-api`) as
 `developer_access`-gated dashboard sections scoped per app-env; marketing app (separate); flip
-`SELF_SERVE_SIGNUP_ENABLED` in testing (needs human go — redline); Node/Python SDKs; usage;
+the `platform.signup` kill-switch in testing (needs human go — redline); Node/Python SDKs; usage;
 admin-console realignment. Email + AI are later PIs. Frontend verifies via build/browser, not the
 integration-test discipline — different cadence. NB: a live browser drive of `/applications` needs the
 full stack up (db + infisical api + dashboard + dev-seed); the tenant-token path itself is API-layer

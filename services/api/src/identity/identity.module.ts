@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
 import { AuditModule } from "../audit/audit.module.js";
+import { KillSwitchModule } from "../kill-switches/kill-switches.module.js";
 import { BffTokenGuard } from "./bff-token.guard.js";
 import { IdentityController } from "./identity.controller.js";
 import { IdentityService } from "./identity.service.js";
@@ -15,7 +16,7 @@ import { WorkosWebhookController } from "./workos-webhook.controller.js";
 import { WorkosWebhookService } from "./workos-webhook.service.js";
 
 @Module({
-  imports: [ApiKeysModule, ProvisioningDbModule, AuditModule],
+  imports: [ApiKeysModule, ProvisioningDbModule, AuditModule, KillSwitchModule],
   controllers: [
     IdentityController,
     StaffIdentityController,

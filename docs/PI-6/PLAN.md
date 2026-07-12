@@ -26,15 +26,16 @@ production — with minimal friction. Self-service is the **primary** path; ops-
 ## Baseline: ~60-70% already exists
 
 The repo is mid-flight on this trajectory (PI-4 verify-first + ADR-0002/0003). Already real: self-
-serve auto-provision (gated `SELF_SERVE_SIGNUP_ENABLED` off), sandbox + virtual-phone sink, go-live
+serve auto-provision (gated by the `platform.signup` kill-switch, seeded OFF), sandbox + virtual-phone sink, go-live
 maker-checker (= production request), sender-ID review, API keys (real API), kill-switches, audit,
 outbox+webhook delivery, privacy/DSR, team invite + roles. Gaps: landing surface, the App/Env
 hierarchy, dev-portal real-wiring, SDKs, usage, templates (Email + AI are later).
 
 ## Cross-cutting workstreams
 
-- **W-A — Flip self-serve on (gated).** `SELF_SERVE_SIGNUP_ENABLED=true` in **testing only**;
-  staging/prod need explicit human go (redline). Converge the two provisioning paths onto one core.
+- **W-A — Flip self-serve on (gated).** Turn the `platform.signup` kill-switch ON (admin console)
+  in **testing only**; staging/prod need explicit human go (redline). Converge the two provisioning
+  paths onto one core.
 - **W-B — Merge dev-portal → dashboard.** Developer surfaces become `developer_access`-gated
   dashboard sections; real-wire the mock keys/reference/webhooks/logs; one fewer ECS service +
   WorkOS redirect set.
