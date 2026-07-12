@@ -52,21 +52,44 @@ Residual hardening (tracked, NOT core, no regression) — task #9:
 - E13 `delivery_mode` moves from `accounts.settings` onto the environment once the dashboard has an
   env selector.
 
-**Phase 2 started:** applications management API — `GET/POST /v1/applications` (operator-gated,
-mirrors key management), `ApplicationsService.list/create`. New app is born sandbox-active /
-live-locked; duplicate slug → 400; tenant-scoped (RLS). 4/4 integration green (`c5814c4`). This is
-the prerequisite for the dashboard env-switcher.
+**Phase 2 (applications API):** `GET/POST /v1/applications`, `ApplicationsService.list/create`. New
+app is born sandbox-active / live-locked; duplicate slug → 400; tenant-scoped (RLS). 4/4 integration
+green (`c5814c4`). Then made customer-consumable (`af4419d`): a new `OperatorOrTenantGuard` lets the
+one controller serve BOTH the staff/ops operator path (operator-supplied tenantId) AND the customer
+dashboard's tenant-token path (ADR-0003 minted token → `req.tenant`; tenantId derived from the token,
+NEVER the client). A present operator token must be valid (no silent fall-through); absent → the
+ApiKeyGuard path runs. This sets the reuse pattern for W-B (keys/webhooks real-wiring). Controller +
+guard unit specs (11) + full api integration suite (117) green; also fixed stale `api-key.guard.spec`
+assertions predating the ADR-0004 `req.tenant` app/env fields.
 
-**Next — Phases 1–5** per `docs/PI-6/PLAN.md` (frontend-heavy from here): dashboard Applications +
-env-switcher UI (consumes the new API); marketing app (separate); flip `SELF_SERVE_SIGNUP_ENABLED`
-in testing (needs human go — redline); dev-portal→dashboard merge; Node/Python SDKs; usage;
-admin-console realignment. Email + AI are later PIs. Frontend work verifies via build/browser, not
-the integration-test discipline used so far — different cadence.
+**Phase 2/3 (dashboard Applications surface) — DONE (`e0f87e5`):** the FIRST customer-facing consumer
+of the applications API. New `/applications` dashboard section (server component) lists the workspace's
+apps with each one's environment status (sandbox active / live locked-until-go-live) + an owner/admin
+create dialog (TanStack Form against `createApplicationRequestSchema`, slug auto-derived). Server-only
+`applications-client` calls `/v1/applications` via `dashboardApi` (session-minted tenant token) and
+parses the response against the contract; BFF POST route gates trusted-origin + session (refresh
+fallback) + owner/admin. Added `applications:read` (universal — the switcher is a core surface) +
+`applications:write` (owner/admin) to the role→permissions map so the BFF gate resolves; dev-login
+stub matched. Verified: dashboard typecheck + production build green (`/applications` +
+`/api/applications` compile), identity specs green (21). NOTHING pushed.
+
+**Next — Phases 1–5** per `docs/PI-6/PLAN.md` (frontend-heavy): global environment SWITCHER (chrome
+control that pins the selected app/env into subsequent calls — keys, sends; tied to task #9 moving
+`delivery_mode` onto the environment); **W-B dev-portal→dashboard merge** — real-wire the still-MOCK
+developer surfaces (`apps/dev-portal` keys/reference/webhooks/logs use `@/lib/mock-api`) as
+`developer_access`-gated dashboard sections scoped per app-env; marketing app (separate); flip
+`SELF_SERVE_SIGNUP_ENABLED` in testing (needs human go — redline); Node/Python SDKs; usage;
+admin-console realignment. Email + AI are later PIs. Frontend verifies via build/browser, not the
+integration-test discipline — different cadence. NB: a live browser drive of `/applications` needs the
+full stack up (db + infisical api + dashboard + dev-seed); the tenant-token path itself is API-layer
+integration-proven.
 
 **Branch commits (E14):** `2301adc` ADR/plan · `337ae79` schema+RLS · `c537739` contracts ·
 `16b081d` backfill · `c523157` key/webhook columns · `a58d2f4` key mint/resolve · `8f6b512` webhook
-scope · `7451ed8` provisioning · `912cd03` env routing · `f30a65a` go-live env-unlock (+ HANDOFF/doc
-commits). Merge order when done: E13→`dev` first, then this rebases (fifi merges).
+scope · `7451ed8` provisioning · `912cd03` env routing · `f30a65a` go-live env-unlock · `c5814c4`
+applications API · `af4419d` applications API tenant-token path · `e0f87e5` dashboard Applications
+surface + permissions (+ HANDOFF/doc commits). Merge order when done: E13→`dev` first, then this
+rebases (fifi merges).
 
 _Milestone rule (user directive 2026-07-12): update this HANDOFF.md at every milestone._
 
