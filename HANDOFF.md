@@ -52,9 +52,16 @@ Residual hardening (tracked, NOT core, no regression) — task #9:
 - E13 `delivery_mode` moves from `accounts.settings` onto the environment once the dashboard has an
   env selector.
 
-**Next — Phases 1–5** per `docs/PI-6/PLAN.md` (a genuinely new, large phase — good fresh-context
-seam): marketing app (separate), flip `SELF_SERVE_SIGNUP_ENABLED` in testing, dev-portal→dashboard
-merge, Node/Python SDKs, usage, admin-console realignment. Email + AI are later PIs.
+**Phase 2 started:** applications management API — `GET/POST /v1/applications` (operator-gated,
+mirrors key management), `ApplicationsService.list/create`. New app is born sandbox-active /
+live-locked; duplicate slug → 400; tenant-scoped (RLS). 4/4 integration green (`c5814c4`). This is
+the prerequisite for the dashboard env-switcher.
+
+**Next — Phases 1–5** per `docs/PI-6/PLAN.md` (frontend-heavy from here): dashboard Applications +
+env-switcher UI (consumes the new API); marketing app (separate); flip `SELF_SERVE_SIGNUP_ENABLED`
+in testing (needs human go — redline); dev-portal→dashboard merge; Node/Python SDKs; usage;
+admin-console realignment. Email + AI are later PIs. Frontend work verifies via build/browser, not
+the integration-test discipline used so far — different cadence.
 
 **Branch commits (E14):** `2301adc` ADR/plan · `337ae79` schema+RLS · `c537739` contracts ·
 `16b081d` backfill · `c523157` key/webhook columns · `a58d2f4` key mint/resolve · `8f6b512` webhook
