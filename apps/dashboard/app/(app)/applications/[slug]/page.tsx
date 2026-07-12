@@ -26,9 +26,8 @@ import {
   TabsTrigger,
 } from "@app/ui/components/ui/tabs";
 import { notFound } from "next/navigation";
-import { CreateApiKeyDialog } from "@/components/forms/create-api-key-dialog";
+import { ApiKeysPanel } from "@/components/api-keys-panel";
 import { CreateWebhookDialog } from "@/components/forms/create-webhook-dialog";
-import { ApiKeysTable } from "@/components/tables/api-keys-table";
 import { RequestLogsTable } from "@/components/tables/request-logs-table";
 import { WebhooksTable } from "@/components/tables/webhooks-table";
 import { BffError } from "@/lib/server/api-client";
@@ -47,6 +46,7 @@ function EnvironmentResources({
   keys,
   webhooks,
   logs,
+  liveActive,
   canManage,
 }: {
   env: ApiKeyEnv;
@@ -54,6 +54,7 @@ function EnvironmentResources({
   keys: ApiKey[];
   webhooks: WebhookEndpointDto[];
   logs: ListRequestLogsResponse;
+  liveActive: boolean;
   canManage: boolean;
 }) {
   const webhookEnv = env === "live" ? "live" : "sandbox";
@@ -67,21 +68,13 @@ function EnvironmentResources({
 
       <TabsContent value="keys">
         <Card>
-          <CardHeader>
-            <CardDescription>
-              {env === "live"
-                ? "Live keys spend real money and deliver to carriers."
-                : "Sandbox keys are free and never reach a carrier."}
-            </CardDescription>
-            {canManage ? (
-              <CardAction>
-                <CreateApiKeyDialog applicationId={applicationId} env={env} />
-              </CardAction>
-            ) : null}
-          </CardHeader>
-          <CardContent>
-            <ApiKeysTable keys={keys} />
-          </CardContent>
+          <ApiKeysPanel
+            keys={keys}
+            applicationId={applicationId}
+            liveActive={liveActive}
+            defaultEnv={env}
+            canManage={canManage}
+          />
         </Card>
       </TabsContent>
 
@@ -147,6 +140,9 @@ export default async function ApplicationDetailPage({
   // once go-live flips the workspace live, the live env's resources show.
   const env: ApiKeyEnv = session.plan === "sandbox" ? "test" : "live";
   const envType = env === "live" ? "live" : "sandbox";
+  // Whether go-live has unlocked the live environment — gates the keys tab's Test/Live switch.
+  const liveActive =
+    app.environments.find((e) => e.type === "live")?.status === "active";
 
   const emptyLogs: ListRequestLogsResponse = { logs: [], next_cursor: null };
   let keys: ApiKey[] = [];
@@ -194,9 +190,10 @@ export default async function ApplicationDetailPage({
         <EnvironmentResources
           env={env}
           applicationId={app.id}
-          keys={keys.filter((k) => k.env === env)}
+          keys={keys}
           webhooks={webhooks.filter((w) => w.env === envType)}
           logs={logs}
+          liveActive={liveActive}
           canManage={canManage}
         />
       )}
