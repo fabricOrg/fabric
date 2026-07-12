@@ -88,6 +88,8 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     id: tenantId,
     scopes: ["sms:send"],
     keyId: "abcdef0123456789",
+    applicationId: null,
+    environmentId: null,
   };
   const req = { tenant };
   const CREDIT = 100_000n;

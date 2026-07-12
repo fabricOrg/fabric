@@ -15,6 +15,9 @@ export interface ResolvedApiKey {
   readonly scopes: string[];
   /** Stable per-key identifier for rate-limit buckets: a hash PREFIX, never raw key material. */
   readonly keyId: string;
+  /** ADR-0004: the application-environment this key belongs to (drives provider routing, #8). */
+  readonly applicationId: string | null;
+  readonly environmentId: string | null;
 }
 
 /** A newly created key — the raw secret is present ONCE here and never again. */
@@ -57,8 +60,13 @@ export class ApiKeyService {
     const rows = await this.db.withApiKeyLookup(
       keyHash,
       (tx) =>
-        tx`SELECT tenant_id, scopes FROM api_keys WHERE status = 'active'` as Promise<
-          Array<{ tenant_id: string; scopes: unknown }>
+        tx`SELECT tenant_id, scopes, application_id, environment_id FROM api_keys WHERE status = 'active'` as Promise<
+          Array<{
+            tenant_id: string;
+            scopes: unknown;
+            application_id: string | null;
+            environment_id: string | null;
+          }>
         >,
     );
     const row = rows[0];
@@ -70,6 +78,8 @@ export class ApiKeyService {
       tenantId,
       scopes: toScopes(row.scopes),
       keyId: keyHash.slice(0, 16),
+      applicationId: row.application_id ? String(row.application_id) : null,
+      environmentId: row.environment_id ? String(row.environment_id) : null,
     };
   }
 
@@ -91,32 +101,43 @@ export class ApiKeyService {
     tenantId: string,
     input: { name?: string; env: ApiKeyEnv; scopes?: string[] },
   ): Promise<CreatedApiKey> {
-    // ADR-0002 F3: a sandbox-plan tenant can only hold sk_test_ keys — live keys arrive with the
-    // go-live approval (F4), never before. Enforced here so every caller (operator console today,
-    // customer session later) hits the same wall.
-    if (input.env === "live") {
-      const rows = (await this.db.withTenant(
-        tenantId,
-        (tx) => tx`SELECT plan FROM accounts WHERE id = ${tenantId}`,
-      )) as Array<{ plan?: unknown }>;
-      if (rows[0]?.plan === "sandbox") {
+    const k = generateApiKey(input.env);
+    const scopes = input.scopes ?? [];
+    // ADR-0004: a key is minted INTO an application-environment. Default application for now (the
+    // API doesn't surface app selection yet); the env is chosen by the requested key type
+    // (test -> sandbox, live -> live). The environment row is the single source of truth for whether
+    // live keys are allowed — superseding the old accounts.plan check.
+    const envType = input.env === "live" ? "live" : "sandbox";
+    const id = await this.db.withTenant(tenantId, async (tx) => {
+      const envRows = (await tx`
+        SELECT e.id, e.status
+        FROM environments e
+        JOIN applications a ON a.id = e.application_id
+        WHERE a.tenant_id = ${tenantId} AND a.slug = 'default' AND e.type = ${envType}
+        LIMIT 1`) as Array<{ id: string; status: string }>;
+      const env = envRows[0];
+      if (!env) {
+        // No default app/env means the workspace was never provisioned into the hierarchy — a bug,
+        // not a user error (provisioning + the backfill both create it). Fail loud.
+        throw new Error(
+          `workspace ${tenantId} has no default '${envType}' environment`,
+        );
+      }
+      // ADR-0002 F3 gate, now keyed on the environment: live keys only once go-live has unlocked
+      // the live environment (status 'active'); a 'locked' live env means no live keys yet.
+      if (input.env === "live" && env.status !== "active") {
         throw invalidRequest(
           "sandbox_no_live_keys",
-          "Sandbox workspaces can only mint test keys. Request go-live to unlock live keys.",
+          "Live keys unlock after go-live. Request go-live to enable the live environment.",
           "env",
         );
       }
-    }
-    const k = generateApiKey(input.env);
-    const scopes = input.scopes ?? [];
-    const rows = await this.db.withTenant(
-      tenantId,
-      (tx) =>
-        tx`INSERT INTO api_keys (tenant_id, name, prefix, key_hash, env, scopes)
-           VALUES (${tenantId}, ${input.name ?? ""}, ${k.prefix}, ${k.keyHash}, ${k.env}, ${JSON.stringify(scopes)}::jsonb)
-           RETURNING id` as Promise<Array<{ id: string }>>,
-    );
-    const id = rows[0]?.id;
+      const rows = (await tx`
+        INSERT INTO api_keys (tenant_id, application_id, environment_id, name, prefix, key_hash, env, scopes)
+        VALUES (${tenantId}, (SELECT application_id FROM environments WHERE id = ${env.id}), ${env.id}, ${input.name ?? ""}, ${k.prefix}, ${k.keyHash}, ${k.env}, ${JSON.stringify(scopes)}::jsonb)
+        RETURNING id`) as Array<{ id: string }>;
+      return rows[0]?.id;
+    });
     if (!id) throw new Error("api key insert returned no id");
     return { id: String(id), prefix: k.prefix, env: k.env, scopes, raw: k.raw };
   }

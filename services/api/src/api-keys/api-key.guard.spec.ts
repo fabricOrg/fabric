@@ -70,6 +70,8 @@ describe("ApiKeyGuard (F2.3)", () => {
       tenantId: "00000000-0000-0000-0000-0000000000a1",
       scopes: ["sms:send"],
       keyId: "abcdef0123456789",
+      applicationId: null,
+      environmentId: null,
     }));
     const { ctx, req } = ctxFor({ authorization: "Bearer sk_test_valid" });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
@@ -150,6 +152,8 @@ describe("requireScope", () => {
     id: "00000000-0000-0000-0000-0000000000a1",
     scopes: ["sms:read"],
     keyId: "abcdef0123456789",
+    applicationId: null,
+    environmentId: null,
   };
 
   it("returns a tenant with the required or wildcard scope", () => {

@@ -65,12 +65,40 @@ beforeAll(async () => {
     "INSERT INTO accounts (id, name, slug) VALUES ($1, 'Tenant C', 'tenant-c') ON CONFLICT (id) DO NOTHING",
     [TENANT],
   );
+  // ADR-0004: keys hang off an application-environment, so seed the default app + envs a provisioned
+  // workspace has, and point the seeded keys at the sandbox environment (as the backfill/mint do).
+  const appRows = (await owner.unsafe(
+    `INSERT INTO applications (tenant_id, name, slug) VALUES ($1, 'Default', 'default')
+     ON CONFLICT (tenant_id, slug) DO UPDATE SET slug = EXCLUDED.slug RETURNING id`,
+    [TENANT],
+  )) as unknown as Array<{ id: string }>;
+  const appId = appRows[0]?.id;
+  if (!appId) throw new Error("seed: default application id missing");
+  const sbRows = (await owner.unsafe(
+    `INSERT INTO environments (tenant_id, application_id, type, status)
+     VALUES ($1, $2, 'sandbox', 'active')
+     ON CONFLICT (application_id, type) DO UPDATE SET status = EXCLUDED.status RETURNING id`,
+    [TENANT, appId],
+  )) as unknown as Array<{ id: string }>;
+  const sandboxEnvId = sbRows[0]?.id;
+  if (!sandboxEnvId) throw new Error("seed: sandbox environment id missing");
+  await owner.unsafe(
+    `INSERT INTO environments (tenant_id, application_id, type, status)
+     VALUES ($1, $2, 'live', 'active') ON CONFLICT (application_id, type) DO NOTHING`,
+    [TENANT, appId],
+  );
   // key_hash uses the SAME hashApiKey the service computes → the possession lookup matches.
   await owner.unsafe(
-    `INSERT INTO api_keys (tenant_id, prefix, key_hash, env, scopes, status)
-     VALUES ($1, 'sk_test_actv', $2, 'test', '["sms:send"]'::jsonb, 'active'),
-            ($1, 'sk_test_revk', $3, 'test', '[]'::jsonb, 'revoked')`,
-    [TENANT, hashApiKey(ACTIVE_RAW), hashApiKey(REVOKED_RAW)],
+    `INSERT INTO api_keys (tenant_id, application_id, environment_id, prefix, key_hash, env, scopes, status)
+     VALUES ($1, $4, $5, 'sk_test_actv', $2, 'test', '["sms:send"]'::jsonb, 'active'),
+            ($1, $4, $5, 'sk_test_revk', $3, 'test', '[]'::jsonb, 'revoked')`,
+    [
+      TENANT,
+      hashApiKey(ACTIVE_RAW),
+      hashApiKey(REVOKED_RAW),
+      appId,
+      sandboxEnvId,
+    ],
   );
 });
 
@@ -89,6 +117,9 @@ describe("ApiKeyService.resolve (integration, real RLS)", () => {
       scopes: ["sms:send"],
       // keyId = sha-256 prefix of the presented key — per-key rate-limit bucket, no raw material.
       keyId: expect.stringMatching(/^[0-9a-f]{16}$/),
+      // ADR-0004: resolve surfaces the key's application-environment for downstream routing.
+      applicationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      environmentId: expect.stringMatching(/^[0-9a-f-]{36}$/),
     });
   });
 
@@ -112,6 +143,21 @@ describe("sandbox key minting (ADR-0002 F3)", () => {
     await owner.unsafe(
       "INSERT INTO accounts (id, name, slug, plan) VALUES ($1, 'Sandbox C', 'sandbox-c-f3', 'sandbox') ON CONFLICT (id) DO NOTHING",
       [SANDBOX],
+    );
+    // A sandbox workspace: default app, sandbox env active, live env LOCKED (go-live not done) —
+    // so create(live) hits the locked-env wall and create(test) mints into the sandbox env.
+    const appRows = (await owner.unsafe(
+      `INSERT INTO applications (tenant_id, name, slug) VALUES ($1, 'Default', 'default')
+       ON CONFLICT (tenant_id, slug) DO UPDATE SET slug = EXCLUDED.slug RETURNING id`,
+      [SANDBOX],
+    )) as unknown as Array<{ id: string }>;
+    const sandboxAppId = appRows[0]?.id;
+    if (!sandboxAppId) throw new Error("seed: sandbox app id missing");
+    await owner.unsafe(
+      `INSERT INTO environments (tenant_id, application_id, type, status) VALUES
+         ($1, $2, 'sandbox', 'active'), ($1, $2, 'live', 'locked')
+       ON CONFLICT (application_id, type) DO NOTHING`,
+      [SANDBOX, sandboxAppId],
     );
   });
 
@@ -137,6 +183,8 @@ describe("ApiKeyGuard (integration, real resolve)", () => {
       id: TENANT,
       scopes: ["sms:send"],
       keyId: expect.stringMatching(/^[0-9a-f]{16}$/),
+      applicationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      environmentId: expect.stringMatching(/^[0-9a-f-]{36}$/),
     });
   });
 
@@ -178,6 +226,9 @@ describe("ApiKeyGuard (integration, real resolve)", () => {
       id: TENANT,
       scopes: ["*"],
       keyId: `bfft_${TENANT.slice(0, 12)}`,
+      // BFF token path asserts tenant containment only — app/env selection is a later BFF concern.
+      applicationId: null,
+      environmentId: null,
     });
   });
 });
