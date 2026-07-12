@@ -6,8 +6,8 @@ packages:
   - "packages/*" # shared libraries (db, types, config, fe-auth, ui, ...)
   - "services/*" # deployable backend apps (api, workers, admin-api) — added in B4
   - "apps/*"
-    # deployable Next.js surfaces (admin-console, dev-portal, dashboard) — PI-2 build;
-    # dir reserved now so FE topology is on rails (2 auth realms, separate apps).
+    # deployable Next.js surfaces (dashboard = customer, admin-console = staff) — PI-2 build.
+    # dev-portal retired in PI-6 (its developer surfaces merged into the dashboard).
     # See team/frontend/PROPOSAL-fe-auth-bff-seam.md §1.
 # Build-script approval (pnpm 11: `allowBuilds` replaces `onlyBuiltDependencies`). pnpm blocks
 # lifecycle scripts by default (supply-chain hygiene) and lists unapproved ones here for review.

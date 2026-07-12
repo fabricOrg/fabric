@@ -130,6 +130,25 @@ count** (matches the table, incl. revoked) not the env count (`api_key_count` on
 Dropped the sidebar "DASHBOARD" badge (ProductMark `showBadge`, dashboard-only). Standard empty
 states + Card-wrapped tables throughout.
 
+**dev-portal RETIRED (W-B final step).** Its developer surfaces are now real in the dashboard, so
+`apps/dev-portal` is deleted along with its package.json scripts, pnpm-workspace entry, the CI
+`deploy-dev-portal-testing` job, and all `infra/dev` Terraform (dev-portal.tf + the dev_portal
+blocks in autoscaling/waf/monitoring/ecs/github-oidc/database/variables). `contracts/dev-portal.ts`
+STAYS (the dashboard reuses its apiKey/webhook types — misnamed now, rename is a cosmetic follow-up).
+No code imports the app; lockfile pruned; api/dashboard/admin typecheck green.
+✅ **Live teardown DONE (human-approved "Full apply").** `terraform apply` in `infra/dev` destroyed
+all 23 dev-portal resources (ECS service + task def + task role, service discovery, API-GW
+api/integration/route/stage + its log group + 5xx alarm, autoscaling target/policies + alarms,
+CloudFront edge, app log group, 2 secrets + versions) and dropped the dev-portal ARNs from 3 IAM
+policies. The ECR repo refused the default delete (`RepositoryNotEmptyException` — held build
+images); force-deleted via `aws ecr delete-repository --force`, then a second `terraform apply`
+reconciled it out of state. Plan is now clean (`No changes`); 0 dev_portal resources in state. The
+same apply also registered the drifted `app_env_backfill` E14 task def (harmless — task-def revision
+only, runs nothing).
+⚠️ **Remaining (external, not required):** remove the dev-portal `:3200` redirect URIs from the WorkOS
+app (no WorkOS MCP tool this session — do it in the WorkOS dashboard, or ask me to browser-drive it).
+They're now-unused entries, not a functional risk.
+
 ⚠️ **Local migration drift:** `__drizzle_migrations` tracks through 0046, but 0047–0050 are applied
 to the local DB (0047/0048 out-of-band from prior sessions; 0049/0050 applied directly this session
 because `drizzle-kit migrate` re-runs the untracked 0047 and errors). Migration FILES are correct +

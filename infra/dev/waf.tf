@@ -12,10 +12,6 @@ locals {
       domain_name = trimprefix(aws_apigatewayv2_api.admin_console_testing.api_endpoint, "https://")
       comment     = "Fabric testing admin console edge"
     }
-    dev_portal = {
-      domain_name = trimprefix(aws_apigatewayv2_api.dev_portal_testing.api_endpoint, "https://")
-      comment     = "Fabric testing dev portal edge"
-    }
   }
 }
 

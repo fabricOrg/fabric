@@ -118,25 +118,6 @@ resource "aws_cloudwatch_metric_alarm" "admin_console_gateway_5xx" {
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "dev_portal_gateway_5xx" {
-  alarm_name          = "fabric-testing-dev-portal-gateway-5xx"
-  alarm_description   = "The testing dev portal returned at least five server errors in five minutes."
-  namespace           = "AWS/ApiGateway"
-  metric_name         = "5xx"
-  statistic           = "Sum"
-  period              = 300
-  evaluation_periods  = 1
-  threshold           = 5
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  treat_missing_data  = "notBreaching"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-
-  dimensions = {
-    ApiId = aws_apigatewayv2_api.dev_portal_testing.id
-    Stage = aws_apigatewayv2_stage.dev_portal_default.name
-  }
-}
-
 resource "aws_cloudwatch_metric_alarm" "waf_blocked_requests" {
   provider = aws.useast1
 

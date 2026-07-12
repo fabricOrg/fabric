@@ -17,9 +17,9 @@ variable "github_repository" {
 }
 
 variable "github_environments" {
-  description = "GitHub Environments allowed to assume the testing deployment role — one per deployable service (api, dashboard, admin-console, dev-portal) sharing this account."
+  description = "GitHub Environments allowed to assume the testing deployment role — one per deployable service (api, dashboard, admin-console) sharing this account."
   type        = list(string)
-  default     = ["testing", "testing-dashboard", "testing-admin-console", "testing-dev-portal"]
+  default     = ["testing", "testing-dashboard", "testing-admin-console"]
 }
 
 variable "testing_sms_provider" {

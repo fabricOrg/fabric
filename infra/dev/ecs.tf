@@ -43,8 +43,6 @@ data "aws_iam_policy_document" "ecs_secret_access" {
       aws_secretsmanager_secret.edge_shared_secret.arn,
       aws_secretsmanager_secret.admin_console_cookie_password.arn,
       aws_secretsmanager_secret.admin_console_workos.arn,
-      aws_secretsmanager_secret.dev_portal_cookie_password.arn,
-      aws_secretsmanager_secret.dev_portal_workos.arn,
       # Both were injected into the api task definition without ever being granted here, so the task
       # could not have read them — an ECS task fails to START on a secret it cannot fetch.
       aws_secretsmanager_secret.virtual_phone_encryption_key.arn,

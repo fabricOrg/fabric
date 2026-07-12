@@ -27,15 +27,6 @@ locals {
       scale_in_cooldown  = 180
       scale_out_cooldown = 60
     }
-    dev_portal = {
-      name               = aws_ecs_service.dev_portal.name
-      min_capacity       = 1
-      max_capacity       = 2
-      cpu_target         = 65
-      memory_target      = 80
-      scale_in_cooldown  = 180
-      scale_out_cooldown = 60
-    }
   }
 }
 

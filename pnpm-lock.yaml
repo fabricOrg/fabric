@@ -182,67 +182,6 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
-  apps/dev-portal:
-    dependencies:
-      '@app/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@app/fe-auth':
-        specifier: workspace:*
-        version: link:../../packages/fe-auth
-      '@app/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-      '@tanstack/react-form':
-        specifier: ^1.11.0
-        version: 1.33.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@tanstack/react-query':
-        specifier: ^5.66.0
-        version: 5.101.2(react@19.2.7)
-      '@tanstack/react-table':
-        specifier: ^8.21.0
-        version: 8.21.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      lucide-react:
-        specifier: ^1.23.0
-        version: 1.23.0(react@19.2.7)
-      next:
-        specifier: ^16.1.0
-        version: 16.2.10(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      next-themes:
-        specifier: ^0.4.4
-        version: 0.4.6(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      react:
-        specifier: ^19.0.0
-        version: 19.2.7
-      react-dom:
-        specifier: ^19.0.0
-        version: 19.2.7(react@19.2.7)
-      sonner:
-        specifier: ^2.0.7
-        version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@tailwindcss/postcss':
-        specifier: ^4.0.0
-        version: 4.3.2
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.20.0
-      '@types/react':
-        specifier: ^19.0.0
-        version: 19.2.17
-      '@types/react-dom':
-        specifier: ^19.0.0
-        version: 19.2.3(@types/react@19.2.17)
-      tailwindcss:
-        specifier: ^4.0.0
-        version: 4.3.2
-      typescript:
-        specifier: ^5.6.0
-        version: 5.9.3
-
   packages/contracts:
     dependencies:
       zod:
