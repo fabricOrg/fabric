@@ -6,7 +6,7 @@ import {
   readSession,
   refreshSession,
 } from "@app/fe-auth";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   resolveOrganizationForUser,
@@ -117,7 +117,10 @@ export async function requireDashboardSession(): Promise<AppSession> {
   const session = await readDashboardSession();
   if (session) return session;
   if (workosAuthConfigured() && store.has(WORKOS_COOKIE)) {
-    redirect("/auth/refresh");
+    // Carry the current path through the refresh hop so a reload returns here, not the home route.
+    const pathname = (await headers()).get("x-pathname");
+    const returnTo = pathname?.startsWith("/") ? pathname : "/";
+    redirect(`/auth/refresh?return_to=${encodeURIComponent(returnTo)}`);
   }
   redirect("/login");
 }

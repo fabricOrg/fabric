@@ -4,13 +4,19 @@ const EDGE_HEADER = "x-fabric-edge-secret";
 
 export function proxy(request: NextRequest): NextResponse {
   const expected = process.env.EDGE_SHARED_SECRET?.trim();
-  if (!expected || isLocalHealthCheck(request)) {
-    return NextResponse.next();
+  const edgeAllowed =
+    !expected ||
+    isLocalHealthCheck(request) ||
+    request.headers.get(EDGE_HEADER) === expected;
+  if (!edgeAllowed) {
+    return new NextResponse("Forbidden", { status: 403 });
   }
-  if (request.headers.get(EDGE_HEADER) === expected) {
-    return NextResponse.next();
-  }
-  return new NextResponse("Forbidden", { status: 403 });
+  // Expose the current pathname to Server Components so requireAdminSession() can build the
+  // /auth/refresh?return_to=… hop — a reload that refreshes the access token returns the user to the
+  // page they were on, not the home route.
+  const headers = new Headers(request.headers);
+  headers.set("x-pathname", request.nextUrl.pathname);
+  return NextResponse.next({ request: { headers } });
 }
 
 function isLocalHealthCheck(request: NextRequest): boolean {
