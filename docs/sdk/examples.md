@@ -5,7 +5,7 @@ All examples load credentials from `FABRIC_API_KEY` and execute only on the serv
 ## Plain Node.js or background job
 
 ```ts
-import { Fabric } from "fabric-messaging";
+import { Fabric } from "@fabric-messaging/sdk";
 
 const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY! });
 const job = { id: "job_123", phone: "+233545227189" };

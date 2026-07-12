@@ -6,7 +6,7 @@ import { VerifyResource } from "./verify.js";
 import { WalletResource } from "./wallet.js";
 import { WebhooksResource } from "./webhooks.js";
 
-const VERSION = "0.1.0-beta.2";
+const VERSION = "0.1.0-beta.1";
 const DEFAULT_BASE_URL = "https://api.fabric.africa";
 
 export interface FabricConfig {
@@ -90,7 +90,7 @@ function isLoopback(url: URL): boolean {
 function assertServerRuntime(): void {
   if (typeof window !== "undefined" && typeof window.document !== "undefined") {
     throw new TypeError(
-      "fabric-messaging contains secret API keys and can only run in a trusted server environment.",
+      "@fabric-messaging/sdk contains secret API keys and can only run in a trusted server environment.",
     );
   }
 }

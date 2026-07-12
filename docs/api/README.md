@@ -1,16 +1,16 @@
 # Fabric public API reference
 
 The generated [OpenAPI 3.1 document](openapi.json) describes the stable server-to-server endpoints
-currently exposed by `fabric-messaging`: SMS send/status/list, Verify, Wallet, Sender IDs, and webhook
+currently exposed by `@fabric-messaging/sdk`: SMS send/status/list, Verify, Wallet, Sender IDs, and webhook
 endpoint management.
 
 Regenerate it after changing a public controller or wire contract:
 
 ```bash
-pnpm --filter fabric-messaging openapi:generate
+pnpm --filter @fabric-messaging/sdk openapi:generate
 ```
 
-`pnpm --filter fabric-messaging release:check` fails when the committed artifact is stale. The Zod
+`pnpm --filter @fabric-messaging/sdk release:check` fails when the committed artifact is stale. The Zod
 schemas under `packages/contracts` remain the canonical application DTO definitions; the OpenAPI
 generator explicitly models public wire differences such as `sender_id` and `currency` on SMS send.
 

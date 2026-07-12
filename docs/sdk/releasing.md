@@ -15,7 +15,7 @@ removed/renamed fields or changed meaning require an API/SDK migration plan.
 Run the reproducible local gate first:
 
 ```bash
-pnpm --filter fabric-messaging release:check
+pnpm --filter @fabric-messaging/sdk release:check
 ```
 
 1. Run SDK typecheck, tests, build, example compilation, and `pnpm pack --dry-run`.

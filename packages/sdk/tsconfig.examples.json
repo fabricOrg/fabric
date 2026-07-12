@@ -3,7 +3,7 @@
   "compilerOptions": {
     "noEmit": true,
     "baseUrl": ".",
-    "paths": { "fabric-messaging": ["./src/index.ts"] }
+    "paths": { "@fabric-messaging/sdk": ["./src/index.ts"] }
   },
   "include": ["examples"]
 }

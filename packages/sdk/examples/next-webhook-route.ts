@@ -1,4 +1,4 @@
-import { Fabric } from "fabric-messaging";
+import { Fabric } from "@fabric-messaging/sdk";
 
 const fabric = new Fabric({
   apiKey: process.env.FABRIC_API_KEY ?? "sk_test_example",

@@ -253,7 +253,7 @@ export function apiSnippets(input: {
     "currency": "GHS"
   }'`;
 
-  const node = `import { Fabric } from "fabric-messaging";
+  const node = `import { Fabric } from "@fabric-messaging/sdk";
 
 const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY });
 const recipients = [${toDisplay}${tail}];

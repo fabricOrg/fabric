@@ -1,4 +1,4 @@
-import { Fabric } from "fabric-messaging";
+import { Fabric } from "@fabric-messaging/sdk";
 
 const apiKey = process.env.FABRIC_API_KEY;
 if (!apiKey) throw new Error("Set FABRIC_API_KEY before running this example.");

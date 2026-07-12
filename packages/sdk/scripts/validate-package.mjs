@@ -9,7 +9,10 @@ const temporaryDirectory = await mkdtemp(join(tmpdir(), "fabric-sdk-package-"));
 
 try {
   run(pnpm, ["pack", "--pack-destination", temporaryDirectory]);
-  const tarball = join(temporaryDirectory, "fabric-messaging-0.1.0-beta.2.tgz");
+  const tarball = join(
+    temporaryDirectory,
+    "fabric-messaging-sdk-0.1.0-beta.1.tgz",
+  );
   const consumer = join(temporaryDirectory, "consumer.mjs");
   await writeFile(
     join(temporaryDirectory, "package.json"),
@@ -27,13 +30,14 @@ try {
       join(
         temporaryDirectory,
         "node_modules",
-        "fabric-messaging",
+        "@fabric-messaging",
+        "sdk",
         "package.json",
       ),
       "utf8",
     ),
   );
-  if (installedManifest.version !== "0.1.0-beta.2") {
+  if (installedManifest.version !== "0.1.0-beta.1") {
     throw new Error(
       "The installed SDK version does not match the release candidate.",
     );
@@ -41,7 +45,7 @@ try {
   await writeFile(
     consumer,
     [
-      'import { Fabric, WebhookVerificationError } from "fabric-messaging";',
+      'import { Fabric, WebhookVerificationError } from "@fabric-messaging/sdk";',
       'const client = new Fabric({ apiKey: "sk_test_package_smoke" });',
       'if (client.environment !== "sandbox") throw new Error("bad environment");',
       'if (typeof WebhookVerificationError !== "function") throw new Error("missing export");',

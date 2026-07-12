@@ -2,13 +2,13 @@
 
 The official server-side TypeScript client for sending and inspecting messages with Fabric.
 
-> Public prerelease: `0.1.0-beta.2`. Email and batch messaging are not exposed because those public
+> Public prerelease: `0.1.0-beta.1`. Email and batch messaging are not exposed because those public
 > API endpoints do not exist yet. Install the explicit `beta` channel until 1.0 is ready.
 
 ## Install
 
 ```bash
-pnpm add fabric-messaging@beta
+pnpm add @fabric-messaging/sdk@beta
 ```
 
 Requires Node.js 22 or newer and a Fabric secret key. Create a sandbox key in Dashboard →
@@ -21,7 +21,7 @@ FABRIC_API_KEY=sk_test_...
 ## Send your first SMS
 
 ```ts
-import { Fabric } from "fabric-messaging";
+import { Fabric } from "@fabric-messaging/sdk";
 
 const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY! });
 
@@ -72,7 +72,7 @@ default. Invalid, malformed, or stale events throw `WebhookVerificationError`.
 ## Handle errors
 
 ```ts
-import { AuthenticationError, FabricError, RateLimitError } from "fabric-messaging";
+import { AuthenticationError, FabricError, RateLimitError } from "@fabric-messaging/sdk";
 
 try {
   await fabric.sms.list();
@@ -112,5 +112,5 @@ See [the SDK guides](../../docs/sdk/README.md) and bundled [OpenAPI reference](.
 for retries, security, framework patterns, versioning, and the public wire contract. Report SDK issues through the repository issue tracker and
 include the request ID—but never credentials or message content.
 
-Maintainers validate a release candidate with `pnpm --filter fabric-messaging release:check`; this builds,
+Maintainers validate a release candidate with `pnpm --filter @fabric-messaging/sdk release:check`; this builds,
 tests, inspects, installs, and imports the packed artifact from a clean temporary project.
