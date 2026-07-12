@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@app/ui/components/ui/dialog";
 import type { ColumnDef } from "@tanstack/react-table";
+import { KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toastApiError } from "@/lib/error-toast";
@@ -146,7 +147,12 @@ export function ApiKeysTable({ keys }: { keys: readonly ApiKey[] }) {
         columns={columns}
         data={[...keys]}
         ariaLabel="API keys"
-        empty="No API keys to show."
+        emptyState={{
+          icon: <KeyRound />,
+          title: "No API keys yet",
+          description:
+            "Create a key to start calling the Fabric API from this environment.",
+        }}
       />
 
       <Dialog

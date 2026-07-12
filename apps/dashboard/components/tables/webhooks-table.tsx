@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@app/ui/components/ui/dialog";
 import type { ColumnDef } from "@tanstack/react-table";
+import { Webhook } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toastApiError } from "@/lib/error-toast";
@@ -133,7 +134,12 @@ export function WebhooksTable({
         columns={columns}
         data={[...endpoints]}
         ariaLabel="Webhook endpoints"
-        empty="No webhook endpoints yet."
+        emptyState={{
+          icon: <Webhook />,
+          title: "No webhook endpoints yet",
+          description:
+            "Add an endpoint to receive signed event deliveries for this environment.",
+        }}
       />
 
       <Dialog
