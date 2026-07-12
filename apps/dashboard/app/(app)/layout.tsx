@@ -1,15 +1,13 @@
+import { AppShell } from "@app/ui/components/ui/app-shell";
 import { Button } from "@app/ui/components/ui/button";
-import { Separator } from "@app/ui/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@app/ui/components/ui/sidebar";
-import { LogOut, Wallet } from "lucide-react";
+import { UserMenu } from "@app/ui/components/ui/user-menu";
+import { Wallet } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AppBreadcrumbs } from "@/components/app-breadcrumbs";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandMenu, CommandMenuTrigger } from "@/components/command-menu";
+import { DeliveryModeToggle } from "@/components/delivery-mode-toggle";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { formatMoney } from "@/lib/money";
 import { requireDashboardSession } from "@/lib/server/auth";
@@ -24,15 +22,28 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const primaryBalance = (await getWalletSnapshot()).balances[0]?.balance;
   const isSandbox = session.plan === "sandbox";
   return (
-    <SidebarProvider>
-      <AppSidebar role={session.role} />
-      <SidebarInset>
-        {isSandbox ? (
+    <AppShell
+      sidebar={
+        <AppSidebar
+          role={session.role}
+          email={session.email}
+          name={session.name}
+        />
+      }
+      banner={
+        isSandbox ? (
           <div className="flex h-8 shrink-0 items-center justify-center gap-2 bg-amber-500/15 px-4 text-xs font-medium text-amber-700 dark:text-amber-400">
             <span className="rounded-sm bg-amber-500/25 px-1.5 py-0.5 font-semibold tracking-wide">
               SANDBOX
             </span>
-            Messages route to the test provider and never reach a real phone.
+            Messages are delivered to your virtual phone and never reach a
+            carrier.
+            <Link
+              href="/virtual-phone"
+              className="font-semibold underline underline-offset-2 hover:text-amber-600 dark:hover:text-amber-300"
+            >
+              Open virtual phone
+            </Link>
             <Link
               href="/go-live"
               className="font-semibold underline underline-offset-2 hover:text-amber-600 dark:hover:text-amber-300"
@@ -40,43 +51,35 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               Request go-live
             </Link>
           </div>
-        ) : null}
-        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
-          <SidebarTrigger className="-ml-1" />
-          <Separator
-            orientation="vertical"
-            className="mr-1 data-[orientation=vertical]:h-4"
+        ) : null
+      }
+      headerContext={<CommandMenuTrigger />}
+      breadcrumbs={<AppBreadcrumbs />}
+      headerActions={
+        <>
+          <DeliveryModeToggle />
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="font-mono tabular-nums"
+          >
+            <Link href="/wallet">
+              <Wallet data-icon="inline-start" />
+              {primaryBalance ? formatMoney(primaryBalance) : "Wallet"}
+            </Link>
+          </Button>
+          <ThemeToggle />
+          <UserMenu
+            email={session.email}
+            name={session.name}
+            role={session.role}
           />
-          <CommandMenuTrigger />
-          <div className="ml-auto flex items-center gap-2">
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="font-mono tabular-nums"
-            >
-              <Link href="/wallet">
-                <Wallet data-icon="inline-start" />
-                {primaryBalance ? formatMoney(primaryBalance) : "Wallet"}
-              </Link>
-            </Button>
-            <ThemeToggle />
-            <form action="/auth/logout" method="post">
-              <Button
-                type="submit"
-                variant="ghost"
-                size="icon"
-                title="Sign out"
-              >
-                <LogOut />
-                <span className="sr-only">Sign out</span>
-              </Button>
-            </form>
-          </div>
-        </header>
-        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
-      </SidebarInset>
+        </>
+      }
+    >
+      {children}
       <CommandMenu />
-    </SidebarProvider>
+    </AppShell>
   );
 }

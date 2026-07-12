@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
+import { Switch } from "@app/ui/components/ui/switch";
 import { useForm } from "@tanstack/react-form";
 import { UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -33,9 +34,10 @@ import { z } from "zod";
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const schema = z.object({
   email: z.string().regex(EMAIL, "Enter a valid email address."),
-  role: z.enum(["admin", "member", "developer"]),
+  role: z.enum(["admin", "member"]),
+  developerAccess: z.boolean(),
 });
-type InviteRole = "admin" | "member" | "developer";
+type InviteRole = "admin" | "member";
 
 interface ErrorPayload {
   error?: { message?: string };
@@ -47,14 +49,22 @@ export function InviteTenantMemberDialog({ tenantId }: { tenantId: string }) {
   const [open, setOpen] = useState(false);
 
   const form = useForm({
-    defaultValues: { email: "", role: "member" as InviteRole },
+    defaultValues: {
+      email: "",
+      role: "member" as InviteRole,
+      developerAccess: false,
+    },
     validators: { onMount: schema, onChange: schema },
     onSubmit: async ({ value }) => {
       try {
         const response = await fetch(`/api/admin/tenants/${tenantId}/members`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: value.email.trim(), role: value.role }),
+          body: JSON.stringify({
+            email: value.email.trim(),
+            role: value.role,
+            developer_access: value.developerAccess,
+          }),
         });
         if (!response.ok) {
           const payload = (await response
@@ -128,13 +138,31 @@ export function InviteTenantMemberDialog({ tenantId }: { tenantId: string }) {
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="member">Member</SelectItem>
-                      <SelectItem value="developer">Developer</SelectItem>
                     </SelectContent>
                   </Select>
                   <FieldDescription>
-                    Developers get the developer portal (API keys, logs) — no
-                    SMS sending or team management.
+                    Workspace governance role. Developer access is assigned
+                    separately below.
                   </FieldDescription>
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="developerAccess">
+              {(field) => (
+                <Field orientation="horizontal">
+                  <div className="min-w-0 flex-1">
+                    <FieldLabel htmlFor="invite-developer-access">
+                      Developer Portal access
+                    </FieldLabel>
+                    <FieldDescription>
+                      Adds API keys, webhooks, and request logs.
+                    </FieldDescription>
+                  </div>
+                  <Switch
+                    id="invite-developer-access"
+                    checked={field.state.value}
+                    onCheckedChange={field.handleChange}
+                  />
                 </Field>
               )}
             </form.Field>

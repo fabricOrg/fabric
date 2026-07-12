@@ -88,7 +88,7 @@ export default function PluginsPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-display text-2xl font-semibold tracking-tight">
           Plugins

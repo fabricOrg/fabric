@@ -53,12 +53,14 @@ export async function resolveStaffSession(
   return toAppSession(
     resolveStaffSessionResponseSchema.parse(await response.json()),
     claims.email,
+    claims.name,
   );
 }
 
 function toAppSession(
   response: ResolveStaffSessionResponse,
   email: string,
+  name: string | null,
 ): AppSession {
   return {
     userId: response.staff_user_id,
@@ -67,5 +69,6 @@ function toAppSession(
     permissions: response.permissions,
     sessionId: response.session_id,
     email,
+    name: name ?? undefined,
   };
 }

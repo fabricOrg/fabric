@@ -26,13 +26,19 @@ interface ErrorPayload {
   error?: { message?: string };
 }
 
-type ManagedRole = "admin" | "member" | "developer";
-const ROLE_LABEL: Record<ManagedRole, string> = {
+type ManagedRole = "admin" | "member";
+type GovernanceRole = "owner" | ManagedRole;
+const ROLE_LABEL: Record<GovernanceRole, string> = {
+  owner: "Owner",
   admin: "Admin",
   member: "Member",
-  developer: "Developer",
 };
-const ROLES: ManagedRole[] = ["admin", "member", "developer"];
+const ROLES: ManagedRole[] = ["admin", "member"];
+const ROLE_IMPACT: Record<ManagedRole, string> = {
+  admin: "Gains messaging, compliance, billing, and team-management access.",
+  member:
+    "Keeps messaging and reporting access, but loses billing and team administration.",
+};
 
 /**
  * Per-row member management (dashboard team page). Owner rows and the current user's own row render
@@ -44,17 +50,25 @@ export function MemberRowActions({
   email,
   label,
   role,
+  developerAccess,
+  canChangeRole = true,
   status,
 }: {
   userId: string;
   email: string;
   label: string;
-  role: ManagedRole;
+  role: GovernanceRole;
+  developerAccess: boolean;
+  canChangeRole?: boolean;
   status: "active" | "invited" | "disabled";
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingRole, setPendingRole] = useState<ManagedRole | null>(null);
+  const [pendingDeveloperAccess, setPendingDeveloperAccess] = useState<
+    boolean | null
+  >(null);
 
   async function run(
     input: RequestInfo,
@@ -106,12 +120,16 @@ export function MemberRowActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Change role</DropdownMenuLabel>
-          {ROLES.filter((r) => r !== role).map((r) => (
-            <DropdownMenuItem key={r} onClick={() => changeRole(r)}>
-              Make {ROLE_LABEL[r].toLowerCase()}
-            </DropdownMenuItem>
-          ))}
+          {canChangeRole ? (
+            <>
+              <DropdownMenuLabel>Change role</DropdownMenuLabel>
+              {ROLES.filter((r) => r !== role).map((r) => (
+                <DropdownMenuItem key={r} onClick={() => setPendingRole(r)}>
+                  Make {ROLE_LABEL[r].toLowerCase()}
+                </DropdownMenuItem>
+              ))}
+            </>
+          ) : null}
           {status === "invited" ? (
             <>
               <DropdownMenuSeparator />
@@ -122,7 +140,11 @@ export function MemberRowActions({
                     {
                       method: "POST",
                       headers: { "content-type": "application/json" },
-                      body: JSON.stringify({ email, role }),
+                      body: JSON.stringify({
+                        email,
+                        role,
+                        developer_access: developerAccess,
+                      }),
                     },
                     `Invite re-sent to ${email}`,
                   )
@@ -134,13 +156,109 @@ export function MemberRowActions({
           ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            className="text-destructive focus:text-destructive"
-            onClick={() => setConfirmOpen(true)}
+            onClick={() => setPendingDeveloperAccess(!developerAccess)}
           >
-            Remove
+            {developerAccess
+              ? "Remove Developer Portal access"
+              : "Grant Developer Portal access"}
           </DropdownMenuItem>
+          {canChangeRole ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => setConfirmOpen(true)}
+              >
+                Remove
+              </DropdownMenuItem>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Dialog
+        open={pendingRole !== null}
+        onOpenChange={(open) => !open && setPendingRole(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Change {label} to {pendingRole ? ROLE_LABEL[pendingRole] : ""}?
+            </DialogTitle>
+            <DialogDescription>
+              {pendingRole ? ROLE_IMPACT[pendingRole] : null} Their permissions
+              change immediately across Fabric after confirmation.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPendingRole(null)}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!pendingRole) return;
+                await changeRole(pendingRole);
+                setPendingRole(null);
+              }}
+              loading={busy}
+            >
+              Confirm role change
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={pendingDeveloperAccess !== null}
+        onOpenChange={(open) => !open && setPendingDeveloperAccess(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {pendingDeveloperAccess ? "Grant" : "Remove"} Developer Portal
+              access for {label}?
+            </DialogTitle>
+            <DialogDescription>
+              {pendingDeveloperAccess
+                ? "They will be able to manage API keys, webhooks, and inspect request logs in addition to their current workspace role."
+                : "They will lose API keys, webhooks, and request-log access, but retain their current workspace role."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPendingDeveloperAccess(null)}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (pendingDeveloperAccess === null) return;
+                await run(
+                  `/api/team/members/${userId}`,
+                  {
+                    method: "PATCH",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({
+                      developer_access: pendingDeveloperAccess,
+                    }),
+                  },
+                  `${pendingDeveloperAccess ? "Granted" : "Removed"} Developer Portal access for ${label}`,
+                );
+                setPendingDeveloperAccess(null);
+              }}
+              loading={busy}
+            >
+              Confirm access change
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>

@@ -11,7 +11,7 @@ export default async function GoLivePage() {
   const canRequest = session.role === "owner" || session.role === "admin";
   const isSandbox = session.plan === "sandbox";
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <h1 className="text-2xl font-semibold tracking-tight">Go live</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         Sandbox workspaces route every message to the test provider. Going live

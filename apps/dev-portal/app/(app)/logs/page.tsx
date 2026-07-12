@@ -1,16 +1,18 @@
 "use client";
 
 import type { ApiLogSummary } from "@app/contracts";
-import { Button } from "@app/ui/components/ui/button";
+import { PageContainer } from "@app/ui/components/ui/app-shell";
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@app/ui/components/ui/empty";
-import { Skeleton } from "@app/ui/components/ui/skeleton";
-import { ScrollText, TriangleAlert } from "lucide-react";
+  PageHeader,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+} from "@app/ui/components/ui/page-header";
+import {
+  ErrorState,
+  TableEmptyState,
+  TableLoadingState,
+} from "@app/ui/components/ui/states";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { LogsTable } from "@/components/tables/logs-table";
@@ -50,61 +52,44 @@ function LogsInner() {
   }, [reload, scenario]);
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Logs
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Recent API requests. Open a row for the request and response — the
-          request ID ties back to any error you saw.
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader>
+        <PageHeaderHeading>
+          <PageHeaderTitle>Logs</PageHeaderTitle>
+          <PageHeaderDescription>
+            Recent API requests. Open a row for the request and response — the
+            request ID ties back to any error you saw.
+          </PageHeaderDescription>
+        </PageHeaderHeading>
+      </PageHeader>
 
       {loading ? (
-        <div className="flex flex-col gap-2">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-11 w-full" />
-          ))}
-        </div>
+        <TableLoadingState rows={5} />
       ) : errorReqId !== null || rows === null ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <TriangleAlert />
-            </EmptyMedia>
-            <EmptyTitle>Couldn't load logs</EmptyTitle>
-            <EmptyDescription>
-              Please try again.{" "}
-              {errorReqId ? `Contact support with ${errorReqId}.` : ""}
-            </EmptyDescription>
-          </EmptyHeader>
-          <Button variant="outline" onClick={() => setReload((x) => x + 1)}>
-            Retry
-          </Button>
-        </Empty>
+        <ErrorState
+          title="Couldn't load logs"
+          message={
+            errorReqId
+              ? `Please try again. Contact support with ${errorReqId}.`
+              : "Please try again."
+          }
+          onRetry={() => setReload((x) => x + 1)}
+        />
       ) : rows.length === 0 ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <ScrollText />
-            </EmptyMedia>
-            <EmptyTitle>No requests yet</EmptyTitle>
-            <EmptyDescription>
-              Your API calls will show up here once you start sending.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <TableEmptyState
+          title="No requests yet"
+          description="Your API calls will show up here once you start sending."
+        />
       ) : (
         <LogsTable rows={rows} />
       )}
-    </div>
+    </PageContainer>
   );
 }
 
 export default function LogsPage() {
   return (
-    <Suspense fallback={<div className="mx-auto max-w-5xl p-6">Loading…</div>}>
+    <Suspense fallback={<div className="w-full">Loading…</div>}>
       <LogsInner />
     </Suspense>
   );

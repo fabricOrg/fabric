@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
+import { Switch } from "@app/ui/components/ui/switch";
 import { TimePicker } from "@app/ui/components/ui/time-picker";
 import { cn } from "@app/ui/lib/utils";
 import { Clock, Moon } from "lucide-react";
@@ -84,29 +85,19 @@ export function QuietHoursCard({
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-medium">Status</legend>
-          <div className="inline-flex w-fit rounded-lg border p-0.5">
-            <Button
-              type="button"
-              size="sm"
-              variant={enabled ? "default" : "ghost"}
-              aria-pressed={enabled}
-              onClick={() => setEnabled(true)}
-            >
-              On
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={enabled ? "ghost" : "default"}
-              aria-pressed={!enabled}
-              onClick={() => setEnabled(false)}
-            >
-              Off
-            </Button>
+        <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 p-3">
+          <div>
+            <p className="text-sm font-medium">Enforce quiet hours</p>
+            <p className="text-xs text-muted-foreground">
+              Hold promotional messages outside the configured window.
+            </p>
           </div>
-        </fieldset>
+          <Switch
+            checked={enabled}
+            onCheckedChange={setEnabled}
+            aria-label="Enforce quiet hours"
+          />
+        </div>
 
         <div
           className={cn(
@@ -122,6 +113,7 @@ export function QuietHoursCard({
               value={start}
               disabled={!enabled}
               onChange={setStart}
+              className="w-full"
             />
           </Field>
           <Field>
@@ -131,6 +123,7 @@ export function QuietHoursCard({
               value={end}
               disabled={!enabled}
               onChange={setEnd}
+              className="w-full"
             />
           </Field>
           <Field>

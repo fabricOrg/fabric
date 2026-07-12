@@ -1,13 +1,10 @@
+import { AppShell } from "@app/ui/components/ui/app-shell";
 import { Badge } from "@app/ui/components/ui/badge";
 import { Button } from "@app/ui/components/ui/button";
-import { Separator } from "@app/ui/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@app/ui/components/ui/sidebar";
-import { ArrowUpRight, LogOut } from "lucide-react";
+import { UserMenu } from "@app/ui/components/ui/user-menu";
+import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
+import { AppBreadcrumbs } from "@/components/app-breadcrumbs";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { requireDeveloperSession } from "@/lib/server/auth";
@@ -21,44 +18,41 @@ import { requireDeveloperSession } from "@/lib/server/auth";
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await requireDeveloperSession();
   return (
-    <SidebarProvider>
-      <AppSidebar role={session.role} />
-      <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
-          <SidebarTrigger className="-ml-1" />
-          <Separator
-            orientation="vertical"
-            className="mr-1 data-[orientation=vertical]:h-4"
+    <AppShell
+      sidebar={
+        <AppSidebar
+          role={session.role}
+          email={session.email}
+          name={session.name}
+        />
+      }
+      headerContext={
+        <Badge
+          variant="outline"
+          className="font-mono text-[0.65rem] tracking-wide"
+        >
+          DEV
+        </Badge>
+      }
+      breadcrumbs={<AppBreadcrumbs />}
+      headerActions={
+        <>
+          <Button asChild variant="outline" size="sm">
+            <a href={process.env.DASHBOARD_BASE_URL ?? "http://localhost:3100"}>
+              Back to dashboard
+              <ArrowUpRight data-icon="inline-end" />
+            </a>
+          </Button>
+          <ThemeToggle />
+          <UserMenu
+            email={session.email}
+            name={session.name}
+            role={session.role}
           />
-          <Badge
-            variant="outline"
-            className="font-mono text-[0.65rem] tracking-wide"
-          >
-            DEV
-          </Badge>
-          <div className="ml-auto flex items-center gap-2">
-            <Button asChild variant="outline" size="sm">
-              <a href="http://localhost:3100">
-                Back to dashboard
-                <ArrowUpRight data-icon="inline-end" />
-              </a>
-            </Button>
-            <ThemeToggle />
-            <form action="/auth/logout" method="post">
-              <Button
-                type="submit"
-                variant="ghost"
-                size="icon"
-                title="Sign out"
-              >
-                <LogOut />
-                <span className="sr-only">Sign out</span>
-              </Button>
-            </form>
-          </div>
-        </header>
-        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
-      </SidebarInset>
-    </SidebarProvider>
+        </>
+      }
+    >
+      {children}
+    </AppShell>
   );
 }

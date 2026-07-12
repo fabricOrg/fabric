@@ -68,7 +68,7 @@ export async function resolveDeveloperSession(
   if (!resolved.permissions.some((p) => API_ACCESS_PERMISSIONS.includes(p))) {
     return null;
   }
-  return toAppSession(resolved);
+  return toAppSession(resolved, claims.email, claims.name);
 }
 
 /**
@@ -111,13 +111,19 @@ export async function resolveDeveloperOrganization(
     .workos_organization_id;
 }
 
-function toAppSession(response: ResolveIdentitySessionResponse): AppSession {
+function toAppSession(
+  response: ResolveIdentitySessionResponse,
+  email: string,
+  name: string | null,
+): AppSession {
   return {
     userId: response.user_id,
     orgId: response.tenant_id,
     role: response.role,
     permissions: response.permissions,
     sessionId: response.session_id,
+    email,
+    name: name ?? undefined,
     plan: response.plan,
   };
 }

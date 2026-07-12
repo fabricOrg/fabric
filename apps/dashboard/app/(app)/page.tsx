@@ -1,6 +1,7 @@
 "use client";
 
 import { parseApiError } from "@app/contracts";
+import { PageContainer } from "@app/ui/components/ui/app-shell";
 import { Button } from "@app/ui/components/ui/button";
 import { Card, CardContent, CardHeader } from "@app/ui/components/ui/card";
 import { Skeleton } from "@app/ui/components/ui/skeleton";
@@ -8,17 +9,14 @@ import { EmptyState, ErrorState } from "@app/ui/components/ui/states";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { BadgeCheck, Megaphone, Send, Signal } from "lucide-react";
 import Link from "next/link";
+import { ActivationChecklist } from "@/components/overview/activation-checklist";
+import { AttentionQueue } from "@/components/overview/attention-queue";
 import { RecentActivity } from "@/components/overview/recent-activity";
 import { SpendByChannel } from "@/components/overview/spend-by-channel";
 import { StatTiles } from "@/components/overview/stat-tiles";
 import { TrafficChart } from "@/components/overview/traffic-chart";
 import { getOverview, type OverviewSummary } from "@/lib/client/overview-api";
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">{children}</div>
-  );
-}
+import { listSenders, type SenderId } from "@/lib/client/senders-api";
 
 function Header() {
   return (
@@ -55,7 +53,7 @@ function QuickActions() {
       <Button asChild size="sm" variant="outline">
         <Link href="/verify">
           <BadgeCheck data-icon="inline-start" />
-          Verify
+          Verify number
         </Link>
       </Button>
     </div>
@@ -102,7 +100,13 @@ function isEmpty(summary: OverviewSummary): boolean {
 }
 
 /** Body renders exactly one of the first-class states, resolved with early-return if-blocks. */
-function OverviewBody({ query }: { query: UseQueryResult<OverviewSummary> }) {
+function OverviewBody({
+  query,
+  senders,
+}: {
+  query: UseQueryResult<OverviewSummary>;
+  senders?: readonly SenderId[];
+}) {
   if (query.isPending) {
     return <LoadingState />;
   }
@@ -124,24 +128,21 @@ function OverviewBody({ query }: { query: UseQueryResult<OverviewSummary> }) {
   const summary = query.data;
   if (isEmpty(summary)) {
     return (
-      <EmptyState
-        icon={<Signal />}
-        title="Nothing to show yet"
-        description="Send your first message to start seeing traffic, delivery, and spend here."
-        action={
-          <Button asChild>
-            <Link href="/send">
-              <Send data-icon="inline-start" />
-              Send a message
-            </Link>
-          </Button>
-        }
-      />
+      <>
+        <ActivationChecklist summary={summary} senders={senders} />
+        <EmptyState
+          icon={<Signal />}
+          title="No activity yet"
+          description="Complete the setup steps above, then your traffic, delivery, and spend will appear here."
+        />
+      </>
     );
   }
 
   return (
     <>
+      <ActivationChecklist summary={summary} senders={senders} />
+      <AttentionQueue summary={summary} senders={senders} />
       <StatTiles summary={summary} />
       <TrafficChart points={summary.traffic} />
       <div className="grid gap-4 lg:grid-cols-2">
@@ -154,11 +155,15 @@ function OverviewBody({ query }: { query: UseQueryResult<OverviewSummary> }) {
 
 export default function OverviewPage() {
   const query = useQuery({ queryKey: ["overview"], queryFn: getOverview });
+  const sendersQuery = useQuery({
+    queryKey: ["senders"],
+    queryFn: listSenders,
+  });
 
   return (
-    <Shell>
+    <PageContainer>
       <Header />
-      <OverviewBody query={query} />
-    </Shell>
+      <OverviewBody query={query} senders={sendersQuery.data} />
+    </PageContainer>
   );
 }

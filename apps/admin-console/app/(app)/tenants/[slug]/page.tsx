@@ -35,7 +35,6 @@ const ROLE_LABEL: Record<Role, string> = {
   owner: "Owner",
   admin: "Admin",
   member: "Member",
-  developer: "Developer",
 };
 const STATUS_STYLE: Record<MemberDto["status"], string> = {
   active: "border-transparent bg-success/12 text-success",
@@ -77,7 +76,7 @@ export default async function TenantDetailPage({
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div className="flex flex-col gap-2">
         <Link
           href="/"
@@ -173,7 +172,14 @@ export default async function TenantDetailPage({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{ROLE_LABEL[m.role]}</Badge>
+                        <div className="flex flex-wrap gap-1.5">
+                          <Badge variant="secondary">
+                            {ROLE_LABEL[m.role]}
+                          </Badge>
+                          {m.developer_access ? (
+                            <Badge variant="outline">Developer access</Badge>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge
@@ -192,6 +198,7 @@ export default async function TenantDetailPage({
                               email={m.email}
                               label={m.name ?? m.email}
                               role={m.role}
+                              developerAccess={m.developer_access}
                               status={m.status}
                             />
                           ) : null}

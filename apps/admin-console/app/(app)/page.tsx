@@ -1,4 +1,12 @@
 import type { TenantSummaryDto } from "@app/contracts";
+import { PageContainer } from "@app/ui/components/ui/app-shell";
+import {
+  PageHeader,
+  PageHeaderActions,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+} from "@app/ui/components/ui/page-header";
 import { NewTenantButton } from "@/components/new-tenant-button";
 import { TenantsTable } from "@/components/tables/tenants-table";
 import { requireAdminSession } from "@/lib/server/auth";
@@ -19,25 +27,25 @@ export default async function TenantsPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-display text-2xl font-semibold tracking-tight">
-            Tenants
-          </h1>
-          <p className="text-sm text-muted-foreground">
+    <PageContainer>
+      <PageHeader>
+        <PageHeaderHeading>
+          <PageHeaderTitle>Tenants</PageHeaderTitle>
+          <PageHeaderDescription>
             Every customer organisation on Fabric. Accounts soft-close — never
             hard-delete.
-          </p>
-        </div>
-        <NewTenantButton />
-      </div>
+          </PageHeaderDescription>
+        </PageHeaderHeading>
+        <PageHeaderActions>
+          <NewTenantButton />
+        </PageHeaderActions>
+      </PageHeader>
 
       <TenantsTable
         tenants={tenants}
         nextCursor={nextCursor}
         loadError={loadError}
       />
-    </div>
+    </PageContainer>
   );
 }

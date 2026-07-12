@@ -2,6 +2,7 @@
 
 import type { MessageDetail, MessageSummary } from "@app/contracts";
 import { Badge } from "@app/ui/components/ui/badge";
+import { Button } from "@app/ui/components/ui/button";
 import {
   DataTable,
   DataTableColumnHeader,
@@ -22,7 +23,8 @@ import {
   SheetTitle,
 } from "@app/ui/components/ui/sheet";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { type MessageStatus, StatusBadge } from "@/components/status-badge";
 import { getMessage } from "@/lib/client/dashboard-api";
 import { countryOf } from "@/lib/dial-codes";
@@ -40,6 +42,41 @@ const STATUSES: readonly MessageStatus[] = [
 ];
 
 const ALL = "all" as const;
+
+function failureGuidance(reason: string): {
+  cause: string;
+  action: string;
+} {
+  const code = reason.toLowerCase();
+  if (
+    code.includes("dnd") ||
+    code.includes("opt") ||
+    code.includes("consent")
+  ) {
+    return {
+      cause: "The recipient is suppressed by consent or DND policy.",
+      action:
+        "Do not retry until the recipient's legal sendability is verified.",
+    };
+  }
+  if (code.includes("sender") || code.includes("originator")) {
+    return {
+      cause: "The carrier rejected the sender identity.",
+      action: "Use an approved sender ID before composing a new send.",
+    };
+  }
+  if (code.includes("invalid") || code.includes("number")) {
+    return {
+      cause: "The destination number was rejected as invalid or unreachable.",
+      action: "Confirm the number in E.164 format before sending again.",
+    };
+  }
+  return {
+    cause: "The provider did not complete delivery.",
+    action:
+      "Check the timeline and provider status before creating a new send.",
+  };
+}
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString("en", {
@@ -109,11 +146,17 @@ const columns: ColumnDef<MessageSummary>[] = [
 
 export function MessagesTable({
   messages,
+  initialMessageId,
+  initialStatus,
 }: {
   messages: readonly MessageSummary[];
+  initialMessageId?: string;
+  initialStatus?: MessageStatus;
 }) {
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<MessageStatus | typeof ALL>(ALL);
+  const [status, setStatus] = useState<MessageStatus | typeof ALL>(
+    initialStatus ?? ALL,
+  );
   // Provider is this SMS-only surface's channel/route dimension; a true multi-channel filter
   // (WhatsApp, voice) lands when those channels ship. Country is derived from the recipient mask.
   const [provider, setProvider] = useState<string>(ALL);
@@ -141,14 +184,18 @@ export function MessagesTable({
     );
   }, [messages, q, status, provider, country]);
 
-  async function open(id: string) {
+  const open = useCallback(async (id: string) => {
     setLoadingDetail(true);
     try {
       setDetail(await getMessage(id));
     } finally {
       setLoadingDetail(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (initialMessageId) void open(initialMessageId);
+  }, [initialMessageId, open]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -259,17 +306,33 @@ export function MessagesTable({
               </div>
 
               {detail.failureReason && (
-                <div className="flex flex-col gap-1 rounded-lg bg-destructive/8 p-3">
+                <div className="flex flex-col gap-2 rounded-lg bg-destructive/8 p-3">
                   <span className="text-xs font-medium text-destructive">
                     Failure reason
                   </span>
                   <p className="text-sm">{detail.failureReason}</p>
+                  <p className="text-sm">
+                    {failureGuidance(detail.failureReason).cause}{" "}
+                    {failureGuidance(detail.failureReason).action}
+                  </p>
+                  <p className="text-xs font-medium text-destructive">
+                    Automatic retry is disabled because the recipient shown here
+                    is masked and retry safety cannot be established.
+                  </p>
                   {detail.requestId && (
                     <p className="text-xs text-muted-foreground">
                       Contact support with{" "}
                       <code className="font-mono">{detail.requestId}</code>.
                     </p>
                   )}
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="mt-1 w-fit"
+                  >
+                    <Link href="/send">Compose a corrected send</Link>
+                  </Button>
                 </div>
               )}
 

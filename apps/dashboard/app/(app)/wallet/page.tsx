@@ -28,6 +28,7 @@ import {
   EmptyTitle,
 } from "@app/ui/components/ui/empty";
 import { Separator } from "@app/ui/components/ui/separator";
+import { TableEmptyRow } from "@app/ui/components/ui/states";
 import {
   Table,
   TableBody,
@@ -42,12 +43,15 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Bell,
+  CheckCircle2,
+  Clock,
   CreditCard,
   type LucideIcon,
   Repeat,
   TriangleAlert,
   Wallet,
 } from "lucide-react";
+import Link from "next/link";
 import { AutoTopupDialog } from "@/components/forms/auto-topup-dialog";
 import { TopUpDialog } from "@/components/forms/top-up-dialog";
 import { BalanceTrend } from "@/components/wallet/balance-trend";
@@ -117,9 +121,7 @@ function PageHeader() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">{children}</div>
-  );
+  return <div className="flex w-full flex-col gap-6">{children}</div>;
 }
 
 /** A balance is low when it has a configured threshold and sits at or below it (exact bigint compare). */
@@ -145,7 +147,16 @@ function messageRunway(b: WalletBalance) {
   };
 }
 
-export default async function WalletPage() {
+export default async function WalletPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    payment_return?: string;
+    reference?: string;
+    trxref?: string;
+  }>;
+}) {
+  const paymentParams = await searchParams;
   let balances: readonly WalletBalance[];
   let ledger: readonly LedgerEntry[];
   // Best-effort: a missing saved card just shows the Paystack fallback, never blocks the page.
@@ -205,6 +216,14 @@ export default async function WalletPage() {
   }
 
   const low = balances.filter(isLow);
+  const paymentReference =
+    paymentParams.reference ?? paymentParams.trxref ?? null;
+  const paymentCredited = paymentReference
+    ? ledger.some(
+        (entry) =>
+          entry.type === "topup" && entry.reference === paymentReference,
+      )
+    : false;
   const primaryCurrency = balances[0]?.balance.currency ?? "GHS";
   // "This month" spend = Σ|sms_charge| (exact bigint minor units, never float).
   const monthSpendMinor = ledger
@@ -242,6 +261,46 @@ export default async function WalletPage() {
           </Button>
         </div>
       </div>
+
+      {paymentParams.payment_return === "1" ? (
+        <Alert>
+          {paymentCredited ? <CheckCircle2 /> : <Clock />}
+          <AlertTitle>
+            {paymentCredited
+              ? "Top-up confirmed"
+              : "Payment confirmation is processing"}
+          </AlertTitle>
+          <AlertDescription>
+            {paymentCredited
+              ? "Paystack confirmed the payment and the credit is present in your wallet ledger."
+              : "Returning from checkout does not confirm payment. We are waiting for Paystack's signed webhook before crediting your balance."}
+            {paymentReference ? (
+              <span className="mt-1 block text-xs">
+                Payment reference:{" "}
+                <code className="font-mono">{paymentReference}</code>
+              </span>
+            ) : null}
+            {!paymentCredited ? (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="mt-3 w-fit"
+              >
+                <Link
+                  href={`/wallet?payment_return=1${
+                    paymentReference
+                      ? `&reference=${encodeURIComponent(paymentReference)}`
+                      : ""
+                  }`}
+                >
+                  Check again
+                </Link>
+              </Button>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {low.length > 0 && (
         <Alert>
@@ -436,40 +495,59 @@ export default async function WalletPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {ledger.map((e) => (
-                  <TableRow key={e.id}>
-                    <TableCell>
-                      <span className="font-medium">{KIND[e.type].label}</span>
-                      {e.reference && (
-                        <span className="block font-mono text-xs text-muted-foreground">
-                          {e.reference}
+                {ledger.length === 0 ? (
+                  <TableEmptyRow
+                    columns={5}
+                    icon={<Wallet />}
+                    title="No billing transactions yet"
+                    description="Top-ups, message charges, refunds, and adjustments will appear here."
+                  />
+                ) : (
+                  ledger.map((e) => (
+                    <TableRow key={e.id}>
+                      <TableCell>
+                        <span className="font-medium">
+                          {KIND[e.type].label}
                         </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <LedgerKindBadge type={e.type} />
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        "text-right font-mono tabular-nums",
-                        e.direction === "credit"
-                          ? "text-success"
-                          : "text-foreground",
-                      )}
-                    >
-                      {formatSigned(e.amount, e.direction)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
-                      {formatMoney(e.runningBalance)}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {new Date(e.createdAt).toLocaleDateString("en", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        {e.reference &&
+                          (e.type === "sms_charge" ? (
+                            <Link
+                              href={`/messages?messageId=${encodeURIComponent(e.reference)}`}
+                              className="block font-mono text-xs text-primary hover:underline"
+                            >
+                              View message {e.reference}
+                            </Link>
+                          ) : (
+                            <span className="block font-mono text-xs text-muted-foreground">
+                              {e.reference}
+                            </span>
+                          ))}
+                      </TableCell>
+                      <TableCell>
+                        <LedgerKindBadge type={e.type} />
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          "text-right font-mono tabular-nums",
+                          e.direction === "credit"
+                            ? "text-success"
+                            : "text-foreground",
+                        )}
+                      >
+                        {formatSigned(e.amount, e.direction)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
+                        {formatMoney(e.runningBalance)}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {new Date(e.createdAt).toLocaleDateString("en", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </section>

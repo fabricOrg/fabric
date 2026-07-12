@@ -5,6 +5,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@app/ui/components/ui/alert";
+import { Button } from "@app/ui/components/ui/button";
 import {
   Card,
   CardContent,
@@ -12,28 +13,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@app/ui/components/ui/card";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@app/ui/components/ui/empty";
+import { TableEmptyState } from "@app/ui/components/ui/states";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@app/ui/components/ui/tabs";
-import { List, TriangleAlert } from "lucide-react";
+import { Send, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 import { InsightsOverview } from "@/components/insights/insights-overview";
 import { MessagesTable } from "@/components/tables/messages-table";
 import { getMessageList } from "@/lib/server/dashboard-data";
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">{children}</div>
-  );
+  return <div className="flex w-full flex-col gap-6">{children}</div>;
 }
 
 function PageHeader() {
@@ -52,10 +46,14 @@ function PageHeader() {
 /** The Log tab body — the real-BFF message log, with its error/empty/loaded states intact. */
 function MessageLog({
   result,
+  initialMessageId,
+  initialStatus,
 }: {
   result:
     | { kind: "error"; message: string; requestId?: string }
     | { kind: "messages"; messages: readonly MessageSummary[] };
+  initialMessageId?: string;
+  initialStatus?: MessageSummary["status"];
 }) {
   if (result.kind === "error") {
     return (
@@ -70,6 +68,9 @@ function MessageLog({
               <code className="font-mono">{result.requestId}</code>.
             </p>
           )}
+          <Button asChild variant="outline" size="sm">
+            <Link href="/messages">Retry</Link>
+          </Button>
         </AlertDescription>
       </Alert>
     );
@@ -77,18 +78,28 @@ function MessageLog({
 
   if (result.messages.length === 0) {
     return (
-      <Empty className="mx-auto max-w-2xl">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <List />
-          </EmptyMedia>
-          <EmptyTitle>No messages yet</EmptyTitle>
-          <EmptyDescription>
-            Your sends will appear here with live delivery status. Head to Send
-            SMS to get started.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <Card>
+        <CardHeader>
+          <CardTitle>Message log</CardTitle>
+          <CardDescription>
+            Delivery records, provider outcomes, and message cost.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TableEmptyState
+            title="No messages yet"
+            description="Send a sandbox SMS to create the first delivery record."
+            action={
+              <Button asChild>
+                <Link href="/send">
+                  <Send data-icon="inline-start" />
+                  Send SMS
+                </Link>
+              </Button>
+            }
+          />
+        </CardContent>
+      </Card>
     );
   }
 
@@ -102,13 +113,33 @@ function MessageLog({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <MessagesTable messages={result.messages} />
+        <MessagesTable
+          messages={result.messages}
+          initialMessageId={initialMessageId}
+          initialStatus={initialStatus}
+        />
       </CardContent>
     </Card>
   );
 }
 
-export default async function MessagesPage() {
+export default async function MessagesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ messageId?: string; status?: string }>;
+}) {
+  const params = await searchParams;
+  const statuses = [
+    "queued",
+    "sending",
+    "accepted",
+    "sent",
+    "delivered",
+    "undelivered",
+    "failed",
+    "expired",
+  ] as const;
+  const initialStatus = statuses.find((status) => status === params.status);
   let result:
     | { kind: "error"; message: string; requestId?: string }
     | { kind: "messages"; messages: readonly MessageSummary[] };
@@ -132,7 +163,11 @@ export default async function MessagesPage() {
           <TabsTrigger value="insights">Insights</TabsTrigger>
         </TabsList>
         <TabsContent value="log">
-          <MessageLog result={result} />
+          <MessageLog
+            result={result}
+            initialMessageId={params.messageId}
+            initialStatus={initialStatus}
+          />
         </TabsContent>
         <TabsContent value="insights">
           <InsightsOverview />

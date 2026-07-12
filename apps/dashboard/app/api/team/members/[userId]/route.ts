@@ -33,6 +33,13 @@ export async function PATCH(
         { status: 422 },
       );
     }
+    if (userId === gate.userId && parsed.data.role !== undefined) {
+      return unauthorized(
+        "self_role_change",
+        "You cannot change your own role. Ask another owner or admin.",
+        400,
+      );
+    }
     const member = await updateMemberRole(gate.orgId, userId, parsed.data);
     return NextResponse.json(member);
   } catch (error) {
@@ -47,6 +54,13 @@ export async function DELETE(
   const gate = await authorize(request);
   if ("response" in gate) return gate.response;
   const { userId } = await params;
+  if (userId === gate.userId) {
+    return unauthorized(
+      "self_removal",
+      "You cannot remove your own workspace access.",
+      400,
+    );
+  }
   try {
     await removeMember(gate.orgId, userId);
     return new NextResponse(null, { status: 204 });
@@ -58,7 +72,7 @@ export async function DELETE(
 /** Shared origin + owner/admin gate. Returns the session's orgId, or a NextResponse to return. */
 async function authorize(
   request: Request,
-): Promise<{ orgId: string } | { response: NextResponse }> {
+): Promise<{ orgId: string; userId: string } | { response: NextResponse }> {
   if (!hasTrustedOrigin(request)) {
     return {
       response: unauthorized("invalid_origin", "Request rejected.", 403),
@@ -84,7 +98,7 @@ async function authorize(
       ),
     };
   }
-  return { orgId: session.orgId };
+  return { orgId: session.orgId, userId: session.userId };
 }
 
 function toErrorResponse(error: unknown) {

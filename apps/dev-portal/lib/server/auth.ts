@@ -109,8 +109,8 @@ export function configuredDevelopmentSession(): AppSession {
   return {
     userId: "development-developer",
     orgId: "",
-    role: "developer",
-    permissions: ["developer:*"],
+    role: "member",
+    permissions: ["api_keys:write", "api_keys:read", "request_logs:read"],
     sessionId: "development-developer-session",
   };
 }

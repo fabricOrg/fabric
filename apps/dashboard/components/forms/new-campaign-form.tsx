@@ -48,7 +48,7 @@ export function NewCampaignForm() {
   const router = useRouter();
   const [schedule, setSchedule] = useState<Schedule>("now");
   const [scheduledAt, setScheduledAt] = useState<Date | undefined>(undefined);
-  const [respectOptOuts, setRespectOptOuts] = useState(true);
+  const respectOptOuts = true;
   const scheduleId = useId();
 
   const scheduleValid = schedule === "now" || scheduledAt !== undefined;
@@ -69,11 +69,12 @@ export function NewCampaignForm() {
               : null,
           respectOptOuts,
         });
-        toast.success(
-          created.status === "scheduled"
-            ? `“${created.name}” scheduled`
-            : `“${created.name}” is sending`,
-        );
+        toast.success(`“${created.name}” preview created`, {
+          description:
+            created.status === "scheduled"
+              ? "The preview schedule was saved. No production audience was contacted."
+              : "No production audience was contacted.",
+        });
         router.push("/campaigns");
       } catch (envelope) {
         toastApiError(envelope);
@@ -200,35 +201,14 @@ export function NewCampaignForm() {
           </Field>
 
           <Field>
-            <FieldLabel>Opt-out handling</FieldLabel>
-            <div
-              className="flex gap-2"
-              role="group"
-              aria-label="Opt-out handling"
-            >
-              <Button
-                type="button"
-                variant={respectOptOuts ? "default" : "outline"}
-                size="sm"
-                aria-pressed={respectOptOuts}
-                onClick={() => setRespectOptOuts(true)}
-              >
-                Respect opt-outs
-              </Button>
-              <Button
-                type="button"
-                variant={respectOptOuts ? "outline" : "default"}
-                size="sm"
-                aria-pressed={!respectOptOuts}
-                onClick={() => setRespectOptOuts(false)}
-              >
-                Send to all
-              </Button>
+            <FieldLabel>Compliance policy</FieldLabel>
+            <div className="rounded-md border bg-muted/25 p-3 text-sm">
+              Promotional opt-outs are always suppressed in Campaigns. A bulk
+              campaign cannot override recipient consent.
             </div>
             <FieldDescription>
-              {respectOptOuts
-                ? "Promotional default: recipients who opted out are suppressed and never messaged."
-                : "Transactional only: send to everyone. Use only for service messages the law exempts from opt-out."}
+              Transactional notifications must be sent through an approved
+              transactional workflow, not this preview.
             </FieldDescription>
           </Field>
         </CardContent>
@@ -238,7 +218,7 @@ export function NewCampaignForm() {
       <div className="lg:col-span-1">
         <Card className="lg:sticky lg:top-6">
           <CardHeader>
-            <CardTitle className="text-base">Review &amp; send</CardTitle>
+            <CardTitle className="text-base">Review preview</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
@@ -274,9 +254,7 @@ export function NewCampaignForm() {
             </div>
             <div className="flex items-center justify-between gap-4 text-sm">
               <span className="text-muted-foreground">Opt-outs</span>
-              <span className="font-medium">
-                {respectOptOuts ? "Respected" : "Sending to all"}
-              </span>
+              <span className="font-medium">Always respected</span>
             </div>
 
             <Separator />
@@ -287,7 +265,9 @@ export function NewCampaignForm() {
               disabled={!canSubmit || !scheduleValid}
               className="w-full"
             >
-              {schedule === "later" ? "Schedule campaign" : "Send campaign"}
+              {schedule === "later"
+                ? "Create scheduled preview"
+                : "Create campaign preview"}
             </Button>
             <Button variant="outline" asChild className="w-full">
               <Link href="/campaigns">Cancel</Link>

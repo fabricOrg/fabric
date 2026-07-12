@@ -1,31 +1,32 @@
 "use client";
 
+import { Button } from "@app/ui/components/ui/button";
+import { Input } from "@app/ui/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@app/ui/components/ui/popover";
 import { cn } from "@app/ui/lib/utils";
 import { Clock } from "lucide-react";
 import { useId } from "react";
 
-function pad(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-function clamp(value: number, max: number): number {
-  if (Number.isNaN(value)) return 0;
-  if (value < 0) return 0;
-  if (value > max) return max;
-  return value;
+function clamp(value: string, maximum: number): string {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) return "00";
+  return String(Math.min(maximum, Math.max(0, parsed))).padStart(2, "0");
 }
 
 /**
- * Segmented HH:MM time picker (24-hour), replacing the native `type="time"` control for a consistent
- * look across apps. Controlled by an "HH:mm" string (empty string = unset); every edit emits a
- * normalised, zero-padded, clamped value so callers never see a half-typed time.
+ * Accessible 24-hour picker composed from the shared shadcn Popover and Input primitives.
+ * The controlled value is always emitted as HH:mm.
  */
 export function TimePicker({
   value,
   onChange,
   disabled,
   className,
-  "aria-label": ariaLabel = "Time",
+  "aria-label": ariaLabel = "Choose time",
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -33,55 +34,79 @@ export function TimePicker({
   className?: string;
   "aria-label"?: string;
 }) {
-  const groupId = useId();
-  const [hh = "", mm = ""] = value ? value.split(":") : [];
-
-  function emit(nextHour: string, nextMinute: string) {
-    const h = clamp(Number.parseInt(nextHour || "0", 10), 23);
-    const m = clamp(Number.parseInt(nextMinute || "0", 10), 59);
-    onChange(`${pad(h)}:${pad(m)}`);
-  }
-
-  const segment =
-    "w-7 bg-transparent text-center font-mono tabular-nums outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed";
+  const [hour = "00", minute = "00"] = value.split(":");
+  const id = useId();
 
   return (
-    <div
-      role="group"
-      aria-labelledby={groupId}
-      className={cn(
-        "inline-flex h-9 items-center gap-0.5 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30",
-        disabled && "cursor-not-allowed opacity-50",
-        className,
-      )}
-    >
-      <span id={groupId} className="sr-only">
-        {ariaLabel}
-      </span>
-      <input
-        aria-label="Hour"
-        inputMode="numeric"
-        maxLength={2}
-        placeholder="--"
-        disabled={disabled}
-        value={hh}
-        onChange={(e) => emit(e.target.value.replace(/\D/g, ""), mm)}
-        className={segment}
-      />
-      <span aria-hidden className="text-muted-foreground">
-        :
-      </span>
-      <input
-        aria-label="Minute"
-        inputMode="numeric"
-        maxLength={2}
-        placeholder="--"
-        disabled={disabled}
-        value={mm}
-        onChange={(e) => emit(hh, e.target.value.replace(/\D/g, ""))}
-        className={segment}
-      />
-      <Clock className="ml-1 size-4 shrink-0 text-muted-foreground" />
-    </div>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          aria-label={ariaLabel}
+          className={cn(
+            "w-full justify-start font-mono font-normal tabular-nums",
+            className,
+          )}
+        >
+          <Clock data-icon="inline-start" />
+          {hour}:{minute}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72">
+        <div className="mb-3">
+          <p className="text-sm font-medium">{ariaLabel}</p>
+          <p className="text-xs text-muted-foreground">24-hour time</p>
+        </div>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3">
+          <div className="grid gap-1.5">
+            <label
+              htmlFor={`${id}-hour`}
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Hour
+            </label>
+            <Input
+              id={`${id}-hour`}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={23}
+              value={Number(hour)}
+              onChange={(event) =>
+                onChange(`${clamp(event.target.value, 23)}:${minute}`)
+              }
+              className="text-center font-mono tabular-nums"
+              aria-label={`${ariaLabel} hour, 0 to 23`}
+            />
+          </div>
+          <span className="pb-2 text-muted-foreground" aria-hidden="true">
+            :
+          </span>
+          <div className="grid gap-1.5">
+            <label
+              htmlFor={`${id}-minute`}
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Minute
+            </label>
+            <Input
+              id={`${id}-minute`}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={59}
+              value={Number(minute)}
+              onChange={(event) =>
+                onChange(`${hour}:${clamp(event.target.value, 59)}`)
+              }
+              className="text-center font-mono tabular-nums"
+              aria-label={`${ariaLabel} minute, 0 to 59`}
+            />
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

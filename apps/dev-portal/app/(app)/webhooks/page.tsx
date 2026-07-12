@@ -127,7 +127,7 @@ function WebhooksInner() {
   }
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-display text-2xl font-semibold tracking-tight">
           Webhooks
@@ -277,7 +277,7 @@ function WebhooksInner() {
 
 export default function WebhooksPage() {
   return (
-    <Suspense fallback={<div className="mx-auto max-w-4xl p-6">Loading…</div>}>
+    <Suspense fallback={<div className="w-full">Loading…</div>}>
       <WebhooksInner />
     </Suspense>
   );

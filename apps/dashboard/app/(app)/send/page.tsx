@@ -1,6 +1,11 @@
 "use client";
 
-import { type Currency, parseApiError, toMoney } from "@app/contracts";
+import {
+  type Currency,
+  type DeliveryMode,
+  parseApiError,
+  toMoney,
+} from "@app/contracts";
 import { DEFAULT_RATES, encodeAndSegment, rateSegments } from "@app/domain";
 import {
   Alert,
@@ -44,9 +49,9 @@ import {
 import { ViewAsApiDialog } from "@/components/send/view-as-api-dialog";
 import { getConsent, type OptOut } from "@/lib/client/consent-api";
 import {
+  getMessagingSettings,
   getWallet,
   sendSms,
-  simulateDeliveredDlr,
 } from "@/lib/client/dashboard-api";
 import { listSenders, type SenderId } from "@/lib/client/senders-api";
 import { toastApiError } from "@/lib/error-toast";
@@ -69,10 +74,12 @@ export default function SendPage() {
   const [balanceMinor, setBalanceMinor] = useState<bigint | null>(null);
   const [senders, setSenders] = useState<SenderId[]>([]);
   const [optOuts, setOptOuts] = useState<OptOut[]>([]);
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode | null>(null);
 
   const [sending, setSending] = useState(false);
   const [sentTotal, setSentTotal] = useState<string | null>(null);
   const [sentCount, setSentCount] = useState(0);
+  const [sentMessageIds, setSentMessageIds] = useState<string[]>([]);
   const [blockedReqId, setBlockedReqId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -91,6 +98,9 @@ export default function SendPage() {
     getConsent()
       .then((c) => live && setOptOuts(c.optOuts))
       .catch(() => {});
+    getMessagingSettings()
+      .then((settings) => live && setDeliveryMode(settings.delivery_mode))
+      .catch((envelope) => live && toastApiError(envelope));
     return () => {
       live = false;
     };
@@ -161,11 +171,11 @@ export default function SendPage() {
           // Console sends are transactional-style tests; campaign/promo tooling declares its own class.
           class: "transactional",
         });
-        await simulateDeliveredDlr(result.id);
         results.push(result);
       }
       setSentTotal(formatMoney(toMoney(totalMinor, CURRENCY)));
       setSentCount(results.length);
+      setSentMessageIds(results.map((result) => result.id));
     } catch (envelope) {
       const parsed = parseApiError(envelope);
       if (parsed.type === "insufficient_funds_error") {
@@ -190,8 +200,10 @@ export default function SendPage() {
           </h2>
           <p className="text-sm text-muted-foreground">
             Charged <span className="font-mono tabular-nums">{sentTotal}</span>{" "}
-            to {sentCount} recipient{sentCount === 1 ? "" : "s"}. Track delivery
-            in Messages.
+            to {sentCount} recipient{sentCount === 1 ? "" : "s"}.{" "}
+            {deliveryMode === "virtual"
+              ? "Delivered to your virtual phone."
+              : "Track carrier delivery in Messages."}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2">
@@ -206,7 +218,21 @@ export default function SendPage() {
             Send another
           </Button>
           <Button variant="outline" asChild>
-            <Link href="/messages">View messages</Link>
+            <Link
+              href={
+                deliveryMode === "virtual"
+                  ? "/virtual-phone"
+                  : sentMessageIds.length === 1
+                    ? `/messages?messageId=${encodeURIComponent(sentMessageIds[0] ?? "")}`
+                    : "/messages"
+              }
+            >
+              {deliveryMode === "virtual"
+                ? "Open virtual phone"
+                : sentMessageIds.length === 1
+                  ? "View delivery record"
+                  : "View messages"}
+            </Link>
           </Button>
         </div>
       </div>
@@ -214,7 +240,7 @@ export default function SendPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-display text-2xl font-semibold tracking-tight">
           Send SMS
@@ -365,6 +391,16 @@ export default function SendPage() {
               {hasEstimate ? (
                 <>
                   <ConfirmRow label="From" value={senderId || "—"} />
+                  <ConfirmRow
+                    label="Delivery"
+                    value={
+                      deliveryMode === "virtual"
+                        ? "Virtual phone"
+                        : deliveryMode === "live"
+                          ? "Live carrier"
+                          : "Loading..."
+                    }
+                  />
                   <ConfirmRow
                     label="Recipients"
                     value={<span className="tabular-nums">{recipients}</span>}

@@ -264,9 +264,7 @@ function Canvas() {
             <Plus data-icon="inline-start" />
             Steps
           </Button>
-          <span className="px-1 font-display text-sm font-semibold">
-            Journeys
-          </span>
+          <h1 className="px-1 font-display text-sm font-semibold">Journeys</h1>
           <Badge variant="secondary" className="tabular-nums">
             {nodes.length} steps
           </Badge>
@@ -293,7 +291,7 @@ function Canvas() {
             title="This defines a journey; it doesn't run yet. Scheduling, waits, retries and live sends are a separate build, so Publish is disabled."
           >
             <Info className="size-3" />
-            Draft
+            Preview draft
           </Badge>
           <Button variant="ghost" size="sm" onClick={reset}>
             <RotateCcw data-icon="inline-start" />

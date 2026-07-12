@@ -97,6 +97,13 @@ function Row({ item }: { item: OverviewActivity }) {
   );
 }
 
+function activityHref(item: OverviewActivity): string {
+  if (item.kind === "message") {
+    return `/messages?messageId=${encodeURIComponent(item.id)}`;
+  }
+  return item.kind === "campaign" ? "/campaigns" : "/wallet";
+}
+
 /**
  * Compact recent-activity feed. Message rows link to /messages (the drill-down surface); campaign and
  * top-up rows are non-navigable here. Divided list keeps it scannable without a full table.
@@ -126,16 +133,12 @@ export function RecentActivity({
         <ul className="divide-y divide-border">
           {items.map((item) => (
             <li key={item.id}>
-              {item.kind === "message" ? (
-                <Link
-                  href="/messages"
-                  className="-mx-2 block rounded-md px-2 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                >
-                  <Row item={item} />
-                </Link>
-              ) : (
+              <Link
+                href={activityHref(item)}
+                className="-mx-2 block rounded-md px-2 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+              >
                 <Row item={item} />
-              )}
+              </Link>
             </li>
           ))}
         </ul>
