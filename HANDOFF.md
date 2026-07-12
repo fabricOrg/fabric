@@ -92,6 +92,20 @@ it's being deleted in W-B, don't invest.
   until it's flipped on. Flipping it = **W-A**, testing-only; staging/prod human-gated redline (and
   gated on Phase-5 abuse controls existing first).
 
+**W-B slice 1 — API keys real, under an application (`28e616f`).** First dev-portal→dashboard merge
+slice. Keys were mock in the dev-portal; now real on the tenant-token API. Per ADR-0004 they live on
+the **application-detail page** `/applications/[slug]`, split into **environment sections** (Sandbox
+always; **Live hidden until go-live** unlocks it — a sandbox workspace never sees a live table).
+`ApiKeysController` reuses `OperatorOrTenantGuard`; `ApiKeyService.create/list` gained an optional
+`applicationId` (mint into the NAMED app's env, not just `default`; list filters by app). owner/admin
+gained `api_keys:read/write`. Application cards link to the detail + show/count only ACTIVE envs.
+Flat `/api-keys` page + nav item removed. **Fixed** a real bug: the tenant-token client set
+`content-type: application/json` on every request, so a bodyless DELETE tripped Fastify's empty-JSON
+parser → 400 and revoke silently failed; now set only when there's a body. **Browser-verified**
+end-to-end (create → once-only secret; revoke → 200 → Revoked). Follow-ups (tasks): **key
+expiry/TTL** (schema `expires_at` + resolve-path enforcement + create-dialog field — user-requested);
+webhooks + request logs (next W-B slices, still mock in dev-portal).
+
 **Next — Phases 1–5** per `docs/PI-6/PLAN.md` (frontend-heavy): global environment SWITCHER (chrome
 control that pins the selected app/env into subsequent calls — keys, sends; tied to task #9 moving
 `delivery_mode` onto the environment); **W-B dev-portal→dashboard merge** — real-wire the still-MOCK
@@ -107,8 +121,10 @@ integration-proven.
 `16b081d` backfill · `c523157` key/webhook columns · `a58d2f4` key mint/resolve · `8f6b512` webhook
 scope · `7451ed8` provisioning · `912cd03` env routing · `f30a65a` go-live env-unlock · `c5814c4`
 applications API · `af4419d` applications API tenant-token path · `e0f87e5` dashboard Applications
-surface + permissions · `4bf5a4c` remove dev-login bypass + login forwards to AuthKit (auth pivot)
-(+ HANDOFF/doc commits). Merge order when done: E13→`dev` first, then this rebases (fifi merges).
+surface + permissions · `4bf5a4c` remove dev-login bypass + login forwards to AuthKit (auth pivot) ·
+`d68113e` self-serve gate → platform.signup kill-switch · `0400737` ApplicationCard restyle ·
+`28e616f` API keys under an application per env (W-B slice 1) (+ HANDOFF/doc commits). Merge order
+when done: E13→`dev` first, then this rebases (fifi merges).
 
 _Milestone rule (user directive 2026-07-12): update this HANDOFF.md at every milestone._
 
