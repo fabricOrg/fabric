@@ -25,13 +25,42 @@ Milestones so far:
 - Application/environment zod contracts in `@app/contracts` (`c537739`).
 - Backfill flat→hierarchy: `cloud-backfill-app-env.ts` (in-image, runs as `app_provisioner` — the
   only cross-tenant role, since FORCE RLS binds even the owner and nothing has BYPASSRLS) + its
-  in-VPC ECS task-def. Verified on real Postgres: sandbox acct → live env locked, live acct → live
-  env active, idempotent re-run. Dry-run by default; `--commit` to write.
+  in-VPC ECS task-def. Also re-points existing keys/webhooks. Verified on real Postgres, idempotent
+  (`16b081d`).
+- `api_keys` + `webhook_endpoints` gain `application_id`/`environment_id` (migration `0047`,
+  nullable during two-step backfill) (`c523157`). API keys mint into the default app's env matching
+  the key type; live keys gate on the live env being `active` (not on `accounts.plan`); `resolve()`
+  + `req.tenant` carry app/env; 8/8 spec green (`a58d2f4`). Webhook endpoints scope to the default
+  app's sandbox env (`8f6b512`).
+- Both provisioning paths birth the hierarchy: self-serve → live env LOCKED (go-live unlocks); ops
+  (enterprise exception) → live env ACTIVE. Converged with the backfill; self-serve spec asserts it,
+  5/5 green (`7451ed8`).
 
-**Next (foundation, tasks #6–#8):** re-key api_keys/webhooks to application+environment (+ auth
-lookup resolves tenant/app/env + their DTO extensions); converge self-serve+ops provisioning onto one
-workspace→app→env core; re-key routing + go-live + E13 virtual-phone onto `environment.type`. Then
-Phases 1–5 per `docs/PI-6/PLAN.md`.
+**Foundation is 7/8 done — every step tested on real Postgres, all committed, NOTHING pushed.**
+
+**Next — task #8 (the ONLY remaining foundation piece; send/money-critical — do carefully):**
+re-key routing + go-live + E13 virtual-phone onto `environment.type`. Full design is in the task
+tracker + below:
+- ROUTING (`virtual-phone.service.ts` / `sms.service.ts`): `settings()`/`resolveMode()` pin on
+  `accounts.plan==='sandbox'` today. Add `resolveModeForEnvironment(tenantId, environmentId)` —
+  sandbox env → `virtual` forced; live env → existing default-live/opt-in logic. `send()` uses
+  `req.tenant.environmentId` when present (sk_* keys), ELSE falls back to the current plan-based path
+  for the BFF tenant-token path (environmentId null until dashboard env-selection, a later phase).
+- GO-LIVE: `go_live` proposal approval flips `accounts.plan` today → change to unlock the live
+  ENVIRONMENT (`status locked→active`), which is what `api-keys.service` already gates live-key
+  minting on.
+- E13: `delivery_mode` in `accounts.settings` → re-key onto environment where known.
+- OUTBOX+DELIVERY: add `environment_id` to `outbox_events`; env-filter webhook delivery (deferred
+  from #6c).
+
+Then **Phases 1–5** per `docs/PI-6/PLAN.md`: marketing app (separate), flip `SELF_SERVE_SIGNUP_ENABLED`
+in testing, dev-portal→dashboard merge, Node/Python SDKs, usage, admin-console realignment. Email +
+AI are later PIs.
+
+**Branch commits (E14):** `2301adc` ADR/plan · `337ae79` schema+RLS · `c537739` contracts ·
+`16b081d` backfill · `c523157` key/webhook columns · `a58d2f4` key mint/resolve · `8f6b512` webhook
+scope · `7451ed8` provisioning · (+ HANDOFF/doc commits). Merge order when done: E13→`dev` first,
+then this rebases (fifi merges).
 
 _Milestone rule (user directive 2026-07-12): update this HANDOFF.md at every milestone._
 
