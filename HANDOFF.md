@@ -20,11 +20,14 @@ first; then rebases). **Local commits only, NO push until the program is done** 
 Milestones so far:
 - ADR-0004 + PI-6 plan committed (`2301adc`).
 - Foundation schema: `applications` + `environments` tables (migration `0045`) + RLS/grants
-  (`0046`, provisioner + tenant_isolation). RLS boundary stays the workspace/tenant.
+  (`0046`, provisioner + tenant_isolation). RLS boundary stays the workspace/tenant. Cross-tenant
+  read/write denial + fail-closed proven — full db integration suite green, 34 tests (`337ae79`).
+- Application/environment zod contracts in `@app/contracts` (`c537739`).
 
-**Next (foundation, tasks #4–#8):** app/env contracts; backfill flat→hierarchy; re-key
-api_keys/webhooks to application+environment; converge self-serve+ops provisioning; re-key routing +
-go-live + E13 virtual-phone onto `environment.type`. Then Phases 1–5 per `docs/PI-6/PLAN.md`.
+**Next (foundation, tasks #5–#8):** backfill flat→hierarchy (each account → default app → sandbox
+env + live env locked/active); re-key api_keys/webhooks to application+environment (+ auth lookup +
+their DTO extensions); converge self-serve+ops provisioning onto one workspace→app→env core; re-key
+routing + go-live + E13 virtual-phone onto `environment.type`. Then Phases 1–5 per `docs/PI-6/PLAN.md`.
 
 _Milestone rule (user directive 2026-07-12): update this HANDOFF.md at every milestone._
 
