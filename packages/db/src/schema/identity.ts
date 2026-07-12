@@ -1,4 +1,5 @@
 import {
+  boolean,
   jsonb,
   pgEnum,
   pgTable,
@@ -32,8 +33,8 @@ export const membershipRole = pgEnum("membership_role", [
   "owner",
   "admin",
   "member",
-  // API-focused, least-privilege role: dev-portal access (api_keys + request_logs + wallet:read),
-  // NOT sms:send or org/member management. A developer is a tenant member, not an org admin.
+  // Legacy value retained in PostgreSQL for migration compatibility. New writes use a governance
+  // role plus memberships.developer_access.
   "developer",
 ]);
 export const membershipStatus = pgEnum("membership_status", [
@@ -89,6 +90,7 @@ export const memberships = pgTable(
       .$type<UserId>(),
     workosMembershipId: text("workos_membership_id").unique(),
     role: membershipRole("role").notNull().default("member"),
+    developerAccess: boolean("developer_access").notNull().default(false),
     status: membershipStatus("status").notNull().default("active"),
     workosUpdatedAt: timestamp("workos_updated_at", { withTimezone: true }),
     ...timestamps,

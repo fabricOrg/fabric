@@ -18,6 +18,7 @@ import { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
 import { SmsController } from "../sms/sms.controller.js";
 import { SmsService } from "../sms/sms.service.js";
+import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
 import { IdempotencyService } from "./idempotency.service.js";
 
 // E10-S4: sender enforcement has its own spec — these flows always pass the gate.
@@ -28,6 +29,9 @@ const consentAllowAll = {
 const sendersAlwaysActive = {
   isActiveSender: async () => true,
 } as unknown as SendersService;
+const liveMode = {
+  resolveMode: async () => "live",
+} as unknown as VirtualPhoneService;
 
 /**
  * CLIENT IDEMPOTENCY — integration spec (finding 3 of the architecture remediation).
@@ -70,6 +74,7 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     new QueueService(config),
     sendersAlwaysActive,
     consentAllowAll,
+    liveMode,
   );
   const idempotency = new IdempotencyService(appDb);
   const controller = new SmsController(sms, idempotency);

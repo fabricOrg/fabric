@@ -80,14 +80,8 @@ describeDb("identity provisioning (invite-only)", () => {
     expect(resolved).toMatchObject({
       tenant_id: tenantId,
       role: "owner",
-      permissions: [
-        "sms:send",
-        "sms:read",
-        "wallet:read",
-        "api_keys:write",
-        "api_keys:read",
-        "request_logs:read",
-      ],
+      developer_access: false,
+      permissions: ["sms:send", "sms:read", "wallet:read"],
       session_id: "session_test",
     });
 
@@ -120,6 +114,37 @@ describeDb("identity provisioning (invite-only)", () => {
       session_id: "session_test_2",
     });
     expect(resolved).toMatchObject({ tenant_id: tenantId, role: "owner" });
+  });
+
+  it("combines member permissions with independent developer access", async () => {
+    await db.db
+      .update(memberships)
+      .set({ role: "member", developerAccess: true })
+      .where(eq(memberships.tenantId, tenantId));
+
+    const resolved = await service.resolve({
+      external_user_id: externalUserId,
+      organization_id: organizationId,
+      email,
+      name: "Owner Renamed",
+      user_updated_at: "2026-07-05T11:00:00.000Z",
+      role: "member",
+      permissions: [],
+      session_id: "session_developer_access",
+    });
+
+    expect(resolved).toMatchObject({
+      role: "member",
+      developer_access: true,
+      permissions: [
+        "sms:send",
+        "sms:read",
+        "wallet:read",
+        "api_keys:write",
+        "api_keys:read",
+        "request_logs:read",
+      ],
+    });
   });
 
   it("fails closed for an identity with no invite in this org", async () => {

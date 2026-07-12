@@ -21,3 +21,26 @@ variable "github_environments" {
   type        = list(string)
   default     = ["testing", "testing-dashboard", "testing-admin-console", "testing-dev-portal"]
 }
+
+variable "testing_sms_provider" {
+  description = "SMS provider selected in testing. Use arkesel so testing exercises the same provider path as production."
+  type        = string
+  default     = "arkesel"
+
+  validation {
+    condition     = contains(["fake", "arkesel"], var.testing_sms_provider)
+    error_message = "testing_sms_provider must be either fake or arkesel."
+  }
+}
+
+variable "testing_arkesel_sandbox" {
+  description = "Whether testing sends the Arkesel sandbox flag. Set false so testing can validate real SMS delivery."
+  type        = bool
+  default     = false
+}
+
+variable "testing_alarm_email" {
+  description = "Optional email subscribed to testing alarm notifications. Leave blank to create the SNS topic without an email subscription."
+  type        = string
+  default     = ""
+}

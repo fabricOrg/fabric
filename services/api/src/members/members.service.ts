@@ -31,7 +31,6 @@ import {
  * the account before any tenant context and writes the platform-level users row). The dashboard BFF
  * supplies the tenant id from the authenticated session — never from user input — and gates invite
  * on owner/admin, so this internal endpoint trusts the BFF token (like tenant provisioning).
- *
  * Invite = create an `invited` user (by email; bound to a WorkOS subject on first sign-in) + an
  * `invited` membership, then send a WorkOS organization invitation. The invitation goes out FIRST:
  * if WorkOS rejects it, nothing is written; if the DB write then fails, the worst case is an
@@ -63,7 +62,9 @@ export class MembersService {
         email: users.email,
         name: users.name,
         role: memberships.role,
+        developer_access: memberships.developerAccess,
         status: memberships.status,
+        updated_at: memberships.updatedAt,
       })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
@@ -73,7 +74,16 @@ export class MembersService {
     const { page, nextCursor } = takePage(rows, pageSize, (r) =>
       encodeCursor(r.email, r.user_id),
     );
-    return { members: page, next_cursor: nextCursor };
+    return {
+      members: page.map((member) => ({
+        ...member,
+        role: member.role === "developer" ? "member" : member.role,
+        developer_access:
+          member.developer_access || member.role === "developer",
+        updated_at: member.updated_at.toISOString(),
+      })),
+      next_cursor: nextCursor,
+    };
   }
 
   async invite(
@@ -133,7 +143,7 @@ export class MembersService {
     await this.workosClient().userManagement.sendInvitation({
       email,
       organizationId: account.organizationId,
-      ...(request.role === "developer" ? {} : { roleSlug: request.role }),
+      roleSlug: request.role,
     });
 
     return this.provisioning.db.transaction(async (tx) => {
@@ -156,11 +166,17 @@ export class MembersService {
           tenantId: scoped,
           userId: user.id,
           role: request.role,
+          developerAccess: request.developer_access,
           status: "invited",
         })
         .onConflictDoUpdate({
           target: [memberships.tenantId, memberships.userId],
-          set: { role: request.role, status: "invited", updatedAt: new Date() },
+          set: {
+            role: request.role,
+            developerAccess: request.developer_access,
+            status: "invited",
+            updatedAt: new Date(),
+          },
         });
 
       return {
@@ -168,7 +184,9 @@ export class MembersService {
         email,
         name: user.name,
         role: request.role,
+        developer_access: request.developer_access,
         status: "invited" as const,
+        updated_at: new Date().toISOString(),
       };
     });
   }
@@ -191,23 +209,37 @@ export class MembersService {
         "The owner's role can't be changed here.",
       );
     }
+    const currentRole = current.role === "developer" ? "member" : current.role;
     const [updated] = await this.provisioning.db
       .update(memberships)
-      .set({ role: request.role, updatedAt: new Date() })
+      .set({
+        ...(request.role ? { role: request.role } : {}),
+        ...(request.developer_access !== undefined
+          ? { developerAccess: request.developer_access }
+          : {}),
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(memberships.tenantId, scoped),
           eq(memberships.userId, current.userId),
         ),
       )
-      .returning({ role: memberships.role, status: memberships.status });
+      .returning({
+        role: memberships.role,
+        developerAccess: memberships.developerAccess,
+        status: memberships.status,
+        updatedAt: memberships.updatedAt,
+      });
     if (!updated) throw new Error("Membership update returned no row.");
     return {
       user_id: current.userId,
       email: current.email,
       name: current.name,
-      role: updated.role,
+      role: updated.role === "developer" ? currentRole : updated.role,
+      developer_access: updated.developerAccess || updated.role === "developer",
       status: updated.status,
+      updated_at: updated.updatedAt.toISOString(),
     };
   }
 
@@ -244,7 +276,8 @@ export class MembersService {
     userId: UserId;
     email: string;
     name: string | null;
-    role: MemberDto["role"];
+    role: (typeof memberships.$inferSelect)["role"];
+    developerAccess: boolean;
   }> {
     const [row] = await this.provisioning.db
       .select({
@@ -252,6 +285,7 @@ export class MembersService {
         email: users.email,
         name: users.name,
         role: memberships.role,
+        developerAccess: memberships.developerAccess,
       })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))

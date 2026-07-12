@@ -37,6 +37,10 @@ data "aws_iam_policy_document" "ecs_secret_access" {
       aws_secretsmanager_secret.dashboard_cookie_password.arn,
       aws_secretsmanager_secret.dashboard_workos.arn,
       aws_secretsmanager_secret.tenant_token_secret.arn,
+      aws_secretsmanager_secret.arkesel_sms.arn,
+      aws_secretsmanager_secret.paystack.arn,
+      aws_secretsmanager_secret.workos_webhook.arn,
+      aws_secretsmanager_secret.edge_shared_secret.arn,
       aws_secretsmanager_secret.admin_console_cookie_password.arn,
       aws_secretsmanager_secret.admin_console_workos.arn,
       aws_secretsmanager_secret.dev_portal_cookie_password.arn,
@@ -61,13 +65,13 @@ resource "aws_ecs_cluster" "testing" {
 
   setting {
     name  = "containerInsights"
-    value = "disabled"
+    value = "enabled"
   }
 }
 
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/fabric/testing/api"
-  retention_in_days = 14
+  retention_in_days = 90
 }
 
 locals {
@@ -78,8 +82,8 @@ resource "aws_ecs_task_definition" "api" {
   family                   = "fabric-api-testing"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
+  cpu                      = 512
+  memory                   = 1024
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.api_task.arn
 
@@ -108,7 +112,27 @@ resource "aws_ecs_task_definition" "api" {
         # real image) — never `update-service` onto the raw terraform revision (bootstrap image).
         {
           name  = "REDIS_QUEUE_URL"
-          value = "redis://${aws_elasticache_cluster.redis_queue.cache_nodes[0].address}:6379"
+          value = "redis://${aws_elasticache_replication_group.redis_queue.primary_endpoint_address}:6379"
+        },
+        {
+          name  = "REDIS_CACHE_URL"
+          value = "redis://${aws_elasticache_replication_group.redis_cache.primary_endpoint_address}:6379"
+        },
+        {
+          name  = "SMS_PROVIDER"
+          value = var.testing_sms_provider
+        },
+        {
+          name  = "ARKESEL_SANDBOX"
+          value = tostring(var.testing_arkesel_sandbox)
+        },
+        {
+          name  = "ARKESEL_DLR_CALLBACK_URL"
+          value = "https://${aws_cloudfront_distribution.testing_edge["api"].domain_name}/webhooks/dlr/arkesel-sms"
+        },
+        {
+          name  = "DASHBOARD_BASE_URL"
+          value = "https://${aws_cloudfront_distribution.testing_edge["dashboard"].domain_name}"
         },
         # ADR-0002: self-serve sandbox sign-up is ON in the testing environment (fail closed
         # elsewhere — the api treats anything but "true" as OFF).
@@ -150,6 +174,30 @@ resource "aws_ecs_task_definition" "api" {
           name      = "WORKOS_API_KEY"
           valueFrom = "${aws_secretsmanager_secret.dashboard_workos.arn}:WORKOS_API_KEY::"
         },
+        {
+          name      = "WORKOS_WEBHOOK_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.workos_webhook.arn}:WORKOS_WEBHOOK_SECRET::"
+        },
+        {
+          name      = "PAYSTACK_SECRET_KEY"
+          valueFrom = "${aws_secretsmanager_secret.paystack.arn}:PAYSTACK_SECRET_KEY::"
+        },
+        {
+          name      = "ARKESEL_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.arkesel_sms.arn}:ARKESEL_API_KEY::"
+        },
+        {
+          name      = "ARKESEL_SENDER_ID"
+          valueFrom = "${aws_secretsmanager_secret.arkesel_sms.arn}:ARKESEL_SENDER_ID::"
+        },
+        {
+          name      = "VIRTUAL_PHONE_ENCRYPTION_KEY"
+          valueFrom = "${aws_secretsmanager_secret.virtual_phone_encryption_key.arn}:VIRTUAL_PHONE_ENCRYPTION_KEY::"
+        },
+        {
+          name      = "EDGE_SHARED_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.edge_shared_secret.arn}:EDGE_SHARED_SECRET::"
+        },
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -180,6 +228,10 @@ resource "aws_ecs_task_definition" "api" {
     aws_secretsmanager_secret_version.bff_internal_token,
     aws_secretsmanager_secret_version.tenant_token_secret,
     aws_secretsmanager_secret_version.dashboard_workos,
+    aws_secretsmanager_secret_version.workos_webhook,
+    aws_secretsmanager_secret_version.paystack,
+    aws_secretsmanager_secret_version.arkesel_sms,
+    aws_secretsmanager_secret_version.edge_shared_secret,
   ]
 }
 
@@ -187,8 +239,8 @@ resource "aws_ecs_task_definition" "migration" {
   family                   = "fabric-api-testing-migration"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
+  cpu                      = 512
+  memory                   = 1024
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.api_task.arn
 
@@ -245,7 +297,7 @@ resource "aws_ecs_task_definition" "migration" {
 
 resource "aws_service_discovery_private_dns_namespace" "testing" {
   name = "testing.fabric.internal"
-  vpc  = data.aws_vpc.default.id
+  vpc  = aws_vpc.testing.id
 }
 
 resource "aws_service_discovery_service" "api" {
@@ -282,9 +334,9 @@ resource "aws_ecs_service" "api" {
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    subnets          = [for subnet in aws_subnet.private : subnet.id]
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   service_registries {

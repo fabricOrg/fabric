@@ -15,6 +15,7 @@ import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import type { SendersService } from "../senders/senders.service.js";
 import { SMS_SEND_QUEUE, SmsService } from "../sms/sms.service.js";
 import { SmsSendWorker } from "../sms/sms-send.worker.js";
+import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
 import { QueueService } from "./queue.service.js";
 
 // E10-S4: sender enforcement has its own spec — these flows always pass the gate.
@@ -51,6 +52,9 @@ const killSwitch = {
 const autoTopup = {
   maybeAutoTopUp: async () => undefined,
 } as unknown as AutoTopupService;
+const liveMode = {
+  resolveMode: async () => "live",
+} as unknown as VirtualPhoneService;
 
 describeDb("queued send pipeline (BullMQ)", () => {
   const provisioning = createProvisioningDb(superUrl ?? "", { max: 2 });
@@ -67,6 +71,7 @@ describeDb("queued send pipeline (BullMQ)", () => {
     queueOn,
     sendersAlwaysActive,
     consentAllowAll,
+    liveMode,
   );
   const smsInline = new SmsService(
     appDb,
@@ -76,6 +81,7 @@ describeDb("queued send pipeline (BullMQ)", () => {
     queueOff,
     sendersAlwaysActive,
     consentAllowAll,
+    liveMode,
   );
 
   const tenantId = randomUUID() as TenantId;

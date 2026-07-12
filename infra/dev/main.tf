@@ -6,8 +6,9 @@
 #
 # STATE: encrypted and versioned in S3 with a native S3 lockfile.
 #
-# COST STANCE: the testing runtime is intentionally small and has no NAT gateway or load balancer.
-# Review the recurring-cost estimate in README.md before applying this stack.
+# RUNTIME STANCE: the testing runtime favors production-like behavior over minimum cost. It uses a
+# dedicated VPC, private ECS tasks, NAT gateways, Multi-AZ RDS, Redis queue/cache tiers, and alarms.
+# Review README.md and docs/TESTING-RUNTIME-RUNBOOK.md before applying this stack.
 #
 # RUN:
 #   aws configure --profile app-dev        # one-time: IAM keys + region eu-west-1
@@ -40,6 +41,19 @@ terraform {
 provider "aws" {
   region  = var.region  # eu-west-1 (af-south-1 unavailable here; residency is a PROD concern only)
   profile = var.profile # the IAM-user profile you set with `aws configure --profile app-dev`
+  default_tags {
+    tags = {
+      Project   = "app-platform"
+      Env       = "testing"
+      ManagedBy = "terraform"
+    }
+  }
+}
+
+provider "aws" {
+  alias   = "useast1"
+  region  = "us-east-1" # CloudFront-scoped WAF resources are managed from us-east-1.
+  profile = var.profile
   default_tags {
     tags = {
       Project   = "app-platform"

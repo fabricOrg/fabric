@@ -134,7 +134,7 @@ jobs:
       smoke-test-path: /login
     secrets: inherit
 
-  # admin-console + dev-portal: same pattern as the dashboard jobs — own GitHub Environment per
+  # admin-console + dev-portal: same pattern as the dashboard jobs - own GitHub Environment per
   # service (own vars/secrets/OIDC trust); share the api's database so run-migration is false.
   # Testing only for now (staging/production wired later, mirroring the dashboard jobs).
   deploy-admin-console-testing:

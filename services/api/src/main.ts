@@ -8,6 +8,7 @@ import {
 } from "@nestjs/platform-fastify";
 import { Logger } from "nestjs-pino";
 import { AppModule } from "./app.module.js";
+import { edgeOriginAllowed } from "./http/edge-origin-guard.js";
 import { resolveRequestId } from "./http/logging.config.js";
 
 /**
@@ -31,6 +32,20 @@ async function bootstrap(): Promise<void> {
   );
   // All Nest `Logger` calls (SmsService, MaintenanceService, …) now emit structured pino JSON.
   app.useLogger(app.get(Logger));
+  const edgeSharedSecret = process.env.EDGE_SHARED_SECRET;
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addHook("onRequest", (request, reply, done) => {
+      if (edgeOriginAllowed(request, edgeSharedSecret)) {
+        done();
+        return;
+      }
+      reply.code(403).send({
+        error: "forbidden",
+        message: "Requests must use the protected edge endpoint.",
+      });
+    });
   // Echo the id to the caller so a support ticket can quote the exact request.
   app
     .getHttpAdapter()
