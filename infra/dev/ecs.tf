@@ -37,10 +37,16 @@ data "aws_iam_policy_document" "ecs_secret_access" {
       aws_secretsmanager_secret.dashboard_cookie_password.arn,
       aws_secretsmanager_secret.dashboard_workos.arn,
       aws_secretsmanager_secret.tenant_token_secret.arn,
+      aws_secretsmanager_secret.arkesel_sms.arn,
+      aws_secretsmanager_secret.paystack.arn,
+      aws_secretsmanager_secret.workos_webhook.arn,
+      aws_secretsmanager_secret.edge_shared_secret.arn,
       aws_secretsmanager_secret.admin_console_cookie_password.arn,
       aws_secretsmanager_secret.admin_console_workos.arn,
-      aws_secretsmanager_secret.dev_portal_cookie_password.arn,
-      aws_secretsmanager_secret.dev_portal_workos.arn,
+      # Both were injected into the api task definition without ever being granted here, so the task
+      # could not have read them — an ECS task fails to START on a secret it cannot fetch.
+      aws_secretsmanager_secret.virtual_phone_encryption_key.arn,
+      aws_secretsmanager_secret.pii_master_key.arn,
     ]
   }
 }
@@ -61,13 +67,13 @@ resource "aws_ecs_cluster" "testing" {
 
   setting {
     name  = "containerInsights"
-    value = "disabled"
+    value = "enabled"
   }
 }
 
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/fabric/testing/api"
-  retention_in_days = 14
+  retention_in_days = 90
 }
 
 locals {
@@ -78,8 +84,8 @@ resource "aws_ecs_task_definition" "api" {
   family                   = "fabric-api-testing"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
+  cpu                      = 512
+  memory                   = 1024
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.api_task.arn
 
@@ -108,7 +114,27 @@ resource "aws_ecs_task_definition" "api" {
         # real image) — never `update-service` onto the raw terraform revision (bootstrap image).
         {
           name  = "REDIS_QUEUE_URL"
-          value = "redis://${aws_elasticache_cluster.redis_queue.cache_nodes[0].address}:6379"
+          value = "redis://${aws_elasticache_replication_group.redis_queue.primary_endpoint_address}:6379"
+        },
+        {
+          name  = "REDIS_CACHE_URL"
+          value = "redis://${aws_elasticache_replication_group.redis_cache.primary_endpoint_address}:6379"
+        },
+        {
+          name  = "SMS_PROVIDER"
+          value = var.testing_sms_provider
+        },
+        {
+          name  = "ARKESEL_SANDBOX"
+          value = tostring(var.testing_arkesel_sandbox)
+        },
+        {
+          name  = "ARKESEL_DLR_CALLBACK_URL"
+          value = "https://${aws_cloudfront_distribution.testing_edge["api"].domain_name}/webhooks/dlr/arkesel-sms"
+        },
+        {
+          name  = "DASHBOARD_BASE_URL"
+          value = "https://${aws_cloudfront_distribution.testing_edge["dashboard"].domain_name}"
         },
         # ADR-0002: self-serve sandbox sign-up is ON in the testing environment (fail closed
         # elsewhere — the api treats anything but "true" as OFF).
@@ -150,6 +176,34 @@ resource "aws_ecs_task_definition" "api" {
           name      = "WORKOS_API_KEY"
           valueFrom = "${aws_secretsmanager_secret.dashboard_workos.arn}:WORKOS_API_KEY::"
         },
+        {
+          name      = "WORKOS_WEBHOOK_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.workos_webhook.arn}:WORKOS_WEBHOOK_SECRET::"
+        },
+        {
+          name      = "PAYSTACK_SECRET_KEY"
+          valueFrom = "${aws_secretsmanager_secret.paystack.arn}:PAYSTACK_SECRET_KEY::"
+        },
+        {
+          name      = "ARKESEL_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.arkesel_sms.arn}:ARKESEL_API_KEY::"
+        },
+        {
+          name      = "ARKESEL_SENDER_ID"
+          valueFrom = "${aws_secretsmanager_secret.arkesel_sms.arn}:ARKESEL_SENDER_ID::"
+        },
+        {
+          name      = "VIRTUAL_PHONE_ENCRYPTION_KEY"
+          valueFrom = "${aws_secretsmanager_secret.virtual_phone_encryption_key.arn}:VIRTUAL_PHONE_ENCRYPTION_KEY::"
+        },
+        {
+          name      = "PII_MASTER_KEY"
+          valueFrom = "${aws_secretsmanager_secret.pii_master_key.arn}:PII_MASTER_KEY::"
+        },
+        {
+          name      = "EDGE_SHARED_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.edge_shared_secret.arn}:EDGE_SHARED_SECRET::"
+        },
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -180,6 +234,10 @@ resource "aws_ecs_task_definition" "api" {
     aws_secretsmanager_secret_version.bff_internal_token,
     aws_secretsmanager_secret_version.tenant_token_secret,
     aws_secretsmanager_secret_version.dashboard_workos,
+    aws_secretsmanager_secret_version.workos_webhook,
+    aws_secretsmanager_secret_version.paystack,
+    aws_secretsmanager_secret_version.arkesel_sms,
+    aws_secretsmanager_secret_version.edge_shared_secret,
   ]
 }
 
@@ -187,8 +245,8 @@ resource "aws_ecs_task_definition" "migration" {
   family                   = "fabric-api-testing-migration"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
+  cpu                      = 512
+  memory                   = 1024
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.api_task.arn
 
@@ -243,9 +301,130 @@ resource "aws_ecs_task_definition" "migration" {
   ]
 }
 
+# One-off backfill: move virtual-delivery PII out of the legacy platform-wide key and into the PII
+# vault (per-subject DEK), so that crypto-shred erasure can actually reach it.
+#
+# It needs its own task definition rather than a `run-task` override because ECS overrides can set
+# `environment` but NOT `secrets` — and this needs BOTH keys: the legacy one to read the old rows and
+# the master one to write the vault. The database is not publicly reachable, so it must run in-VPC.
+#
+# Runs ONLY after a deploy has applied migration 0043 (which adds the columns it writes). Dry-run by
+# default; pass --commit in the command override to write. Delete this once the backfill is done and
+# the *_ciphertext columns are dropped.
+resource "aws_ecs_task_definition" "pii_backfill" {
+  family                   = "fabric-api-testing-pii-backfill"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.api_task.arn
+
+  runtime_platform {
+    cpu_architecture        = "X86_64"
+    operating_system_family = "LINUX"
+  }
+
+  container_definitions = jsonencode([
+    {
+      name      = "backfill"
+      image     = local.bootstrap_image
+      essential = true
+      # Dry run by default — an accidental task launch must not rewrite data.
+      command = [
+        "node",
+        "node_modules/@app/db/dist/cloud-backfill-pii-vault.js",
+      ]
+      secrets = [
+        {
+          name      = "DATABASE_URL_OWNER"
+          valueFrom = "${aws_secretsmanager_secret.database_owner.arn}:DATABASE_URL_OWNER::"
+        },
+        {
+          name      = "PII_MASTER_KEY"
+          valueFrom = "${aws_secretsmanager_secret.pii_master_key.arn}:PII_MASTER_KEY::"
+        },
+        {
+          name      = "VIRTUAL_PHONE_ENCRYPTION_KEY"
+          valueFrom = "${aws_secretsmanager_secret.virtual_phone_encryption_key.arn}:VIRTUAL_PHONE_ENCRYPTION_KEY::"
+        },
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "pii-backfill"
+        }
+      }
+    },
+  ])
+
+  depends_on = [
+    aws_secretsmanager_secret_version.database_owner,
+    aws_secretsmanager_secret_version.pii_master_key,
+    aws_secretsmanager_secret_version.virtual_phone_encryption_key,
+  ]
+}
+
+# One-off backfill (ADR-0004): give every existing workspace the Workspace -> Application ->
+# Environment hierarchy that new signups get at provision time — a default application + a sandbox
+# and a live environment (live locked unless the account is already live).
+#
+# Runs as app_provisioner (DATABASE_URL_PROVISIONER): FORCE RLS binds even the table owner and no
+# role has BYPASSRLS, so cross-tenant enumeration/writes go through the one role with permissive
+# provisioner_all policies (0013 accounts, 0046 applications/environments). The DB is not publicly
+# reachable, so this runs in-VPC. Runs ONLY after a deploy applies migrations 0045/0046. Dry-run by
+# default; pass --commit in the command override to write. Delete once the backfill has run.
+resource "aws_ecs_task_definition" "app_env_backfill" {
+  family                   = "fabric-api-testing-app-env-backfill"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.api_task.arn
+
+  runtime_platform {
+    cpu_architecture        = "X86_64"
+    operating_system_family = "LINUX"
+  }
+
+  container_definitions = jsonencode([
+    {
+      name      = "backfill"
+      image     = local.bootstrap_image
+      essential = true
+      # Dry run by default — an accidental task launch must not write data.
+      command = [
+        "node",
+        "node_modules/@app/db/dist/cloud-backfill-app-env.js",
+      ]
+      secrets = [
+        {
+          name      = "DATABASE_URL_PROVISIONER"
+          valueFrom = "${aws_secretsmanager_secret.database_provisioner.arn}:DATABASE_URL_PROVISIONER::"
+        },
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "app-env-backfill"
+        }
+      }
+    },
+  ])
+
+  depends_on = [
+    aws_secretsmanager_secret_version.database_provisioner,
+  ]
+}
+
 resource "aws_service_discovery_private_dns_namespace" "testing" {
   name = "testing.fabric.internal"
-  vpc  = data.aws_vpc.default.id
+  vpc  = aws_vpc.testing.id
 }
 
 resource "aws_service_discovery_service" "api" {
@@ -282,9 +461,9 @@ resource "aws_ecs_service" "api" {
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    subnets          = [for subnet in aws_subnet.private : subnet.id]
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   service_registries {

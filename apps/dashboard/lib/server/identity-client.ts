@@ -51,6 +51,7 @@ export async function resolveWorkOSSession(
   return toAppSession(
     resolveIdentitySessionResponseSchema.parse(await response.json()),
     claims.email,
+    claims.name,
   );
 }
 
@@ -98,6 +99,7 @@ export async function resolveOrganizationForUser(
 function toAppSession(
   response: ResolveIdentitySessionResponse,
   email: string,
+  name: string | null,
 ): AppSession {
   return {
     userId: response.user_id,
@@ -106,6 +108,7 @@ function toAppSession(
     permissions: response.permissions,
     sessionId: response.session_id,
     email,
+    name: name ?? undefined,
     plan: response.plan,
   };
 }

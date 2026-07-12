@@ -1,13 +1,13 @@
 ####################################################################################################
-# Fabric customer dashboard — testing runtime. Same topology as the api (ecs.tf/gateway.tf): a
+# Fabric customer dashboard testing runtime. Same topology as the api (ecs.tf/gateway.tf): a private
 # Fargate ECS service behind its own API Gateway HTTP API + VPC Link, sharing the testing cluster,
 # VPC, and ECS-tasks security group (already opens 3000 from the shared VPC Link SG). No load
-# balancer, no NAT — same cost stance as the rest of this stack.
+# balancer.
 #
 # WORKOS_ORGANIZATION_ID / WORKOS_REDIRECT_URI / WORKOS_LOGOUT_REDIRECT_URI are only knowable
-# AFTER this stack is applied (they depend on this API's real URL) — see database.tf's placeholder
+# AFTER this stack is applied (they depend on this API's real URL); see database.tf's placeholder
 # secrets and docs/PI-3/PATH-TO-TESTING.md for the exact order of operations. The BFF's data-plane
-# credential is a short-lived tenant token minted by the api (ADR-0003) — no per-tenant key here.
+# credential is a short-lived tenant token minted by the api (ADR-0003); no per-tenant key here.
 ####################################################################################################
 
 resource "aws_ecr_repository" "dashboard" {
@@ -45,7 +45,7 @@ resource "aws_iam_role" "dashboard_task" {
 
 resource "aws_cloudwatch_log_group" "dashboard" {
   name              = "/fabric/testing/dashboard"
-  retention_in_days = 14
+  retention_in_days = 90
 }
 
 locals {
@@ -56,8 +56,8 @@ resource "aws_ecs_task_definition" "dashboard" {
   family                   = "fabric-dashboard-testing"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
+  cpu                      = 512
+  memory                   = 1024
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.dashboard_task.arn
 
@@ -80,10 +80,10 @@ resource "aws_ecs_task_definition" "dashboard" {
         { name = "PORT", value = "3000" },
         # The api's public HTTPS endpoint (API Gateway) — simplest path for the BFF's server-side
         # fetches; avoids depending on Cloud Map SRV resolution from a second, unrelated service.
-        { name = "API_BASE_URL", value = aws_apigatewayv2_api.testing.api_endpoint },
+        { name = "API_BASE_URL", value = "https://${aws_cloudfront_distribution.testing_edge["api"].domain_name}" },
         # The dashboard's OWN public origin. Behind API Gateway + VPC Link the container sees the
         # internal host as request.url, so auth redirects + the trusted-origin check must use this.
-        { name = "DASHBOARD_BASE_URL", value = aws_apigatewayv2_api.dashboard_testing.api_endpoint },
+        { name = "DASHBOARD_BASE_URL", value = "https://${aws_cloudfront_distribution.testing_edge["dashboard"].domain_name}" },
       ]
       secrets = [
         {
@@ -114,6 +114,10 @@ resource "aws_ecs_task_definition" "dashboard" {
           name      = "WORKOS_LOGOUT_REDIRECT_URI"
           valueFrom = "${aws_secretsmanager_secret.dashboard_workos.arn}:WORKOS_LOGOUT_REDIRECT_URI::"
         },
+        {
+          name      = "EDGE_SHARED_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.edge_shared_secret.arn}:EDGE_SHARED_SECRET::"
+        },
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -143,6 +147,7 @@ resource "aws_ecs_task_definition" "dashboard" {
     aws_secretsmanager_secret_version.bff_internal_token,
     aws_secretsmanager_secret_version.dashboard_cookie_password,
     aws_secretsmanager_secret_version.dashboard_workos,
+    aws_secretsmanager_secret_version.edge_shared_secret,
   ]
 }
 
@@ -180,9 +185,9 @@ resource "aws_ecs_service" "dashboard" {
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    subnets          = [for subnet in aws_subnet.private : subnet.id]
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   service_registries {
@@ -199,7 +204,7 @@ resource "aws_ecs_service" "dashboard" {
   }
 }
 
-# Separate HTTP API (own public URL) reusing the same VPC Link — the dashboard is a distinct public
+# Separate HTTP API (own public URL) reusing the same VPC Link; the dashboard is a distinct public
 # surface from the api, not a route under it.
 resource "aws_apigatewayv2_api" "dashboard_testing" {
   name          = "fabric-dashboard-testing"
@@ -224,7 +229,7 @@ resource "aws_apigatewayv2_route" "dashboard_default" {
 
 resource "aws_cloudwatch_log_group" "dashboard_api_gateway" {
   name              = "/fabric/testing/dashboard-gateway"
-  retention_in_days = 14
+  retention_in_days = 90
 }
 
 resource "aws_apigatewayv2_stage" "dashboard_default" {

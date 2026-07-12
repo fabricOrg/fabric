@@ -6,6 +6,7 @@ import {
   Power,
   Radio,
   ScrollText,
+  ShieldOff,
   UserCog,
   Users,
 } from "lucide-react";
@@ -34,6 +35,7 @@ export const navGroups: readonly NavGroup[] = [
       { title: "Senders", href: "/senders", icon: Radio },
       { title: "Impersonation", href: "/impersonation", icon: UserCog },
       { title: "Kill-switch", href: "/kill-switch", icon: Power },
+      { title: "Data requests", href: "/privacy", icon: ShieldOff },
     ],
   },
   {

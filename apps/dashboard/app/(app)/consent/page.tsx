@@ -5,7 +5,14 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@app/ui/components/ui/alert";
+import { PageContainer } from "@app/ui/components/ui/app-shell";
 import { Card, CardContent, CardHeader } from "@app/ui/components/ui/card";
+import {
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+  PageHeader as UIPageHeader,
+} from "@app/ui/components/ui/page-header";
 import { Skeleton } from "@app/ui/components/ui/skeleton";
 import { TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -24,22 +31,16 @@ type LoadState = "loading" | "ready" | "error";
 
 function PageHeader() {
   return (
-    <div className="flex flex-col gap-1">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">
-        Consent &amp; DND
-      </h1>
-      <p className="text-sm text-muted-foreground">
-        Opting out is a legal right. Transactional messages — OTP, alerts,
-        receipts — always deliver. Promotional SMS respects opt-outs and only
-        sends inside your quiet-hours window.
-      </p>
-    </div>
-  );
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">{children}</div>
+    <UIPageHeader>
+      <PageHeaderHeading>
+        <PageHeaderTitle>Consent &amp; DND</PageHeaderTitle>
+        <PageHeaderDescription className="max-w-3xl">
+          Opting out is a legal right. Transactional messages — OTP, alerts,
+          receipts — always deliver. Promotional SMS respects opt-outs and only
+          sends inside your quiet-hours window.
+        </PageHeaderDescription>
+      </PageHeaderHeading>
+    </UIPageHeader>
   );
 }
 
@@ -110,7 +111,7 @@ export default function ConsentPage() {
   }
 
   return (
-    <Shell>
+    <PageContainer>
       <PageHeader />
 
       {state === "loading" && <LoadingSkeleton />}
@@ -155,6 +156,6 @@ export default function ConsentPage() {
           </Card>
         </>
       )}
-    </Shell>
+    </PageContainer>
   );
 }

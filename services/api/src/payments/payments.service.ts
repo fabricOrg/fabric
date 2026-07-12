@@ -22,13 +22,7 @@ import { invalidRequest, unauthorized } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 
-/**
- * Wallet top-up over Paystack (E4). initiate() opens a hosted checkout and records a PENDING intent;
- * the provider webhook then credits the ledger. The credit is idempotent on the reference and runs
- * under the intent's tenant RLS context — a replayed webhook never double-credits. SANDBOX only
- * (sk_test_); the platform.payments kill-switch gates new top-ups. Amounts stay exact bigint minor
- * units end to end.
- */
+/** Paystack top-ups: pending intent, idempotent webhook credit, tenant RLS, and exact minor units. */
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
@@ -82,7 +76,11 @@ export class PaymentsService {
         currency: request.currency,
         email: request.email,
         reference,
-        ...(base ? { callbackUrl: `${base.replace(/\/$/, "")}/wallet` } : {}),
+        ...(base
+          ? {
+              callbackUrl: `${base.replace(/\/$/, "")}/wallet?payment_return=1`,
+            }
+          : {}),
         metadata: { tenant_id: tenantId },
       },
       creds,

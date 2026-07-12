@@ -7,9 +7,11 @@ import type {
 } from "@app/contracts";
 import {
   accounts,
+  applications,
   clampLimit,
   decodeCursor,
   encodeCursor,
+  environments,
   keysetWhere,
   memberships,
   type ProvisioningDb,
@@ -207,6 +209,35 @@ export class TenantProvisioningService {
           .onConflictDoNothing({
             target: [memberships.tenantId, memberships.userId],
           });
+
+        // ADR-0004: same workspace birth as the self-serve path — a default application + a sandbox
+        // environment and a live environment. Ops provisioning is the ENTERPRISE EXCEPTION (a human
+        // operator deliberately onboards the tenant), and its plans are all live-eligible
+        // ('free'|'growth'|'scale' — never 'sandbox'), so the live env is active immediately rather
+        // than locked-until-go-live. Idempotent: re-provisioning leaves an existing default app be.
+        const [app] = await tx
+          .insert(applications)
+          .values({ tenantId: created.id, name: "Default", slug: "default" })
+          .onConflictDoNothing({
+            target: [applications.tenantId, applications.slug],
+          })
+          .returning({ id: applications.id });
+        if (app) {
+          await tx.insert(environments).values([
+            {
+              tenantId: created.id,
+              applicationId: app.id,
+              type: "sandbox",
+              status: "active",
+            },
+            {
+              tenantId: created.id,
+              applicationId: app.id,
+              type: "live",
+              status: "active",
+            },
+          ]);
+        }
 
         return created;
       });

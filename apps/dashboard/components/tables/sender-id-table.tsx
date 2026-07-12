@@ -12,12 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@app/ui/components/ui/tooltip";
 import { cn } from "@app/ui/lib/utils";
 import type { ColumnDef } from "@tanstack/react-table";
 import { BadgeCheck, CircleX, Clock, type LucideIcon } from "lucide-react";
@@ -123,16 +117,13 @@ const columns: ColumnDef<SenderId>[] = [
     header: "Status",
     cell: ({ row }) => {
       const s = row.original;
-      return s.status === "rejected" && s.note ? (
-        <Tooltip>
-          <TooltipTrigger className="rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-            <StatusBadge status={s.status} />
-            <span className="sr-only">Rejection reason: {s.note}</span>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-xs">{s.note}</TooltipContent>
-        </Tooltip>
-      ) : (
-        <StatusBadge status={s.status} />
+      return (
+        <div className="flex max-w-xs flex-col items-start gap-1">
+          <StatusBadge status={s.status} />
+          {s.status === "rejected" && s.note ? (
+            <span className="text-xs text-destructive">{s.note}</span>
+          ) : null}
+        </div>
       );
     },
   },
@@ -151,8 +142,16 @@ const columns: ColumnDef<SenderId>[] = [
   },
 ];
 
-export function SenderIdTable({ senders }: { senders: readonly SenderId[] }) {
-  const [status, setStatus] = useState<SenderStatus | "all">("all");
+export function SenderIdTable({
+  senders,
+  initialStatus,
+}: {
+  senders: readonly SenderId[];
+  initialStatus?: SenderStatus;
+}) {
+  const [status, setStatus] = useState<SenderStatus | "all">(
+    initialStatus ?? "all",
+  );
   const [country, setCountry] = useState<SenderCountry | "all">("all");
 
   const filtered = useMemo(
@@ -166,57 +165,54 @@ export function SenderIdTable({ senders }: { senders: readonly SenderId[] }) {
   );
 
   return (
-    <TooltipProvider>
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Select
-            value={status}
-            onValueChange={(v) => setStatus(v as SenderStatus | "all")}
-          >
-            <SelectTrigger className="sm:w-48" aria-label="Filter by status">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {SENDER_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {STATUS_META[s].label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={country}
-            onValueChange={(v) => setCountry(v as SenderCountry | "all")}
-          >
-            <SelectTrigger className="sm:w-48" aria-label="Filter by country">
-              <SelectValue placeholder="All countries" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All countries</SelectItem>
-              {SENDER_COUNTRIES.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {COUNTRY_LABEL[c]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <DataTable
-          columns={columns}
-          data={filtered}
-          ariaLabel="Sender IDs"
-          empty="No sender IDs match this filter."
-        />
-
-        {filtered.some((s) => s.status === "rejected") && (
-          <p className="text-xs text-muted-foreground">
-            Rejected sender IDs show the reason on hover or focus. Resubmit with
-            a corrected request.
-          </p>
-        )}
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Select
+          value={status}
+          onValueChange={(v) => setStatus(v as SenderStatus | "all")}
+        >
+          <SelectTrigger className="sm:w-48" aria-label="Filter by status">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            {SENDER_STATUSES.map((s) => (
+              <SelectItem key={s} value={s}>
+                {STATUS_META[s].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={country}
+          onValueChange={(v) => setCountry(v as SenderCountry | "all")}
+        >
+          <SelectTrigger className="sm:w-48" aria-label="Filter by country">
+            <SelectValue placeholder="All countries" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All countries</SelectItem>
+            {SENDER_COUNTRIES.map((c) => (
+              <SelectItem key={c} value={c}>
+                {COUNTRY_LABEL[c]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-    </TooltipProvider>
+
+      <DataTable
+        columns={columns}
+        data={filtered}
+        ariaLabel="Sender IDs"
+        empty="No sender IDs match this filter."
+      />
+
+      {filtered.some((s) => s.status === "rejected") && (
+        <p className="text-xs text-muted-foreground">
+          Correct the stated issue, then submit a new registration request.
+        </p>
+      )}
+    </div>
   );
 }

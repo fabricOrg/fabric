@@ -68,7 +68,9 @@ async function apiRequest<T>(
       cache: "no-store",
       headers: {
         authorization: `Bearer ${token}`,
-        "content-type": "application/json",
+        // Only declare a JSON body when there IS one: a DELETE (no body) with content-type
+        // application/json trips Fastify's empty-body parser → 400 (FST_ERR_CTP_EMPTY_JSON_BODY).
+        ...(init.body ? { "content-type": "application/json" } : {}),
         ...init.headers,
       },
     });
@@ -80,7 +82,12 @@ async function apiRequest<T>(
     tenantTokens.delete(tenantId);
     response = await request(await mintTenantToken(tenantId));
   }
-  const payload = (await response.json()) as unknown;
+  // 204 No Content (e.g. a DELETE) has no body — don't try to parse it. `.catch` also guards a
+  // non-JSON error body so a failure still surfaces as a BffError rather than a parse throw.
+  const payload =
+    response.status === 204
+      ? undefined
+      : ((await response.json().catch(() => null)) as unknown);
   if (!response.ok) throw new BffError(response.status, payload);
   return payload as T;
 }

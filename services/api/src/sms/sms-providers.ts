@@ -1,5 +1,5 @@
 import type { Creds, SmsSenderPlugin } from "@app/integrations";
-import { ArkeselSmsProvider } from "@app/integrations";
+import { ArkeselSmsProvider, VirtualPhoneProvider } from "@app/integrations";
 import { FakeProvider } from "@app/integrations/testing";
 import type { Logger } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
@@ -12,29 +12,85 @@ import type { ConfigService } from "@nestjs/config";
 export interface ConfiguredSmsProviders {
   readonly provider: SmsSenderPlugin;
   readonly creds: Creds | undefined;
-  readonly sandboxProvider: SmsSenderPlugin;
+  readonly virtualProvider: VirtualPhoneProvider;
+  readonly legacySandboxProvider: FakeProvider;
+  readonly liveReady: boolean;
+  readonly liveReadinessReason: string | null;
 }
 
 export function buildSmsProviders(
   config: ConfigService,
   logger: Logger,
 ): ConfiguredSmsProviders {
-  const sandboxProvider = new FakeProvider();
+  const virtualProvider = new VirtualPhoneProvider();
+  const legacySandboxProvider = new FakeProvider();
   if (config.get<string>("SMS_PROVIDER") !== "arkesel") {
-    return { provider: new FakeProvider(), creds: undefined, sandboxProvider };
+    const readiness = liveProviderReadiness(config);
+    return {
+      provider: legacySandboxProvider,
+      creds: undefined,
+      virtualProvider,
+      legacySandboxProvider,
+      liveReady: readiness.ready,
+      liveReadinessReason: readiness.reason,
+    };
   }
   // Sandbox by default — real delivery needs ARKESEL_SANDBOX=false, a deliberate human-gated flip.
   const callbackUrl = dlrCallbackUrl(config);
+  const apiKey = config.get<string>("ARKESEL_API_KEY") ?? "";
+  const senderId = config.get<string>("ARKESEL_SENDER_ID") ?? "";
+  const sandbox = config.get<string>("ARKESEL_SANDBOX") ?? "true";
   const creds: Creds = {
-    apiKey: config.get<string>("ARKESEL_API_KEY") ?? "",
-    senderId: config.get<string>("ARKESEL_SENDER_ID") ?? "",
-    sandbox: config.get<string>("ARKESEL_SANDBOX") ?? "true",
+    apiKey,
+    senderId,
+    sandbox,
     ...(callbackUrl ? { callbackUrl } : {}),
   };
   logger.log(
     `SMS provider: arkesel-sms (sandbox=${creds.sandbox}, dlr=${callbackUrl ? "on" : "off"})`,
   );
-  return { provider: new ArkeselSmsProvider(), creds, sandboxProvider };
+  const readiness = liveProviderReadiness(config);
+  return {
+    provider: new ArkeselSmsProvider(),
+    creds,
+    virtualProvider,
+    legacySandboxProvider,
+    liveReady: readiness.ready,
+    liveReadinessReason: readiness.reason,
+  };
+}
+
+export function assertLiveProviderReady(config: ConfigService): void {
+  const readiness = liveProviderReadiness(config);
+  if (!readiness.ready) {
+    throw new Error(readiness.reason ?? "Live SMS is not configured.");
+  }
+}
+
+function liveProviderReadiness(config: ConfigService): {
+  ready: boolean;
+  reason: string | null;
+} {
+  if ((config.get<string>("NODE_ENV") ?? process.env.NODE_ENV) === "test") {
+    return { ready: true, reason: null };
+  }
+  if (config.get<string>("SMS_PROVIDER") !== "arkesel") {
+    return {
+      ready: false,
+      reason: "Arkesel is not configured as the live SMS provider.",
+    };
+  }
+  const apiKey = config.get<string>("ARKESEL_API_KEY") ?? "";
+  if (!apiKey || apiKey === "REPLACE_ME") {
+    return { ready: false, reason: "Arkesel credentials are not configured." };
+  }
+  if ((config.get<string>("ARKESEL_SANDBOX") ?? "true") !== "false") {
+    return {
+      ready: false,
+      reason: "Arkesel carrier delivery is still in sandbox mode.",
+    };
+  }
+  return { ready: true, reason: null };
 }
 
 /**

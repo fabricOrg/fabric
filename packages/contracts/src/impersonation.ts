@@ -6,7 +6,8 @@ import { z } from "zod";
  * these DTOs are the audit-side of the action.
  */
 export const startImpersonationRequestSchema = z.object({
-  tenant_id: z.string().uuid(),
+  // guid() not uuid(): accepts the non-RFC-version dev seed tenant id (zod v4 uuid() rejects it).
+  tenant_id: z.string().guid(),
   tenant_label: z.string().trim().min(1).max(200),
   reason: z.string().trim().min(8).max(500),
 });
@@ -15,7 +16,7 @@ export type StartImpersonationRequest = z.infer<
 >;
 
 export const stopImpersonationRequestSchema = z.object({
-  tenant_id: z.string().uuid(),
+  tenant_id: z.string().guid(),
   tenant_label: z.string().trim().min(1).max(200),
 });
 export type StopImpersonationRequest = z.infer<

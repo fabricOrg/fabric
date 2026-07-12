@@ -84,8 +84,9 @@ export async function runCloudSeed(): Promise<void> {
           role: "owner",
           status: "active",
         })
-        .onConflictDoNothing({
+        .onConflictDoUpdate({
           target: [memberships.tenantId, memberships.userId],
+          set: { role: "owner", status: "active", updatedAt: new Date() },
         });
     }
 

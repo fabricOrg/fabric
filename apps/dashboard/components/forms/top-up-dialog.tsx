@@ -28,7 +28,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { formatMoney, parseAmountToMinor } from "@/lib/money";
 
-type Phase = "form" | "processing";
+type Phase = "form" | "review" | "processing";
 
 const CURRENCIES = currencySchema.options;
 
@@ -59,40 +59,42 @@ export function TopUpDialog({
   const form = useForm({
     defaultValues: { amount: "" },
     validators: { onMount: schema, onChange: schema },
-    onSubmit: async ({ value }) => {
-      const minor = parseAmountToMinor(value.amount, currency);
-      if (minor === null || minor <= 0n) return;
-      setPhase("processing");
-      try {
-        const response = await fetch("/api/dashboard/wallet/topup", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            amount_minor: minor.toString(),
-            currency,
-          }),
-        });
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as {
-            error?: { message?: string };
-          } | null;
-          throw new Error(
-            payload?.error?.message ?? "Couldn't start the top-up.",
-          );
-        }
-        const { authorization_url } = (await response.json()) as {
-          authorization_url: string;
-        };
-        // Hand off to the provider's hosted checkout; the wallet credits via webhook on success.
-        window.location.href = authorization_url;
-      } catch (error) {
-        setPhase("form");
-        toast.error(
-          error instanceof Error ? error.message : "Couldn't start the top-up.",
+    onSubmit: () => setPhase("review"),
+  });
+
+  async function startPayment() {
+    const minor = parseAmountToMinor(form.state.values.amount, currency);
+    if (minor === null || minor <= 0n) return;
+    setPhase("processing");
+    try {
+      const response = await fetch("/api/dashboard/wallet/topup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          amount_minor: minor.toString(),
+          currency,
+        }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(
+          payload?.error?.message ?? "Couldn't start the top-up.",
         );
       }
-    },
-  });
+      const { authorization_url } = (await response.json()) as {
+        authorization_url: string;
+      };
+      // Hand off to the provider's hosted checkout; the wallet credits via webhook on success.
+      window.location.href = authorization_url;
+    } catch (error) {
+      setPhase("review");
+      toast.error(
+        error instanceof Error ? error.message : "Couldn't start the top-up.",
+      );
+    }
+  }
 
   function reset() {
     setPhase("form");
@@ -195,6 +197,50 @@ export function TopUpDialog({
               </form.Subscribe>
             </DialogFooter>
           </form>
+        )}
+
+        {phase === "review" && (
+          <div className="flex flex-col gap-5">
+            <DialogHeader>
+              <DialogTitle>Confirm wallet top-up</DialogTitle>
+              <DialogDescription>
+                Review the charge before continuing to Paystack&apos;s hosted
+                checkout.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-md border p-4">
+              <p className="text-sm text-muted-foreground">
+                You will authorize
+              </p>
+              <p className="mt-1 font-display text-3xl font-semibold tabular-nums">
+                {formatMoney({
+                  currency,
+                  minor:
+                    parseAmountToMinor(
+                      form.state.values.amount,
+                      currency,
+                    )?.toString() ?? "0",
+                })}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your Fabric balance changes only after Paystack confirms a
+                successful payment. Closing or failing checkout does not credit
+                the wallet.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPhase("form")}
+              >
+                Back
+              </Button>
+              <Button type="button" onClick={() => void startPayment()}>
+                Continue to secure payment
+              </Button>
+            </DialogFooter>
+          </div>
         )}
 
         {phase === "processing" && (

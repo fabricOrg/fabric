@@ -1,6 +1,8 @@
 "use client";
 
 import { Button } from "@app/ui/components/ui/button";
+import { Skeleton } from "@app/ui/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@app/ui/components/ui/states";
 import {
   Table,
   TableBody,
@@ -27,6 +29,15 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   /** Rendered in a full-width row when there are no rows. */
   empty?: ReactNode;
+  emptyState?: {
+    title: string;
+    description?: string;
+    icon?: ReactNode;
+    action?: ReactNode;
+  };
+  loading?: boolean;
+  loadingRows?: number;
+  error?: { title?: string; message: string; onRetry?: () => void };
   /** Accessible label for the scroll region (WCAG scrollable-region-focusable). */
   ariaLabel?: string;
   onRowClick?: (row: TData) => void;
@@ -44,6 +55,10 @@ export function DataTable<TData, TValue>({
   columns,
   data,
   empty,
+  emptyState,
+  loading = false,
+  loadingRows = 5,
+  error,
   ariaLabel,
   onRowClick,
   rowLabel,
@@ -84,7 +99,27 @@ export function DataTable<TData, TValue>({
           ))}
         </TableHeader>
         <TableBody>
-          {table.getRowModel().rows.length ? (
+          {loading ? (
+            Array.from({ length: loadingRows }, (_, index) => (
+              <TableRow key={`loading-${index}`} aria-hidden="true">
+                {columns.map((_, columnIndex) => (
+                  <TableCell key={`loading-${index}-${columnIndex}`}>
+                    <Skeleton className="h-5 w-full max-w-36" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : error ? (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="p-4">
+                <ErrorState
+                  title={error.title ?? "Couldn't load data"}
+                  message={error.message}
+                  onRetry={error.onRetry}
+                />
+              </TableCell>
+            </TableRow>
+          ) : table.getRowModel().rows.length ? (
             table.getRowModel().rows.map((row) => (
               <TableRow
                 key={row.id}
@@ -118,9 +153,19 @@ export function DataTable<TData, TValue>({
             <TableRow>
               <TableCell
                 colSpan={columns.length}
-                className="h-24 text-center text-muted-foreground"
+                className="h-48 p-4 text-center text-muted-foreground"
               >
-                {empty ?? "No results."}
+                {emptyState ? (
+                  <EmptyState
+                    icon={emptyState.icon}
+                    title={emptyState.title}
+                    description={emptyState.description}
+                    action={emptyState.action}
+                    className="min-h-36 border-0 p-4 md:p-6"
+                  />
+                ) : (
+                  (empty ?? "No results.")
+                )}
               </TableCell>
             </TableRow>
           )}

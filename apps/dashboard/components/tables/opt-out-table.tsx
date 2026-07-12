@@ -15,13 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@app/ui/components/ui/dialog";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@app/ui/components/ui/empty";
 import { Input } from "@app/ui/components/ui/input";
 import {
   Select,
@@ -140,6 +133,12 @@ export function OptOutTable({
               size="sm"
               variant="ghost"
               onClick={() => setPending(row.original)}
+              disabled={row.original.source !== "manual"}
+              title={
+                row.original.source === "manual"
+                  ? "Remove this workspace-managed opt-out"
+                  : "Managed by the recipient or regulatory registry"
+              }
               aria-label={`Remove opt-out for ${row.original.msisdn}`}
             >
               <Trash2 />
@@ -222,27 +221,33 @@ export function OptOutTable({
         </div>
       </div>
 
-      {optOuts.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <ShieldOff />
-            </EmptyMedia>
-            <EmptyTitle>No opt-outs yet</EmptyTitle>
-            <EmptyDescription>
-              Numbers that reply STOP, appear on the 2442 registry, or are added
-              here will be excluded from promotional sends.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={filtered}
-          ariaLabel="Opt-out list"
-          empty="No numbers match this filter."
-        />
-      )}
+      <DataTable
+        columns={columns}
+        data={filtered}
+        ariaLabel="Opt-out list"
+        className="rounded-lg border"
+        emptyState={
+          optOuts.length === 0
+            ? {
+                title: "No opt-outs yet",
+                description:
+                  "STOP replies, 2442 registry entries, and manually added numbers will appear here.",
+                icon: <ShieldOff />,
+              }
+            : {
+                title: "No matching opt-outs",
+                description:
+                  "Adjust the search, scope, or source filters to see more results.",
+                icon: <ShieldOff />,
+              }
+        }
+      />
+
+      <p className="text-xs text-muted-foreground">
+        Only manually added workspace opt-outs can be removed here. STOP replies
+        require a new approved opt-in, and 2442 registry records remain under
+        regulatory authority.
+      </p>
 
       <Dialog
         open={pending !== null}

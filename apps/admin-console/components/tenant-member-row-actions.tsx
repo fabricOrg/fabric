@@ -26,13 +26,12 @@ interface ErrorPayload {
   error?: { message?: string };
 }
 
-type ManagedRole = "admin" | "member" | "developer";
+type ManagedRole = "admin" | "member";
 const ROLE_LABEL: Record<ManagedRole, string> = {
   admin: "Admin",
   member: "Member",
-  developer: "Developer",
 };
-const ROLES: ManagedRole[] = ["admin", "member", "developer"];
+const ROLES: ManagedRole[] = ["admin", "member"];
 
 /**
  * Staff per-row management of a tenant's member. Owner rows render no actions (the api refuses to
@@ -44,6 +43,7 @@ export function TenantMemberRowActions({
   email,
   label,
   role,
+  developerAccess,
   status,
 }: {
   tenantId: string;
@@ -51,6 +51,7 @@ export function TenantMemberRowActions({
   email: string;
   label: string;
   role: ManagedRole;
+  developerAccess: boolean;
   status: "active" | "invited" | "disabled";
 }) {
   const router = useRouter();
@@ -124,7 +125,11 @@ export function TenantMemberRowActions({
                     {
                       method: "POST",
                       headers: { "content-type": "application/json" },
-                      body: JSON.stringify({ email, role }),
+                      body: JSON.stringify({
+                        email,
+                        role,
+                        developer_access: developerAccess,
+                      }),
                     },
                     `Invite re-sent to ${email}`,
                   )
@@ -134,6 +139,26 @@ export function TenantMemberRowActions({
               </DropdownMenuItem>
             </>
           ) : null}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() =>
+              run(
+                `${base}/${userId}`,
+                {
+                  method: "PATCH",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    developer_access: !developerAccess,
+                  }),
+                },
+                `${developerAccess ? "Removed" : "Granted"} Developer Portal access for ${label}`,
+              )
+            }
+          >
+            {developerAccess
+              ? "Remove Developer Portal access"
+              : "Grant Developer Portal access"}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             className="text-destructive focus:text-destructive"

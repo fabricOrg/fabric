@@ -1,8 +1,7 @@
 ####################################################################################################
-# Fabric admin-console (staff) — testing runtime. Same topology as the dashboard (dashboard.tf): a
-# Fargate ECS service behind its own API Gateway HTTP API + VPC Link, sharing the testing cluster,
-# VPC, and ECS-tasks security group. No load balancer, no NAT — same cost stance as the rest of the
-# stack.
+# Fabric admin-console (staff) testing runtime. Same topology as the dashboard (dashboard.tf): a
+# private Fargate ECS service behind its own API Gateway HTTP API + VPC Link, sharing the testing
+# cluster, VPC, and ECS-tasks security group. No load balancer.
 #
 # Staff aren't org-scoped, so there's NO WORKOS_ORGANIZATION_ID and no tenant API key: the console
 # reaches the api only as the BFF (BFF_INTERNAL_TOKEN). It reuses the SHARED WorkOS app, so register
@@ -44,7 +43,7 @@ resource "aws_iam_role" "admin_console_task" {
 
 resource "aws_cloudwatch_log_group" "admin_console" {
   name              = "/fabric/testing/admin-console"
-  retention_in_days = 14
+  retention_in_days = 90
 }
 
 locals {
@@ -55,8 +54,8 @@ resource "aws_ecs_task_definition" "admin_console" {
   family                   = "fabric-admin-console-testing"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
+  cpu                      = 512
+  memory                   = 1024
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.admin_console_task.arn
 
@@ -77,10 +76,10 @@ resource "aws_ecs_task_definition" "admin_console" {
       }]
       environment = [
         { name = "PORT", value = "3000" },
-        { name = "API_BASE_URL", value = aws_apigatewayv2_api.testing.api_endpoint },
+        { name = "API_BASE_URL", value = "https://${aws_cloudfront_distribution.testing_edge["api"].domain_name}" },
         # The console's OWN public origin — auth redirect/logout URIs + the trusted-origin check derive
         # from this (behind API Gateway the container sees the internal host as request.url).
-        { name = "ADMIN_CONSOLE_BASE_URL", value = aws_apigatewayv2_api.admin_console_testing.api_endpoint },
+        { name = "ADMIN_CONSOLE_BASE_URL", value = "https://${aws_cloudfront_distribution.testing_edge["admin_console"].domain_name}" },
       ]
       secrets = [
         {
@@ -98,6 +97,10 @@ resource "aws_ecs_task_definition" "admin_console" {
         {
           name      = "WORKOS_CLIENT_ID"
           valueFrom = "${aws_secretsmanager_secret.admin_console_workos.arn}:WORKOS_CLIENT_ID::"
+        },
+        {
+          name      = "EDGE_SHARED_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.edge_shared_secret.arn}:EDGE_SHARED_SECRET::"
         },
       ]
       logConfiguration = {
@@ -125,6 +128,7 @@ resource "aws_ecs_task_definition" "admin_console" {
     aws_secretsmanager_secret_version.bff_internal_token,
     aws_secretsmanager_secret_version.admin_console_cookie_password,
     aws_secretsmanager_secret_version.admin_console_workos,
+    aws_secretsmanager_secret_version.edge_shared_secret,
   ]
 }
 
@@ -162,9 +166,9 @@ resource "aws_ecs_service" "admin_console" {
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    subnets          = [for subnet in aws_subnet.private : subnet.id]
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   service_registries {
@@ -204,7 +208,7 @@ resource "aws_apigatewayv2_route" "admin_console_default" {
 
 resource "aws_cloudwatch_log_group" "admin_console_api_gateway" {
   name              = "/fabric/testing/admin-console-gateway"
-  retention_in_days = 14
+  retention_in_days = 90
 }
 
 resource "aws_apigatewayv2_stage" "admin_console_default" {

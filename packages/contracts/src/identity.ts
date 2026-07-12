@@ -1,11 +1,9 @@
 import { z } from "zod";
 
-export const customerRoleSchema = z.enum([
-  "owner",
-  "admin",
-  "member",
-  // Least-privilege, API-focused role — dev-portal access without SMS/org-management rights.
-  "developer",
+export const customerRoleSchema = z.enum(["owner", "admin", "member"]);
+export const customerRoleWireSchema = z.union([
+  customerRoleSchema,
+  z.literal("developer"),
 ]);
 
 const identifier = z.string().trim().min(1).max(255);
@@ -28,15 +26,22 @@ export type ResolveIdentitySessionRequest = z.infer<
   typeof resolveIdentitySessionRequestSchema
 >;
 
-export const resolveIdentitySessionResponseSchema = z.object({
-  tenant_id: postgresUuid,
-  user_id: postgresUuid,
-  role: customerRoleSchema,
-  permissions: z.array(identifier),
-  session_id: identifier,
-  /** Tenant plan — the dashboard renders sandbox state from it (ADR-0002 F3). */
-  plan: identifier,
-});
+export const resolveIdentitySessionResponseSchema = z
+  .object({
+    tenant_id: postgresUuid,
+    user_id: postgresUuid,
+    role: customerRoleWireSchema,
+    developer_access: z.boolean().optional(),
+    permissions: z.array(identifier),
+    session_id: identifier,
+    /** Tenant plan — the dashboard renders sandbox state from it (ADR-0002 F3). */
+    plan: identifier,
+  })
+  .transform((value) => ({
+    ...value,
+    role: value.role === "developer" ? ("member" as const) : value.role,
+    developer_access: value.developer_access ?? value.role === "developer",
+  }));
 
 export type ResolveIdentitySessionResponse = z.infer<
   typeof resolveIdentitySessionResponseSchema

@@ -23,7 +23,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@app/ui/components/ui/sheet";
-import { Skeleton } from "@app/ui/components/ui/skeleton";
+import { TableEmptyRow, TableLoadingRows } from "@app/ui/components/ui/states";
 import {
   Table,
   TableBody,
@@ -178,15 +178,15 @@ export default function TransactionsPage() {
   }, [txns, query, status]);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="font-display text-2xl font-semibold tracking-tight">
-            Transactions
+            API transactions
           </h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Every verify→charge→notify as one reconciled, audited record — the
-            thing three separate vendors can't give you.
+            Trace each verify, charge, and notification step as one reconciled
+            API record.
           </p>
         </div>
         <RunTestTransactionDialog
@@ -262,26 +262,41 @@ export default function TransactionsPage() {
             </Select>
           </div>
 
-          {txns === null ? (
-            <Skeleton className="h-48 w-full" />
-          ) : (
-            <section
-              className="overflow-x-auto"
-              tabIndex={0}
-              aria-label="Transactions"
-            >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Transaction</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">When</TableHead>
-                    <TableHead className="w-8" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((t) => {
+          <section
+            className="overflow-x-auto rounded-lg border"
+            tabIndex={0}
+            aria-label="Transactions"
+          >
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Transaction</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">When</TableHead>
+                  <TableHead className="w-8" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {txns === null ? (
+                  <TableLoadingRows columns={5} rows={5} />
+                ) : filtered.length === 0 ? (
+                  <TableEmptyRow
+                    columns={5}
+                    icon={<Receipt />}
+                    title={
+                      query.trim() || status !== "all"
+                        ? "No matching transactions"
+                        : "No transactions yet"
+                    }
+                    description={
+                      query.trim() || status !== "all"
+                        ? "Adjust the search or status filter to see more results."
+                        : "Run a test transaction to see its reconciled record here."
+                    }
+                  />
+                ) : (
+                  filtered.map((t) => {
                     const meta = OUTCOME_META[outcome(t)];
                     return (
                       <TableRow
@@ -326,20 +341,11 @@ export default function TransactionsPage() {
                         </TableCell>
                       </TableRow>
                     );
-                  })}
-                </TableBody>
-              </Table>
-              {filtered.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 p-10 text-center">
-                  <Receipt className="size-6 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    No transactions match. Run a test transaction to see the
-                    reconciled record.
-                  </p>
-                </div>
-              ) : null}
-            </section>
-          )}
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </section>
         </CardContent>
       </Card>
 

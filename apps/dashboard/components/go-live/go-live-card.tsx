@@ -10,6 +10,7 @@ import { Button } from "@app/ui/components/ui/button";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@app/ui/components/ui/card";
@@ -19,6 +20,8 @@ import { Textarea } from "@app/ui/components/ui/textarea";
 import { BadgeCheck, Clock, Rocket, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toastApiError } from "@/lib/error-toast";
+
+const DRAFT_KEY = "fabric.go-live-draft";
 
 async function bff(path: string, init?: RequestInit): Promise<unknown> {
   const response = await fetch(path, {
@@ -42,6 +45,34 @@ export function GoLiveCard({
   const [registration, setRegistration] = useState("");
   const [useCase, setUseCase] = useState("");
   const [busy, setBusy] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
+
+  useEffect(() => {
+    try {
+      const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null") as {
+        businessName?: string;
+        registration?: string;
+        useCase?: string;
+      } | null;
+      if (draft) {
+        setBusinessName(draft.businessName ?? "");
+        setRegistration(draft.registration ?? "");
+        setUseCase(draft.useCase ?? "");
+      }
+    } catch {
+      localStorage.removeItem(DRAFT_KEY);
+    } finally {
+      setDraftReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({ businessName, registration, useCase }),
+    );
+  }, [businessName, draftReady, registration, useCase]);
 
   useEffect(() => {
     let live = true;
@@ -116,6 +147,17 @@ export function GoLiveCard({
         <AlertDescription>
           Our team is reviewing your go-live request. You&apos;ll keep full
           sandbox access meanwhile.
+          {status.requested_at ? (
+            <span className="mt-1 block text-xs">
+              Submitted{" "}
+              {new Date(status.requested_at).toLocaleDateString("en", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+              .
+            </span>
+          ) : null}
         </AlertDescription>
       </Alert>
     );
@@ -130,6 +172,10 @@ export function GoLiveCard({
           <AlertDescription>
             {status.decided_reason ??
               "See the reason from our team, adjust, and resubmit."}
+            <span className="mt-1 block">
+              Your saved draft remains in the form below. Correct the relevant
+              information and submit a new review request.
+            </span>
           </AlertDescription>
         </Alert>
       ) : null}
@@ -138,10 +184,19 @@ export function GoLiveCard({
           <CardTitle className="flex items-center gap-2">
             <Rocket className="size-4" /> Request go-live
           </CardTitle>
+          <CardDescription>
+            Provide enough information for compliance review. Most complete
+            requests are reviewed within 1–5 business days.
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {canRequest ? (
             <>
+              <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 text-sm sm:grid-cols-3">
+                <span>1. Business identity</span>
+                <span>2. Messaging use case</span>
+                <span>3. Compliance review</span>
+              </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="gl-business">Registered business name</Label>
                 <Input

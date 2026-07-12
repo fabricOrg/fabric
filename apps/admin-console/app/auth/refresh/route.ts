@@ -18,12 +18,21 @@ export async function GET(request: NextRequest) {
   if (!sealedCookie) {
     return NextResponse.redirect(redirectUrl("/login", request));
   }
+  // Return the user to the page that triggered the refresh. Accept only same-origin app paths — never
+  // a protocol-relative //host escape or an /auth/* loop back into this hop.
+  const requested = request.nextUrl.searchParams.get("return_to");
+  const returnTo =
+    requested?.startsWith("/") &&
+    !requested.startsWith("//") &&
+    !requested.startsWith("/auth/")
+      ? requested
+      : "/";
   const outcome = await refreshSessionDetailed(
     staffRealmConfig(),
     sealedCookie,
   );
   if (outcome.status === "refreshed") {
-    const response = NextResponse.redirect(redirectUrl("/", request));
+    const response = NextResponse.redirect(redirectUrl(returnTo, request));
     response.cookies.set(
       WORKOS_COOKIE,
       outcome.sealedCookie,

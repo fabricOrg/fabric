@@ -110,6 +110,15 @@ jobs:
         shell: bash
         run: |
           image="$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          if [[ "$(aws ecr batch-get-image \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --query 'length(images)' \
+            --output text)" == "1" ]]; then
+            echo "Image already exists; reusing $image"
+            echo "image=$image" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           docker build --file "${{ inputs.dockerfile }}" --tag "$image" .
           docker push "$image"
           echo "image=$image" >> "$GITHUB_OUTPUT"
@@ -128,6 +137,15 @@ jobs:
             docker login --username AWS --password-stdin "$source_registry"
           source_image="$PROMOTION_SOURCE_IMAGE:$IMAGE_TAG"
           destination_image="$DESTINATION_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          if [[ "$(aws ecr batch-get-image \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --query 'length(images)' \
+            --output text)" == "1" ]]; then
+            echo "Image already exists; reusing $destination_image"
+            echo "image=$destination_image" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           docker pull "$source_image"
           docker tag "$source_image" "$destination_image"
           docker push "$destination_image"
@@ -186,7 +204,7 @@ jobs:
           run-task-launch-type: FARGATE
           run-task-subnets: ${{ env.ECS_SUBNET_IDS }}
           run-task-security-groups: ${{ env.ECS_SECURITY_GROUP_ID }}
-          run-task-assign-public-IP: ENABLED
+          run-task-assign-public-IP: DISABLED
           wait-for-task-stopped: true
           wait-max-delay-seconds: 15
 

@@ -15,7 +15,7 @@ import { Input } from "@app/ui/components/ui/input";
 import { LoadMore } from "@app/ui/components/ui/load-more";
 import { useCursorPage } from "@app/ui/hooks/use-cursor-page";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ChevronRight } from "lucide-react";
+import { Building2, ChevronRight, SearchX } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toastApiError } from "@/lib/error-toast";
@@ -150,22 +150,36 @@ export function TenantsTable({
           className="sm:max-w-xs"
           aria-label="Search tenants"
         />
-        {loadError ? (
-          <p className="p-6 text-center text-sm text-muted-foreground">
-            Couldn&apos;t load tenants right now. Try again shortly.
-          </p>
-        ) : (
+        <DataTable
+          columns={columns}
+          data={filtered as TenantSummaryDto[]}
+          ariaLabel="Tenants"
+          error={
+            loadError
+              ? {
+                  title: "Couldn't load tenants",
+                  message:
+                    "The tenant directory is temporarily unavailable. Refresh the page to try again.",
+                }
+              : undefined
+          }
+          emptyState={
+            items.length === 0
+              ? {
+                  title: "No tenants yet",
+                  description:
+                    "Create the first customer organisation to begin onboarding.",
+                  icon: <Building2 />,
+                }
+              : {
+                  title: "No matching tenants",
+                  description: `No tenants match “${query}”. Try a different name or slug.`,
+                  icon: <SearchX />,
+                }
+          }
+        />
+        {!loadError ? (
           <>
-            <DataTable
-              columns={columns}
-              data={filtered as TenantSummaryDto[]}
-              ariaLabel="Tenants"
-              empty={
-                items.length === 0
-                  ? "No tenants yet."
-                  : "No tenants match this search."
-              }
-            />
             {/* Only when not narrowing by a search term — "Load more" pages the full list. */}
             {query.trim() === "" ? (
               <LoadMore
@@ -175,7 +189,7 @@ export function TenantsTable({
               />
             ) : null}
           </>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

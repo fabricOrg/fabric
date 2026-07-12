@@ -11,7 +11,7 @@ import { NewCampaignForm } from "@/components/forms/new-campaign-form";
 
 export default function NewCampaignPage() {
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <PageHeader>
         <PageHeaderHeading>
           <PageHeaderBack asChild>

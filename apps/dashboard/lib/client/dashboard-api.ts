@@ -1,7 +1,9 @@
 import {
   messageDetailResponse,
+  messagingSettings,
   type SendSmsRequest,
   sendSmsApiResponse,
+  virtualPhoneInbox,
   walletSnapshot,
 } from "@app/contracts";
 
@@ -35,6 +37,34 @@ export async function sendSms(input: SendSmsRequest) {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  );
+}
+
+export async function getMessagingSettings() {
+  return messagingSettings.parse(
+    await bffRequest("/api/dashboard/messaging-settings"),
+  );
+}
+
+export async function updateMessagingMode(delivery_mode: "virtual" | "live") {
+  return messagingSettings.parse(
+    await bffRequest("/api/dashboard/messaging-settings", {
+      method: "PATCH",
+      body: JSON.stringify({ delivery_mode }),
+    }),
+  );
+}
+
+export async function getVirtualPhone() {
+  return virtualPhoneInbox.parse(
+    await bffRequest("/api/dashboard/virtual-phone"),
+  );
+}
+
+export async function markVirtualMessageRead(messageId: string) {
+  await bffRequest(
+    `/api/dashboard/virtual-phone/${encodeURIComponent(messageId)}/read`,
+    { method: "PATCH", body: "{}" },
   );
 }
 

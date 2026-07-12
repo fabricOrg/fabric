@@ -13,9 +13,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
 import { SmsService } from "../sms/sms.service.js";
+import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
 import { MaintenanceService } from "./maintenance.service.js";
 
 // E10-S4: sender enforcement has its own spec — these flows always pass the gate.
@@ -26,6 +28,9 @@ const consentAllowAll = {
 const sendersAlwaysActive = {
   isActiveSender: async () => true,
 } as unknown as SendersService;
+const liveMode = {
+  resolveMode: async () => "live",
+} as unknown as VirtualPhoneService;
 
 /**
  * MAINTENANCE JOB — integration spec (finding 1+2 of the architecture remediation).
@@ -54,6 +59,8 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     // runSweep()/runInvariant() directly.
     get: () => undefined,
   } as unknown as ConfigService;
+  // Real vault against the test Postgres: the send path tokenizes every recipient.
+  const vault = new PiiVaultService(appDb, config);
   const killSwitch = {
     isPaused: async () => false,
   } as unknown as KillSwitchService;
@@ -69,6 +76,8 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     new QueueService(config),
     sendersAlwaysActive,
     consentAllowAll,
+    liveMode,
+    vault,
   );
   const maintenance = new MaintenanceService(provisioning, sms, config);
 

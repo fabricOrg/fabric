@@ -2,7 +2,8 @@ import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Job } from "bullmq";
 import { QueueService } from "../queue/queue.service.js";
-import { SMS_SEND_QUEUE, type SmsSendJob, SmsService } from "./sms.service.js";
+import { SmsService } from "./sms.service.js";
+import { SMS_SEND_QUEUE, type SmsSendJob } from "./sms-send.job.js";
 
 /**
  * In-process consumer for the sms-send queue (finding 7 — modular monolith: the worker lives in

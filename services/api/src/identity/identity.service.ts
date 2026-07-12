@@ -13,33 +13,38 @@ import { Inject, Injectable } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
 
+// ADR-0004: `applications:read` is universal — the dashboard's application/environment switcher is a
+// core surface everyone in the workspace sees. Creating an application structures the workspace, so
+// `applications:write` is an owner/admin action (mirrors org management, not the developer lane).
 const ROLE_PERMISSIONS = {
   owner: [
     "sms:send",
     "sms:read",
     "wallet:read",
-    "api_keys:write",
+    "applications:read",
+    "applications:write",
     "api_keys:read",
+    "api_keys:write",
     "request_logs:read",
   ],
   admin: [
     "sms:send",
     "sms:read",
     "wallet:read",
+    "applications:read",
+    "applications:write",
     "api_keys:read",
-    "request_logs:read",
-  ],
-  member: ["sms:send", "sms:read", "wallet:read"],
-  // Developer: API/integration surface only. Can mint + manage API keys and read request logs +
-  // wallet — but NOT send SMS from the console or manage the org/its members. This is what clears
-  // the dev-portal gate (api_keys:*) without granting org-admin rights.
-  developer: [
-    "wallet:read",
     "api_keys:write",
-    "api_keys:read",
     "request_logs:read",
   ],
+  member: ["sms:send", "sms:read", "wallet:read", "applications:read"],
 } as const;
+
+const DEVELOPER_PERMISSIONS = [
+  "api_keys:write",
+  "api_keys:read",
+  "request_logs:read",
+] as const;
 
 @Injectable()
 export class IdentityService {
@@ -140,6 +145,7 @@ export class IdentityService {
         .select({
           id: memberships.id,
           role: memberships.role,
+          developerAccess: memberships.developerAccess,
           status: memberships.status,
         })
         .from(memberships)
@@ -158,12 +164,18 @@ export class IdentityService {
           .where(eq(memberships.id, membership.id));
       }
 
-      // 4. Authorization is the Fabric membership role — WorkOS claims never widen the grant.
+      const role = membership.role === "developer" ? "member" : membership.role;
+      const developerAccess =
+        membership.developerAccess || membership.role === "developer";
       return {
         tenant_id: account.id,
         user_id: user.id,
-        role: membership.role,
-        permissions: [...ROLE_PERMISSIONS[membership.role]],
+        role,
+        developer_access: developerAccess,
+        permissions: [
+          ...ROLE_PERMISSIONS[role],
+          ...(developerAccess ? DEVELOPER_PERMISSIONS : []),
+        ],
         session_id: request.session_id,
         plan: account.plan,
       };

@@ -13,8 +13,9 @@ import {
   EmptyTitle,
 } from "@app/ui/components/ui/empty";
 import { Skeleton } from "@app/ui/components/ui/skeleton";
+import { TableCell, TableRow } from "@app/ui/components/ui/table";
 import { cn } from "@app/ui/lib/utils";
-import { TriangleAlert } from "lucide-react";
+import { SearchX, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
 /**
@@ -106,5 +107,86 @@ export function LoadingRows({
         <Skeleton key={key} className="h-12 w-full" />
       ))}
     </div>
+  );
+}
+
+export function TableLoadingState({ rows = 5 }: { rows?: number }) {
+  return (
+    <div
+      className="rounded-lg border bg-card p-3"
+      role="status"
+      aria-label="Loading table data"
+    >
+      <LoadingRows rows={rows} className="gap-2" />
+      <span className="sr-only">Loading data</span>
+    </div>
+  );
+}
+
+export function TableEmptyState({
+  title,
+  description,
+  action,
+  filtered = false,
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+  filtered?: boolean;
+}) {
+  return (
+    <EmptyState
+      icon={filtered ? <SearchX /> : undefined}
+      title={title}
+      description={description}
+      action={action}
+      className="min-h-56 rounded-lg border bg-card"
+    />
+  );
+}
+
+export function TableLoadingRows({
+  columns,
+  rows = 5,
+}: {
+  columns: number;
+  rows?: number;
+}) {
+  return Array.from({ length: rows }, (_, row) => (
+    <TableRow key={`loading-row-${row}`} aria-hidden="true">
+      {Array.from({ length: columns }, (_, column) => (
+        <TableCell key={`loading-cell-${row}-${column}`}>
+          <Skeleton className="h-5 w-full max-w-36" />
+        </TableCell>
+      ))}
+    </TableRow>
+  ));
+}
+
+export function TableEmptyRow({
+  columns,
+  title,
+  description,
+  icon,
+  action,
+}: {
+  columns: number;
+  title: string;
+  description?: string;
+  icon?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <TableRow className="hover:bg-transparent">
+      <TableCell colSpan={columns} className="h-52 p-4">
+        <EmptyState
+          icon={icon}
+          title={title}
+          description={description}
+          action={action}
+          className="min-h-44 border-0 p-4 md:p-6"
+        />
+      </TableCell>
+    </TableRow>
   );
 }

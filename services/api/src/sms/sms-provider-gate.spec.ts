@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { AppDb } from "@app/db";
 import { HttpException } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
@@ -5,9 +6,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import type { PiiVaultService } from "../privacy/pii-vault.service.js";
 import type { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
 import { SmsService } from "./sms.service.js";
+import type { VirtualPhoneService } from "./virtual-phone.service.js";
 
 /**
  * PROVIDER KILL-SWITCH GATE — unit spec (finding 9). Before finding 9 the provider switches were
@@ -35,6 +38,13 @@ const senderStub = {
 const consentStub = {
   isSuppressed: async () => false,
 } as unknown as ConsentService;
+const virtualPhoneStub = {
+  resolveMode: async () => "live",
+} as unknown as VirtualPhoneService;
+// No db in this spec — the gate must reject before the send path ever tokenizes a recipient.
+const vaultStub = {
+  subjectForPhone: async () => randomUUID(),
+} as unknown as PiiVaultService;
 
 function serviceWithSwitch(paused: Record<string, boolean>): {
   svc: SmsService;
@@ -51,6 +61,8 @@ function serviceWithSwitch(paused: Record<string, boolean>): {
       queue,
       senderStub,
       consentStub,
+      virtualPhoneStub,
+      vaultStub,
     ),
     isPaused,
   };

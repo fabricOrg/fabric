@@ -52,7 +52,11 @@ describeDb("member invites", () => {
   });
 
   it("creates an invited user + membership and sends a WorkOS invitation", async () => {
-    const member = await service.invite(tenantId, { email, role: "member" });
+    const member = await service.invite(tenantId, {
+      email,
+      role: "member",
+      developer_access: false,
+    });
 
     expect(member).toMatchObject({ email, role: "member", status: "invited" });
     expect(sendInvitation).toHaveBeenCalledWith({
@@ -101,7 +105,11 @@ describeDb("member invites", () => {
       );
 
     await expect(
-      service.invite(tenantId, { email, role: "admin" }),
+      service.invite(tenantId, {
+        email,
+        role: "admin",
+        developer_access: false,
+      }),
     ).rejects.toMatchObject({
       response: { error: { code: "already_a_member" } },
     });
@@ -109,32 +117,48 @@ describeDb("member invites", () => {
 
   it("fails closed for an unknown tenant", async () => {
     await expect(
-      service.invite(randomUUID(), { email: "x@example.com", role: "member" }),
+      service.invite(randomUUID(), {
+        email: "x@example.com",
+        role: "member",
+        developer_access: false,
+      }),
     ).rejects.toMatchObject({
       response: { error: { code: "tenant_not_found" } },
     });
   });
 
-  it("invites a developer with the local role but no WorkOS role slug", async () => {
+  it("invites a member with independent Developer Portal access", async () => {
     sendInvitation.mockClear();
     const member = await service.invite(tenantId, {
       email: devEmail,
-      role: "developer",
+      role: "member",
+      developer_access: true,
     });
 
-    expect(member).toMatchObject({ role: "developer", status: "invited" });
+    expect(member).toMatchObject({
+      role: "member",
+      developer_access: true,
+      status: "invited",
+    });
     // `developer` is Fabric-local — WorkOS gets email + org only, no roleSlug.
     expect(sendInvitation).toHaveBeenCalledWith({
       email: devEmail,
       organizationId,
+      roleSlug: "member",
     });
 
     const [membership] = await db.db
-      .select({ role: memberships.role })
+      .select({
+        role: memberships.role,
+        developerAccess: memberships.developerAccess,
+      })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
       .where(eq(users.email, devEmail));
-    expect(membership).toMatchObject({ role: "developer" });
+    expect(membership).toMatchObject({
+      role: "member",
+      developerAccess: true,
+    });
   });
 
   it("changes a member's role", async () => {
@@ -144,9 +168,13 @@ describeDb("member invites", () => {
       .where(eq(users.email, devEmail));
     // biome-ignore lint/style/noNonNullAssertion: seeded by the developer-invite test
     const updated = await service.updateRole(tenantId, user!.id, {
-      role: "member",
+      role: "admin",
     });
-    expect(updated).toMatchObject({ role: "member", email: devEmail });
+    expect(updated).toMatchObject({
+      role: "admin",
+      developer_access: true,
+      email: devEmail,
+    });
   });
 
   it("soft-removes a member (membership disabled, reversible)", async () => {

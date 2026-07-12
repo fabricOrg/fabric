@@ -23,6 +23,9 @@ export const apiKey = z.object({
   status: apiKeyStatus,
   createdAt: z.string(),
   lastUsedAt: z.string().nullable(),
+  // Optional expiry (ISO string) — absent/null = never expires. Optional so older callers/fixtures
+  // that predate expiry still parse.
+  expiresAt: z.string().nullable().optional(),
 });
 export type ApiKey = z.infer<typeof apiKey>;
 
