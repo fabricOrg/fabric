@@ -105,7 +105,13 @@ export function configuredDevelopmentSession(): AppSession {
     userId: "development-user",
     orgId,
     role: "owner",
-    permissions: ["sms:send", "sms:read", "wallet:read"],
+    permissions: [
+      "sms:send",
+      "sms:read",
+      "wallet:read",
+      "applications:read",
+      "applications:write",
+    ],
     sessionId: "development-session",
   };
 }

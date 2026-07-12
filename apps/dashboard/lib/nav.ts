@@ -1,6 +1,7 @@
 import {
   BadgeCheck,
   BellOff,
+  Boxes,
   LayoutDashboard,
   List,
   type LucideIcon,
@@ -38,6 +39,14 @@ export const navGroups: readonly NavGroup[] = [
     items: [
       { title: "Overview", href: "/", icon: LayoutDashboard },
       { title: "API transactions", href: "/flows", icon: Workflow },
+    ],
+  },
+  {
+    label: "Developers",
+    items: [
+      // ADR-0004: applications are the workspace's top-level structure; each carries a sandbox and a
+      // live environment. This is where the dev-portal surfaces (keys/webhooks/logs) land under W-B.
+      { title: "Applications", href: "/applications", icon: Boxes },
     ],
   },
   {

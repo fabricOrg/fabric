@@ -81,7 +81,13 @@ describeDb("identity provisioning (invite-only)", () => {
       tenant_id: tenantId,
       role: "owner",
       developer_access: false,
-      permissions: ["sms:send", "sms:read", "wallet:read"],
+      permissions: [
+        "sms:send",
+        "sms:read",
+        "wallet:read",
+        "applications:read",
+        "applications:write",
+      ],
       session_id: "session_test",
     });
 
@@ -140,6 +146,7 @@ describeDb("identity provisioning (invite-only)", () => {
         "sms:send",
         "sms:read",
         "wallet:read",
+        "applications:read",
         "api_keys:write",
         "api_keys:read",
         "request_logs:read",

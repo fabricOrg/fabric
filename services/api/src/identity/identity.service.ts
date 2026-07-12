@@ -13,10 +13,25 @@ import { Inject, Injectable } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
 
+// ADR-0004: `applications:read` is universal — the dashboard's application/environment switcher is a
+// core surface everyone in the workspace sees. Creating an application structures the workspace, so
+// `applications:write` is an owner/admin action (mirrors org management, not the developer lane).
 const ROLE_PERMISSIONS = {
-  owner: ["sms:send", "sms:read", "wallet:read"],
-  admin: ["sms:send", "sms:read", "wallet:read"],
-  member: ["sms:send", "sms:read", "wallet:read"],
+  owner: [
+    "sms:send",
+    "sms:read",
+    "wallet:read",
+    "applications:read",
+    "applications:write",
+  ],
+  admin: [
+    "sms:send",
+    "sms:read",
+    "wallet:read",
+    "applications:read",
+    "applications:write",
+  ],
+  member: ["sms:send", "sms:read", "wallet:read", "applications:read"],
 } as const;
 
 const DEVELOPER_PERMISSIONS = [
