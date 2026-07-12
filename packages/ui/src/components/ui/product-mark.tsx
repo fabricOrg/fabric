@@ -4,10 +4,14 @@ import { cn } from "@app/ui/lib/utils";
 export function ProductMark({
   product,
   compact = false,
+  showBadge = true,
   className,
 }: {
   product: "Dashboard" | "Admin" | "Developer";
   compact?: boolean;
+  /** The product badge next to the wordmark. Off for the customer dashboard (one app post-merge;
+   *  environment is shown by the topbar toggle + banner). The sr-only label is kept regardless. */
+  showBadge?: boolean;
   className?: string;
 }) {
   return (
@@ -28,12 +32,14 @@ export function ProductMark({
           <span className="truncate font-display text-lg font-semibold group-data-[collapsible=icon]:hidden">
             Fabric
           </span>
-          <Badge
-            variant="secondary"
-            className="ml-auto text-[10px] uppercase group-data-[collapsible=icon]:hidden"
-          >
-            {product}
-          </Badge>
+          {showBadge ? (
+            <Badge
+              variant="secondary"
+              className="ml-auto text-[10px] uppercase group-data-[collapsible=icon]:hidden"
+            >
+              {product}
+            </Badge>
+          ) : null}
         </>
       ) : null}
       <span className="sr-only">Fabric {product}</span>

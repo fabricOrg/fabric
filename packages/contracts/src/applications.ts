@@ -28,6 +28,10 @@ export const applicationDtoSchema = z.object({
   created_at: z.string(),
   // Its environments (a sandbox always; a live env that may be locked until go-live).
   environments: z.array(environmentDtoSchema),
+  // Count of api keys across the application's environments (matches the keys table, incl. revoked)
+  // — a more useful at-a-glance card metric than the environment count. Defaulted so a response that
+  // predates the field still parses (0) rather than breaking the applications list.
+  api_key_count: z.number().int().default(0),
 });
 export type ApplicationDto = z.infer<typeof applicationDtoSchema>;
 

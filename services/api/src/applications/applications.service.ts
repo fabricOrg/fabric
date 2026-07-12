@@ -6,13 +6,14 @@ import type {
 } from "@app/contracts";
 import {
   type AppDb,
+  apiKeys,
   applications,
   type Environment,
   environments,
   type TenantId,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
-import { asc } from "drizzle-orm";
+import { asc, count } from "drizzle-orm";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest } from "../http/api-error.js";
 
@@ -27,7 +28,7 @@ export class ApplicationsService {
   constructor(@Inject(APP_DB) private readonly db: AppDb) {}
 
   async list(tenantId: string): Promise<ListApplicationsResponse> {
-    const { apps, envs } = await this.db.withTenantDrizzle(
+    const { apps, envs, keyCounts } = await this.db.withTenantDrizzle(
       tenantId,
       async (tx) => {
         const apps = await tx
@@ -35,14 +36,24 @@ export class ApplicationsService {
           .from(applications)
           .orderBy(asc(applications.createdAt));
         const envs = await tx.select().from(environments);
-        return { apps, envs };
+        // Key count per application, one grouped query (RLS scopes to this tenant). Counts ALL keys
+        // (incl. revoked) so the card matches the keys table, which lists revoked keys too.
+        const keyCounts = await tx
+          .select({ applicationId: apiKeys.applicationId, n: count() })
+          .from(apiKeys)
+          .groupBy(apiKeys.applicationId);
+        return { apps, envs, keyCounts };
       },
+    );
+    const countByApp = new Map(
+      keyCounts.map((r) => [r.applicationId, Number(r.n)]),
     );
     return {
       applications: apps.map((app) =>
         toApplicationDto(
           app,
           envs.filter((e) => e.applicationId === app.id),
+          countByApp.get(app.id) ?? 0,
         ),
       ),
     };
@@ -91,7 +102,7 @@ export class ApplicationsService {
           },
         ])
         .returning();
-      return toApplicationDto(app, envs);
+      return toApplicationDto(app, envs, 0); // a brand-new application has no keys yet
     });
   }
 }
@@ -109,6 +120,7 @@ function toEnvironmentDto(env: Environment): EnvironmentDto {
 function toApplicationDto(
   app: typeof applications.$inferSelect,
   envs: Environment[],
+  apiKeyCount: number,
 ): ApplicationDto {
   return {
     id: app.id,
@@ -116,5 +128,6 @@ function toApplicationDto(
     slug: app.slug,
     created_at: app.createdAt.toISOString(),
     environments: envs.map(toEnvironmentDto),
+    api_key_count: apiKeyCount,
   };
 }

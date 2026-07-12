@@ -35,7 +35,7 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <ProductMark product="Dashboard" />
+        <ProductMark product="Dashboard" showBadge={false} />
       </SidebarHeader>
       <SidebarContent>
         {navGroups.map((group, i) => (

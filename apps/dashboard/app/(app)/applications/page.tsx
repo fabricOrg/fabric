@@ -9,7 +9,7 @@ import {
   PageHeaderTitle,
 } from "@app/ui/components/ui/page-header";
 import { ErrorState, TableEmptyState } from "@app/ui/components/ui/states";
-import { Boxes, Layers } from "lucide-react";
+import { Boxes, KeyRound } from "lucide-react";
 import Link from "next/link";
 import { CreateApplicationDialog } from "@/components/forms/create-application-dialog";
 import { BffError } from "@/lib/server/api-client";
@@ -72,11 +72,12 @@ function ApplicationCard({ application }: { application: ApplicationDto }) {
         ))}
       </div>
 
-      {/* Footer: environment count + created date, split by a divider. */}
+      {/* Footer: API-key count + created date, split by a divider. */}
       <div className="flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
-          <Layers className="size-3.5" />
-          {envs.length} {envs.length === 1 ? "Environment" : "Environments"}
+          <KeyRound className="size-3.5" />
+          {application.api_key_count}{" "}
+          {application.api_key_count === 1 ? "API key" : "API keys"}
         </span>
         <span>
           Created <span className="font-medium text-foreground">{created}</span>

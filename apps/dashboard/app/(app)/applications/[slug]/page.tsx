@@ -5,7 +5,6 @@ import type {
   WebhookEndpointDto,
 } from "@app/contracts";
 import { PageContainer } from "@app/ui/components/ui/app-shell";
-import { Badge } from "@app/ui/components/ui/badge";
 import {
   Card,
   CardAction,
@@ -39,11 +38,10 @@ import { requireDashboardSession } from "@/lib/server/auth";
 import { listRequestLogs } from "@/lib/server/request-logs-client";
 import { listWebhooks } from "@/lib/server/webhooks-client";
 
-/** One (active) environment: its API keys + its webhook endpoints. Only rendered for an active
- *  environment — a locked live env is hidden entirely, not shown as unusable tables. `env` is the
- *  api-key env (test/live); the webhook env (sandbox/live) is derived from it. */
-function EnvironmentSection({
-  title,
+/** The resource tabs (API keys · Webhooks · Logs) for ONE environment. The environment itself is
+ *  chosen by the outer switcher — this renders the selected env's resources. `env` is the api-key
+ *  env (test/live); the webhook/log env (sandbox/live) is derived from it. */
+function EnvironmentResources({
   env,
   applicationId,
   keys,
@@ -51,7 +49,6 @@ function EnvironmentSection({
   logs,
   canManage,
 }: {
-  title: string;
   env: ApiKeyEnv;
   applicationId: string;
   keys: ApiKey[];
@@ -61,87 +58,73 @@ function EnvironmentSection({
 }) {
   const webhookEnv = env === "live" ? "live" : "sandbox";
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <h2 className="font-display text-lg font-semibold tracking-tight">
-          {title}
-        </h2>
-        <Badge
-          variant="outline"
-          className="border-transparent bg-success/12 text-success"
-        >
-          Active
-        </Badge>
-      </div>
+    <Tabs defaultValue="keys" className="gap-4">
+      <TabsList>
+        <TabsTrigger value="keys">API keys</TabsTrigger>
+        <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+        <TabsTrigger value="logs">Logs</TabsTrigger>
+      </TabsList>
 
-      <Tabs defaultValue="keys" className="gap-4">
-        <TabsList>
-          <TabsTrigger value="keys">API keys</TabsTrigger>
-          <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
-          <TabsTrigger value="logs">Logs</TabsTrigger>
-        </TabsList>
+      <TabsContent value="keys">
+        <Card>
+          <CardHeader>
+            <CardDescription>
+              {env === "live"
+                ? "Live keys spend real money and deliver to carriers."
+                : "Sandbox keys are free and never reach a carrier."}
+            </CardDescription>
+            {canManage ? (
+              <CardAction>
+                <CreateApiKeyDialog applicationId={applicationId} env={env} />
+              </CardAction>
+            ) : null}
+          </CardHeader>
+          <CardContent>
+            <ApiKeysTable keys={keys} />
+          </CardContent>
+        </Card>
+      </TabsContent>
 
-        <TabsContent value="keys">
-          <Card>
-            <CardHeader>
-              <CardDescription>
-                {env === "live"
-                  ? "Live keys spend real money and deliver to carriers."
-                  : "Sandbox keys are free and never reach a carrier."}
-              </CardDescription>
-              {canManage ? (
-                <CardAction>
-                  <CreateApiKeyDialog applicationId={applicationId} env={env} />
-                </CardAction>
-              ) : null}
-            </CardHeader>
-            <CardContent>
-              <ApiKeysTable keys={keys} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+      <TabsContent value="webhooks">
+        <Card>
+          <CardHeader>
+            <CardDescription>
+              Signed event deliveries for this environment.
+            </CardDescription>
+            {canManage ? (
+              <CardAction>
+                <CreateWebhookDialog
+                  applicationId={applicationId}
+                  env={webhookEnv}
+                />
+              </CardAction>
+            ) : null}
+          </CardHeader>
+          <CardContent>
+            <WebhooksTable endpoints={webhooks} />
+          </CardContent>
+        </Card>
+      </TabsContent>
 
-        <TabsContent value="webhooks">
-          <Card>
-            <CardHeader>
-              <CardDescription>
-                Signed event deliveries for this environment.
-              </CardDescription>
-              {canManage ? (
-                <CardAction>
-                  <CreateWebhookDialog
-                    applicationId={applicationId}
-                    env={webhookEnv}
-                  />
-                </CardAction>
-              ) : null}
-            </CardHeader>
-            <CardContent>
-              <WebhooksTable endpoints={webhooks} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="logs">
-          <Card>
-            <CardHeader>
-              <CardDescription>
-                Every API request made with this environment&apos;s keys, newest
-                first. Metadata only, retained for a limited window.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <RequestLogsTable
-                initialLogs={logs.logs}
-                initialCursor={logs.next_cursor}
-                applicationId={applicationId}
-                env={webhookEnv}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </section>
+      <TabsContent value="logs">
+        <Card>
+          <CardHeader>
+            <CardDescription>
+              Every API request made with this environment&apos;s keys, newest
+              first. Metadata only, retained for a limited window.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RequestLogsTable
+              initialLogs={logs.logs}
+              initialCursor={logs.next_cursor}
+              applicationId={applicationId}
+              env={webhookEnv}
+            />
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -159,24 +142,23 @@ export default async function ApplicationDetailPage({
   const app = applications.find((a) => a.slug === slug);
   if (!app) notFound();
 
-  const liveEnv = app.environments.find((e) => e.type === "live");
-  const liveActive = liveEnv?.status === "active";
+  // Which environment the page shows follows the workspace's mode: the topbar Virtual/Live toggle is
+  // the ONE environment switcher (no per-page duplicate). A sandbox workspace shows its sandbox env;
+  // once go-live flips the workspace live, the live env's resources show.
+  const env: ApiKeyEnv = session.plan === "sandbox" ? "test" : "live";
+  const envType = env === "live" ? "live" : "sandbox";
 
   const emptyLogs: ListRequestLogsResponse = { logs: [], next_cursor: null };
   let keys: ApiKey[] = [];
   let webhooks: WebhookEndpointDto[] = [];
-  let sandboxLogs: ListRequestLogsResponse = emptyLogs;
-  let liveLogs: ListRequestLogsResponse = emptyLogs;
+  let logs: ListRequestLogsResponse = emptyLogs;
   let loadError = false;
   if (canRead) {
     try {
-      [keys, webhooks, sandboxLogs, liveLogs] = await Promise.all([
+      [keys, webhooks, logs] = await Promise.all([
         listApiKeys(app.id),
         listWebhooks(app.id),
-        listRequestLogs(app.id, "sandbox"),
-        liveActive
-          ? listRequestLogs(app.id, "live")
-          : Promise.resolve(emptyLogs),
+        listRequestLogs(app.id, envType),
       ]);
     } catch (error) {
       loadError = error instanceof BffError || error instanceof Error;
@@ -192,7 +174,8 @@ export default async function ApplicationDetailPage({
             <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
               {app.slug}
             </code>{" "}
-            — keys, webhooks, and logs are scoped to an environment below.
+            — API keys, webhooks, and logs for the environment selected in the
+            top bar.
           </PageHeaderDescription>
         </PageHeaderHeading>
       </PageHeader>
@@ -208,30 +191,14 @@ export default async function ApplicationDetailPage({
           message="The developer service is temporarily unavailable. Refresh the page to try again."
         />
       ) : (
-        <div className="flex flex-col gap-8">
-          <EnvironmentSection
-            title="Sandbox"
-            env="test"
-            applicationId={app.id}
-            keys={keys.filter((k) => k.env === "test")}
-            webhooks={webhooks.filter((w) => w.env === "sandbox")}
-            logs={sandboxLogs}
-            canManage={canManage}
-          />
-          {/* The live environment is hidden entirely until go-live unlocks it — a workspace in
-              sandbox mode never sees live tables it can't use. It appears once live is active. */}
-          {liveActive ? (
-            <EnvironmentSection
-              title="Live"
-              env="live"
-              applicationId={app.id}
-              keys={keys.filter((k) => k.env === "live")}
-              webhooks={webhooks.filter((w) => w.env === "live")}
-              logs={liveLogs}
-              canManage={canManage}
-            />
-          ) : null}
-        </div>
+        <EnvironmentResources
+          env={env}
+          applicationId={app.id}
+          keys={keys.filter((k) => k.env === env)}
+          webhooks={webhooks.filter((w) => w.env === envType)}
+          logs={logs}
+          canManage={canManage}
+        />
       )}
     </PageContainer>
   );
