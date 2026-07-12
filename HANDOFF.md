@@ -112,7 +112,20 @@ column. Integration-proven (future-expiry resolves; expired → null).
 environments.type). App-detail page now uses **Tabs (API keys | Webhooks)** per active env, each a
 standard Card-wrapped table; webhooks tab has Add-endpoint (url+description → once-only whsec_) +
 delete. Fixed `apiRequest` to not parse a 204 body (webhook DELETE). Integration-proven (5/5).
-Follow-up: request logs (next W-B slice, still mock in dev-portal).
+
+**W-B slice 3 — request logs (`283232a` backend, `fae87df` UI):** net-new vertical (no prior backend).
+`request_logs` table (migration 0049 + hand-written RLS 0050) — metadata only (never bodies/raw keys).
+Global `RequestLogInterceptor` captures customer sk_* requests fire-and-forget + FAIL-OPEN (skips
+bfft_ dashboard calls); `GET /v1/logs` keyset-paginated per app+env; daily retention @Cron in
+MaintenanceService (default 30d, advisory-locked). owner/admin gain `request_logs:read`. Dashboard:
+a third **Logs** tab per env section (colour-coded status, latency, request_id, time, "Load more").
+Integration-proven (4/4: env-scoped keyset, record() fail-open, retention sweep).
+
+⚠️ **Local migration drift:** `__drizzle_migrations` tracks through 0046, but 0047–0050 are applied
+to the local DB (0047/0048 out-of-band from prior sessions; 0049/0050 applied directly this session
+because `drizzle-kit migrate` re-runs the untracked 0047 and errors). Migration FILES are correct +
+journaled for a fresh CI/deploy migrate. To reconcile locally: `db:up` fresh + migrate, or record
+0047–0050 into `__drizzle_migrations`.
 
 ⚠️ **Running API dev server was serving STALE code this session** (didn't hot-reload the api-keys
 controller/service edits — a live create wrote NULL expiry despite correct, integration-proven code;
