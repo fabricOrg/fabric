@@ -79,6 +79,9 @@ export class SmsController {
       body: requireString(body.body, "body"),
       currency: requireString(body.currency, "currency"),
       messageClass,
+      // ADR-0004: route on the presenting key's environment (a sandbox key can never reach a
+      // carrier). Null on the BFF token path, which falls back to the tenant/plan-based mode.
+      environmentId: tenant.environmentId,
     };
 
     // No header → the un-keyed path (a client that doesn't retry-protect gets today's behavior).
@@ -121,6 +124,7 @@ export class SmsController {
     body: string;
     currency: string;
     messageClass: "transactional" | "promotional";
+    environmentId?: string | null;
   }): Promise<SendSmsApiResponse> {
     const result = await this.sms.send(input);
     return {

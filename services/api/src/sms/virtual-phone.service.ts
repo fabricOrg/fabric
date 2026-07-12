@@ -143,6 +143,52 @@ export class VirtualPhoneService {
   }
 
   /**
+   * ADR-0004 routing: resolve delivery mode from the ENVIRONMENT a request arrived on, not the
+   * tenant's plan. A `sandbox` environment can NEVER reach a real carrier — forced virtual, enforced
+   * here in routing (not the UI). A `live` environment defaults to carrier delivery but honours a
+   * tenant's opt-in to the virtual phone. Used when the request carries an environment (sk_* keys);
+   * the BFF tenant-token path (no environment yet) still uses the plan-based resolveMode above.
+   */
+  async resolveModeForEnvironment(
+    tenantId: string,
+    environmentId: string,
+  ): Promise<DeliveryMode> {
+    try {
+      const rows = (await this.db.withTenant(
+        tenantId,
+        (tx) => tx`
+          SELECT type FROM environments
+          WHERE id = ${environmentId} AND tenant_id = ${tenantId} LIMIT 1`,
+      )) as Row[];
+      const env = rows[0];
+      if (!env) {
+        throw notFound("environment_not_found", "Environment not found.");
+      }
+      // Sandbox: hard-pinned to virtual — a sandbox key can never reach a carrier.
+      if (env.type === "sandbox") return "virtual";
+      // Live: default to carrier delivery; a tenant may opt into the virtual phone via settings.
+      const acctRows = (await this.db.withTenant(
+        tenantId,
+        (tx) => tx`SELECT settings FROM accounts WHERE id = ${tenantId}`,
+      )) as Row[];
+      const account = acctRows[0];
+      const settings = isObject(account?.settings) ? account.settings : {};
+      const messaging = isObject(settings.messaging) ? settings.messaging : {};
+      return messaging.delivery_mode === "virtual" ? "virtual" : "live";
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      // Fail closed — same posture as settings(): never silently divert a real send into the inbox.
+      this.logger.error(
+        `env delivery mode lookup failed for ${tenantId}/${environmentId}: ${error instanceof Error ? error.message : "unknown"}`,
+      );
+      throw invalidRequest(
+        "delivery_settings_unavailable",
+        "Delivery settings are temporarily unavailable. Try again shortly.",
+      );
+    }
+  }
+
+  /**
    * Persist the tenant-visible projection of a virtual send. The body goes into the PII vault under
    * the recipient's own DEK and only its surrogate is stored here, so a later erasure of that
    * recipient renders this message unreadable too — which is precisely what the previous

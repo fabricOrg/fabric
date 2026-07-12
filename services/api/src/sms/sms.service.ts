@@ -99,6 +99,8 @@ export class SmsService {
     currency: string;
     /** E10-S5: absent = transactional (OTP/receipts). Promotional must be declared. */
     messageClass?: "transactional" | "promotional";
+    /** ADR-0004: the environment the request arrived on (sk_* keys). Null for the BFF token path. */
+    environmentId?: string | null;
   }): Promise<SendSmsResponse> {
     if (await this.killSwitch.isPaused("platform.sms_sending")) {
       throw invalidRequest(
@@ -106,7 +108,14 @@ export class SmsService {
         "SMS sending is temporarily paused.",
       );
     }
-    const deliveryMode = await this.virtualPhone.resolveMode(input.tenantId);
+    // ADR-0004: route on the request's environment when known (a sandbox env can never reach a
+    // carrier); fall back to the tenant/plan-based mode for the BFF token path (no environment yet).
+    const deliveryMode = input.environmentId
+      ? await this.virtualPhone.resolveModeForEnvironment(
+          input.tenantId,
+          input.environmentId,
+        )
+      : await this.virtualPhone.resolveMode(input.tenantId);
     if (deliveryMode === "live" && !this.liveReady) {
       throw invalidRequest(
         "live_provider_not_ready",

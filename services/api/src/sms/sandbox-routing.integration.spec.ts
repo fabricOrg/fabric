@@ -1,9 +1,9 @@
 // ============================================================================================
-// ADR-0002 F3 — sandbox tenants are PINNED to the fake provider at the ROUTING layer. This
-// boots the real app with SMS_PROVIDER=arkesel (the real vendor selected) and proves a
-// sandbox-plan tenant's send still lands on fake-sms — i.e. forcing live routing from the
-// outside is impossible — while a live-plan tenant is routed at the configured provider.
-// tier: test:integration.
+// ADR-0002 F3 / ADR-0004 — a SANDBOX ENVIRONMENT is PINNED to the fake/virtual provider at the
+// ROUTING layer. This boots the real app with SMS_PROVIDER=arkesel (the real vendor selected) and
+// proves a send on a sandbox-environment key still lands on virtual-phone — i.e. forcing live
+// routing from the outside is impossible. Routing now keys on the presenting key's
+// environment.type (ADR-0004), not accounts.plan. tier: test:integration.
 // ============================================================================================
 
 import { createAppDb } from "@app/db";
@@ -49,11 +49,33 @@ async function seedTenant(id: string, plan: string, rawKey: string) {
     "INSERT INTO accounts (id, name, slug, plan) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING",
     [id, `Routing ${plan}`, `routing-${plan}-${id.slice(0, 8)}`, plan],
   );
+  // ADR-0004: default app + envs; the sk_test_ key belongs to the SANDBOX environment. Routing now
+  // decides on that environment's type, so this key is what pins the send to virtual-phone.
+  const appRows = (await owner.unsafe(
+    `INSERT INTO applications (tenant_id, name, slug) VALUES ($1, 'Default', 'default')
+     ON CONFLICT (tenant_id, slug) DO UPDATE SET slug = EXCLUDED.slug RETURNING id`,
+    [id],
+  )) as Array<{ id: string }>;
+  const appId = appRows[0]?.id;
+  if (!appId) throw new Error("seed: default application id missing");
+  const sbRows = (await owner.unsafe(
+    `INSERT INTO environments (tenant_id, application_id, type, status)
+     VALUES ($1, $2, 'sandbox', 'active')
+     ON CONFLICT (application_id, type) DO UPDATE SET status = 'active' RETURNING id`,
+    [id, appId],
+  )) as Array<{ id: string }>;
+  const sandboxEnvId = sbRows[0]?.id;
+  if (!sandboxEnvId) throw new Error("seed: sandbox environment id missing");
   await owner.unsafe(
-    `INSERT INTO api_keys (tenant_id, prefix, key_hash, env, scopes, status)
-     VALUES ($1, 'sk_test_rout', $2, 'test', '["sms:send","sms:read"]'::jsonb, 'active')
+    `INSERT INTO environments (tenant_id, application_id, type, status)
+     VALUES ($1, $2, 'live', $3) ON CONFLICT (application_id, type) DO NOTHING`,
+    [id, appId, plan === "sandbox" ? "locked" : "active"],
+  );
+  await owner.unsafe(
+    `INSERT INTO api_keys (tenant_id, application_id, environment_id, prefix, key_hash, env, scopes, status)
+     VALUES ($1, $3, $4, 'sk_test_rout', $2, 'test', '["sms:send","sms:read"]'::jsonb, 'active')
      ON CONFLICT (key_hash) DO NOTHING`,
-    [id, hashApiKey(rawKey)],
+    [id, hashApiKey(rawKey), appId, sandboxEnvId],
   );
   await db.withTenant(id, (tx) =>
     credit(tx, {
