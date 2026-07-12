@@ -6,6 +6,8 @@ import type {
 } from "@app/contracts";
 import {
   type AppDb,
+  applications,
+  environments,
   type TenantId,
   type WebhookEndpoint,
   webhookEndpoints,
@@ -31,10 +33,40 @@ export class WebhooksService {
     // whsec_ + 32 random bytes — verifiable HMAC key, recognizable prefix (Stripe convention).
     const secret = `whsec_${randomBytes(32).toString("base64url")}`;
     const row = await this.db.withTenantDrizzle(tenantId, async (tx) => {
+      // ADR-0004: an endpoint belongs to one application-environment. Default application + sandbox
+      // environment for now (progressive disclosure — a workspace starts in sandbox; per-environment
+      // endpoint selection arrives with the dashboard webhook UI). Env-filtered DELIVERY (only an
+      // environment's events reach its endpoints) lands with #8, once outbox events carry an env.
+      const [env] = await tx
+        .select({
+          appId: environments.applicationId,
+          envId: environments.id,
+        })
+        .from(environments)
+        .innerJoin(
+          applications,
+          eq(applications.id, environments.applicationId),
+        )
+        .where(
+          and(
+            eq(applications.tenantId, tenantId as TenantId),
+            eq(applications.slug, "default"),
+            eq(environments.type, "sandbox"),
+          ),
+        )
+        .limit(1);
+      if (!env) {
+        // No default app/env means the workspace was never provisioned into the hierarchy — a bug.
+        throw new Error(
+          `workspace ${tenantId} has no default sandbox environment`,
+        );
+      }
       const [created] = await tx
         .insert(webhookEndpoints)
         .values({
           tenantId: tenantId as TenantId,
+          applicationId: env.appId,
+          environmentId: env.envId,
           url: request.url,
           secret,
           description: request.description ?? null,
