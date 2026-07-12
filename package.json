@@ -22,6 +22,7 @@
     "dev:seed:infisical": "infisical run --env=dev -- pnpm dev:seed",
     "dev:dashboard:infisical": "infisical run --env=dev -- pnpm dev",
     "dev:admin": "pnpm --filter @app/admin-console dev",
+    "dev:sdk-playground": "npm --prefix examples/sdk-playground start",
     "dev:all": "pnpm build:shared && pnpm -r --parallel --filter @app/dashboard --filter @app/admin-console dev",
     "dev:all:infisical": "infisical run --env=dev -- pnpm dev:all",
     "dev:stack": "pnpm build:shared && pnpm -r --parallel --filter @app/api --filter @app/dashboard --filter @app/admin-console dev",
