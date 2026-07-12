@@ -22,10 +22,14 @@ export function RouteBreadcrumbs({
   appLabel,
   pathname,
   routes,
+  current: currentOverride,
 }: {
   appLabel: string;
   pathname: string;
   routes: readonly BreadcrumbRoute[];
+  /** Explicit leaf label — for dynamic routes (e.g. /tenants/[slug]) where the URL segment isn't a
+   *  human-readable name. Falls back to an exact route match, then a humanized last segment. */
+  current?: string;
 }) {
   const exact = routes.find((route) => route.href === pathname);
   const parent = [...routes]
@@ -34,6 +38,7 @@ export function RouteBreadcrumbs({
     )
     .sort((a, b) => b.href.length - a.href.length)[0];
   const current =
+    currentOverride ??
     exact?.label ??
     humanize(pathname.split("/").filter(Boolean).at(-1) ?? "Overview");
 
