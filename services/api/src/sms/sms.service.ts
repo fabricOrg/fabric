@@ -37,6 +37,7 @@ import { buildSmsProviders } from "./sms-providers.js";
 import { getMessage, listMessages } from "./sms-read.js";
 import { SMS_SEND_QUEUE, type SmsSendJob } from "./sms-send.job.js";
 import { VirtualPhoneService } from "./virtual-phone.service.js";
+import { maybeAutoStop } from "./virtual-phone-auto-stop.js";
 
 /**
  * Wires the HTTP boundary to the L5 send pipeline. Holds the EngineDeps (the app_runtime AppDb + the
@@ -49,9 +50,7 @@ import { VirtualPhoneService } from "./virtual-phone.service.js";
 export class SmsService {
   private readonly provider: SmsSenderPlugin;
   private readonly creds: Creds | undefined;
-  // ADR-0002 F3: sandbox tenants are PINNED to the fake provider no matter what SMS_PROVIDER
-  // says — a sandbox send must never reach a real carrier. Kept alongside the configured
-  // provider so one api serves live and sandbox tenants simultaneously.
+  // Sandbox tenants are pinned to this provider and can never reach a carrier.
   private readonly virtualProvider: VirtualPhoneProvider;
   private readonly legacySandboxProvider: FakeProvider;
   private readonly liveReady: boolean;
@@ -241,13 +240,16 @@ export class SmsService {
     prepared: PreparedSend,
     deliveryMode: DeliveryMode,
   ): Promise<SendResult> {
-    return dispatchProviderSend({
+    const result = await dispatchProviderSend({
       deps: this.deps(deliveryMode),
       virtualProvider: this.virtualProvider,
       input,
       prepared,
       deliveryMode,
     });
+    if (deliveryMode === "virtual")
+      await maybeAutoStop(this.virtualPhone, input, result);
+    return result;
   }
 
   /**

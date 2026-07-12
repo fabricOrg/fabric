@@ -4,6 +4,7 @@ import {
   type SendSmsRequest,
   sendSmsApiResponse,
   virtualPhoneInbox,
+  virtualPhoneReplyResponse,
   walletSnapshot,
 } from "@app/contracts";
 
@@ -55,9 +56,14 @@ export async function updateMessagingMode(delivery_mode: "virtual" | "live") {
   );
 }
 
-export async function getVirtualPhone() {
+export async function getVirtualPhone(cursor?: string, recipient?: string) {
+  const search = new URLSearchParams();
+  if (cursor) search.set("cursor", cursor);
+  if (recipient) search.set("recipient", recipient);
   return virtualPhoneInbox.parse(
-    await bffRequest("/api/dashboard/virtual-phone"),
+    await bffRequest(
+      `/api/dashboard/virtual-phone${search.size > 0 ? `?${search}` : ""}`,
+    ),
   );
 }
 
@@ -66,6 +72,19 @@ export async function markVirtualMessageRead(messageId: string) {
     `/api/dashboard/virtual-phone/${encodeURIComponent(messageId)}/read`,
     { method: "PATCH", body: "{}" },
   );
+}
+
+export async function sendVirtualReply(input: { to: string; body: string }) {
+  return virtualPhoneReplyResponse.parse(
+    await bffRequest("/api/dashboard/virtual-phone", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function clearVirtualPhone() {
+  return bffRequest("/api/dashboard/virtual-phone", { method: "DELETE" });
 }
 
 export async function simulateDeliveredDlr(messageId: string) {

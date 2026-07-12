@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type {
   CreateOptOutRequest,
   MessageClass,
@@ -9,6 +8,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq } from "drizzle-orm";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
+import { hashMsisdn } from "./msisdn.js";
 
 /**
  * Consent / opt-out registry (E10-S5, NCC 2442). Scope semantics are the whole point:
@@ -40,7 +40,7 @@ export class ConsentService {
         .insert(optOuts)
         .values({
           tenantId: tenantId as never,
-          msisdnHash: sha256(request.msisdn),
+          msisdnHash: hashMsisdn(request.msisdn),
           msisdnMasked: maskMsisdn(request.msisdn),
           scope: request.scope,
           source,
@@ -97,7 +97,7 @@ export class ConsentService {
         .where(
           and(
             eq(optOuts.tenantId, tenantId as never),
-            eq(optOuts.msisdnHash, sha256(to)),
+            eq(optOuts.msisdnHash, hashMsisdn(to)),
           ),
         )
         .limit(1),
@@ -126,10 +126,6 @@ export function promoWindowOpen(now: Date, country: string): boolean {
   if (now.getUTCDay() === 0) return false; // Sunday
   const hour = now.getUTCHours();
   return hour >= 8 && hour < 19;
-}
-
-function sha256(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function maskMsisdn(to: string): string {

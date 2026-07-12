@@ -28,17 +28,25 @@ export async function dispatchSend(args: {
   const result = await engineDispatchSend(deps, input, prepared);
   if (deliveryMode !== "virtual" || result.status !== "accepted") return result;
 
-  await engineIngestDlr(
-    deps,
-    input.tenantId,
-    virtualProvider.delivered({
-      messageId: prepared.messageId,
-      to: input.to,
-      senderId: input.senderId,
-      body: input.body,
-      encoding: prepared.encoding,
-      segments: prepared.segments,
-    }),
-  );
-  return { ...result, status: "delivered" };
+  // The delayed test recipient rehearses an asynchronous DLR. In production this runs in the
+  // existing send worker, so the original API request has already returned `sending`.
+  const delayMs = virtualDlrDelayMs(input.to);
+  if (delayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  const dlr = virtualProvider.delivered({
+    messageId: prepared.messageId,
+    to: input.to,
+    senderId: input.senderId,
+    body: input.body,
+    encoding: prepared.encoding,
+    segments: prepared.segments,
+  });
+  await engineIngestDlr(deps, input.tenantId, dlr);
+  return { ...result, status: dlr.status };
+}
+
+export function virtualDlrDelayMs(to: string): number {
+  return to.endsWith("0002") ? 2_000 : 0;
 }

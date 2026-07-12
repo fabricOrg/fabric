@@ -2,7 +2,7 @@
 
 The official server-side TypeScript client for sending and inspecting messages with Fabric.
 
-> Public prerelease: `0.1.0-beta.1`. Email and batch messaging are not exposed because those public
+> Public prerelease: `0.1.0-beta.2`. Email and batch messaging are not exposed because those public
 > API endpoints do not exist yet. Install the explicit `beta` channel until 1.0 is ready.
 
 ## Install
@@ -96,6 +96,10 @@ receive only method/path/status/retry/request metadata.
 No separate environment setting can conflict with the key. Moving to production changes only
 `FABRIC_API_KEY`, but requires an approved sender ID, billing, provider configuration, and applicable
 Ghana/Nigeria compliance approval.
+
+Sandbox sends appear on the workspace’s two-way Virtual Phone and never contact a carrier. See the
+[sandbox guide](../../docs/sdk/sandbox.md) for the stable virtual number, STOP/START replies, and
+deterministic test recipients.
 
 This package is for trusted server runtimes only. Never import it into browser code or expose secret
 keys in client bundles, logs, commits, screenshots, or support tickets.

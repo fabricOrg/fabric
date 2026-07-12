@@ -1,21 +1,32 @@
 import { Button } from "@app/ui/components/ui/button";
-import {
-  ArrowLeft,
-  LockKeyhole,
-  MessageSquareText,
-  MoreVertical,
-} from "lucide-react";
+import { Input } from "@app/ui/components/ui/input";
+import { ArrowLeft, MessageSquareText, MoreVertical, Send } from "lucide-react";
+import { useState } from "react";
 import type { VirtualThread } from "@/lib/virtual-phone/threads";
 
 export function Handset({
   thread,
   onBack,
   onSelectMessage,
+  onReply,
 }: {
   thread?: VirtualThread;
   onBack: () => void;
   onSelectMessage: (id: string) => void;
+  onReply: (to: string, body: string) => Promise<boolean>;
 }) {
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+
+  async function submit() {
+    if (!thread || body.trim().length === 0 || sending) return;
+    setSending(true);
+    try {
+      if (await onReply(thread.to, body.trim())) setBody("");
+    } finally {
+      setSending(false);
+    }
+  }
   return (
     <section className="flex min-h-[36rem] min-w-0 flex-1 justify-center bg-muted/30 p-0 lg:p-6">
       <div className="flex h-[min(46rem,calc(100vh-12rem))] min-h-[34rem] w-full max-w-md flex-col overflow-hidden bg-background shadow-sm lg:rounded-[2rem] lg:border-[6px] lg:border-foreground/90">
@@ -78,7 +89,7 @@ export function Handset({
                   <button
                     type="button"
                     onClick={() => onSelectMessage(message.id)}
-                    className="group block max-w-[85%] rounded-2xl rounded-bl-sm bg-card px-3.5 py-2.5 text-left shadow-sm outline-none ring-border hover:ring-1 focus-visible:ring-2 focus-visible:ring-ring"
+                    className={`group block max-w-[85%] rounded-2xl px-3.5 py-2.5 text-left shadow-sm outline-none ring-border hover:ring-1 focus-visible:ring-2 focus-visible:ring-ring ${message.direction === "inbound" ? "ml-auto rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-card"}`}
                   >
                     <span className="sr-only">
                       From {message.from}, {message.status}, at{" "}
@@ -102,10 +113,27 @@ export function Handset({
               ))}
             </div>
             <div className="flex h-16 shrink-0 items-center gap-2 border-t bg-background px-3">
-              <div className="flex h-10 flex-1 items-center rounded-full border bg-muted/40 px-4 text-sm text-muted-foreground">
-                <LockKeyhole className="mr-2 size-4" />
-                Replies are not supported
-              </div>
+              <Input
+                value={body}
+                onChange={(event) => setBody(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void submit();
+                  }
+                }}
+                placeholder="Reply as this phone (try STOP)"
+                aria-label="Virtual phone reply"
+                disabled={sending}
+              />
+              <Button
+                size="icon"
+                onClick={() => void submit()}
+                disabled={sending || body.trim().length === 0}
+                aria-label="Send virtual reply"
+              >
+                <Send />
+              </Button>
             </div>
           </>
         ) : (

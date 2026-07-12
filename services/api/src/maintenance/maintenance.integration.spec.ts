@@ -79,7 +79,12 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     liveMode,
     vault,
   );
-  const maintenance = new MaintenanceService(provisioning, sms, config);
+  const maintenance = new MaintenanceService(
+    provisioning,
+    sms,
+    liveMode,
+    config,
+  );
 
   const tenantId = randomUUID() as TenantId;
   const CREDIT = 10_000n;

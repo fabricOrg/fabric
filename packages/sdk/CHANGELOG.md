@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-beta.2
+
+- Documented the two-way sandbox Virtual Phone and deterministic test recipients.
+- Added a complete server-side SDK playground covering every published resource.
+- Kept the public SDK API compatible with beta.1.
+
 ## 0.1.0-beta.1
 
 - First organization-scoped release as `@fabric-messaging/sdk`.

@@ -6,12 +6,16 @@ import { join } from "node:path";
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const temporaryDirectory = await mkdtemp(join(tmpdir(), "fabric-sdk-package-"));
+const releaseManifest = JSON.parse(
+  await readFile(new URL("../package.json", import.meta.url), "utf8"),
+);
+const releaseVersion = String(releaseManifest.version);
 
 try {
   run(pnpm, ["pack", "--pack-destination", temporaryDirectory]);
   const tarball = join(
     temporaryDirectory,
-    "fabric-messaging-sdk-0.1.0-beta.1.tgz",
+    `fabric-messaging-sdk-${releaseVersion}.tgz`,
   );
   const consumer = join(temporaryDirectory, "consumer.mjs");
   await writeFile(
@@ -37,7 +41,7 @@ try {
       "utf8",
     ),
   );
-  if (installedManifest.version !== "0.1.0-beta.1") {
+  if (installedManifest.version !== releaseVersion) {
     throw new Error(
       "The installed SDK version does not match the release candidate.",
     );

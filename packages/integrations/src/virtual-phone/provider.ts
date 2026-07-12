@@ -16,6 +16,8 @@ interface VirtualDlr {
   status: MessageStatus;
   occurredAt: string;
   segments: number;
+  errorCode?: string;
+  faultCause?: "internal_error";
 }
 
 export class VirtualPhoneProvider implements SmsSenderPlugin {
@@ -23,7 +25,9 @@ export class VirtualPhoneProvider implements SmsSenderPlugin {
   readonly capability = "sms" as const;
   readonly version = "1.0.0";
   readonly configSchema = {};
-  readonly billableStatuses: readonly MessageStatus[] = ["accepted"];
+  // Successful virtual sends reserve through the real wallet path, then refund at the terminal.
+  // The 0000 carrier-rejection simulation is deliberately billable to rehearse that real outcome.
+  readonly billableStatuses: readonly MessageStatus[] = ["undelivered"];
   readonly platformFaultExemptions = PLATFORM_FAULT_CAUSES;
 
   supports(_ctx: RequestContext): boolean {
@@ -43,28 +47,44 @@ export class VirtualPhoneProvider implements SmsSenderPlugin {
   }
 
   delivered(message: NormalizedMessage): VirtualDlr {
+    const suffix = message.to.slice(-4);
+    const status: MessageStatus =
+      suffix === "0000"
+        ? "undelivered"
+        : suffix === "0001"
+          ? "failed"
+          : "delivered";
     return {
       providerRef: `virtual-${message.messageId}`,
-      status: "delivered",
+      status,
       occurredAt: new Date().toISOString(),
       segments: message.segments,
+      ...(suffix === "0000" ? { errorCode: "virtual_carrier_rejected" } : {}),
+      ...(suffix === "0001"
+        ? { errorCode: "virtual_platform_fault", faultCause: "internal_error" }
+        : {}),
     };
   }
 
   parseDlr(payload: unknown): CanonicalDlr {
     const event = payload as Partial<VirtualDlr>;
+    const status = event.status;
     if (
       typeof event.providerRef !== "string" ||
-      event.status !== "delivered" ||
+      (status !== "delivered" &&
+        status !== "undelivered" &&
+        status !== "failed") ||
       typeof event.occurredAt !== "string"
     ) {
       throw new Error("Invalid virtual-phone delivery event.");
     }
     return {
       providerRef: event.providerRef,
-      status: event.status,
+      status,
       occurredAt: event.occurredAt,
       ...(event.segments ? { segments: event.segments } : {}),
+      ...(event.errorCode ? { errorCode: event.errorCode } : {}),
+      ...(event.faultCause ? { faultCause: event.faultCause } : {}),
       raw: payload,
     };
   }

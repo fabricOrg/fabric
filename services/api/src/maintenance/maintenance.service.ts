@@ -10,6 +10,7 @@ import { Cron, CronExpression } from "@nestjs/schedule";
 import { sql } from "drizzle-orm";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { SmsService } from "../sms/sms.service.js";
+import { VirtualPhoneService } from "../sms/virtual-phone.service.js";
 
 /**
  * SCHEDULED MAINTENANCE (ARCHITECTURE §10 made real) — two money-correctness jobs that previously
@@ -43,6 +44,8 @@ export class MaintenanceService {
   constructor(
     @Inject(PROVISIONING_DB) private readonly provisioning: ProvisioningDb,
     @Inject(SmsService) private readonly sms: SmsService,
+    @Inject(VirtualPhoneService)
+    private readonly virtualPhone: VirtualPhoneService,
     @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
@@ -191,8 +194,38 @@ export class MaintenanceService {
         sql`DELETE FROM api_idempotency_keys WHERE expires_at < now()`,
       );
 
+      const virtualCutoff = new Date(
+        Date.now() - this.virtualPhoneRetentionDays() * 86_400_000,
+      ).toISOString();
+      const virtualTenants = (await tx.execute(
+        sql`SELECT DISTINCT tenant_id FROM inbound_messages
+            WHERE created_at < ${virtualCutoff}::timestamptz
+            UNION
+            SELECT DISTINCT tenant_id FROM messages
+            WHERE delivery_mode = 'virtual' AND created_at < ${virtualCutoff}::timestamptz`,
+      )) as Array<{ tenant_id: string }>;
+      for (const row of virtualTenants) {
+        try {
+          await this.virtualPhone.purgeExpired(
+            String(row.tenant_id),
+            virtualCutoff,
+          );
+        } catch (error) {
+          this.logger.error(
+            `virtual phone retention failed for ${String(row.tenant_id)}: ${error instanceof Error ? error.message : "unknown"}`,
+          );
+        }
+      }
+
       return { locked: true, sweptTenants };
     });
+  }
+
+  private virtualPhoneRetentionDays(): number {
+    const parsed = Number(
+      this.config.get<string>("VIRTUAL_PHONE_RETENTION_DAYS") ?? "30",
+    );
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 30;
   }
 
   /**
