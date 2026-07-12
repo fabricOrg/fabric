@@ -1,13 +1,19 @@
 import type {
+  DeliveryMode,
   MessageDetail,
   MessageSummary,
   SendSmsResponse,
 } from "@app/contracts";
 import type { AppDb } from "@app/db";
-import type { Creds, SmsSenderPlugin } from "@app/integrations";
+import type {
+  Creds,
+  SmsSenderPlugin,
+  VirtualPhoneProvider,
+} from "@app/integrations";
+import type { FakeProvider } from "@app/integrations/testing";
 import {
   dispatchSend as engineDispatchSend,
-  ingestDlr as engineIngestDlr,
+  failPreparedSend as engineFailPreparedSend,
   prepareSend as enginePrepareSend,
   sweepExpired as engineSweepExpired,
   type PreparedSend,
@@ -18,14 +24,17 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
-import { invalidRequest, notFound, unauthorized } from "../http/api-error.js";
+import { invalidRequest } from "../http/api-error.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { AutoTopupService } from "../payments/auto-topup.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import { SendersService } from "../senders/senders.service.js";
 import { assertSendCompliant } from "./sms-compliance.js";
+import { dispatchSend as dispatchProviderSend } from "./sms-dispatch.js";
+import { ingestProviderDlr } from "./sms-dlr.js";
 import { buildSmsProviders } from "./sms-providers.js";
 import { getMessage, listMessages } from "./sms-read.js";
+import { VirtualPhoneService } from "./virtual-phone.service.js";
 
 /**
  * The sms-send job payload: everything dispatch needs (tx1 already ran). Carries transient PII by
@@ -34,16 +43,11 @@ import { getMessage, listMessages } from "./sms-read.js";
 export interface SmsSendJob {
   input: SendInput;
   prepared: PreparedSend;
-  /** ADR-0002 F3: the worker must dispatch on the SAME provider the send was routed to. */
+  deliveryMode?: DeliveryMode;
   sandbox?: boolean;
 }
 
 export const SMS_SEND_QUEUE = "sms-send";
-
-interface Row {
-  tenant_id?: unknown;
-  [key: string]: unknown;
-}
 
 /**
  * Wires the HTTP boundary to the L5 send pipeline. Holds the EngineDeps (the app_runtime AppDb + the
@@ -59,7 +63,10 @@ export class SmsService {
   // ADR-0002 F3: sandbox tenants are PINNED to the fake provider no matter what SMS_PROVIDER
   // says — a sandbox send must never reach a real carrier. Kept alongside the configured
   // provider so one api serves live and sandbox tenants simultaneously.
-  private readonly sandboxProvider: SmsSenderPlugin;
+  private readonly virtualProvider: VirtualPhoneProvider;
+  private readonly legacySandboxProvider: FakeProvider;
+  private readonly liveReady: boolean;
+  private readonly liveReadinessReason: string | null;
   private readonly logger = new Logger(SmsService.name);
 
   constructor(
@@ -70,42 +77,27 @@ export class SmsService {
     @Inject(QueueService) private readonly queue: QueueService,
     @Inject(SendersService) private readonly senders: SendersService,
     @Inject(ConsentService) private readonly consent: ConsentService,
+    @Inject(VirtualPhoneService)
+    private readonly virtualPhone: VirtualPhoneService,
   ) {
     const wired = buildSmsProviders(this.config, this.logger);
     this.provider = wired.provider;
     this.creds = wired.creds;
-    this.sandboxProvider = wired.sandboxProvider;
+    this.virtualProvider = wired.virtualProvider;
+    this.legacySandboxProvider = wired.legacySandboxProvider;
+    this.liveReady = wired.liveReady;
+    this.liveReadinessReason = wired.liveReadinessReason;
   }
 
-  private deps(sandbox = false) {
-    if (sandbox) {
-      // Fake provider needs no creds; passing the real ones would be wrong AND leaky.
-      return { db: this.db, provider: this.sandboxProvider };
+  private deps(deliveryMode: DeliveryMode = "live") {
+    if (deliveryMode === "virtual") {
+      return { db: this.db, provider: this.virtualProvider };
     }
     return {
       db: this.db,
       provider: this.provider,
       ...(this.creds ? { creds: this.creds } : {}),
     };
-  }
-
-  /**
-   * Is this tenant sandbox-planned? Money/carrier posture: on a read failure we fail TOWARD the
-   * sandbox provider — an outage must never route an unverified tenant to a real carrier.
-   */
-  private async isSandboxTenant(tenantId: string): Promise<boolean> {
-    try {
-      const rows = (await this.db.withTenant(
-        tenantId,
-        (tx) => tx`SELECT plan FROM accounts WHERE id = ${tenantId}`,
-      )) as Array<{ plan?: unknown }>;
-      return rows[0]?.plan === "sandbox";
-    } catch (error) {
-      this.logger.error(
-        `plan lookup failed for ${tenantId} — routing to sandbox provider: ${error instanceof Error ? error.message : "unknown"}`,
-      );
-      return true;
-    }
   }
 
   /** POST /v1/sms/send — the tenant is already resolved by ApiKeyGuard. */
@@ -118,21 +110,22 @@ export class SmsService {
     /** E10-S5: absent = transactional (OTP/receipts). Promotional must be declared. */
     messageClass?: "transactional" | "promotional";
   }): Promise<SendSmsResponse> {
-    // Global kill-switch: staff can halt ALL sending (incident, abuse, vendor outage) in one flip.
     if (await this.killSwitch.isPaused("platform.sms_sending")) {
       throw invalidRequest(
         "sms_sending_paused",
         "SMS sending is temporarily paused.",
       );
     }
-    const sandbox = await this.isSandboxTenant(input.tenantId);
-    // Per-provider kill-switch (finding 9): halt the ACTIVE provider without pausing the platform.
-    // With a single real provider there's no failover target, so a paused provider fails CLOSED
+    const deliveryMode = await this.virtualPhone.resolveMode(input.tenantId);
+    if (deliveryMode === "live" && !this.liveReady) {
+      throw invalidRequest(
+        "live_provider_not_ready",
+        this.liveReadinessReason ?? "Live SMS is not configured.",
+      );
+    }
     // (never a silent send, never a faked success) — the honest behavior until a 2nd provider lands.
-    // The sandbox `fake-sms` provider has no switch (nothing risky to halt). Gate here at send
-    // entry so we don't reserve + enqueue for a provider that can't run.
     if (
-      !sandbox &&
+      deliveryMode === "live" &&
       (await this.killSwitch.isPaused(`provider.${this.provider.slug}`))
     ) {
       throw invalidRequest(
@@ -150,11 +143,33 @@ export class SmsService {
       to: input.to,
       senderId: input.senderId,
       messageClass,
-      sandbox,
+      virtual: deliveryMode === "virtual",
     });
     // tx1 in-request EITHER way: insufficient funds must fail the request synchronously (a queue
     // must never accept money it can't reserve).
-    const prepared = await enginePrepareSend(this.deps(sandbox), input);
+    const routedInput: SendInput = { ...input, deliveryMode };
+    const prepared = await enginePrepareSend(
+      this.deps(deliveryMode),
+      routedInput,
+    );
+    if (deliveryMode === "virtual") {
+      try {
+        await this.virtualPhone.record({
+          tenantId: input.tenantId,
+          messageId: prepared.messageId,
+          to: input.to,
+          body: input.body,
+        });
+      } catch (error) {
+        await engineFailPreparedSend(
+          this.deps(deliveryMode),
+          routedInput,
+          prepared,
+          "virtual_delivery_persistence_failed",
+        );
+        throw error;
+      }
+    }
 
     let status: SendResult["status"];
     if (this.queue.enabled) {
@@ -162,21 +177,21 @@ export class SmsService {
       // messageId → BullMQ dedupes, so an accidental double-enqueue is a no-op.
       await this.queue
         .queue(SMS_SEND_QUEUE)
-        .add("send", { input, prepared, sandbox } satisfies SmsSendJob, {
-          jobId: prepared.messageId,
-          attempts: 5,
-          backoff: { type: "exponential", delay: 2_000 },
-          removeOnComplete: { count: 1_000 },
-          removeOnFail: { count: 5_000 },
-        });
+        .add(
+          "send",
+          { input: routedInput, prepared, deliveryMode } satisfies SmsSendJob,
+          {
+            jobId: prepared.messageId,
+            attempts: 5,
+            backoff: { type: "exponential", delay: 2_000 },
+            removeOnComplete: { count: 1_000 },
+            removeOnFail: { count: 5_000 },
+          },
+        );
       status = "sending"; // truthful: reserved + persisted, provider outcome pending
     } else {
       // Inline fallback (no Redis configured): the pre-queue behavior, unchanged.
-      const result = await engineDispatchSend(
-        this.deps(sandbox),
-        input,
-        prepared,
-      );
+      const result = await this.dispatch(routedInput, prepared, deliveryMode);
       status = result.status;
     }
 
@@ -205,11 +220,28 @@ export class SmsService {
   async processQueuedSend(job: SmsSendJob): Promise<SendResult> {
     // Route on the flag captured at send time (a plan change mid-flight must not flip provider);
     // pre-F3 jobs without the flag came from live-configured tenants → configured provider.
-    return engineDispatchSend(
-      this.deps(job.sandbox === true),
-      job.input,
-      job.prepared,
-    );
+    if (!job.deliveryMode && job.sandbox === true) {
+      return engineDispatchSend(
+        { db: this.db, provider: this.legacySandboxProvider },
+        job.input,
+        job.prepared,
+      );
+    }
+    return this.dispatch(job.input, job.prepared, job.deliveryMode ?? "live");
+  }
+
+  private async dispatch(
+    input: SendInput,
+    prepared: PreparedSend,
+    deliveryMode: DeliveryMode,
+  ): Promise<SendResult> {
+    return dispatchProviderSend({
+      deps: this.deps(deliveryMode),
+      virtualProvider: this.virtualProvider,
+      input,
+      prepared,
+      deliveryMode,
+    });
   }
 
   /**
@@ -219,7 +251,12 @@ export class SmsService {
    * so concurrent/repeated sweeps are safe. Returns how many messages were resolved.
    */
   async sweepStuck(tenantId: string, olderThanIso: string): Promise<number> {
-    return engineSweepExpired(this.deps(), tenantId, olderThanIso);
+    return engineSweepExpired(
+      this.deps("live"),
+      tenantId,
+      olderThanIso,
+      (mode) => this.deps(mode),
+    );
   }
 
   async list(tenantId: string): Promise<MessageSummary[]> {
@@ -242,46 +279,13 @@ export class SmsService {
   ): Promise<{ status: string }> {
     // F3: sandbox tenants always run on the fake provider, so its DLRs must ingest even when the
     // configured provider is a real vendor — one api serves both planes.
-    const provider =
-      providerSlug === this.provider.slug
-        ? this.provider
-        : providerSlug === this.sandboxProvider.slug
-          ? this.sandboxProvider
-          : null;
-    if (!provider) {
-      throw notFound("unknown_provider", `no provider '${providerSlug}'`);
-    }
-    const rawBody = typeof body === "string" ? body : JSON.stringify(body);
-    const flatHeaders: Record<string, string> = {};
-    for (const [k, v] of Object.entries(headers)) {
-      flatHeaders[k] = Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
-    }
-    if (!provider.verifyWebhook({ headers: flatHeaders, rawBody }, {})) {
-      throw unauthorized("invalid_signature", "DLR webhook signature invalid.");
-    }
-    const dlr = provider.parseDlr(body);
-    // Possession-scoped resolve: the dlr_provider_ref_lookup policy exposes only the presented ref's row.
-    const tenantId = await this.db.withProviderRefLookup(
-      dlr.providerRef,
-      async (tx) => {
-        const rows = (await tx`
-          SELECT tenant_id FROM messages
-          WHERE provider_slug = ${providerSlug} AND provider_ref = ${dlr.providerRef}`) as Row[];
-        return rows[0]?.tenant_id ? String(rows[0].tenant_id) : null;
-      },
-    );
-    if (tenantId === null) {
-      throw notFound(
-        "message_not_found",
-        `no message for provider_ref ${dlr.providerRef}`,
-      );
-    }
-    return {
-      status: await engineIngestDlr(
-        this.deps(provider === this.sandboxProvider),
-        tenantId,
-        body,
-      ),
-    };
+    return ingestProviderDlr({
+      db: this.db,
+      providerSlug,
+      body,
+      headers,
+      live: this.deps("live"),
+      virtual: this.deps("virtual"),
+    });
   }
 }

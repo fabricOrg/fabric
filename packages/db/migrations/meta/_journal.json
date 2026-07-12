@@ -274,6 +274,34 @@
       "when": 1783675038464,
       "tag": "0038_opt_outs_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1783792413591,
+      "tag": "0039_bitter_living_tribunal",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1783814122656,
+      "tag": "0040_spooky_blur",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1783815950015,
+      "tag": "0041_delivery_mode_check",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1783834805915,
+      "tag": "0042_ancient_bug",
+      "breakpoints": true
     }
   ]
 }

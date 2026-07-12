@@ -154,6 +154,24 @@ describe("consent / DND enforcement (E10-S5)", () => {
     ).toBe("recipient_opted_out");
   });
 
+  it("refuses to remove a regulatory registry suppression", async () => {
+    const [registry] = await owner<{ id: string }[]>`
+      INSERT INTO opt_outs (
+        tenant_id, msisdn_hash, msisdn_masked, scope, source
+      ) VALUES (
+        ${TENANT}, ${`registry-${SUFFIX}`}, ${`+23320•••${SUFFIX.slice(-4)}`},
+        'promotional', 'registry'
+      ) RETURNING id
+    `;
+    if (!registry) throw new Error("registry opt-out insert returned no row");
+    const removed = await optOuts("DELETE", `/${registry.id}`);
+    expect(removed.statusCode).toBe(400);
+    expect((removed.json() as { error: { code: string } }).error.code).toBe(
+      "managed_opt_out",
+    );
+    await owner`DELETE FROM opt_outs WHERE id = ${registry.id}`;
+  });
+
   it("removal restores delivery; the list reflects it", async () => {
     const removed = await optOuts("DELETE", `/${optOutId}`);
     expect(removed.statusCode).toBe(200);

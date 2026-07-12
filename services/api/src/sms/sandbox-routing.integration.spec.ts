@@ -28,6 +28,8 @@ process.env.DATABASE_URL_APP = APP_URL;
 process.env.SMS_PROVIDER = "arkesel";
 process.env.ARKESEL_API_KEY = ""; // no creds — an accidental real call could never succeed anyway
 process.env.REDIS_QUEUE_URL = ""; // inline path: assert the synchronous outcome
+process.env.VIRTUAL_PHONE_ENCRYPTION_KEY =
+  "integration-virtual-phone-key-at-least-32-characters";
 
 const SANDBOX_TENANT = "abcdabcd-0000-4000-8000-0000000000f3";
 const LIVE_TENANT = "abcdabcd-1111-4111-8111-0000000000f3";
@@ -71,6 +73,7 @@ async function seedTenant(id: string, plan: string, rawKey: string) {
 async function cleanTenant(id: string) {
   for (const table of [
     "senders",
+    "virtual_deliveries",
     "ledger_entries",
     "ledger_transactions",
     "ledger_accounts",
@@ -128,17 +131,30 @@ afterAll(async () => {
 });
 
 describe("sandbox provider pinning (F3)", () => {
-  it("routes a sandbox tenant's send to fake-sms even with arkesel configured", async () => {
+  it("delivers a sandbox send through the encrypted virtual phone", async () => {
     const res = await sendAs(SANDBOX_KEY);
     expect(res.statusCode).toBe(201);
-    await expect(providerOf(SANDBOX_TENANT)).resolves.toBe("fake-sms");
+    expect(res.json().status).toBe("delivered");
+    await expect(providerOf(SANDBOX_TENANT)).resolves.toBe("virtual-phone");
+
+    const rows = (await owner.unsafe(
+      `SELECT v.recipient_ciphertext, v.body_ciphertext, m.status
+       FROM virtual_deliveries v JOIN messages m ON m.id = v.message_id
+       WHERE v.tenant_id = $1 ORDER BY v.created_at DESC LIMIT 1`,
+      [SANDBOX_TENANT],
+    )) as Array<Record<string, unknown>>;
+    expect(rows[0]?.status).toBe("delivered");
+    expect(String(rows[0]?.recipient_ciphertext)).not.toContain(
+      "+233545227189",
+    );
+    expect(String(rows[0]?.body_ciphertext)).not.toContain("routing pin test");
   });
 
-  it("routes a live-plan tenant at the CONFIGURED provider (never silently faked)", async () => {
-    // No Arkesel creds here, so the provider call fails — the message must show the real
-    // provider (or a failed status), proving live traffic was NOT quietly served by the fake.
-    await sendAs(LIVE_KEY);
-    const provider = await providerOf(LIVE_TENANT);
-    expect(provider).not.toBe("fake-sms");
+  it("does not expose a virtual delivery in another tenant context", async () => {
+    const rows = await db.withTenant(
+      LIVE_TENANT,
+      (tx) => tx`SELECT message_id FROM virtual_deliveries`,
+    );
+    expect(rows).toHaveLength(0);
   });
 });

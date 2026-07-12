@@ -42,6 +42,7 @@ export interface SendInput {
   body: string;
   currency: string;
   subjectId?: string;
+  deliveryMode?: "virtual" | "live";
 }
 
 export interface SendResult {
@@ -141,8 +142,8 @@ export async function prepareSend(
 
   const messageId = await deps.db.withTenant(input.tenantId, async (tx) => {
     const rows = (await tx`
-      INSERT INTO messages (tenant_id, subject_id, sender_id, status, status_rank, encoding, segments, cost_minor, currency, provider_slug)
-      VALUES (current_setting('app.tenant_id')::uuid, ${input.subjectId ?? null}, ${input.senderId}, 'sending', ${STATUS_RANK.sending}, ${seg.encoding}, ${seg.segments}, ${cost.toString()}::bigint, ${input.currency}, ${deps.provider.slug})
+      INSERT INTO messages (tenant_id, subject_id, sender_id, status, status_rank, encoding, segments, cost_minor, currency, delivery_mode, provider_slug)
+      VALUES (current_setting('app.tenant_id')::uuid, ${input.subjectId ?? null}, ${input.senderId}, 'sending', ${STATUS_RANK.sending}, ${seg.encoding}, ${seg.segments}, ${cost.toString()}::bigint, ${input.currency}, ${input.deliveryMode ?? "live"}, ${deps.provider.slug})
       RETURNING id`) as Row[];
     const id = String(rows[0]?.id);
     await reserve(tx, {
@@ -190,6 +191,21 @@ export async function dispatchSend(
   return { messageId: prepared.messageId, status };
 }
 
+/** Resolve a prepared send that cannot proceed before provider dispatch (for example, required
+ * tenant-side delivery persistence failed). This immediately refunds the reservation instead of
+ * leaving recovery to the TTL sweeper. */
+export async function failPreparedSend(
+  deps: EngineDeps,
+  input: SendInput,
+  prepared: PreparedSend,
+  errorCode: string,
+): Promise<SendResult> {
+  const status = await deps.db.withTenant(input.tenantId, (tx) =>
+    resolveMessage(deps, tx, prepared.messageId, "failed", { errorCode }),
+  );
+  return { messageId: prepared.messageId, status };
+}
+
 /** POST /v1/sms/send inline core: prepare (tx1) → dispatch (send + tx2), one call. */
 export async function sendSms(
   deps: EngineDeps,
@@ -229,14 +245,22 @@ export async function sweepExpired(
   deps: EngineDeps,
   tenantId: string,
   olderThanIso: string,
+  depsForMode?: (deliveryMode: "virtual" | "live") => EngineDeps,
 ): Promise<number> {
   return deps.db.withTenant(tenantId, async (tx) => {
     const stuck = (await tx`
-      SELECT id FROM messages
+      SELECT id, delivery_mode FROM messages
       WHERE status IN ('queued','sending','accepted','sent') AND updated_at < ${olderThanIso}::timestamptz
       FOR UPDATE`) as Row[];
     for (const row of stuck) {
-      await resolveMessage(deps, tx, String(row.id), "expired", {});
+      const mode = row.delivery_mode === "virtual" ? "virtual" : "live";
+      await resolveMessage(
+        depsForMode?.(mode) ?? deps,
+        tx,
+        String(row.id),
+        "expired",
+        {},
+      );
     }
     return stuck.length;
   });

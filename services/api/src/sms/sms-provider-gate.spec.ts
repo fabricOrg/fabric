@@ -8,6 +8,7 @@ import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import type { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
 import { SmsService } from "./sms.service.js";
+import type { VirtualPhoneService } from "./virtual-phone.service.js";
 
 /**
  * PROVIDER KILL-SWITCH GATE — unit spec (finding 9). Before finding 9 the provider switches were
@@ -35,6 +36,9 @@ const senderStub = {
 const consentStub = {
   isSuppressed: async () => false,
 } as unknown as ConsentService;
+const virtualPhoneStub = {
+  resolveMode: async () => "live",
+} as unknown as VirtualPhoneService;
 
 function serviceWithSwitch(paused: Record<string, boolean>): {
   svc: SmsService;
@@ -51,6 +55,7 @@ function serviceWithSwitch(paused: Record<string, boolean>): {
       queue,
       senderStub,
       consentStub,
+      virtualPhoneStub,
     ),
     isPaused,
   };

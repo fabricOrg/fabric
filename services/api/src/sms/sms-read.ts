@@ -53,6 +53,7 @@ function toMessageSummary(row: {
   costMinor: bigint;
   currency: string;
   providerSlug: string | null;
+  deliveryMode: string;
   subjectId: string | null;
   createdAt: Date;
 }): MessageSummary {
@@ -67,6 +68,7 @@ function toMessageSummary(row: {
       minor: row.costMinor.toString(),
     },
     provider: row.providerSlug ?? "pending",
+    deliveryMode: row.deliveryMode === "virtual" ? "virtual" : "live",
     createdAt: row.createdAt.toISOString(),
   };
 }

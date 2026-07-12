@@ -42,5 +42,6 @@ export * from "./sms.js";
 // Wallet top-up (E4) — initiate a provider charge; the webhook credits the ledger.
 export * from "./topup.js";
 export * from "./verify.js";
+export * from "./virtual-phone.js";
 export * from "./wallet.js";
 export * from "./webhooks.js";

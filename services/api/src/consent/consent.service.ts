@@ -8,7 +8,7 @@ import { type AppDb, optOuts } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq } from "drizzle-orm";
 import { APP_DB } from "../db/db.module.js";
-import { notFound } from "../http/api-error.js";
+import { invalidRequest, notFound } from "../http/api-error.js";
 
 /**
  * Consent / opt-out registry (E10-S5, NCC 2442). Scope semantics are the whole point:
@@ -57,12 +57,28 @@ export class ConsentService {
   }
 
   async remove(tenantId: string, id: string): Promise<void> {
-    const deleted = await this.db.withTenantDrizzle(tenantId, (tx) =>
-      tx
+    const deleted = await this.db.withTenantDrizzle(tenantId, async (tx) => {
+      const [current] = await tx
+        .select({ id: optOuts.id, source: optOuts.source })
+        .from(optOuts)
+        .where(and(eq(optOuts.id, id), eq(optOuts.tenantId, tenantId as never)))
+        .limit(1);
+      if (!current) {
+        throw notFound("opt_out_not_found", "No opt-out with that id.");
+      }
+      if (current.source !== "manual") {
+        throw invalidRequest(
+          "managed_opt_out",
+          current.source === "registry"
+            ? "Registry DND records cannot be removed from the workspace."
+            : "STOP replies cannot be removed from the workspace; new consent must be captured through an approved opt-in flow.",
+        );
+      }
+      return tx
         .delete(optOuts)
         .where(and(eq(optOuts.id, id), eq(optOuts.tenantId, tenantId as never)))
-        .returning({ id: optOuts.id }),
-    );
+        .returning({ id: optOuts.id });
+    });
     if (deleted.length === 0) {
       throw notFound("opt_out_not_found", "No opt-out with that id.");
     }

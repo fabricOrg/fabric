@@ -1,7 +1,9 @@
 import { Module } from "@nestjs/common";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
+import { AuditModule } from "../audit/audit.module.js";
 import { ConsentModule } from "../consent/consent.module.js";
 import { IdempotencyModule } from "../idempotency/idempotency.module.js";
+import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { KillSwitchModule } from "../kill-switches/kill-switches.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
 import { QueueModule } from "../queue/queue.module.js";
@@ -10,6 +12,8 @@ import { DlrController } from "./dlr.controller.js";
 import { SmsController } from "./sms.controller.js";
 import { SmsService } from "./sms.service.js";
 import { SmsSendWorker } from "./sms-send.worker.js";
+import { VirtualPhoneController } from "./virtual-phone.controller.js";
+import { VirtualPhoneService } from "./virtual-phone.service.js";
 import { WebhookTokenGuard } from "./webhook-token.guard.js";
 
 /**
@@ -20,6 +24,7 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
 @Module({
   imports: [
     ApiKeysModule,
+    AuditModule,
     IdempotencyModule,
     PaymentsModule,
     KillSwitchModule,
@@ -29,9 +34,15 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
     // E10-S5: DND/consent + promotional quiet hours on the same path.
     ConsentModule,
   ],
-  controllers: [SmsController, DlrController],
+  controllers: [SmsController, DlrController, VirtualPhoneController],
   // SmsSendWorker consumes the sms-send queue in-process when REDIS_QUEUE_URL is set.
-  providers: [SmsService, SmsSendWorker, WebhookTokenGuard],
+  providers: [
+    SmsService,
+    SmsSendWorker,
+    WebhookTokenGuard,
+    BffTokenGuard,
+    VirtualPhoneService,
+  ],
   // Exported for the maintenance module: the scheduled sweeper resolves stuck reservations
   // through SmsService (same EngineDeps + provider billing basis as the live send path).
   exports: [SmsService],
