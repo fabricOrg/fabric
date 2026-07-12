@@ -1,0 +1,65 @@
+{
+  "name": "fabric-messaging",
+  "version": "0.1.0-beta.2",
+  "description": "Official TypeScript SDK for the Fabric communications platform",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "openapi.json",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./openapi.json": "./openapi.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fabricOrg/fabric.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/fabricOrg/fabric/tree/dev/packages/sdk#readme",
+  "bugs": {
+    "url": "https://github.com/fabricOrg/fabric/issues"
+  },
+  "keywords": [
+    "fabric",
+    "messaging",
+    "sms",
+    "cpaas",
+    "ghana",
+    "nigeria",
+    "typescript"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "artifact:check": "node scripts/validate-package.mjs",
+    "examples:typecheck": "tsc -p tsconfig.examples.json",
+    "openapi:generate": "node scripts/openapi.mjs",
+    "openapi:check": "node scripts/openapi.mjs --check",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "pack:check": "pnpm pack --dry-run",
+    "release:check": "pnpm openapi:check && pnpm typecheck && pnpm examples:typecheck && pnpm test && pnpm build && pnpm pack:check && pnpm artifact:check"
+  },
+  "devDependencies": {
+    "@app/contracts": "workspace:*",
+    "@types/node": "^22.0.0",
+    "vitest": "^2.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

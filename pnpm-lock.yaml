@@ -239,6 +239,18 @@ importers:
         specifier: ^22.0.0
         version: 22.20.0
 
+  packages/sdk:
+    devDependencies:
+      '@app/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.0
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)
+
   packages/sms-engine:
     dependencies:
       '@app/contracts':

@@ -238,27 +238,32 @@ export function apiSnippets(input: {
   const more = input.to.length - shown.length;
   const toDisplay = shown.map((n) => `"${n}"`).join(", ");
   const tail = more > 0 ? ` /* +${more} more */` : "";
+  const firstRecipient = shown[0] ?? "+233545227189";
   const from = input.from || "Fabric";
   const body = JSON.stringify(input.body || "Your message");
 
-  const curl = `curl https://api.fabric.africa/v1/messages \\
+  const curl = `curl https://api.fabric.africa/v1/sms/send \\
   -H "Authorization: Bearer $FABRIC_API_KEY" \\
   -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: notification-123-0" \\
   -d '{
-    "from": "${from}",
-    "to": [${toDisplay}${tail}],
-    "body": ${body}
+    "to": "${firstRecipient}",
+    "sender_id": "${from}",
+    "body": ${body},
+    "currency": "GHS"
   }'`;
 
-  const node = `import { Fabric } from "@fabric/sdk";
+  const node = `import { Fabric } from "fabric-messaging";
 
-const fabric = new Fabric(process.env.FABRIC_API_KEY);
+const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY });
+const recipients = [${toDisplay}${tail}];
 
-await fabric.messages.create({
-  from: "${from}",
-  to: [${toDisplay}${tail}],
-  body: ${body},
-});`;
+for (const [index, to] of recipients.entries()) {
+  await fabric.sms.send(
+    { to, senderId: "${from}", body: ${body} },
+    { idempotencyKey: \`notification-123-\${index}\` },
+  );
+}`;
 
   return { curl, node };
 }
