@@ -102,9 +102,17 @@ gained `api_keys:read/write`. Application cards link to the detail + show/count 
 Flat `/api-keys` page + nav item removed. **Fixed** a real bug: the tenant-token client set
 `content-type: application/json` on every request, so a bodyless DELETE tripped Fastify's empty-JSON
 parser → 400 and revoke silently failed; now set only when there's a body. **Browser-verified**
-end-to-end (create → once-only secret; revoke → 200 → Revoked). Follow-ups (tasks): **key
-expiry/TTL** (schema `expires_at` + resolve-path enforcement + create-dialog field — user-requested);
-webhooks + request logs (next W-B slices, still mock in dev-portal).
+end-to-end (create → once-only secret; revoke → 200 → Revoked). **Key expiry/TTL added (`86bebae`,
+migration 0048):** `api_keys.expires_at`; `resolve()` rejects expired keys (auth lookup gains
+`expires_at IS NULL OR > now()`); create dialog Expires select (Never/30/60/90d) + table Expires
+column. Integration-proven (future-expiry resolves; expired → null). Follow-ups: webhooks + request
+logs (next W-B slices, still mock in dev-portal).
+
+⚠️ **Running API dev server was serving STALE code this session** (didn't hot-reload the api-keys
+controller/service edits — a live create wrote NULL expiry despite correct, integration-proven code;
+a direct BFF probe confirmed the request reached the API but the stale handler dropped it).
+**Restart the API** (`dev:stack:infisical`) to pick up this session's api-keys backend (app-scoping +
+expiry). Dashboard-side changes hot-reloaded fine (revoke fix verified live).
 
 **Next — Phases 1–5** per `docs/PI-6/PLAN.md` (frontend-heavy): global environment SWITCHER (chrome
 control that pins the selected app/env into subsequent calls — keys, sends; tied to task #9 moving
