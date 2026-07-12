@@ -9,7 +9,7 @@
 </head>
 <body><main>
   <header><p class="hint">SERVER-SIDE TEST LAB · @fabric-messaging/sdk</p><h1>Try every shipped capability.</h1><p>Choose an operation, edit its JSON parameters, and run it. Your API key remains on the local Node server. Sandbox SMS is routed to the Dashboard Virtual phone.</p></header>
-  <div class="notice"><strong>Virtual phone status:</strong> outbound sandbox delivery is available. <span class="planned">A dedicated virtual number, inbound replies/STOP, fault numbers, and inbox reset are planned—not simulated here.</span></div>
+  <div class="notice"><strong>Virtual phone is two-way:</strong> every workspace has a stable <code>+999…</code> number. Open Dashboard → Virtual phone to reply, test STOP/START, page history, or reset the inbox. The presets below exercise deterministic delivery outcomes.</div>
   <div class="layout"><section class="card">
     <label for="action">SDK operation</label><select id="action"></select>
     <label for="params">Parameters (JSON)</label><textarea id="params" spellcheck="false"></textarea>
@@ -23,7 +23,11 @@ const examples={
 "wallet.retrieve":{},"senderIds.create":{senderId:"MYBRAND",country:"GH",type:"alphanumeric",useCase:"Transactional notifications"},"senderIds.list":{},
 "webhooks.create":{url:"https://example.com/webhooks/fabric",description:"Playground endpoint",environment:"sandbox"},"webhooks.list":{},"webhooks.remove":{id:"replace-with-webhook-id"},
 "webhooks.verify":{payload:"{\"type\":\"sms.delivered\",\"data\":{}}",signature:"t=...,v1=...",secret:"whsec_..."},
-"webhooks.signAndVerify":{payload:"{\"type\":\"playground.test\",\"data\":{\"ok\":true}}",secret:"local-demo-secret"}}
+"webhooks.signAndVerify":{payload:"{\"type\":\"playground.test\",\"data\":{\"ok\":true}}",secret:"local-demo-secret"},
+"virtualPhone.carrierReject":{senderId:"SANDBOX",body:"Carrier rejection test",idempotencyKey:"vp-reject-001"},
+"virtualPhone.platformFault":{senderId:"SANDBOX",body:"Platform failure test",idempotencyKey:"vp-fault-001"},
+"virtualPhone.delayedDlr":{senderId:"SANDBOX",body:"Delayed delivery test",idempotencyKey:"vp-delay-001"},
+"virtualPhone.autoStop":{senderId:"SANDBOX",body:"Automatic STOP test",idempotencyKey:"vp-stop-001"}}
 const action=document.querySelector("#action"),params=document.querySelector("#params"),output=document.querySelector("#output"),run=document.querySelector("#run");
 for(const key of Object.keys(examples)){const option=document.createElement("option");option.value=key;option.textContent=key;action.append(option)}
 function load(){params.value=JSON.stringify(examples[action.value],null,2)}action.addEventListener("change",load);load();

@@ -49,3 +49,28 @@ export const virtualDeliveries = pgTable(
 );
 
 export type VirtualDelivery = typeof virtualDeliveries.$inferSelect;
+
+/** Canonical mobile-originated messages. Virtual Phone is the first producer; a carrier webhook
+ * will write this same table when live inbound SMS lands. PII remains in the vault. */
+export const inboundMessages = pgTable(
+  "inbound_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: tenantIdCol(),
+    subjectId: uuid("subject_id")
+      .notNull()
+      .references(() => dataSubjects.subjectId, { onDelete: "restrict" })
+      .$type<SubjectId>(),
+    bodyPiiId: uuid("body_pii_id")
+      .notNull()
+      .references(() => piiVault.id, { onDelete: "restrict" }),
+    virtualNumber: text("virtual_number").notNull(),
+    keyword: text("keyword"),
+    ...timestamps,
+  },
+  (t) => [
+    index("idx_inbound_messages_tenant_created").on(t.tenantId, t.createdAt),
+  ],
+);
+
+export type InboundMessage = typeof inboundMessages.$inferSelect;

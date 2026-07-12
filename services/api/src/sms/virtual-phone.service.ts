@@ -2,6 +2,7 @@ import type {
   DeliveryMode,
   MessagingSettings,
   VirtualPhoneInbox,
+  VirtualPhoneReplyResponse,
 } from "@app/contracts";
 import type { AppDb } from "@app/db";
 import { HttpException, Inject, Injectable, Logger } from "@nestjs/common";
@@ -11,13 +12,19 @@ import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { assertLiveProviderReady } from "./sms-providers.js";
+import { listVirtualInbox } from "./virtual-phone-inbox.js";
+import {
+  auditVirtualClear,
+  clearVirtualMessages,
+  recordVirtualReply,
+  virtualNumberFor,
+  virtualRetentionDays,
+} from "./virtual-phone-operations.js";
 
 type Row = Record<string, unknown>;
 
 /** What the inbox shows once a recipient has exercised their right to erasure. */
-const ERASED_PLACEHOLDER = "[erased]";
 /** Written before the vault existed, not yet backfilled — unreadable here, but NOT erased. */
-const PENDING_PLACEHOLDER = "[pending migration]";
 
 @Injectable()
 export class VirtualPhoneService {
@@ -218,66 +225,34 @@ export class VirtualPhoneService {
     );
   }
 
-  async list(tenantId: string): Promise<VirtualPhoneInbox> {
-    const rows = (await this.db.withTenant(
+  async list(
+    tenantId: string,
+    opts: { cursor?: string; limit?: number; recipient?: string } = {},
+  ): Promise<VirtualPhoneInbox> {
+    return listVirtualInbox({
+      db: this.db,
+      vault: this.vault,
       tenantId,
-      (tx) => tx`
-      SELECT m.id, m.sender_id, m.status, m.segments, m.created_at,
-             v.subject_id, v.body_pii_id, v.read_at,
-             (v.recipient_ciphertext IS NOT NULL) AS legacy
-      FROM virtual_deliveries v
-      JOIN messages m ON m.id = v.message_id
-      ORDER BY m.created_at DESC, m.id DESC
-      LIMIT 100`,
-    )) as Row[];
+      virtualNumber: this.virtualNumber(tenantId),
+      retentionDays: virtualRetentionDays(this.config),
+      ...opts,
+    });
+  }
 
-    // Two batched vault reads for the whole page — never one per row.
-    const [bodies, phones] = await Promise.all([
-      this.vault.readMany(
-        tenantId,
-        rows.flatMap((row) =>
-          row.body_pii_id ? [String(row.body_pii_id)] : [],
-        ),
-      ),
-      this.vault.readPhones(tenantId, [
-        ...new Set(
-          rows.flatMap((row) =>
-            row.subject_id ? [String(row.subject_id)] : [],
-          ),
-        ),
-      ]),
-    ]);
+  async reply(
+    tenantId: string,
+    input: { to: string; body: string },
+  ): Promise<VirtualPhoneReplyResponse> {
+    return recordVirtualReply({
+      db: this.db,
+      vault: this.vault,
+      tenantId,
+      ...input,
+    });
+  }
 
-    return {
-      messages: rows.map((row) => {
-        const bodyId = row.body_pii_id ? String(row.body_pii_id) : null;
-        const subjectId = row.subject_id ? String(row.subject_id) : null;
-        // An erased subject leaves the message in place with its PII gone — a first-class state the
-        // UI renders, not an error. Same for a row we simply cannot read.
-        const to = subjectId ? (phones.get(subjectId) ?? null) : null;
-        const body = bodyId ? (bodies.get(bodyId) ?? null) : null;
-        const unreadable = to === null || body === null;
-        // A row still holding legacy ciphertext has NOT been erased — it just hasn't been backfilled
-        // into the vault yet. Reporting it as "erased" would tell the user their data was destroyed
-        // while it is in fact fully recoverable, which is the opposite of the truth and exactly the
-        // claim this surface must never get wrong.
-        const pending = unreadable && !subjectId && row.legacy === true;
-        const placeholder = pending ? PENDING_PLACEHOLDER : ERASED_PLACEHOLDER;
-        return {
-          id: String(row.id),
-          to: to ?? placeholder,
-          from: String(row.sender_id),
-          body: body ?? placeholder,
-          erased: unreadable && !pending,
-          status: row.status as VirtualPhoneInbox["messages"][number]["status"],
-          segments: Number(row.segments),
-          created_at: new Date(String(row.created_at)).toISOString(),
-          read_at: row.read_at
-            ? new Date(String(row.read_at)).toISOString()
-            : null,
-        };
-      }),
-    };
+  virtualNumber(tenantId: string): string {
+    return virtualNumberFor(tenantId);
   }
 
   async markRead(tenantId: string, messageId: string): Promise<void> {
@@ -291,6 +266,25 @@ export class VirtualPhoneService {
     )) as Row[];
     if (!rows[0])
       throw notFound("virtual_message_not_found", "Message not found.");
+  }
+
+  async clear(tenantId: string, actorEmail?: string): Promise<number> {
+    const cleared = await clearVirtualMessages({ db: this.db, tenantId });
+    await auditVirtualClear({
+      audit: this.audit,
+      tenantId,
+      ...(actorEmail ? { actorEmail } : {}),
+      cleared,
+    });
+    return cleared;
+  }
+
+  async purgeExpired(tenantId: string, cutoffIso: string): Promise<number> {
+    return clearVirtualMessages({
+      db: this.db,
+      tenantId,
+      before: cutoffIso,
+    });
   }
 }
 

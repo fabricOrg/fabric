@@ -4,6 +4,7 @@ Start with the package [quickstart](../../packages/sdk/README.md). These guides 
 production concerns that should not obscure first success.
 
 - [Authentication, environments, and key security](security.md)
+- [Sandbox and Virtual Phone](sandbox.md)
 - [Retries, idempotency, timeouts, and cancellation](reliability.md)
 - [Webhook verification](webhooks.md)
 - [Framework and worker examples](examples.md)

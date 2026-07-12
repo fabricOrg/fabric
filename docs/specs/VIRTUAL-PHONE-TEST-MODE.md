@@ -1,5 +1,8 @@
 # Virtual Phone — Test Mode (inbound, faults, retention)
 
+> Status: shipped. The “today” paragraphs below preserve the problems that motivated each decision;
+> the decisions and acceptance slices are now implemented.
+
 Follow-on to [`VIRTUAL-PHONE-DELIVERY.md`](./VIRTUAL-PHONE-DELIVERY.md), which landed the send path.
 That slice made virtual delivery real; it did not make it a usable **test mode**. Today a virtual
 send always succeeds, can never be replied to, and charges the tenant real money. This spec closes

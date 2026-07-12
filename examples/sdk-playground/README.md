@@ -18,5 +18,6 @@ without contacting a carrier. Live-key mutations are blocked unless `FABRIC_ALLO
 is deliberately set.
 
 The playground covers SMS send/retrieve/list, Verify start/check, wallet retrieval, sender-ID
-create/list, webhook create/list/delete, and local webhook signature verification. A virtual phone
-number and inbound replies are not public SDK capabilities yet, so the UI labels them as planned.
+create/list, webhook create/list/delete, and local webhook signature verification. Its Virtual Phone
+presets exercise carrier rejection, platform failure/refund, delayed delivery, and automatic STOP.
+Open Dashboard → Virtual phone to see your stable `+999…` number and reply from the handset.

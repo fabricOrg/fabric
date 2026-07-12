@@ -23,7 +23,7 @@ export function ThreadRail({
         <Input
           value={query}
           onChange={(event) => onQuery(event.target.value)}
-          placeholder="Search messages"
+          placeholder="Search loaded text or exact +number"
           className="pl-9"
         />
       </div>

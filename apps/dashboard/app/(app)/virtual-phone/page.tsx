@@ -14,16 +14,18 @@ import {
 } from "@app/ui/components/ui/states";
 import { cn } from "@app/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Info, Smartphone } from "lucide-react";
+import { Info, Smartphone, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { Handset } from "@/components/virtual-phone/handset";
 import { MessageInspector } from "@/components/virtual-phone/message-inspector";
 import { ThreadRail } from "@/components/virtual-phone/thread-rail";
 import {
+  clearVirtualPhone,
   getMessagingSettings,
   getVirtualPhone,
   markVirtualMessageRead,
+  sendVirtualReply,
 } from "@/lib/client/dashboard-api";
 import {
   groupVirtualThreads,
@@ -42,19 +44,27 @@ export default function VirtualPhonePage() {
   const [selectedKey, setSelectedKey] = useState<string>();
   const [selectedMessageId, setSelectedMessageId] = useState<string>();
   const [query, setQuery] = useState("");
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasLoadedOlder, setHasLoadedOlder] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const recipientSearch = /^\+[1-9]\d{7,14}$/.test(query.trim())
+    ? query.trim()
+    : undefined;
+  const inboxKey = [...INBOX_KEY, recipientSearch ?? "all"] as const;
 
   // TanStack Query owns the polling (CLAUDE.md §4): it dedupes in-flight requests, pauses while the
   // tab is hidden, and keeps the last good page on screen during a refetch — all of which the
   // hand-rolled setInterval had to fake, and the "keep last good data" part it never did.
   const inboxQuery = useQuery({
-    queryKey: INBOX_KEY,
-    queryFn: getVirtualPhone,
-    refetchInterval: 5_000,
+    queryKey: inboxKey,
+    queryFn: () => getVirtualPhone(undefined, recipientSearch),
+    refetchInterval: hasLoadedOlder ? false : 5_000,
     refetchIntervalInBackground: false,
     placeholderData: (previous) => previous,
   });
   const messages = inboxQuery.data?.messages ?? null;
-  const error = inboxQuery.isError ? errorMessage(inboxQuery.error) : null;
+  const error =
+    actionError ?? (inboxQuery.isError ? errorMessage(inboxQuery.error) : null);
   const reload = useCallback(
     () => queryClient.invalidateQueries({ queryKey: INBOX_KEY }),
     [queryClient],
@@ -89,9 +99,12 @@ export default function VirtualPhonePage() {
 
     // Optimistic: mark read in the cache immediately so the badge clears on tap, then reconcile.
     const readAt = new Date().toISOString();
-    queryClient.setQueryData<VirtualPhoneInbox>(INBOX_KEY, (current) =>
+    queryClient.setQueryData<VirtualPhoneInbox>(inboxKey, (current) =>
       current
         ? {
+            virtual_number: current.virtual_number,
+            next_cursor: current.next_cursor,
+            retention_days: current.retention_days,
             messages: current.messages.map((message) =>
               unread.some((item) => item.id === message.id)
                 ? { ...message, read_at: readAt }
@@ -105,6 +118,59 @@ export default function VirtualPhonePage() {
     ).catch(() => void reload());
   }
 
+  async function reply(to: string, body: string) {
+    setActionError(null);
+    try {
+      await sendVirtualReply({ to, body });
+      await reload();
+      return true;
+    } catch (cause) {
+      setActionError(errorMessage(cause));
+      return false;
+    }
+  }
+
+  async function clearInbox() {
+    if (
+      !window.confirm(
+        "Clear every virtual conversation? This cannot be undone.",
+      )
+    )
+      return;
+    setActionError(null);
+    try {
+      await clearVirtualPhone();
+      setSelectedKey(undefined);
+      setSelectedMessageId(undefined);
+      await reload();
+    } catch (cause) {
+      setActionError(errorMessage(cause));
+    }
+  }
+
+  async function loadOlder() {
+    const cursor = inboxQuery.data?.next_cursor;
+    if (!cursor || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const older = await getVirtualPhone(cursor, recipientSearch);
+      queryClient.setQueryData<VirtualPhoneInbox>(inboxKey, (current) =>
+        current
+          ? {
+              ...current,
+              messages: [...current.messages, ...older.messages],
+              next_cursor: older.next_cursor,
+            }
+          : older,
+      );
+      setHasLoadedOlder(true);
+    } catch (cause) {
+      setActionError(errorMessage(cause));
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
+
   return (
     <div className="flex w-full flex-col gap-5">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
@@ -114,11 +180,29 @@ export default function VirtualPhonePage() {
             Receive and inspect test SMS exactly where a carrier delivery would
             land.
           </p>
+          {inboxQuery.data?.virtual_number ? (
+            <p className="mt-2 font-mono text-sm font-medium">
+              Your number: {inboxQuery.data.virtual_number}
+            </p>
+          ) : null}
         </div>
+        {messages &&
+        messages.length > 0 &&
+        inboxQuery.data?.can_clear === true ? (
+          <Button variant="outline" onClick={() => void clearInbox()}>
+            <Trash2 /> Clear inbox
+          </Button>
+        ) : null}
       </div>
 
       {error ? (
-        <ErrorState message={error} onRetry={() => void reload()} />
+        <ErrorState
+          message={error}
+          onRetry={() => {
+            setActionError(null);
+            void reload();
+          }}
+        />
       ) : null}
       {settings?.delivery_mode === "live" ? (
         <Alert>
@@ -171,11 +255,22 @@ export default function VirtualPhonePage() {
               thread={selectedThread}
               onBack={() => setSelectedKey(undefined)}
               onSelectMessage={setSelectedMessageId}
+              onReply={reply}
             />
             <MessageInspector message={selectedMessage} />
           </div>
         </div>
       )}
+      {messages && inboxQuery.data?.next_cursor ? (
+        <Button
+          variant="outline"
+          className="self-center"
+          onClick={() => void loadOlder()}
+          disabled={loadingOlder}
+        >
+          {loadingOlder ? "Loading…" : "Load older conversations"}
+        </Button>
+      ) : null}
     </div>
   );
 }

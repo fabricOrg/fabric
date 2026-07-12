@@ -66,6 +66,26 @@ const actions = {
       }),
     };
   },
+  "virtualPhone.carrierReject": (p) =>
+    fabric.sms.send(
+      { to: "+233500000000", senderId: p.senderId, body: p.body },
+      { idempotencyKey: p.idempotencyKey },
+    ),
+  "virtualPhone.platformFault": (p) =>
+    fabric.sms.send(
+      { to: "+233500000001", senderId: p.senderId, body: p.body },
+      { idempotencyKey: p.idempotencyKey },
+    ),
+  "virtualPhone.delayedDlr": (p) =>
+    fabric.sms.send(
+      { to: "+233500000002", senderId: p.senderId, body: p.body },
+      { idempotencyKey: p.idempotencyKey },
+    ),
+  "virtualPhone.autoStop": (p) =>
+    fabric.sms.send(
+      { to: "+233500000003", senderId: p.senderId, body: p.body },
+      { idempotencyKey: p.idempotencyKey },
+    ),
 };
 
 const mutating = new Set([
@@ -75,6 +95,10 @@ const mutating = new Set([
   "senderIds.create",
   "webhooks.create",
   "webhooks.remove",
+  "virtualPhone.carrierReject",
+  "virtualPhone.platformFault",
+  "virtualPhone.delayedDlr",
+  "virtualPhone.autoStop",
 ]);
 
 createServer(async (request, response) => {

@@ -14,7 +14,7 @@ export function groupVirtualThreads(
 ): VirtualThread[] {
   const groups = new Map<string, VirtualPhoneMessage[]>();
   for (const message of messages) {
-    const key = `${message.to}\u0000${message.from}`;
+    const key = message.direction === "inbound" ? message.from : message.to;
     groups.set(key, [...(groups.get(key) ?? []), message]);
   }
   return [...groups.entries()]
@@ -24,8 +24,10 @@ export function groupVirtualThreads(
       );
       return {
         key,
-        to: sorted[0]?.to ?? "",
-        from: sorted[0]?.from ?? "",
+        to: key,
+        from:
+          sorted.find((message) => message.direction === "outbound")?.from ??
+          "Virtual phone",
         messages: sorted,
         lastMessage: sorted[sorted.length - 1] as VirtualPhoneMessage,
         unread: sorted.filter((message) => message.read_at === null).length,
