@@ -11,6 +11,8 @@
 
 // Admin control-plane DTOs — ops-provisioned tenant onboarding (WorkOS org + account + invite).
 export * from "./admin.js";
+// Workspace -> Application -> Environment hierarchy (ADR-0004). Scoped resources ref an environment.
+export * from "./applications.js";
 // Audit log — append-only record of consequential staff actions.
 export * from "./audit.js";
 // Dev-portal DTOs (F8.6/F2.3) — API keys, webhook endpoints, request logs.
