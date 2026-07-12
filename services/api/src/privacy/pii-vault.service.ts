@@ -49,10 +49,16 @@ export class PiiVaultService {
    */
   async subjectForPhone(tenantId: string, e164: string): Promise<string> {
     const index = phoneBlindIndex(this.indexKey(), tenantId, e164);
+    // Only a LIVE subject counts. An erased subject keeps its blind index for history but must not
+    // be reused: its DEK is destroyed, so sealing new PII against it is impossible. Contacting the
+    // number again mints a fresh subject — erasure ends a subject, it does not blacklist a person.
+    // (Whether the tenant MAY contact them is the consent engine's call, not the vault's.)
     const existing = (await this.db.withTenant(
       tenantId,
       (tx) => tx`
-      SELECT subject_id FROM data_subjects WHERE phone_hash = ${index} LIMIT 1`,
+      SELECT subject_id FROM data_subjects
+      WHERE phone_hash = ${index} AND erased_at IS NULL
+      LIMIT 1`,
     )) as Row[];
     const found = existing[0]?.subject_id;
     if (found) return String(found);
@@ -61,17 +67,20 @@ export class PiiVaultService {
       const inserted = (await tx`
         INSERT INTO data_subjects (tenant_id, phone_hash)
         VALUES (current_setting('app.tenant_id')::uuid, ${index})
-        ON CONFLICT (tenant_id, phone_hash) DO NOTHING
+        ON CONFLICT (tenant_id, phone_hash) WHERE erased_at IS NULL DO NOTHING
         RETURNING subject_id`) as Row[];
       // Lost the race: another request created the subject between our SELECT and INSERT.
-      const id = inserted[0]?.subject_id
-        ? String(inserted[0].subject_id)
-        : String(
-            (
-              (await tx`
-          SELECT subject_id FROM data_subjects WHERE phone_hash = ${index} LIMIT 1`) as Row[]
-            )[0]?.subject_id,
-          );
+      const raced = inserted[0]?.subject_id
+        ? inserted[0].subject_id
+        : (
+            (await tx`
+          SELECT subject_id FROM data_subjects
+          WHERE phone_hash = ${index} AND erased_at IS NULL
+          LIMIT 1`) as Row[]
+          )[0]?.subject_id;
+      // Fail loudly rather than stringifying `undefined` into a uuid column.
+      if (!raced) throw new Error("Could not resolve a data subject for send.");
+      const id = String(raced);
       const dek = newDek();
       await tx`
         INSERT INTO dek_keys (tenant_id, subject_id, wrapped_dek, status)
@@ -79,7 +88,7 @@ export class PiiVaultService {
           current_setting('app.tenant_id')::uuid, ${id},
           ${wrapDek(this.masterKey(), dek, tenantId, id)}, 'active'
         )
-        ON CONFLICT DO NOTHING`;
+        ON CONFLICT (subject_id) DO NOTHING`;
       return id;
     });
 
@@ -203,48 +212,6 @@ export class PiiVaultService {
       out.set(String(row.subject_id), this.unseal(tenantId, row));
     }
     return out;
-  }
-
-  /**
-   * ERASURE (crypto-shred). Destroys the subject's DEK, which renders every piece of their PII
-   * permanently unreadable — the ciphertext rows stay, the key does not. Ledger entries, message
-   * history, and audit keep their `subject_id` surrogate and their amounts, which is exactly the
-   * point: we honour erasure without editing append-only financial records.
-   *
-   * Idempotent: erasing an already-erased subject is a no-op that still records the request.
-   */
-  async erase(input: {
-    tenantId: string;
-    subjectId: string;
-    requestedBy: string;
-    basis: string;
-  }): Promise<{ erased: boolean }> {
-    const { tenantId, subjectId, requestedBy, basis } = input;
-    const erased = await this.db.withTenant(tenantId, async (tx) => {
-      const subject = (await tx`
-        SELECT subject_id FROM data_subjects WHERE subject_id = ${subjectId} LIMIT 1`) as Row[];
-      if (!subject[0]) {
-        throw notFound("subject_not_found", "No such data subject.");
-      }
-      const destroyed = (await tx`
-        UPDATE dek_keys
-        SET wrapped_dek = NULL, status = 'destroyed', destroyed_at = now(), updated_at = now()
-        WHERE subject_id = ${subjectId} AND status = 'active'
-        RETURNING dek_id`) as Row[];
-      // The erasure record is written in the SAME transaction as the key destruction, and survives
-      // it — proof the request was honoured, retained for years after the data is gone.
-      await tx`
-        INSERT INTO erasure_log (tenant_id, subject_id, requested_by, basis, completed_at)
-        VALUES (
-          current_setting('app.tenant_id')::uuid, ${subjectId},
-          ${requestedBy}, ${basis}, now()
-        )`;
-      return destroyed.length > 0;
-    });
-    this.logger.log(
-      `erasure completed for subject ${subjectId} (tenant ${tenantId}); keys destroyed: ${erased}`,
-    );
-    return { erased };
   }
 
   /** Logs the corrupt-row case the pure unsealer swallows, then degrades. */

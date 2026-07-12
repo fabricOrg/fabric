@@ -17,6 +17,7 @@ import { MaintenanceModule } from "./maintenance/maintenance.module.js";
 import { MembersModule } from "./members/members.module.js";
 import { PaymentsModule } from "./payments/payments.module.js";
 import { PluginsModule } from "./plugins/plugins.module.js";
+import { PrivacyModule } from "./privacy/privacy.module.js";
 import { ProposalsModule } from "./proposals/proposals.module.js";
 import { SendersModule } from "./senders/senders.module.js";
 import { SmsModule } from "./sms/sms.module.js";
@@ -52,6 +53,9 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     ApiKeysModule,
     ConsentModule,
     SendersModule,
+    // COMPLIANCE §6: the staff DSR surface. Registered here, not only via SmsModule — erasure is a
+    // platform capability, not an SMS one.
+    PrivacyModule,
     SmsModule,
     VerifyModule,
     WalletModule,

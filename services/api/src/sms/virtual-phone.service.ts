@@ -16,6 +16,8 @@ type Row = Record<string, unknown>;
 
 /** What the inbox shows once a recipient has exercised their right to erasure. */
 const ERASED_PLACEHOLDER = "[erased]";
+/** Written before the vault existed, not yet backfilled — unreadable here, but NOT erased. */
+const PENDING_PLACEHOLDER = "[pending migration]";
 
 @Injectable()
 export class VirtualPhoneService {
@@ -175,7 +177,8 @@ export class VirtualPhoneService {
       tenantId,
       (tx) => tx`
       SELECT m.id, m.sender_id, m.status, m.segments, m.created_at,
-             v.subject_id, v.body_pii_id, v.read_at
+             v.subject_id, v.body_pii_id, v.read_at,
+             (v.recipient_ciphertext IS NOT NULL) AS legacy
       FROM virtual_deliveries v
       JOIN messages m ON m.id = v.message_id
       ORDER BY m.created_at DESC, m.id DESC
@@ -207,12 +210,19 @@ export class VirtualPhoneService {
         // UI renders, not an error. Same for a row we simply cannot read.
         const to = subjectId ? (phones.get(subjectId) ?? null) : null;
         const body = bodyId ? (bodies.get(bodyId) ?? null) : null;
+        const unreadable = to === null || body === null;
+        // A row still holding legacy ciphertext has NOT been erased — it just hasn't been backfilled
+        // into the vault yet. Reporting it as "erased" would tell the user their data was destroyed
+        // while it is in fact fully recoverable, which is the opposite of the truth and exactly the
+        // claim this surface must never get wrong.
+        const pending = unreadable && !subjectId && row.legacy === true;
+        const placeholder = pending ? PENDING_PLACEHOLDER : ERASED_PLACEHOLDER;
         return {
           id: String(row.id),
-          to: to ?? ERASED_PLACEHOLDER,
+          to: to ?? placeholder,
           from: String(row.sender_id),
-          body: body ?? ERASED_PLACEHOLDER,
-          erased: to === null || body === null,
+          body: body ?? placeholder,
+          erased: unreadable && !pending,
           status: row.status as VirtualPhoneInbox["messages"][number]["status"],
           segments: Number(row.segments),
           created_at: new Date(String(row.created_at)).toISOString(),

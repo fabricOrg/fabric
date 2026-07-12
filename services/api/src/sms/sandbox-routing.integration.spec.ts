@@ -15,6 +15,7 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashApiKey } from "../api-keys/api-key.crypto.js";
 import { AppModule } from "../app.module.js";
+import { PiiErasureService } from "../privacy/pii-erasure.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { VirtualPhoneService } from "./virtual-phone.service.js";
 
@@ -202,10 +203,10 @@ describe("sandbox provider pinning (F3)", () => {
       [SANDBOX_TENANT],
     )) as Array<{ n: number }>;
 
-    await vaultService.erase({
+    await app.get(PiiErasureService).eraseByPhone({
       tenantId: SANDBOX_TENANT,
-      subjectId: subject.subject_id,
-      requestedBy: "integration-test",
+      e164: "+233545227189",
+      requestedBy: "ops@fabric.dev",
       basis: "DSR erasure request",
     });
 
@@ -235,5 +236,45 @@ describe("sandbox provider pinning (F3)", () => {
       [SANDBOX_TENANT, subject.subject_id],
     )) as Array<{ completed_at: Date | null }>;
     expect(proof[0]?.completed_at).toBeTruthy();
+
+    // The erasure is audited — erasure_log is the legal proof, the audit trail says WHO did it.
+    const audited = (await owner.unsafe(
+      "SELECT count(*)::int AS n FROM audit_events WHERE action = $1 AND target_id = $2",
+      ["privacy.subject.erased", subject.subject_id],
+    )) as Array<{ n: number }>;
+    expect(audited[0]?.n).toBe(1);
+  });
+
+  // Erasure ends a SUBJECT; it must not blacklist a human being. A tenant that erases a recipient
+  // and later messages them again gets a fresh subject with a fresh key — not a permanent failure.
+  // (Whether they MAY message them is the consent engine's call, not the vault's.)
+  it("can still message a number after erasing it — a new subject is minted", async () => {
+    const [before] = (await owner.unsafe(
+      "SELECT count(*)::int AS n FROM data_subjects WHERE tenant_id = $1",
+      [SANDBOX_TENANT],
+    )) as Array<{ n: number }>;
+
+    const res = await sendAs(SANDBOX_KEY);
+    expect(res.statusCode).toBe(201);
+    expect(res.json().status).toBe("delivered");
+
+    // A NEW live subject exists for the same number; the erased one stays, closed, for history.
+    const [after] = (await owner.unsafe(
+      "SELECT count(*)::int AS n FROM data_subjects WHERE tenant_id = $1",
+      [SANDBOX_TENANT],
+    )) as Array<{ n: number }>;
+    expect(after?.n).toBe((before?.n ?? 0) + 1);
+
+    const live = (await owner.unsafe(
+      "SELECT subject_id FROM data_subjects WHERE tenant_id = $1 AND erased_at IS NULL",
+      [SANDBOX_TENANT],
+    )) as Array<{ subject_id: string }>;
+    expect(live).toHaveLength(1);
+
+    // …and the new message is readable, while the erased one stays erased.
+    const inbox = await app.get(VirtualPhoneService).list(SANDBOX_TENANT);
+    expect(inbox.messages[0]?.erased).toBe(false);
+    expect(inbox.messages[0]?.to).toBe("+233545227189");
+    expect(inbox.messages.at(-1)?.erased).toBe(true);
   });
 });
