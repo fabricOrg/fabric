@@ -27,6 +27,7 @@ import { APP_DB } from "../db/db.module.js";
 import { invalidRequest } from "../http/api-error.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { AutoTopupService } from "../payments/auto-topup.service.js";
+import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import { SendersService } from "../senders/senders.service.js";
 import { assertSendCompliant } from "./sms-compliance.js";
@@ -34,20 +35,8 @@ import { dispatchSend as dispatchProviderSend } from "./sms-dispatch.js";
 import { ingestProviderDlr } from "./sms-dlr.js";
 import { buildSmsProviders } from "./sms-providers.js";
 import { getMessage, listMessages } from "./sms-read.js";
+import { SMS_SEND_QUEUE, type SmsSendJob } from "./sms-send.job.js";
 import { VirtualPhoneService } from "./virtual-phone.service.js";
-
-/**
- * The sms-send job payload: everything dispatch needs (tx1 already ran). Carries transient PII by
- * design — jobs are trimmed on completion; Redis is transport, never storage.
- */
-export interface SmsSendJob {
-  input: SendInput;
-  prepared: PreparedSend;
-  deliveryMode?: DeliveryMode;
-  sandbox?: boolean;
-}
-
-export const SMS_SEND_QUEUE = "sms-send";
 
 /**
  * Wires the HTTP boundary to the L5 send pipeline. Holds the EngineDeps (the app_runtime AppDb + the
@@ -79,6 +68,7 @@ export class SmsService {
     @Inject(ConsentService) private readonly consent: ConsentService,
     @Inject(VirtualPhoneService)
     private readonly virtualPhone: VirtualPhoneService,
+    @Inject(PiiVaultService) private readonly piiVault: PiiVaultService,
   ) {
     const wired = buildSmsProviders(this.config, this.logger);
     this.provider = wired.provider;
@@ -145,9 +135,16 @@ export class SmsService {
       messageClass,
       virtual: deliveryMode === "virtual",
     });
+    // Tokenize the recipient BEFORE the message row exists: `messages` references a subject_id
+    // surrogate and never the raw number (COMPLIANCE §5), so the subject must exist first. A send
+    // that later fails leaves behind a subject with only their number — harmless, and erasable.
+    const subjectId = await this.piiVault.subjectForPhone(
+      input.tenantId,
+      input.to,
+    );
     // tx1 in-request EITHER way: insufficient funds must fail the request synchronously (a queue
     // must never accept money it can't reserve).
-    const routedInput: SendInput = { ...input, deliveryMode };
+    const routedInput: SendInput = { ...input, deliveryMode, subjectId };
     const prepared = await enginePrepareSend(
       this.deps(deliveryMode),
       routedInput,
@@ -157,7 +154,7 @@ export class SmsService {
         await this.virtualPhone.record({
           tenantId: input.tenantId,
           messageId: prepared.messageId,
-          to: input.to,
+          subjectId,
           body: input.body,
         });
       } catch (error) {

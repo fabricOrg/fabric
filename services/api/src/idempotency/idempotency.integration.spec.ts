@@ -14,6 +14,7 @@ import type { RequestTenant } from "../api-keys/api-key.guard.js";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
 import { SmsController } from "../sms/sms.controller.js";
@@ -56,6 +57,8 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
   const config = {
     get: () => undefined, // FakeProvider, defaults everywhere
   } as unknown as ConfigService;
+  // Real vault against the test Postgres: the send path tokenizes every recipient.
+  const vault = new PiiVaultService(appDb, config);
   // Togglable: lets a test force a failure AFTER the idempotency claim (inside SmsService.send).
   let sendingPaused = false;
   const killSwitch = {
@@ -75,6 +78,7 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     sendersAlwaysActive,
     consentAllowAll,
     liveMode,
+    vault,
   );
   const idempotency = new IdempotencyService(appDb);
   const controller = new SmsController(sms, idempotency);

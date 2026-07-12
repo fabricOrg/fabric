@@ -1,9 +1,3 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-} from "node:crypto";
 import type {
   DeliveryMode,
   MessagingSettings,
@@ -15,9 +9,13 @@ import { ConfigService } from "@nestjs/config";
 import { AuditService } from "../audit/audit.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
+import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { assertLiveProviderReady } from "./sms-providers.js";
 
 type Row = Record<string, unknown>;
+
+/** What the inbox shows once a recipient has exercised their right to erasure. */
+const ERASED_PLACEHOLDER = "[erased]";
 
 @Injectable()
 export class VirtualPhoneService {
@@ -27,6 +25,7 @@ export class VirtualPhoneService {
     @Inject(APP_DB) private readonly db: AppDb,
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(PiiVaultService) private readonly vault: PiiVaultService,
   ) {}
 
   async settings(tenantId: string): Promise<MessagingSettings> {
@@ -132,21 +131,32 @@ export class VirtualPhoneService {
     return (await this.settings(tenantId)).delivery_mode;
   }
 
+  /**
+   * Persist the tenant-visible projection of a virtual send. The body goes into the PII vault under
+   * the recipient's own DEK and only its surrogate is stored here, so a later erasure of that
+   * recipient renders this message unreadable too — which is precisely what the previous
+   * platform-key encryption could not do.
+   */
   async record(input: {
     tenantId: string;
     messageId: string;
-    to: string;
+    subjectId: string;
     body: string;
   }): Promise<void> {
+    const bodyPiiId = await this.vault.put(
+      input.tenantId,
+      input.subjectId,
+      "body",
+      input.body,
+    );
     await this.db.withTenant(
       input.tenantId,
       (tx) => tx`
       INSERT INTO virtual_deliveries (
-        message_id, tenant_id, recipient_ciphertext, body_ciphertext
+        message_id, tenant_id, subject_id, body_pii_id
       ) VALUES (
         ${input.messageId}, current_setting('app.tenant_id')::uuid,
-        ${this.encrypt(input.to, input.tenantId, input.messageId)},
-        ${this.encrypt(input.body, input.tenantId, input.messageId)}
+        ${input.subjectId}, ${bodyPiiId}
       ) ON CONFLICT (message_id) DO NOTHING`,
     );
   }
@@ -156,20 +166,44 @@ export class VirtualPhoneService {
       tenantId,
       (tx) => tx`
       SELECT m.id, m.sender_id, m.status, m.segments, m.created_at,
-             v.recipient_ciphertext, v.body_ciphertext, v.read_at
+             v.subject_id, v.body_pii_id, v.read_at
       FROM virtual_deliveries v
       JOIN messages m ON m.id = v.message_id
       ORDER BY m.created_at DESC, m.id DESC
       LIMIT 100`,
     )) as Row[];
+
+    // Two batched vault reads for the whole page — never one per row.
+    const [bodies, phones] = await Promise.all([
+      this.vault.readMany(
+        tenantId,
+        rows.flatMap((row) =>
+          row.body_pii_id ? [String(row.body_pii_id)] : [],
+        ),
+      ),
+      this.vault.readPhones(tenantId, [
+        ...new Set(
+          rows.flatMap((row) =>
+            row.subject_id ? [String(row.subject_id)] : [],
+          ),
+        ),
+      ]),
+    ]);
+
     return {
       messages: rows.map((row) => {
-        const id = String(row.id);
+        const bodyId = row.body_pii_id ? String(row.body_pii_id) : null;
+        const subjectId = row.subject_id ? String(row.subject_id) : null;
+        // An erased subject leaves the message in place with its PII gone — a first-class state the
+        // UI renders, not an error. Same for a row we simply cannot read.
+        const to = subjectId ? (phones.get(subjectId) ?? null) : null;
+        const body = bodyId ? (bodies.get(bodyId) ?? null) : null;
         return {
-          id,
-          to: this.decrypt(String(row.recipient_ciphertext), tenantId, id),
+          id: String(row.id),
+          to: to ?? ERASED_PLACEHOLDER,
           from: String(row.sender_id),
-          body: this.decrypt(String(row.body_ciphertext), tenantId, id),
+          body: body ?? ERASED_PLACEHOLDER,
+          erased: to === null || body === null,
           status: row.status as VirtualPhoneInbox["messages"][number]["status"],
           segments: Number(row.segments),
           created_at: new Date(String(row.created_at)).toISOString(),
@@ -192,54 +226,6 @@ export class VirtualPhoneService {
     )) as Row[];
     if (!rows[0])
       throw notFound("virtual_message_not_found", "Message not found.");
-  }
-
-  private key(): Buffer {
-    const secret = this.config.get<string>("VIRTUAL_PHONE_ENCRYPTION_KEY");
-    if (!secret || secret.length < 32) {
-      if (this.config.get<string>("NODE_ENV") === "production") {
-        throw new Error(
-          "VIRTUAL_PHONE_ENCRYPTION_KEY must be at least 32 characters.",
-        );
-      }
-      return createHash("sha256")
-        .update("fabric-local-virtual-phone-development-key")
-        .digest();
-    }
-    return createHash("sha256").update(secret).digest();
-  }
-
-  private encrypt(value: string, tenantId: string, messageId: string): string {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", this.key(), iv);
-    cipher.setAAD(Buffer.from(`${tenantId}:${messageId}`));
-    const encrypted = Buffer.concat([
-      cipher.update(value, "utf8"),
-      cipher.final(),
-    ]);
-    return [
-      "v1",
-      iv.toString("base64url"),
-      encrypted.toString("base64url"),
-      cipher.getAuthTag().toString("base64url"),
-    ].join(".");
-  }
-
-  private decrypt(value: string, tenantId: string, messageId: string): string {
-    const [version, iv, encrypted, tag] = value.split(".");
-    if (version !== "v1" || !iv || !encrypted || !tag)
-      throw new Error("Invalid virtual delivery ciphertext.");
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      this.key(),
-      Buffer.from(iv, "base64url"),
-    );
-    decipher.setAAD(Buffer.from(`${tenantId}:${messageId}`));
-    decipher.setAuthTag(Buffer.from(tag, "base64url"));
-    return Buffer.concat([
-      decipher.update(Buffer.from(encrypted, "base64url")),
-      decipher.final(),
-    ]).toString("utf8");
   }
 }
 

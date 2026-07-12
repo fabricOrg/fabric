@@ -16,6 +16,12 @@ export const virtualPhoneMessage = z.object({
   to: z.string(),
   from: z.string(),
   body: z.string(),
+  /**
+   * True once the recipient's PII has been crypto-shredded (their DEK destroyed): the message, its
+   * cost, and its delivery history survive, but `to` and `body` are gone for good. A first-class
+   * state the UI renders — not an error, and not a value we can ever recover.
+   */
+  erased: z.boolean(),
   status: messageStatus,
   segments: z.number().int().positive(),
   created_at: z.string(),

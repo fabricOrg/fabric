@@ -13,6 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
 import { SmsService } from "../sms/sms.service.js";
@@ -58,6 +59,8 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     // runSweep()/runInvariant() directly.
     get: () => undefined,
   } as unknown as ConfigService;
+  // Real vault against the test Postgres: the send path tokenizes every recipient.
+  const vault = new PiiVaultService(appDb, config);
   const killSwitch = {
     isPaused: async () => false,
   } as unknown as KillSwitchService;
@@ -74,6 +77,7 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     sendersAlwaysActive,
     consentAllowAll,
     liveMode,
+    vault,
   );
   const maintenance = new MaintenanceService(provisioning, sms, config);
 

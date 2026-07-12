@@ -15,6 +15,8 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashApiKey } from "../api-keys/api-key.crypto.js";
 import { AppModule } from "../app.module.js";
+import { PiiVaultService } from "../privacy/pii-vault.service.js";
+import { VirtualPhoneService } from "./virtual-phone.service.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
@@ -28,8 +30,8 @@ process.env.DATABASE_URL_APP = APP_URL;
 process.env.SMS_PROVIDER = "arkesel";
 process.env.ARKESEL_API_KEY = ""; // no creds — an accidental real call could never succeed anyway
 process.env.REDIS_QUEUE_URL = ""; // inline path: assert the synchronous outcome
-process.env.VIRTUAL_PHONE_ENCRYPTION_KEY =
-  "integration-virtual-phone-key-at-least-32-characters";
+process.env.PII_MASTER_KEY =
+  "integration-pii-master-key-at-least-32-characters";
 
 const SANDBOX_TENANT = "abcdabcd-0000-4000-8000-0000000000f3";
 const LIVE_TENANT = "abcdabcd-1111-4111-8111-0000000000f3";
@@ -73,7 +75,12 @@ async function seedTenant(id: string, plan: string, rawKey: string) {
 async function cleanTenant(id: string) {
   for (const table of [
     "senders",
+    // Order matters: virtual_deliveries → pii_vault → dek_keys → data_subjects (FK chain).
     "virtual_deliveries",
+    "pii_vault",
+    "dek_keys",
+    "erasure_log",
+    "data_subjects",
     "ledger_entries",
     "ledger_transactions",
     "ledger_accounts",
@@ -131,23 +138,36 @@ afterAll(async () => {
 });
 
 describe("sandbox provider pinning (F3)", () => {
-  it("delivers a sandbox send through the encrypted virtual phone", async () => {
+  it("delivers a sandbox send through the virtual phone, PII in the vault", async () => {
     const res = await sendAs(SANDBOX_KEY);
     expect(res.statusCode).toBe(201);
     expect(res.json().status).toBe("delivered");
     await expect(providerOf(SANDBOX_TENANT)).resolves.toBe("virtual-phone");
 
+    // The projection holds SURROGATES only — no ciphertext, and certainly no plaintext.
     const rows = (await owner.unsafe(
-      `SELECT v.recipient_ciphertext, v.body_ciphertext, m.status
+      `SELECT v.subject_id, v.body_pii_id, m.status, m.subject_id AS message_subject
        FROM virtual_deliveries v JOIN messages m ON m.id = v.message_id
        WHERE v.tenant_id = $1 ORDER BY v.created_at DESC LIMIT 1`,
       [SANDBOX_TENANT],
     )) as Array<Record<string, unknown>>;
     expect(rows[0]?.status).toBe("delivered");
-    expect(String(rows[0]?.recipient_ciphertext)).not.toContain(
-      "+233545227189",
-    );
-    expect(String(rows[0]?.body_ciphertext)).not.toContain("routing pin test");
+    expect(rows[0]?.subject_id).toBeTruthy();
+    expect(rows[0]?.body_pii_id).toBeTruthy();
+    // COMPLIANCE §5: `messages` references the subject, never the raw number.
+    expect(rows[0]?.message_subject).toBe(rows[0]?.subject_id);
+
+    // The raw number/body appear nowhere in the vault as plaintext.
+    const vault = (await owner.unsafe(
+      "SELECT kind, ciphertext FROM pii_vault WHERE tenant_id = $1",
+      [SANDBOX_TENANT],
+    )) as Array<{ kind: string; ciphertext: Buffer }>;
+    expect(vault.map((row) => row.kind).sort()).toEqual(["body", "phone"]);
+    for (const row of vault) {
+      const raw = Buffer.from(row.ciphertext).toString("utf8");
+      expect(raw).not.toContain("+233545227189");
+      expect(raw).not.toContain("routing pin test");
+    }
   });
 
   it("does not expose a virtual delivery in another tenant context", async () => {
@@ -156,5 +176,64 @@ describe("sandbox provider pinning (F3)", () => {
       (tx) => tx`SELECT message_id FROM virtual_deliveries`,
     );
     expect(rows).toHaveLength(0);
+  });
+
+  // The whole reason the vault exists: erasure must actually erase, and must NOT take the money
+  // or the delivery history with it. This is the test the platform-key design could not pass.
+  it("crypto-shred erasure makes PII unreadable while ledger + history survive", async () => {
+    const vaultService = app.get(PiiVaultService);
+    const [subject] = (await owner.unsafe(
+      "SELECT subject_id FROM data_subjects WHERE tenant_id = $1 LIMIT 1",
+      [SANDBOX_TENANT],
+    )) as Array<{ subject_id: string }>;
+    expect(subject?.subject_id).toBeTruthy();
+    if (!subject) throw new Error("no subject seeded");
+
+    // Readable before erasure.
+    const phoneBefore = await vaultService.readLatest(
+      SANDBOX_TENANT,
+      subject.subject_id,
+      "phone",
+    );
+    expect(phoneBefore).toBe("+233545227189");
+
+    const ledgerBefore = (await owner.unsafe(
+      "SELECT count(*)::int AS n FROM ledger_entries WHERE tenant_id = $1",
+      [SANDBOX_TENANT],
+    )) as Array<{ n: number }>;
+
+    await vaultService.erase({
+      tenantId: SANDBOX_TENANT,
+      subjectId: subject.subject_id,
+      requestedBy: "integration-test",
+      basis: "DSR erasure request",
+    });
+
+    // PII is gone — permanently. The key is destroyed, not the rows.
+    await expect(
+      vaultService.readLatest(SANDBOX_TENANT, subject.subject_id, "phone"),
+    ).resolves.toBeNull();
+
+    const virtual = app.get(VirtualPhoneService);
+    const inbox = await virtual.list(SANDBOX_TENANT);
+    expect(inbox.messages[0]?.erased).toBe(true);
+    expect(inbox.messages[0]?.to).toBe("[erased]");
+    expect(inbox.messages[0]?.body).toBe("[erased]");
+
+    // …while the append-only financial + delivery record is untouched.
+    const ledgerAfter = (await owner.unsafe(
+      "SELECT count(*)::int AS n FROM ledger_entries WHERE tenant_id = $1",
+      [SANDBOX_TENANT],
+    )) as Array<{ n: number }>;
+    expect(ledgerAfter[0]?.n).toBe(ledgerBefore[0]?.n);
+    expect(inbox.messages[0]?.status).toBe("delivered");
+    expect(inbox.messages[0]?.segments).toBeGreaterThan(0);
+
+    // And the erasure itself is provable, years after the data is gone.
+    const proof = (await owner.unsafe(
+      "SELECT completed_at FROM erasure_log WHERE tenant_id = $1 AND subject_id = $2",
+      [SANDBOX_TENANT, subject.subject_id],
+    )) as Array<{ completed_at: Date | null }>;
+    expect(proof[0]?.completed_at).toBeTruthy();
   });
 });

@@ -302,6 +302,13 @@
       "when": 1783834805915,
       "tag": "0042_ancient_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1783838184081,
+      "tag": "0043_opposite_night_nurse",
+      "breakpoints": true
     }
   ]
 }

@@ -39,8 +39,8 @@ most undermines the feature.
   `inbound_messages` table under FORCE RLS, written through the same path a real carrier MO webhook
   will use when Arkesel inbound lands. Virtual is one producer, not a parallel universe.
 - Keyword handling (`STOP` / `START` / `HELP`, case-insensitive, whitespace-trimmed) runs on that
-  pipeline and writes the consent opt-out with `source = 'stop_reply'` — so E10-S5 is exercised
-  end to end, from handset reply to a subsequent promotional send being blocked.
+  pipeline and writes the consent opt-out with the existing `opt_out_source` value `'stop'` — so
+  E10-S5 is exercised end to end, from handset reply to a subsequent promotional send being blocked.
 - `message.received` and `contact.opted_out` are emitted **through the transactional outbox**, in the
   same transaction as the inbound write. A cross-boundary event a webhook must see never rides a
   fire-and-forget promise.
@@ -68,21 +68,37 @@ magic numbers.
 
 ---
 
-## D4 — Ciphertext resilience and key rotation
+## D4 — Ciphertext resilience and key custody — **SUPERSEDED, and shipped**
 
-`list()` decrypts inside a `.map()` with no per-row guard and `decrypt()` throws on any malformed
-value, so **one corrupt row 500s the entire inbox**. That becomes concrete on the first key rotation:
-`decrypt()` only ever tries the current key, so rotating `VIRTUAL_PHONE_ENCRYPTION_KEY` silently
-bricks every existing inbox row.
+The original plan here was to add a previous-key list to the virtual phone's own
+`VIRTUAL_PHONE_ENCRYPTION_KEY`. Investigating it surfaced something worse, so this decision was
+replaced rather than implemented.
 
-**Decision.**
+**What was actually wrong.** The platform already had a designed PII architecture — `pii_vault` +
+per-subject DEK + crypto-shred erasure (COMPLIANCE §5) — and **nothing had ever written to it**. The
+virtual phone was the first code to store real recipient PII, and it bypassed that design entirely,
+encrypting under a single platform-wide key. A platform-wide key cannot be destroyed for one person,
+so **an erasure request could not reach the only PII we hold**: a DSR would complete "successfully"
+and leave the phone number and message body readable.
 
-- Guard the per-row decrypt. A row that will not decrypt renders as an explicit unreadable
-  placeholder — a degraded message, never a failed inbox.
-- `VIRTUAL_PHONE_ENCRYPTION_KEY` stays the write key. `VIRTUAL_PHONE_ENCRYPTION_KEYS_PREVIOUS`
-  (comma-separated) is tried on **decrypt only**. New writes always use the primary.
-- The `v1.` envelope prefix stays the format version; the AAD binding (`tenantId:messageId`) is
-  unchanged — it is what stops a ciphertext being replayed across tenants and must keep a test.
+**Decision (shipped).** Virtual deliveries store surrogates only. The recipient and body live in
+`pii_vault`, sealed under that subject's DEK; the DEK is wrapped by `PII_MASTER_KEY`, which never
+touches PII directly. Erasure destroys the DEK — one write, and every piece of that person's data is
+permanently unreadable while the ledger, message history, and audit keep their `subject_id` and their
+amounts. `messages.subject_id` is populated for the first time, so recipients are surrogates
+end-to-end.
+
+Key rotation is therefore a *master-key re-wrap* (DEKs re-wrapped, PII untouched) rather than a
+re-encrypt of every row — a strictly smaller operation than the one this section originally proposed.
+
+Resilience came along for free: reads are per-row guarded and an unreadable row degrades to
+`[erased]` instead of 500ing the inbox. The AAD binding is now `tenant:subject:kind` and **is tested**
+— including rejection of a ciphertext replayed across tenants, which was the untested assumption.
+
+Legacy rows written under the old key are moved by
+`scripts/ops/migrate-virtual-deliveries-to-vault.ts` (dry-run by default). The
+`recipient_ciphertext` / `body_ciphertext` columns and `VIRTUAL_PHONE_ENCRYPTION_KEY` are retained
+**only** until that backfill has run everywhere, then dropped.
 
 ---
 
@@ -122,6 +138,9 @@ exists. A silently wrong answer is worse than an empty state.
 ## Invariants (added to the delivery spec's set)
 
 - Virtual delivery never contacts a carrier. *(unchanged)*
+- **Raw PII lives only in `pii_vault`.** Every other table — `messages`, `virtual_deliveries`, and
+  anything inbound adds — references a `subject_id` surrogate. Erasing a subject makes their data
+  unreadable everywhere at once, with no table left behind holding a readable copy. *(shipped)*
 - **For any virtual message, the ledger nets to zero** — reserved, then refunded.
 - Inbound is canonical: a virtual reply and a future carrier MO produce the same record and traverse
   the same pipeline.

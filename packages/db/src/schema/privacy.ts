@@ -1,4 +1,11 @@
-import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
 import {
   bytea,
   type DekId,
@@ -29,13 +36,28 @@ export const dekStatus = pgEnum("dek_status", ["active", "destroyed"]);
 
 // A data subject = a person we hold PII about (typically an SMS recipient). The stable surrogate
 // `subject_id` is what the rest of the platform references instead of a raw phone number.
-export const dataSubjects = pgTable("data_subjects", {
-  subjectId: uuid("subject_id").primaryKey().defaultRandom().$type<SubjectId>(),
-  tenantId: tenantIdCol().references(() => accounts.id, {
-    onDelete: "cascade",
-  }),
-  ...timestamps,
-});
+export const dataSubjects = pgTable(
+  "data_subjects",
+  {
+    subjectId: uuid("subject_id")
+      .primaryKey()
+      .defaultRandom()
+      .$type<SubjectId>(),
+    tenantId: tenantIdCol().references(() => accounts.id, {
+      onDelete: "cascade",
+    }),
+    /**
+     * Blind index — HMAC(phone, index key), NOT the phone. Resolving "have we seen this number
+     * before?" must not require decrypting every subject's vault, and crypto-shredding must not
+     * orphan the lookup. This survives erasure by design: it identifies the subject, and it is
+     * one-way, so it reveals nothing without the number already in hand. Scoped per tenant so the
+     * same number under two tenants is two subjects (RLS is the boundary).
+     */
+    phoneHash: text("phone_hash"),
+    ...timestamps,
+  },
+  (t) => [unique("uniq_data_subject_tenant_phone").on(t.tenantId, t.phoneHash)],
+);
 
 // One Data Encryption Key per subject, stored ONLY in wrapped form (encrypted by the KMS master
 // key — "envelope encryption"). Destroying it (status=destroyed, wrapped_dek=NULL) is erasure.

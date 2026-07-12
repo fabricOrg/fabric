@@ -130,12 +130,24 @@ As a **developer**, I want test sends that fail on demand so that I can exercise
 - **AC3** The suffix table is documented in the dev-portal reference.
 - Precedent: Stripe test cards; Twilio magic numbers. Spec D3.
 
-### E13-S7 — Ciphertext resilience + key rotation — **P1 · S**
-As an **operator**, I want to rotate the virtual-phone encryption key without bricking history.
-- **AC1** A row that fails to decrypt renders as an explicit unreadable placeholder; the inbox never 500s wholesale on one bad row (today it does).
-- **AC2** `VIRTUAL_PHONE_ENCRYPTION_KEYS_PREVIOUS` is tried on decrypt only; new writes always use the primary key.
-- **AC3** A tampered AAD or auth tag is rejected — with a test, since the `tenantId:messageId` binding is what stops cross-tenant ciphertext replay and is currently untested.
-- Spec D4.
+### E13-S7 — PII vault + crypto-shred erasure — **P0 · L** — ✅ **DONE**
+As a **data subject**, I want an erasure request to actually make my data unreadable, so that "delete my data" means something.
+- **Found while specc'ing S7:** `pii_vault` + per-subject DEK + crypto-shred erasure was designed in COMPLIANCE §5 and **never implemented** — no writer existed, `messages.subject_id` was always NULL. The virtual phone was the first code to store real recipient PII and it bypassed the design, encrypting under one platform-wide key. **Erasure could not reach the only PII we held.**
+- **AC1** ✅ Raw PII lives only in `pii_vault`, sealed under a per-subject DEK; the master key wraps DEKs and never touches PII.
+- **AC2** ✅ `messages` + `virtual_deliveries` reference `subject_id`; no table holds a readable copy.
+- **AC3** ✅ Erasure destroys the DEK — PII unreadable, ledger/message history/audit intact, `erasure_log` proof written. Integration-tested on real Postgres.
+- **AC4** ✅ AAD binds `tenant:subject:kind`; cross-tenant ciphertext replay and tamper are rejected, with tests (previously untested).
+- **AC5** ✅ An unreadable row degrades to `[erased]` instead of 500ing the inbox.
+- **AC6** ⏳ Legacy rows: `scripts/ops/migrate-virtual-deliveries-to-vault.ts` (dry-run default) must run in testing, then a follow-up drops the `*_ciphertext` columns and the old key.
+- **AC7** ⏳ `PII_MASTER_KEY` secret needs a `terraform apply` (human-gated). The task also never had IAM read on the virtual-phone secret — fixed in the same change, so the api task could not have started with it.
+- Supersedes the original "key rotation" story: rotation is now a master-key re-wrap of DEKs, not a re-encrypt of every row. Spec D4.
+
+### E13-S10 — DSR operator surface (erasure + access export) — **P1 · M**
+As a **staff operator**, I want to action a data-subject request from the admin console.
+- **AC1** Look up a data subject (by number, via the blind index) and see what PII is held, without decrypting it into a log.
+- **AC2** Trigger erasure with a recorded legal basis; the action is audited and writes `erasure_log`.
+- **AC3** Access-export returns the subject's held PII.
+- The vault + `erase()` exist and are tested; this is the human-facing surface on top. COMPLIANCE §6 (DSR, F7.7).
 
 ### E13-S8 — Virtual inbox retention + clear — **P1 · S**
 As a **compliance owner**, I want test message data to age out so that we don't hoard personal data.

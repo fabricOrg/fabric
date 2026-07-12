@@ -45,6 +45,10 @@ data "aws_iam_policy_document" "ecs_secret_access" {
       aws_secretsmanager_secret.admin_console_workos.arn,
       aws_secretsmanager_secret.dev_portal_cookie_password.arn,
       aws_secretsmanager_secret.dev_portal_workos.arn,
+      # Both were injected into the api task definition without ever being granted here, so the task
+      # could not have read them — an ECS task fails to START on a secret it cannot fetch.
+      aws_secretsmanager_secret.virtual_phone_encryption_key.arn,
+      aws_secretsmanager_secret.pii_master_key.arn,
     ]
   }
 }
@@ -193,6 +197,10 @@ resource "aws_ecs_task_definition" "api" {
         {
           name      = "VIRTUAL_PHONE_ENCRYPTION_KEY"
           valueFrom = "${aws_secretsmanager_secret.virtual_phone_encryption_key.arn}:VIRTUAL_PHONE_ENCRYPTION_KEY::"
+        },
+        {
+          name      = "PII_MASTER_KEY"
+          valueFrom = "${aws_secretsmanager_secret.pii_master_key.arn}:PII_MASTER_KEY::"
         },
         {
           name      = "EDGE_SHARED_SECRET"

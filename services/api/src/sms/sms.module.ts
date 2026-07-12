@@ -6,6 +6,7 @@ import { IdempotencyModule } from "../idempotency/idempotency.module.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { KillSwitchModule } from "../kill-switches/kill-switches.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
+import { PrivacyModule } from "../privacy/privacy.module.js";
 import { QueueModule } from "../queue/queue.module.js";
 import { SendersModule } from "../senders/senders.module.js";
 import { DlrController } from "./dlr.controller.js";
@@ -33,6 +34,9 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
     SendersModule,
     // E10-S5: DND/consent + promotional quiet hours on the same path.
     ConsentModule,
+    // COMPLIANCE §5: recipients are tokenized into the PII vault before a message row exists —
+    // `messages` and `virtual_deliveries` reference a subject_id surrogate, never a raw number.
+    PrivacyModule,
   ],
   controllers: [SmsController, DlrController, VirtualPhoneController],
   // SmsSendWorker consumes the sms-send queue in-process when REDIS_QUEUE_URL is set.

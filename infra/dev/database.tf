@@ -48,6 +48,15 @@ ephemeral "random_password" "virtual_phone_encryption_key" {
   special = false
 }
 
+# Wraps the per-subject DEKs in the PII vault (COMPLIANCE §5). It never encrypts PII directly — a
+# platform-wide key cannot be destroyed for one person, which is the whole point of crypto-shredding.
+# Losing this key makes ALL tenant PII permanently unreadable, so it is generated once and never
+# rotated in place without a re-wrap migration.
+ephemeral "random_password" "pii_master_key" {
+  length  = 48
+  special = false
+}
+
 resource "random_password" "edge_shared_secret" {
   length  = 48
   special = false
@@ -163,8 +172,16 @@ resource "aws_secretsmanager_secret" "webhook_ingress_token" {
 }
 
 resource "aws_secretsmanager_secret" "virtual_phone_encryption_key" {
-  name                    = "fabric/testing/virtual-phone-encryption-key"
-  description             = "Encryption key for tenant virtual-phone message projections."
+  name = "fabric/testing/virtual-phone-encryption-key"
+  # SUPERSEDED by pii_master_key. Retained only so the one-off backfill can still read virtual
+  # deliveries written under the old platform-wide key; delete once the ciphertext columns drop.
+  description             = "DEPRECATED — legacy virtual-phone projection key. Backfill-only."
+  recovery_window_in_days = 7
+}
+
+resource "aws_secretsmanager_secret" "pii_master_key" {
+  name                    = "fabric/testing/pii-master-key"
+  description             = "Master key wrapping per-subject DEKs in the PII vault. Destroying a DEK is how erasure works; losing THIS key makes all PII unreadable."
   recovery_window_in_days = 7
 }
 
@@ -245,6 +262,14 @@ resource "aws_secretsmanager_secret_version" "virtual_phone_encryption_key" {
   secret_id = aws_secretsmanager_secret.virtual_phone_encryption_key.id
   secret_string_wo = jsonencode({
     VIRTUAL_PHONE_ENCRYPTION_KEY = ephemeral.random_password.virtual_phone_encryption_key.result
+  })
+  secret_string_wo_version = 1
+}
+
+resource "aws_secretsmanager_secret_version" "pii_master_key" {
+  secret_id = aws_secretsmanager_secret.pii_master_key.id
+  secret_string_wo = jsonencode({
+    PII_MASTER_KEY = ephemeral.random_password.pii_master_key.result
   })
   secret_string_wo_version = 1
 }
