@@ -6,6 +6,8 @@ import type {
 import {
   type AppDb,
   accounts,
+  applications,
+  environments,
   memberships,
   type ProvisioningDb,
   users,
@@ -207,6 +209,30 @@ export class SelfServeProvisioningService {
           role: "owner",
           status: "active",
         });
+
+        // ADR-0004: a workspace is born with a default application + a sandbox environment (active)
+        // and a live environment (LOCKED until go-live unlocks it — the compliance gate applies to
+        // self-serve and ops-provisioned tenants alike). Same shape as the ops path and the backfill.
+        const [app] = await tx
+          .insert(applications)
+          .values({ tenantId: created.id, name: "Default", slug: "default" })
+          .returning({ id: applications.id });
+        if (!app)
+          throw new Error("Default application insert returned no row.");
+        await tx.insert(environments).values([
+          {
+            tenantId: created.id,
+            applicationId: app.id,
+            type: "sandbox",
+            status: "active",
+          },
+          {
+            tenantId: created.id,
+            applicationId: app.id,
+            type: "live",
+            status: "locked",
+          },
+        ]);
         return created;
       });
 

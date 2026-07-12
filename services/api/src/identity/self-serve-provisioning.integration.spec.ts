@@ -7,8 +7,10 @@
 import { randomUUID } from "node:crypto";
 import {
   accounts,
+  applications,
   createAppDb,
   createProvisioningDb,
+  environments,
   memberships,
   users,
 } from "@app/db";
@@ -161,6 +163,25 @@ describeDb("self-serve sandbox provisioning (ADR-0002)", () => {
       .from(memberships)
       .where(eq(memberships.tenantId, result.tenant_id as never));
     expect(rows).toEqual([{ role: "owner", status: "active" }]);
+
+    // ADR-0004: the workspace was born with a default application + a sandbox env (active) and a
+    // live env (LOCKED until go-live). This is the forward path the backfill mirrors for old tenants.
+    const [app] = await db.db
+      .select({ id: applications.id, slug: applications.slug })
+      .from(applications)
+      .where(eq(applications.tenantId, result.tenant_id as never));
+    expect(app?.slug).toBe("default");
+    const envs = await db.db
+      .select({ type: environments.type, status: environments.status })
+      .from(environments)
+      .where(eq(environments.tenantId, result.tenant_id as never));
+    expect(envs).toEqual(
+      expect.arrayContaining([
+        { type: "sandbox", status: "active" },
+        { type: "live", status: "locked" },
+      ]),
+    );
+    expect(envs).toHaveLength(2);
 
     // WorkOS side: the user was attached to the fresh org as admin.
     expect(workos.orgMemberships).toContainEqual(
