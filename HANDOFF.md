@@ -36,31 +36,30 @@ Milestones so far:
   (enterprise exception) → live env ACTIVE. Converged with the backfill; self-serve spec asserts it,
   5/5 green (`7451ed8`).
 
-**Foundation is 7/8 done — every step tested on real Postgres, all committed, NOTHING pushed.**
+- SMS routing keys on `environment.type` (sandbox env → virtual, never a carrier), not
+  `accounts.plan`; `send()` uses the presenting key's env, falls back to plan-based for the BFF
+  token path; sandbox-routing spec exercises the env pin, 4/4 (`912cd03`).
+- Go-live unlocks the live environment (`locked→active`) — the functional gate live-key minting +
+  live routing depend on; proposals spec asserts it, 8/8 (`f30a65a`).
 
-**Next — task #8 (the ONLY remaining foundation piece; send/money-critical — do carefully):**
-re-key routing + go-live + E13 virtual-phone onto `environment.type`. Full design is in the task
-tracker + below:
-- ROUTING (`virtual-phone.service.ts` / `sms.service.ts`): `settings()`/`resolveMode()` pin on
-  `accounts.plan==='sandbox'` today. Add `resolveModeForEnvironment(tenantId, environmentId)` —
-  sandbox env → `virtual` forced; live env → existing default-live/opt-in logic. `send()` uses
-  `req.tenant.environmentId` when present (sk_* keys), ELSE falls back to the current plan-based path
-  for the BFF tenant-token path (environmentId null until dashboard env-selection, a later phase).
-- GO-LIVE: `go_live` proposal approval flips `accounts.plan` today → change to unlock the live
-  ENVIRONMENT (`status locked→active`), which is what `api-keys.service` already gates live-key
-  minting on.
-- E13: `delivery_mode` in `accounts.settings` → re-key onto environment where known.
-- OUTBOX+DELIVERY: add `environment_id` to `outbox_events`; env-filter webhook delivery (deferred
-  from #6c).
+**ADR-0004 FOUNDATION COMPLETE — the Workspace→Application→Environment model is in end-to-end:
+schema, RLS, contracts, backfill, per-env keys/webhooks, converged provisioning, env-based routing,
+go-live env-unlock. Every step tested on real Postgres. All committed, NOTHING pushed.**
 
-Then **Phases 1–5** per `docs/PI-6/PLAN.md`: marketing app (separate), flip `SELF_SERVE_SIGNUP_ENABLED`
-in testing, dev-portal→dashboard merge, Node/Python SDKs, usage, admin-console realignment. Email +
-AI are later PIs.
+Residual hardening (tracked, NOT core, no regression) — task #9:
+- `outbox_events` gains `environment_id` + env-filtered webhook delivery (matters once multiple envs
+  have live endpoints; delivery is tenant-scoped all→all today, unchanged from before).
+- E13 `delivery_mode` moves from `accounts.settings` onto the environment once the dashboard has an
+  env selector.
+
+**Next — Phases 1–5** per `docs/PI-6/PLAN.md` (a genuinely new, large phase — good fresh-context
+seam): marketing app (separate), flip `SELF_SERVE_SIGNUP_ENABLED` in testing, dev-portal→dashboard
+merge, Node/Python SDKs, usage, admin-console realignment. Email + AI are later PIs.
 
 **Branch commits (E14):** `2301adc` ADR/plan · `337ae79` schema+RLS · `c537739` contracts ·
 `16b081d` backfill · `c523157` key/webhook columns · `a58d2f4` key mint/resolve · `8f6b512` webhook
-scope · `7451ed8` provisioning · (+ HANDOFF/doc commits). Merge order when done: E13→`dev` first,
-then this rebases (fifi merges).
+scope · `7451ed8` provisioning · `912cd03` env routing · `f30a65a` go-live env-unlock (+ HANDOFF/doc
+commits). Merge order when done: E13→`dev` first, then this rebases (fifi merges).
 
 _Milestone rule (user directive 2026-07-12): update this HANDOFF.md at every milestone._
 
