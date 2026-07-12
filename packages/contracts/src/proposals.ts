@@ -58,7 +58,8 @@ export type ListProposalsResponse = z.infer<typeof listProposalsResponseSchema>;
 
 export const createProposalRequestSchema = z.object({
   kind: proposalKindSchema,
-  tenant_id: z.string().uuid().nullable().optional(),
+  // guid() not uuid(): accepts the non-RFC-version dev seed tenant id (zod v4 uuid() rejects it).
+  tenant_id: z.string().guid().nullable().optional(),
   tenant_label: z.string().trim().min(1).max(200),
   before_value: z.string().trim().max(200),
   after_value: z.string().trim().min(1).max(200),
