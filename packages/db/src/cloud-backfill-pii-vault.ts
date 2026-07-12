@@ -26,12 +26,18 @@ import {
 } from "node:crypto";
 import postgres from "postgres";
 
-const databaseUrl = process.env.DATABASE_URL_SUPER;
+// Owner role in the cloud (the migration task uses the same); SUPER is the local equivalent.
+const databaseUrl =
+  process.env.DATABASE_URL_OWNER ?? process.env.DATABASE_URL_SUPER;
 const legacySecret = process.env.VIRTUAL_PHONE_ENCRYPTION_KEY;
 const masterSecret = process.env.PII_MASTER_KEY;
 const commit = process.argv.includes("--commit");
 
-if (!databaseUrl) throw new Error("DATABASE_URL_SUPER is required.");
+if (!databaseUrl) {
+  throw new Error(
+    "DATABASE_URL_OWNER (cloud) or DATABASE_URL_SUPER (local) is required.",
+  );
+}
 if (!legacySecret) {
   throw new Error(
     "VIRTUAL_PHONE_ENCRYPTION_KEY is required — it is the ONLY way to read the legacy rows.",

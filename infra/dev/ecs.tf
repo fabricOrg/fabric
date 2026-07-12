@@ -303,6 +303,72 @@ resource "aws_ecs_task_definition" "migration" {
   ]
 }
 
+# One-off backfill: move virtual-delivery PII out of the legacy platform-wide key and into the PII
+# vault (per-subject DEK), so that crypto-shred erasure can actually reach it.
+#
+# It needs its own task definition rather than a `run-task` override because ECS overrides can set
+# `environment` but NOT `secrets` — and this needs BOTH keys: the legacy one to read the old rows and
+# the master one to write the vault. The database is not publicly reachable, so it must run in-VPC.
+#
+# Runs ONLY after a deploy has applied migration 0043 (which adds the columns it writes). Dry-run by
+# default; pass --commit in the command override to write. Delete this once the backfill is done and
+# the *_ciphertext columns are dropped.
+resource "aws_ecs_task_definition" "pii_backfill" {
+  family                   = "fabric-api-testing-pii-backfill"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.api_task.arn
+
+  runtime_platform {
+    cpu_architecture        = "X86_64"
+    operating_system_family = "LINUX"
+  }
+
+  container_definitions = jsonencode([
+    {
+      name      = "backfill"
+      image     = local.bootstrap_image
+      essential = true
+      # Dry run by default — an accidental task launch must not rewrite data.
+      command = [
+        "node",
+        "node_modules/@app/db/dist/cloud-backfill-pii-vault.js",
+      ]
+      secrets = [
+        {
+          name      = "DATABASE_URL_OWNER"
+          valueFrom = "${aws_secretsmanager_secret.database_owner.arn}:DATABASE_URL_OWNER::"
+        },
+        {
+          name      = "PII_MASTER_KEY"
+          valueFrom = "${aws_secretsmanager_secret.pii_master_key.arn}:PII_MASTER_KEY::"
+        },
+        {
+          name      = "VIRTUAL_PHONE_ENCRYPTION_KEY"
+          valueFrom = "${aws_secretsmanager_secret.virtual_phone_encryption_key.arn}:VIRTUAL_PHONE_ENCRYPTION_KEY::"
+        },
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "pii-backfill"
+        }
+      }
+    },
+  ])
+
+  depends_on = [
+    aws_secretsmanager_secret_version.database_owner,
+    aws_secretsmanager_secret_version.pii_master_key,
+    aws_secretsmanager_secret_version.virtual_phone_encryption_key,
+  ]
+}
+
 resource "aws_service_discovery_private_dns_namespace" "testing" {
   name = "testing.fabric.internal"
   vpc  = aws_vpc.testing.id
