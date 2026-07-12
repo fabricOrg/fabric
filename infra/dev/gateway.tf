@@ -1,7 +1,7 @@
 resource "aws_apigatewayv2_vpc_link" "testing" {
   name               = "fabric-testing"
   security_group_ids = [aws_security_group.api_gateway_vpc_link.id]
-  subnet_ids         = data.aws_subnets.default.ids
+  subnet_ids         = [for subnet in aws_subnet.private : subnet.id]
 }
 
 resource "aws_apigatewayv2_api" "testing" {
@@ -27,7 +27,7 @@ resource "aws_apigatewayv2_route" "default" {
 
 resource "aws_cloudwatch_log_group" "api_gateway" {
   name              = "/fabric/testing/api-gateway"
-  retention_in_days = 14
+  retention_in_days = 90
 }
 
 resource "aws_apigatewayv2_stage" "default" {

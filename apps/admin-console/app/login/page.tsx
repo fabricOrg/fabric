@@ -90,6 +90,12 @@ export default async function LoginPage({
       ? (NOTICE_COPY[notice] ?? null)
       : null;
 
+  // No intermediate "click again" page: forward straight to the WorkOS AuthKit hosted page when
+  // sign-in is available and there's nothing to explain (no error/notice). Mirrors the dashboard.
+  if (workosEnabled && !banner) {
+    redirect("/auth/login");
+  }
+
   return (
     <main className="relative flex min-h-screen flex-col bg-background">
       <div className="flex flex-1 items-center justify-center px-6 py-16">
@@ -126,7 +132,7 @@ export default async function LoginPage({
             <Alert role="alert" className="mt-8 text-left">
               <AlertTitle>Sign-in unavailable</AlertTitle>
               <AlertDescription>
-                Single sign-on isn't configured for this environment.
+                Sign-in isn't configured for this environment.
               </AlertDescription>
             </Alert>
           )}

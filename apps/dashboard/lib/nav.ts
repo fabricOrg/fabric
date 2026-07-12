@@ -1,13 +1,14 @@
 import {
   BadgeCheck,
   BellOff,
+  Boxes,
   LayoutDashboard,
   List,
   type LucideIcon,
   Megaphone,
-  Route,
   Send,
   ShieldCheck,
+  Smartphone,
   Users,
   Wallet,
   Workflow,
@@ -37,14 +38,23 @@ export const navGroups: readonly NavGroup[] = [
   {
     items: [
       { title: "Overview", href: "/", icon: LayoutDashboard },
-      { title: "Transactions", href: "/flows", icon: Workflow, preview: true },
+      { title: "API transactions", href: "/flows", icon: Workflow },
+    ],
+  },
+  {
+    label: "Developers",
+    items: [
+      // ADR-0004: applications are the workspace's top-level structure; each carries a sandbox and a
+      // live environment, and OWNS its API keys (+ webhooks/logs under W-B). Those live on the
+      // application-detail page (/applications/[slug]), not a flat top-level list.
+      { title: "Applications", href: "/applications", icon: Boxes },
     ],
   },
   {
     label: "Messaging",
     items: [
       { title: "Send SMS", href: "/send", icon: Send },
-      { title: "Journeys", href: "/journeys", icon: Route, preview: true },
+      { title: "Virtual phone", href: "/virtual-phone", icon: Smartphone },
       {
         title: "Campaigns",
         href: "/campaigns",
@@ -52,12 +62,11 @@ export const navGroups: readonly NavGroup[] = [
         preview: true,
       },
       { title: "Messages", href: "/messages", icon: List },
-    ],
-  },
-  {
-    label: "Verify",
-    items: [
-      { title: "Verify", href: "/verify", icon: ShieldCheck, preview: true },
+      {
+        title: "Number verification",
+        href: "/verify",
+        icon: ShieldCheck,
+      },
     ],
   },
   {
@@ -67,20 +76,18 @@ export const navGroups: readonly NavGroup[] = [
         title: "Sender IDs",
         href: "/senders",
         icon: BadgeCheck,
-        preview: true,
       },
       {
         title: "Consent & DND",
         href: "/consent",
         icon: BellOff,
-        preview: true,
       },
     ],
   },
   {
     label: "Account",
     items: [
-      { title: "Wallet & Billing", href: "/wallet", icon: Wallet },
+      { title: "Billing & Wallet", href: "/wallet", icon: Wallet },
       { title: "Team", href: "/team", icon: Users },
     ],
   },

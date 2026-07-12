@@ -39,6 +39,8 @@ export interface AppSession {
   readonly sessionId: string;
   /** The signed-in identity's email (from WorkOS). Used for audit-actor attribution + display. */
   readonly email?: string;
+  /** Display name supplied by WorkOS. */
+  readonly name?: string;
   /** Tenant plan ("sandbox" renders the sandbox banner + gates, ADR-0002 F3). */
   readonly plan?: string;
   readonly stepUpAt?: number;

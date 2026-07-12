@@ -24,6 +24,9 @@ jobs:
     env:
       DATABASE_URL_OWNER: postgresql://app_migrator:localdev@localhost:5432/app
       DATABASE_URL_APP: postgresql://app_runtime:localdev_app@localhost:5432/app
+      # CI uses the owner role for the provisioner path, matching .env.example. Cloud runtimes use
+      # the dedicated app_provisioner credential from Secrets Manager.
+      DATABASE_URL_PROVISIONER: postgresql://app_owner:localdev@localhost:5432/app
       DATABASE_URL_SUPER: postgresql://app_owner:localdev@localhost:5432/app
 
     steps:

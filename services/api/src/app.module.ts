@@ -4,6 +4,7 @@ import { ScheduleModule } from "@nestjs/schedule";
 import { LoggerModule } from "nestjs-pino";
 import { AdminModule } from "./admin/admin.module.js";
 import { ApiKeysModule } from "./api-keys/api-keys.module.js";
+import { ApplicationsModule } from "./applications/applications.module.js";
 import { AuditModule } from "./audit/audit.module.js";
 import { ConsentModule } from "./consent/consent.module.js";
 import { DbModule } from "./db/db.module.js";
@@ -17,7 +18,9 @@ import { MaintenanceModule } from "./maintenance/maintenance.module.js";
 import { MembersModule } from "./members/members.module.js";
 import { PaymentsModule } from "./payments/payments.module.js";
 import { PluginsModule } from "./plugins/plugins.module.js";
+import { PrivacyModule } from "./privacy/privacy.module.js";
 import { ProposalsModule } from "./proposals/proposals.module.js";
+import { RequestLogsModule } from "./request-logs/request-logs.module.js";
 import { SendersModule } from "./senders/senders.module.js";
 import { SmsModule } from "./sms/sms.module.js";
 import { VerifyModule } from "./verify/verify.module.js";
@@ -50,8 +53,13 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     PluginsModule,
     ProposalsModule,
     ApiKeysModule,
+    ApplicationsModule,
+    RequestLogsModule,
     ConsentModule,
     SendersModule,
+    // COMPLIANCE §6: the staff DSR surface. Registered here, not only via SmsModule — erasure is a
+    // platform capability, not an SMS one.
+    PrivacyModule,
     SmsModule,
     VerifyModule,
     WalletModule,

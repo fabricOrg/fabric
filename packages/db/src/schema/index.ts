@@ -1,7 +1,9 @@
 // Barrel: the single schema entry point drizzle.config.ts points at.
 // As we add domains (wallet, sms…), re-export them here.
 export type {
+  ApplicationId,
   DekId,
+  EnvironmentId,
   MinorUnits,
   SubjectId,
   TenantId,
@@ -9,6 +11,7 @@ export type {
 } from "./_shared.js";
 export * from "./api-idempotency.js";
 export * from "./api-keys.js";
+export * from "./applications.js";
 export * from "./audit.js";
 export * from "./auto-topup.js";
 export * from "./flows.js";
@@ -20,8 +23,10 @@ export * from "./payment-authorizations.js";
 export * from "./payments.js";
 export * from "./privacy.js";
 export * from "./proposals.js";
+export * from "./request-logs.js";
 export * from "./senders.js";
 export * from "./sms.js";
 export * from "./verify.js";
+export * from "./virtual-phone.js";
 export * from "./wallet.js";
 export * from "./webhooks.js";

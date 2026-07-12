@@ -32,6 +32,7 @@ export interface CustomerMessageRead {
   costMinor: bigint;
   currency: string;
   providerSlug: string | null;
+  deliveryMode: string;
   subjectId: string | null;
   errorCode: string | null;
   createdAt: Date;
@@ -92,6 +93,7 @@ const messageSelection = {
   costMinor: messages.costMinor,
   currency: messages.currency,
   providerSlug: messages.providerSlug,
+  deliveryMode: messages.deliveryMode,
   subjectId: messages.subjectId,
   errorCode: messages.errorCode,
   createdAt: messages.createdAt,

@@ -2,21 +2,17 @@ import "server-only";
 
 import {
   type AppSession,
-  type DevelopmentSessionConfig,
   type RealmConfig,
-  readDevelopmentSession,
   readSession,
   refreshSession,
-  sealDevelopmentSession,
 } from "@app/fe-auth";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   resolveOrganizationForUser,
   resolveWorkOSSession,
 } from "./identity-client";
 
-export const DEVELOPMENT_COOKIE = "fabric-development-session";
 export const WORKOS_COOKIE = "wos-session";
 export const OAUTH_STATE_COOKIE = "fabric-oauth-state";
 /**
@@ -34,20 +30,6 @@ export function noticeCookieOptions() {
     sameSite: "lax" as const,
     path: "/",
     maxAge: 60,
-  };
-}
-
-export function developmentAuthConfig(): DevelopmentSessionConfig {
-  const runtime =
-    process.env.NODE_ENV === "production"
-      ? "production"
-      : process.env.NODE_ENV === "test"
-        ? "test"
-        : "development";
-  return {
-    enabled: process.env.DEV_AUTH_ENABLED === "true",
-    runtime,
-    cookiePassword: process.env.DEV_SESSION_PASSWORD ?? "",
   };
 }
 
@@ -98,38 +80,12 @@ export function customerRealmConfig(): RealmConfig {
   };
 }
 
-export function configuredDevelopmentSession(): AppSession {
-  const orgId = process.env.DEV_TENANT_ID;
-  if (!orgId) throw new Error("DEV_TENANT_ID is required.");
-  return {
-    userId: "development-user",
-    orgId,
-    role: "owner",
-    permissions: ["sms:send", "sms:read", "wallet:read"],
-    sessionId: "development-session",
-  };
-}
-
-export function issueDevelopmentSession(): string {
-  return sealDevelopmentSession(
-    developmentAuthConfig(),
-    configuredDevelopmentSession(),
-  );
-}
-
 export async function readDashboardSession(): Promise<AppSession | null> {
+  if (!workosAuthConfigured()) return null;
   const store = await cookies();
-  if (workosAuthConfigured()) {
-    const workosCookie = store.get(WORKOS_COOKIE)?.value;
-    if (workosCookie) {
-      const session = await readSession(customerRealmConfig(), workosCookie);
-      if (session) return session;
-    }
-  }
-  return readDevelopmentSession(
-    developmentAuthConfig(),
-    store.get(DEVELOPMENT_COOKIE)?.value,
-  );
+  const workosCookie = store.get(WORKOS_COOKIE)?.value;
+  if (!workosCookie) return null;
+  return readSession(customerRealmConfig(), workosCookie);
 }
 
 /**
@@ -161,7 +117,10 @@ export async function requireDashboardSession(): Promise<AppSession> {
   const session = await readDashboardSession();
   if (session) return session;
   if (workosAuthConfigured() && store.has(WORKOS_COOKIE)) {
-    redirect("/auth/refresh");
+    // Carry the current path through the refresh hop so a reload returns here, not the home route.
+    const pathname = (await headers()).get("x-pathname");
+    const returnTo = pathname?.startsWith("/") ? pathname : "/";
+    redirect(`/auth/refresh?return_to=${encodeURIComponent(returnTo)}`);
   }
   redirect("/login");
 }

@@ -24,6 +24,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@app/ui/components/ui/dialog";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@app/ui/components/ui/empty";
 import { Field, FieldLabel } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import {
@@ -102,22 +109,29 @@ export function ProposalBoard({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-3">
-        <Alert className="flex-1">
-          <Users />
-          <AlertTitle>Two-person rule</AlertTitle>
-          <AlertDescription>
+      <Alert>
+        <Users />
+        <AlertTitle>Two-person rule</AlertTitle>
+        <AlertDescription>
+          {/* AlertDescription is a grid — bare text split by <em> becomes separate rows. Keep it
+              one <p> so the sentence flows inline. */}
+          <p>
             You can only decide changes proposed by <em>another</em> operator —
             never your own. Every decision is logged with the actor.
-          </AlertDescription>
-        </Alert>
-        {canManage ? <NewProposalDialog /> : null}
-      </div>
+          </p>
+        </AlertDescription>
+      </Alert>
 
       {pending.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          Queue clear — no proposals awaiting review.
-        </p>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <ShieldQuestion />
+            </EmptyMedia>
+            <EmptyTitle>Queue clear</EmptyTitle>
+            <EmptyDescription>No proposals awaiting review.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <div className="flex flex-col gap-4">
           {pending.map((p) => {
@@ -190,29 +204,34 @@ export function ProposalBoard({
   );
 }
 
-function NewProposalDialog() {
+export function NewProposalDialog({
+  tenants,
+}: {
+  tenants: readonly { tenant_id: string; name: string }[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<ProposalDto["kind"]>("wallet_adjustment");
-  const [tenant, setTenant] = useState("");
+  const [tenantId, setTenantId] = useState("");
   const [before, setBefore] = useState("");
   const [after, setAfter] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const valid =
-    tenant.trim().length > 0 &&
-    after.trim().length > 0 &&
-    reason.trim().length >= 8;
+    tenantId.length > 0 && after.trim().length > 0 && reason.trim().length >= 8;
 
   async function submit() {
     setBusy(true);
     try {
+      // Send the real tenant_id from the select plus its name as the label the queue renders.
+      const selected = tenants.find((t) => t.tenant_id === tenantId);
       const response = await fetch("/api/admin/proposals", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           kind,
-          tenant_label: tenant.trim(),
+          tenant_id: tenantId,
+          tenant_label: selected?.name ?? "",
           before_value: before.trim(),
           after_value: after.trim(),
           reason: reason.trim(),
@@ -225,7 +244,7 @@ function NewProposalDialog() {
       }
       toast.success("Proposal created — awaiting a second operator");
       setOpen(false);
-      setTenant("");
+      setTenantId("");
       setBefore("");
       setAfter("");
       setReason("");
@@ -278,12 +297,18 @@ function NewProposalDialog() {
           </Field>
           <Field>
             <FieldLabel htmlFor="p-tenant">Tenant</FieldLabel>
-            <Input
-              id="p-tenant"
-              value={tenant}
-              onChange={(e) => setTenant(e.target.value)}
-              placeholder="Tenant name"
-            />
+            <Select value={tenantId} onValueChange={setTenantId}>
+              <SelectTrigger id="p-tenant">
+                <SelectValue placeholder="Select a tenant" />
+              </SelectTrigger>
+              <SelectContent>
+                {tenants.map((t) => (
+                  <SelectItem key={t.tenant_id} value={t.tenant_id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <div className="flex gap-3">
             <Field className="flex-1">

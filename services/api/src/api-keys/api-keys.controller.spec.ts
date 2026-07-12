@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import type { RequestTenant } from "./api-key.guard.js";
 import { ApiKeysController } from "./api-keys.controller.js";
 import type { ApiKeyService } from "./api-keys.service.js";
 
 const TID = "00000000-0000-0000-0000-0000000000a1";
+const OTHER = "00000000-0000-0000-0000-0000000000b2";
 
 type SvcMocks = {
   create: ReturnType<typeof vi.fn>;
@@ -21,6 +23,7 @@ function controllerWith(over: Partial<SvcMocks> = {}): {
       env: "test",
       scopes: [],
       raw: "sk_test_raw",
+      expiresAt: null,
     })),
     list: vi.fn(async () => []),
     revoke: vi.fn(async () => true),
@@ -32,63 +35,116 @@ function controllerWith(over: Partial<SvcMocks> = {}): {
   };
 }
 
+/** A request the guard authenticated via a tenant token / sk_* key (customer/dashboard path). */
+function sessionReq(tenantId: string): { tenant: RequestTenant } {
+  return {
+    tenant: {
+      id: tenantId,
+      scopes: ["*"],
+      keyId: `bfft_${tenantId.slice(0, 12)}`,
+      applicationId: null,
+      environmentId: null,
+    },
+  };
+}
+
 describe("ApiKeysController (F2.3 mgmt)", () => {
-  it("create: validates + delegates, returns the raw once", async () => {
-    const { ctl, svc } = controllerWith();
-    const out = await ctl.create({
-      tenantId: TID,
-      env: "test",
-      scopes: ["sms:send"],
+  describe("customer/session path (req.tenant present)", () => {
+    it("create: uses the token's tenant, ignores client tenantId, returns the secret ONCE", async () => {
+      const { ctl, svc } = controllerWith();
+      const out = await ctl.create(sessionReq(TID), {
+        tenantId: OTHER,
+        env: "test",
+        scopes: ["sms:send"],
+        name: "CI",
+      });
+      expect(svc.create).toHaveBeenCalledWith(TID, {
+        env: "test",
+        scopes: ["sms:send"],
+        name: "CI",
+      });
+      expect(out.secret).toBe("sk_test_raw");
+      expect(out.key).toMatchObject({
+        prefix: "sk_test_ab3d",
+        env: "test",
+        name: "CI",
+        status: "active",
+      });
     });
-    expect(svc.create).toHaveBeenCalledWith(TID, {
-      env: "test",
-      scopes: ["sms:send"],
+
+    it("create: scopes the key to the given application (application_id)", async () => {
+      const { ctl, svc } = controllerWith();
+      await ctl.create(sessionReq(TID), {
+        env: "test",
+        scopes: ["sms:send"],
+        application_id: OTHER,
+      });
+      expect(svc.create).toHaveBeenCalledWith(TID, {
+        env: "test",
+        scopes: ["sms:send"],
+        applicationId: OTHER,
+      });
     });
-    expect(out.raw).toBe("sk_test_raw");
+
+    it("list: passes the applicationId filter through", async () => {
+      const { ctl, svc } = controllerWith();
+      await ctl.list(sessionReq(TID), OTHER, OTHER);
+      expect(svc.list).toHaveBeenCalledWith(TID, OTHER);
+    });
+
+    it("list: uses the token's tenant, ignores client tenantId", async () => {
+      const { ctl, svc } = controllerWith();
+      await ctl.list(sessionReq(TID), OTHER, undefined);
+      expect(svc.list).toHaveBeenCalledWith(TID, undefined);
+    });
+
+    it("revoke: uses the token's tenant", async () => {
+      const { ctl, svc } = controllerWith();
+      await ctl.revoke(sessionReq(TID), TID, OTHER);
+      expect(svc.revoke).toHaveBeenCalledWith(TID, TID);
+    });
   });
 
-  it("create: 400 invalid_request_error on bad tenantId (param=tenantId)", async () => {
-    const { ctl } = controllerWith();
-    try {
-      await ctl.create({ tenantId: "nope", env: "test" });
-      expect.unreachable("should have thrown");
-    } catch (e) {
-      const ex = e as {
-        getStatus(): number;
-        getResponse(): { error: { type: string; param?: string } };
-      };
-      expect(ex.getStatus()).toBe(400);
-      expect(ex.getResponse().error.type).toBe("invalid_request_error");
-      expect(ex.getResponse().error.param).toBe("tenantId");
-    }
-  });
+  describe("operator path (no req.tenant)", () => {
+    it("create: delegates with the operator-supplied tenant", async () => {
+      const { ctl, svc } = controllerWith();
+      await ctl.create(
+        {},
+        { tenantId: TID, env: "test", scopes: ["sms:send"] },
+      );
+      expect(svc.create).toHaveBeenCalledWith(TID, {
+        env: "test",
+        scopes: ["sms:send"],
+      });
+    });
 
-  it("create: 400 invalid_request_error on bad env (param=env)", async () => {
-    const { ctl } = controllerWith();
-    try {
-      await ctl.create({ tenantId: TID, env: "prod" });
-      expect.unreachable("should have thrown");
-    } catch (e) {
-      const ex = e as {
-        getStatus(): number;
-        getResponse(): { error: { type: string; param?: string } };
-      };
-      expect(ex.getStatus()).toBe(400);
-      expect(ex.getResponse().error.type).toBe("invalid_request_error");
-      expect(ex.getResponse().error.param).toBe("env");
-    }
-  });
+    it("create: 400 invalid_request_error on a bad tenantId (param=tenantId)", async () => {
+      const { ctl } = controllerWith();
+      await expectInvalidRequest(
+        () => ctl.create({}, { tenantId: "nope", env: "test" }),
+        "tenantId",
+      );
+    });
 
-  it("list: delegates with the validated tenant", async () => {
-    const { ctl, svc } = controllerWith();
-    await ctl.list(TID);
-    expect(svc.list).toHaveBeenCalledWith(TID);
+    it("create: 400 invalid_request_error on a bad env (param=env)", async () => {
+      const { ctl } = controllerWith();
+      await expectInvalidRequest(
+        () => ctl.create({}, { tenantId: TID, env: "prod" }),
+        "env",
+      );
+    });
+
+    it("list: delegates with the operator-supplied tenant", async () => {
+      const { ctl, svc } = controllerWith();
+      await ctl.list({}, TID, undefined);
+      expect(svc.list).toHaveBeenCalledWith(TID, undefined);
+    });
   });
 
   it("revoke: 404 not_found_error when the key wasn't active", async () => {
     const { ctl } = controllerWith({ revoke: vi.fn(async () => false) });
     try {
-      await ctl.revoke(TID, TID);
+      await ctl.revoke(sessionReq(TID), TID, undefined);
       expect.unreachable("should have thrown");
     } catch (e) {
       const ex = e as {
@@ -102,6 +158,26 @@ describe("ApiKeysController (F2.3 mgmt)", () => {
 
   it("revoke: returns {revoked:true} on success", async () => {
     const { ctl } = controllerWith();
-    await expect(ctl.revoke(TID, TID)).resolves.toEqual({ revoked: true });
+    await expect(ctl.revoke(sessionReq(TID), TID, undefined)).resolves.toEqual({
+      revoked: true,
+    });
   });
 });
+
+async function expectInvalidRequest(
+  run: () => Promise<unknown>,
+  param: string,
+): Promise<void> {
+  try {
+    await run();
+    expect.unreachable("should have thrown");
+  } catch (e) {
+    const ex = e as {
+      getStatus(): number;
+      getResponse(): { error: { type: string; param?: string } };
+    };
+    expect(ex.getStatus()).toBe(400);
+    expect(ex.getResponse().error.type).toBe("invalid_request_error");
+    expect(ex.getResponse().error.param).toBe(param);
+  }
+}

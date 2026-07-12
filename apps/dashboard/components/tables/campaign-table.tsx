@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@app/ui/components/ui/select";
 import type { ColumnDef } from "@tanstack/react-table";
+import { SearchX } from "lucide-react";
 import { useState } from "react";
 import {
   CampaignDetailSheet,
@@ -174,7 +175,12 @@ export function CampaignTable({
         ariaLabel="Campaigns"
         onRowClick={setSelected}
         rowLabel={(c) => `Open ${c.name}`}
-        empty="No campaigns match this filter."
+        emptyState={{
+          title: "No matching campaigns",
+          description: "Choose another lifecycle status to see more campaigns.",
+          icon: <SearchX />,
+        }}
+        className="rounded-lg border"
       />
 
       <CampaignDetailSheet

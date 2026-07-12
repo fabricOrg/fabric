@@ -59,6 +59,7 @@ export const messages = pgTable(
     // reserved/charged cost (minor units) — the amount reserve/commit/refund move.
     costMinor: moneyMinor("cost_minor").notNull(),
     currency: char("currency", { length: 3 }).notNull(),
+    deliveryMode: text("delivery_mode").notNull().default("live"),
     providerSlug: text("provider_slug"),
     // provider's message id — set once the provider acknowledges (accepted); the DLR correlation key.
     providerRef: text("provider_ref"),
@@ -73,6 +74,7 @@ export const messages = pgTable(
     uniqueIndex("uniq_messages_provider_ref")
       .on(t.providerSlug, t.providerRef)
       .where(sql`provider_ref IS NOT NULL`),
+    uniqueIndex("uniq_messages_id_tenant").on(t.id, t.tenantId),
   ],
 );
 

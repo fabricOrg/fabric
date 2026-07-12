@@ -14,13 +14,6 @@ import {
   CardTitle,
 } from "@app/ui/components/ui/card";
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@app/ui/components/ui/empty";
-import {
   PageHeaderActions,
   PageHeaderDescription,
   PageHeaderHeading,
@@ -28,17 +21,16 @@ import {
   PageHeader as UIPageHeader,
 } from "@app/ui/components/ui/page-header";
 import { Skeleton } from "@app/ui/components/ui/skeleton";
-import { Megaphone, Plus, TriangleAlert } from "lucide-react";
+import { TableEmptyState } from "@app/ui/components/ui/states";
+import { Plus, RotateCcw, TriangleAlert } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CampaignTable } from "@/components/tables/campaign-table";
 import { type Campaign, listCampaigns } from "@/lib/client/campaigns-api";
 import { toastApiError } from "@/lib/error-toast";
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">{children}</div>
-  );
+  return <div className="flex w-full flex-col gap-6">{children}</div>;
 }
 
 function PageHeader({ action }: { action?: React.ReactNode }) {
@@ -80,6 +72,17 @@ export default function CampaignsPage() {
     requestId?: string;
   } | null>(null);
 
+  const load = useCallback(async () => {
+    setFailed(null);
+    setCampaigns(null);
+    try {
+      setCampaigns(await listCampaigns());
+    } catch (envelope) {
+      const err = toastApiError(envelope);
+      setFailed({ message: err.message, requestId: err.requestId });
+    }
+  }, []);
+
   useEffect(() => {
     let live = true;
     listCampaigns()
@@ -96,6 +99,17 @@ export default function CampaignsPage() {
     };
   }, []);
 
+  const previewNotice = (
+    <Alert>
+      <TriangleAlert />
+      <AlertTitle>Campaigns is a preview</AlertTitle>
+      <AlertDescription>
+        Campaign records currently use the dashboard preview service. Do not use
+        this workspace as evidence that a production audience was sent.
+      </AlertDescription>
+    </Alert>
+  );
+
   const createAction = (
     <Button asChild>
       <Link href="/campaigns/new">
@@ -109,6 +123,7 @@ export default function CampaignsPage() {
     return (
       <Shell>
         <PageHeader action={createAction} />
+        {previewNotice}
         <Alert variant="destructive">
           <TriangleAlert />
           <AlertTitle>Couldn&apos;t load your campaigns</AlertTitle>
@@ -120,6 +135,10 @@ export default function CampaignsPage() {
                 <code className="font-mono">{failed.requestId}</code>.
               </p>
             )}
+            <Button variant="outline" size="sm" onClick={() => void load()}>
+              <RotateCcw data-icon="inline-start" />
+              Retry
+            </Button>
           </AlertDescription>
         </Alert>
       </Shell>
@@ -130,6 +149,7 @@ export default function CampaignsPage() {
     return (
       <Shell>
         <PageHeader action={createAction} />
+        {previewNotice}
         <TableSkeleton />
       </Shell>
     );
@@ -138,20 +158,22 @@ export default function CampaignsPage() {
   if (campaigns.length === 0) {
     return (
       <Shell>
-        <PageHeader />
-        <Empty className="mx-auto max-w-2xl">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Megaphone />
-            </EmptyMedia>
-            <EmptyTitle>No campaigns yet</EmptyTitle>
-            <EmptyDescription>
-              Reach a whole audience with one message. Create your first
-              campaign to schedule a send and track delivery.
-            </EmptyDescription>
-          </EmptyHeader>
-          {createAction}
-        </Empty>
+        <PageHeader action={createAction} />
+        {previewNotice}
+        <Card>
+          <CardHeader>
+            <CardTitle>All campaigns</CardTitle>
+            <CardDescription>
+              Draft, schedule, and monitor audience sends.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TableEmptyState
+              title="No campaigns yet"
+              description="Create a draft, choose an audience and sender, review consent and cost, then schedule delivery."
+            />
+          </CardContent>
+        </Card>
       </Shell>
     );
   }
@@ -159,6 +181,7 @@ export default function CampaignsPage() {
   return (
     <Shell>
       <PageHeader action={createAction} />
+      {previewNotice}
       <Card>
         <CardHeader>
           <CardTitle>All campaigns</CardTitle>

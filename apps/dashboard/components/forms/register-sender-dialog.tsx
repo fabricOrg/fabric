@@ -40,10 +40,16 @@ interface RegisterSenderDialogProps {
   /** Performs the registration (optimistic add + POST + toast live in the parent). Resolves on
    * success so the dialog can close; rejects so it stays open for a retry. */
   readonly onRegister: (input: RegisterSenderInput) => Promise<void>;
+  readonly initialValues?: RegisterSenderInput;
+  readonly triggerLabel?: string;
+  readonly title?: string;
 }
 
 export function RegisterSenderDialog({
   onRegister,
+  initialValues,
+  triggerLabel = "Request sender ID",
+  title = "Register a sender ID",
 }: RegisterSenderDialogProps) {
   const [open, setOpen] = useState(false);
   const idBase = useId();
@@ -52,10 +58,10 @@ export function RegisterSenderDialog({
 
   const form = useForm({
     defaultValues: {
-      senderId: "",
-      country: "NG" as SenderCountry,
-      type: "alphanumeric" as SenderType,
-      useCase: "",
+      senderId: initialValues?.senderId ?? "",
+      country: initialValues?.country ?? ("NG" as SenderCountry),
+      type: initialValues?.type ?? ("alphanumeric" as SenderType),
+      useCase: initialValues?.useCase ?? "",
     },
     validators: { onChange: schema },
     onSubmit: async ({ value }) => {
@@ -84,7 +90,7 @@ export function RegisterSenderDialog({
       <DialogTrigger asChild>
         <Button>
           <Plus />
-          Request sender ID
+          {triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -98,9 +104,7 @@ export function RegisterSenderDialog({
           noValidate
         >
           <DialogHeader>
-            <DialogTitle className="font-display">
-              Register a sender ID
-            </DialogTitle>
+            <DialogTitle className="font-display">{title}</DialogTitle>
             <DialogDescription>
               Registration is reviewed by the carrier and, in Nigeria, the NCC.
               Approval typically takes 1–5 business days.

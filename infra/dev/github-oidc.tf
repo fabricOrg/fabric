@@ -69,7 +69,6 @@ data "aws_iam_policy_document" "github_testing_deploy" {
       aws_ecr_repository.api.arn,
       aws_ecr_repository.dashboard.arn,
       aws_ecr_repository.admin_console.arn,
-      aws_ecr_repository.dev_portal.arn,
     ]
   }
 
@@ -96,7 +95,6 @@ data "aws_iam_policy_document" "github_testing_deploy" {
       "arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:service/fabric-testing/fabric-api-testing",
       "arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:service/fabric-testing/fabric-dashboard-testing",
       "arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:service/fabric-testing/fabric-admin-console-testing",
-      "arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:service/fabric-testing/fabric-dev-portal-testing",
     ]
   }
 
@@ -108,7 +106,6 @@ data "aws_iam_policy_document" "github_testing_deploy" {
       aws_iam_role.api_task.arn,
       aws_iam_role.dashboard_task.arn,
       aws_iam_role.admin_console_task.arn,
-      aws_iam_role.dev_portal_task.arn,
       aws_iam_role.ecs_task_execution.arn,
     ]
 

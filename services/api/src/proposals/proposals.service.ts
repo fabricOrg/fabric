@@ -6,12 +6,18 @@ import type {
   ListProposalsResponse,
   ProposalDto,
 } from "@app/contracts";
-import { accounts, type ProvisioningDb, proposals } from "@app/db";
+import {
+  accounts,
+  environments,
+  type ProvisioningDb,
+  proposals,
+} from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { invalidRequest } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
+import { toProposalDto } from "./proposal-mapper.js";
 
 interface Actor {
   readonly email: string;
@@ -34,7 +40,7 @@ export class ProposalService {
       .select()
       .from(proposals)
       .orderBy(asc(proposals.status), desc(proposals.createdAt));
-    return { proposals: rows.map(toDto), next_cursor: null };
+    return { proposals: rows.map(toProposalDto), next_cursor: null };
   }
 
   async create(
@@ -71,7 +77,7 @@ export class ProposalService {
         after: request.after_value,
       },
     });
-    return toDto(created);
+    return toProposalDto(created);
   }
 
   /**
@@ -155,7 +161,7 @@ export class ProposalService {
       reason,
       metadata: { proposal_id: created.id },
     });
-    return toDto(created);
+    return toProposalDto(created);
   }
 
   /** Latest go-live request for a tenant — what the dashboard renders (none/pending/…): */
@@ -220,9 +226,11 @@ export class ProposalService {
       .returning();
     if (!updated) return null;
 
-    // F4: go_live is the FIRST kind decide() EXECUTES — approval flips the plan (unlocking
-    // live keys + real provider routing). The other kinds still record intent only; the
-    // sandbox-guard on the UPDATE makes a double-approve race a no-op.
+    // F4: go_live is the FIRST kind decide() EXECUTES. ADR-0004: the functional unlock is flipping
+    // the tenant's LIVE ENVIRONMENT locked→active (that is what api-keys.service gates live-key
+    // minting on, and what lets live routing run). The plan flip stays as the billing-tier change
+    // and keeps the request() "already live" guard meaningful. Both are guarded so a double-approve
+    // race is a no-op.
     if (
       status === "approved" &&
       current.kind === "go_live" &&
@@ -235,6 +243,18 @@ export class ProposalService {
           and(
             eq(accounts.id, current.tenantId as never),
             eq(accounts.plan, "sandbox"),
+          ),
+        );
+      // Unlock the live environment(s) for the workspace — go-live is a workspace-wide compliance
+      // gate (approved sender ID + KYC), so every locked live env for the tenant becomes usable.
+      await this.provisioning.db
+        .update(environments)
+        .set({ status: "active", updatedAt: new Date() })
+        .where(
+          and(
+            eq(environments.tenantId, current.tenantId as never),
+            eq(environments.type, "live"),
+            eq(environments.status, "locked"),
           ),
         );
       await this.audit.record({
@@ -264,24 +284,6 @@ export class ProposalService {
         maker: current.makerEmail,
       },
     });
-    return toDto(updated);
+    return toProposalDto(updated);
   }
-}
-
-function toDto(row: typeof proposals.$inferSelect): ProposalDto {
-  return {
-    id: row.id,
-    kind: row.kind as ProposalDto["kind"],
-    tenant_id: row.tenantId,
-    tenant_label: row.tenantLabel,
-    before_value: row.beforeValue,
-    after_value: row.afterValue,
-    reason: row.reason,
-    status: row.status as ProposalDto["status"],
-    maker_email: row.makerEmail,
-    checker_email: row.checkerEmail,
-    decided_reason: row.decidedReason,
-    decided_at: row.decidedAt?.toISOString() ?? null,
-    created_at: row.createdAt.toISOString(),
-  };
 }

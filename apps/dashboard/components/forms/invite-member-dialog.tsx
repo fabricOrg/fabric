@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
+import { Switch } from "@app/ui/components/ui/switch";
 import { useForm } from "@tanstack/react-form";
 import { UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -34,10 +35,18 @@ const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 const schema = z.object({
   email: z.string().regex(EMAIL, "Enter a valid email address."),
-  role: z.enum(["admin", "member", "developer"]),
+  role: z.enum(["admin", "member"]),
+  developerAccess: z.boolean(),
 });
 
-type InviteRole = "admin" | "member" | "developer";
+type InviteRole = "admin" | "member";
+
+const ROLE_DESCRIPTION: Record<InviteRole, string> = {
+  admin:
+    "Can manage messaging, compliance, billing, and team members. Cannot transfer workspace ownership.",
+  member:
+    "Can operate messaging and view reporting, without billing or team administration.",
+};
 
 interface BffErrorPayload {
   error?: { message?: string };
@@ -48,14 +57,22 @@ export function InviteMemberDialog() {
   const [open, setOpen] = useState(false);
 
   const form = useForm({
-    defaultValues: { email: "", role: "member" as InviteRole },
+    defaultValues: {
+      email: "",
+      role: "member" as InviteRole,
+      developerAccess: false,
+    },
     validators: { onMount: schema, onChange: schema },
     onSubmit: async ({ value }) => {
       try {
         const response = await fetch("/api/team/members", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: value.email.trim(), role: value.role }),
+          body: JSON.stringify({
+            email: value.email.trim(),
+            role: value.role,
+            developer_access: value.developerAccess,
+          }),
         });
         if (!response.ok) {
           const payload = (await response
@@ -131,13 +148,31 @@ export function InviteMemberDialog() {
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="member">Member</SelectItem>
-                      <SelectItem value="developer">Developer</SelectItem>
                     </SelectContent>
                   </Select>
                   <FieldDescription>
-                    Developers get the developer portal (API keys, logs) — no
-                    SMS sending or team management.
+                    {ROLE_DESCRIPTION[field.state.value]}
                   </FieldDescription>
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="developerAccess">
+              {(field) => (
+                <Field orientation="horizontal">
+                  <div className="min-w-0 flex-1">
+                    <FieldLabel htmlFor="invite-developer-access">
+                      Developer Portal access
+                    </FieldLabel>
+                    <FieldDescription>
+                      Adds API keys, webhooks, and request logs without changing
+                      the member&apos;s workspace role.
+                    </FieldDescription>
+                  </div>
+                  <Switch
+                    id="invite-developer-access"
+                    checked={field.state.value}
+                    onCheckedChange={field.handleChange}
+                  />
                 </Field>
               )}
             </form.Field>

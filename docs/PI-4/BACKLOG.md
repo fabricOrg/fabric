@@ -103,6 +103,65 @@ As a **user in multiple orgs**, I want an account/tenant switcher in the topbar 
 As a **developer**, I want a test mode that simulates sends (incl. delivery callbacks) without spending so that I integrate before paying.
 - **AC1** A visible test-mode indicator; test sends use FakeProvider and don't debit real balance.
 - Precedent: Arkesel sandbox `2-1`; Twilio Virtual Phone `3-0`. (Do NOT cite Stripe test/live toggle — refuted `0-3`.)
+- Status: **partially built** — virtual-phone delivery + the mode indicator shipped, but **AC1 is currently violated**: virtual sends commit the wallet debit. E13-S4 closes it.
+
+> **Virtual Phone test-mode hardening (E13-S4 … S9).** The send path landed; the *test mode* did not. Design: [`../specs/VIRTUAL-PHONE-TEST-MODE.md`](../specs/VIRTUAL-PHONE-TEST-MODE.md). Recommended order: S5 (unblocks testing the E10-S5 compliance engine we already shipped) → S6 → S7 → S8.
+
+### E13-S4 — Virtual sends are credit-free — **P0 · S**
+As a **tenant**, I want test sends not to cost me money so that rehearsing an integration doesn't burn credits.
+- **AC1** A virtual send reserves against the wallet exactly as a live send does; an underfunded wallet still blocks it ("no funds → no send" holds in test mode).
+- **AC2** At the terminal delivery event the reservation is refunded; the ledger for the message nets to zero and stays balanced-by-construction.
+- **AC3** The refund is idempotent on `refund:{messageId}` — a replayed DLR does not double-credit.
+- **AC4** Integration test on real Postgres asserts the net-zero invariant, not just the call.
+- Closes the E13-S3 AC1 violation. Spec D1.
+
+### E13-S5 — Inbound replies + STOP on the virtual phone — **P0 · L**
+As a **developer**, I want the virtual handset to reply so that I can test opt-out and 2-way flows before going live.
+- **AC1** A reply from the handset persists a **canonical** inbound message (tenant-scoped, FORCE RLS) via the same pipeline a carrier MO webhook will use — not a virtual-only side table.
+- **AC2** `STOP` / `START` / `HELP` (case-insensitive, trimmed) are handled on that pipeline; `STOP` writes a consent opt-out with `source = 'stop_reply'`.
+- **AC3** After a STOP, a subsequent **promotional** send to that recipient is blocked, and a transactional one is not — E10-S5 exercised end to end.
+- **AC4** `message.received` and `contact.opted_out` are emitted through the **transactional outbox**, in the same tx as the inbound write.
+- Why first: E10-S5 (DND/quiet hours) currently has **no end-to-end test path at all**, because the only real-world source of an opt-out is an inbound STOP. Spec D2.
+
+### E13-S6 — Deterministic fault simulation — **P1 · M**
+As a **developer**, I want test sends that fail on demand so that I can exercise my error handling.
+- **AC1** Reserved recipient suffixes produce documented terminal statuses: `0000` undelivered (billable), `0001` failed (platform fault → refunded), `0002` delayed DLR, `0003` auto-inbound STOP.
+- **AC2** Magic suffixes apply **only** in virtual mode; in live mode they are ordinary MSISDNs.
+- **AC3** The suffix table is documented in the dev-portal reference.
+- Precedent: Stripe test cards; Twilio magic numbers. Spec D3.
+
+### E13-S7 — PII vault + crypto-shred erasure — **P0 · L** — ✅ **DONE**
+As a **data subject**, I want an erasure request to actually make my data unreadable, so that "delete my data" means something.
+- **Found while specc'ing S7:** `pii_vault` + per-subject DEK + crypto-shred erasure was designed in COMPLIANCE §5 and **never implemented** — no writer existed, `messages.subject_id` was always NULL. The virtual phone was the first code to store real recipient PII and it bypassed the design, encrypting under one platform-wide key. **Erasure could not reach the only PII we held.**
+- **AC1** ✅ Raw PII lives only in `pii_vault`, sealed under a per-subject DEK; the master key wraps DEKs and never touches PII.
+- **AC2** ✅ `messages` + `virtual_deliveries` reference `subject_id`; no table holds a readable copy.
+- **AC3** ✅ Erasure destroys the DEK — PII unreadable, ledger/message history/audit intact, `erasure_log` proof written. Integration-tested on real Postgres.
+- **AC4** ✅ AAD binds `tenant:subject:kind`; cross-tenant ciphertext replay and tamper are rejected, with tests (previously untested).
+- **AC5** ✅ An unreadable row degrades to `[erased]` instead of 500ing the inbox.
+- **AC6** ⏳ Legacy rows: `scripts/ops/migrate-virtual-deliveries-to-vault.ts` (dry-run default) must run in testing, then a follow-up drops the `*_ciphertext` columns and the old key.
+- **AC7** ⏳ `PII_MASTER_KEY` secret needs a `terraform apply` (human-gated). The task also never had IAM read on the virtual-phone secret — fixed in the same change, so the api task could not have started with it.
+- Supersedes the original "key rotation" story: rotation is now a master-key re-wrap of DEKs, not a re-encrypt of every row. Spec D4.
+
+### E13-S10 — DSR operator surface (erasure + access export) — **P1 · M**
+As a **staff operator**, I want to action a data-subject request from the admin console.
+- **AC1** Look up a data subject (by number, via the blind index) and see what PII is held, without decrypting it into a log.
+- **AC2** Trigger erasure with a recorded legal basis; the action is audited and writes `erasure_log`.
+- **AC3** Access-export returns the subject's held PII.
+- The vault + `erase()` exist and are tested; this is the human-facing surface on top. COMPLIANCE §6 (DSR, F7.7).
+
+### E13-S8 — Virtual inbox retention + clear — **P1 · S**
+As a **compliance owner**, I want test message data to age out so that we don't hoard personal data.
+- **AC1** `virtual_deliveries` rows are purged past a retention window (default 30 days), driven by the **existing scheduled maintenance job** — extend the live caller, don't ship library-only code.
+- **AC2** Owner/Admin can clear the virtual inbox from the dashboard; the action is audited (`tenant.virtual_phone.inbox_cleared`).
+- **AC3** The retention window is visible to the tenant in the UI.
+- Why: encrypted MSISDNs are still personal data and are currently kept forever. Spec D5.
+
+### E13-S9 — Virtual inbox pagination + honest search — **P2 · M**
+As a **developer**, I want to find an old test message so that search doesn't lie to me.
+- **AC1** Cursor pagination on `(created_at, id)`; the inbox no longer silently truncates at 100.
+- **AC2** Recipient search is server-side via an HMAC **blind index**, so exact-match search works without decrypting.
+- **AC3** Body search remains client-side over the loaded page and is **labelled as such** in the UI.
+- Today searching past the newest 100 returns "no results" for a message that exists. Spec D6.
 
 ---
 

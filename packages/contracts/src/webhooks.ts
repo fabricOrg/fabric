@@ -24,6 +24,8 @@ export const webhookEndpointSchema = z.object({
   url: z.string(),
   status: z.enum(["active", "disabled"]),
   description: z.string().nullable(),
+  /** The environment (ADR-0004) this endpoint belongs to — only that env's events reach it. */
+  env: z.enum(["sandbox", "live"]),
   /** whsec_ prefix only — the full secret is shown once at creation. */
   secret_prefix: z.string(),
   created_at: z.string(),

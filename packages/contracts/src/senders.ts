@@ -40,7 +40,10 @@ export type CreateSenderRequest = z.infer<typeof createSenderRequestSchema>;
 
 /** Staff review queue row — the customer DTO plus the owning tenant. */
 export const adminSenderDtoSchema = senderDtoSchema.extend({
-  tenant_id: z.string().uuid(),
+  // guid() not uuid(): tenant ids are UUID-shaped opaque identifiers from our own DB, but the dev
+  // seed tenant (SEED_TENANT_ID = 00000000-…-00d1) isn't RFC-version-compliant, and zod v4's uuid()
+  // rejects it. guid() keeps the shape check without the version pedantry; real v4 tenants still pass.
+  tenant_id: z.string().guid(),
 });
 export type AdminSenderDto = z.infer<typeof adminSenderDtoSchema>;
 

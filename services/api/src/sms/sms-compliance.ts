@@ -18,10 +18,10 @@ export async function assertSendCompliant(opts: {
   to: string;
   senderId: string;
   messageClass: "transactional" | "promotional";
-  sandbox: boolean;
+  virtual: boolean;
 }): Promise<void> {
   const country = destinationCountry(opts.to);
-  if (!opts.sandbox) {
+  if (!opts.virtual) {
     const registered = await opts.senders.isActiveSender(
       opts.tenantId,
       opts.senderId,

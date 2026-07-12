@@ -12,9 +12,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import type { SendersService } from "../senders/senders.service.js";
-import { SMS_SEND_QUEUE, SmsService } from "../sms/sms.service.js";
+import { SmsService } from "../sms/sms.service.js";
+import { SMS_SEND_QUEUE } from "../sms/sms-send.job.js";
 import { SmsSendWorker } from "../sms/sms-send.worker.js";
+import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
 import { QueueService } from "./queue.service.js";
 
 // E10-S4: sender enforcement has its own spec — these flows always pass the gate.
@@ -51,10 +54,15 @@ const killSwitch = {
 const autoTopup = {
   maybeAutoTopUp: async () => undefined,
 } as unknown as AutoTopupService;
+const liveMode = {
+  resolveMode: async () => "live",
+} as unknown as VirtualPhoneService;
 
 describeDb("queued send pipeline (BullMQ)", () => {
   const provisioning = createProvisioningDb(superUrl ?? "", { max: 2 });
   const appDb = createAppDb(appUrl ?? "");
+  // Real vault against the test Postgres: the send path tokenizes every recipient.
+  const vault = new PiiVaultService(appDb, configStub({}));
   const owner = postgres(superUrl ?? "", { max: 1 });
 
   const queueOn = new QueueService(configStub({ REDIS_QUEUE_URL: redisUrl }));
@@ -67,6 +75,8 @@ describeDb("queued send pipeline (BullMQ)", () => {
     queueOn,
     sendersAlwaysActive,
     consentAllowAll,
+    liveMode,
+    vault,
   );
   const smsInline = new SmsService(
     appDb,
@@ -76,6 +86,8 @@ describeDb("queued send pipeline (BullMQ)", () => {
     queueOff,
     sendersAlwaysActive,
     consentAllowAll,
+    liveMode,
+    vault,
   );
 
   const tenantId = randomUUID() as TenantId;

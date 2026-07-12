@@ -2,8 +2,10 @@ import { createHmac, randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import {
   accounts,
+  applications,
   createAppDb,
   createProvisioningDb,
+  environments,
   type TenantId,
 } from "@app/db";
 import type { ConfigService } from "@nestjs/config";
@@ -53,6 +55,17 @@ describeDb("transactional outbox + signed webhook delivery", () => {
       name: "Webhook Test",
       slug: `hook-${tenantId}`,
     });
+    // ADR-0004: webhooks.create mints into the default app's sandbox env, so seed that hierarchy.
+    const [app] = await provisioning.db
+      .insert(applications)
+      .values({ tenantId, name: "Default", slug: "default" })
+      .returning();
+    if (!app)
+      throw new Error("seed: default application insert returned no row");
+    await provisioning.db.insert(environments).values([
+      { tenantId, applicationId: app.id, type: "sandbox", status: "active" },
+      { tenantId, applicationId: app.id, type: "live", status: "active" },
+    ]);
     server = createServer((req, res) => {
       let body = "";
       req.on("data", (c) => {
@@ -173,5 +186,19 @@ describeDb("transactional outbox + signed webhook delivery", () => {
       expect(JSON.stringify(e)).not.toContain("whsec_".padEnd(20, "x"));
       expect((e as { secret?: string }).secret).toBeUndefined();
     }
+  });
+
+  it("endpoints carry their environment (ADR-0004): a live endpoint reports env 'live'", async () => {
+    const live = await webhooks.create(
+      tenantId,
+      { url: "https://example.com/live-hook" },
+      { envType: "live" },
+    );
+    expect(live.env).toBe("live");
+    const endpoints = await webhooks.list(tenantId);
+    const found = endpoints.find((e) => e.id === live.id);
+    expect(found?.env).toBe("live");
+    // The default-sandbox endpoint from earlier still reports 'sandbox'.
+    expect(endpoints.some((e) => e.env === "sandbox")).toBe(true);
   });
 });

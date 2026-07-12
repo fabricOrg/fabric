@@ -85,3 +85,57 @@ describe("KillSwitchService.isPaused cache", () => {
     expect(await svc.isPaused("platform.sms_sending")).toBe(false);
   });
 });
+
+/**
+ * signupEnabled() is the ONE gate that FAILS CLOSED — opening a workspace to a stranger is an
+ * abuse/cost action, so an unknown/unseeded/unreadable switch means signup is DISABLED (the opposite
+ * of isPaused's fail-open posture). Proves both the happy read and every fail-closed branch.
+ */
+describe("KillSwitchService.signupEnabled (fail closed)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns true only when the platform.signup switch is enabled", async () => {
+    const { provisioning } = mockDb(() => [{ enabled: true }]);
+    const svc = new KillSwitchService(provisioning, audit);
+    expect(await svc.signupEnabled()).toBe(true);
+  });
+
+  it("returns false when the switch is disabled (paused)", async () => {
+    const { provisioning } = mockDb(() => [{ enabled: false }]);
+    const svc = new KillSwitchService(provisioning, audit);
+    expect(await svc.signupEnabled()).toBe(false);
+  });
+
+  it("FAILS CLOSED when the switch is unseeded (no row) — signup disabled", async () => {
+    const { provisioning } = mockDb(() => []);
+    const svc = new KillSwitchService(provisioning, audit);
+    expect(await svc.signupEnabled()).toBe(false);
+  });
+
+  it("FAILS CLOSED when the control-plane DB read fails and nothing was cached", async () => {
+    const { provisioning } = mockDb(() => {
+      throw new Error("control-plane db down");
+    });
+    const svc = new KillSwitchService(provisioning, audit);
+    // Unlike isPaused, an outage here denies signup rather than opening the door.
+    expect(await svc.signupEnabled()).toBe(false);
+  });
+
+  it("serves last-known-good enabled through a later DB outage", async () => {
+    let fail = false;
+    const { provisioning } = mockDb(() => {
+      if (fail) throw new Error("control-plane db down");
+      return [{ enabled: true }];
+    });
+    const svc = new KillSwitchService(provisioning, audit);
+    expect(await svc.signupEnabled()).toBe(true); // cached: enabled
+    fail = true;
+    vi.advanceTimersByTime(31_000);
+    expect(await svc.signupEnabled()).toBe(true); // last-known-good
+  });
+});

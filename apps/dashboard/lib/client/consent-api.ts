@@ -23,7 +23,8 @@ export type OptOutSource = z.infer<typeof optOutSource>;
 
 export const optOut = z.object({
   id: z.string(),
-  msisdn: z.string().regex(E164),
+  // Read responses are masked by the API; E.164 validation applies only to mutation input.
+  msisdn: z.string(),
   scope: optOutScope,
   source: optOutSource,
   at: z.string(), // ISO 8601

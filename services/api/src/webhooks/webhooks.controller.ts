@@ -12,6 +12,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -45,7 +46,8 @@ export class WebhooksController {
     @Body() body: unknown,
   ): Promise<CreateWebhookEndpointResponse & { request_id: string }> {
     const tenant = requireScope(req.tenant, "api_keys:write");
-    const parsed = createWebhookEndpointRequestSchema.safeParse(body);
+    const b = (body ?? {}) as Record<string, unknown>;
+    const parsed = createWebhookEndpointRequestSchema.safeParse(b);
     if (!parsed.success) {
       throw invalidRequest(
         "invalid_webhook",
@@ -53,15 +55,27 @@ export class WebhooksController {
         "url",
       );
     }
-    const created = await this.webhooks.create(tenant.id, parsed.data);
+    // ADR-0004: an endpoint is registered into an application-environment (from the app-detail page).
+    const created = await this.webhooks.create(tenant.id, parsed.data, {
+      ...(typeof b.application_id === "string"
+        ? { applicationId: b.application_id }
+        : {}),
+      ...(b.env === "live" || b.env === "sandbox" ? { envType: b.env } : {}),
+    });
     return { ...created, request_id: newRequestId() };
   }
 
   @Get()
-  async list(@Req() req: AuthedRequest): Promise<ListWebhookEndpointsResponse> {
+  async list(
+    @Req() req: AuthedRequest,
+    @Query("applicationId") applicationId: unknown,
+  ): Promise<ListWebhookEndpointsResponse> {
     const tenant = requireScope(req.tenant, "api_keys:read");
     return {
-      endpoints: await this.webhooks.list(tenant.id),
+      endpoints: await this.webhooks.list(
+        tenant.id,
+        typeof applicationId === "string" ? applicationId : undefined,
+      ),
       request_id: newRequestId(),
     };
   }

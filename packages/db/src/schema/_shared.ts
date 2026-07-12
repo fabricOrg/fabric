@@ -14,6 +14,8 @@ type Brand<T, B extends string> = T & { readonly [brand]: B };
 
 export type TenantId = Brand<string, "TenantId">;
 export type UserId = Brand<string, "UserId">;
+export type ApplicationId = Brand<string, "ApplicationId">; // a project within a workspace (ADR-0004)
+export type EnvironmentId = Brand<string, "EnvironmentId">; // sandbox|live env of an application
 export type SubjectId = Brand<string, "SubjectId">; // a data subject (recipient) — see privacy schema
 export type DekId = Brand<string, "DekId">; // a per-subject data-encryption-key id
 

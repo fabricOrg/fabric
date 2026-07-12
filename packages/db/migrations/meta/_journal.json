@@ -274,6 +274,90 @@
       "when": 1783675038464,
       "tag": "0038_opt_outs_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1783792413591,
+      "tag": "0039_bitter_living_tribunal",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1783814122656,
+      "tag": "0040_spooky_blur",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1783815950015,
+      "tag": "0041_delivery_mode_check",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1783834805915,
+      "tag": "0042_ancient_bug",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1783838184081,
+      "tag": "0043_opposite_night_nurse",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1783844149980,
+      "tag": "0044_silent_vargas",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1783851321649,
+      "tag": "0045_cool_franklin_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1783851321650,
+      "tag": "0046_applications_environments_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1783852560464,
+      "tag": "0047_chemical_fat_cobra",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1783862254762,
+      "tag": "0048_dazzling_grandmaster",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1783865276145,
+      "tag": "0049_absent_mad_thinker",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1783865300000,
+      "tag": "0050_request_logs_rls",
+      "breakpoints": true
     }
   ]
 }

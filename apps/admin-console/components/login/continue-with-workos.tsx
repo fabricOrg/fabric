@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@app/ui/components/ui/button";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
 import { useState } from "react";
 
 /** WorkOS sign-in trigger — mirrors the dashboard's (see apps/dashboard/components/login). */
@@ -27,8 +27,8 @@ export function ContinueWithWorkOS() {
           </>
         ) : (
           <>
-            <ShieldCheck className="size-4" />
-            Continue with WorkOS SSO
+            <LogIn className="size-4" />
+            Sign in
           </>
         )}
       </a>

@@ -14,10 +14,12 @@ import type { RequestTenant } from "../api-keys/api-key.guard.js";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
 import { SmsController } from "../sms/sms.controller.js";
 import { SmsService } from "../sms/sms.service.js";
+import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
 import { IdempotencyService } from "./idempotency.service.js";
 
 // E10-S4: sender enforcement has its own spec — these flows always pass the gate.
@@ -28,6 +30,9 @@ const consentAllowAll = {
 const sendersAlwaysActive = {
   isActiveSender: async () => true,
 } as unknown as SendersService;
+const liveMode = {
+  resolveMode: async () => "live",
+} as unknown as VirtualPhoneService;
 
 /**
  * CLIENT IDEMPOTENCY — integration spec (finding 3 of the architecture remediation).
@@ -52,6 +57,8 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
   const config = {
     get: () => undefined, // FakeProvider, defaults everywhere
   } as unknown as ConfigService;
+  // Real vault against the test Postgres: the send path tokenizes every recipient.
+  const vault = new PiiVaultService(appDb, config);
   // Togglable: lets a test force a failure AFTER the idempotency claim (inside SmsService.send).
   let sendingPaused = false;
   const killSwitch = {
@@ -70,6 +77,8 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     new QueueService(config),
     sendersAlwaysActive,
     consentAllowAll,
+    liveMode,
+    vault,
   );
   const idempotency = new IdempotencyService(appDb);
   const controller = new SmsController(sms, idempotency);
@@ -79,6 +88,8 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     id: tenantId,
     scopes: ["sms:send"],
     keyId: "abcdef0123456789",
+    applicationId: null,
+    environmentId: null,
   };
   const req = { tenant };
   const CREDIT = 100_000n;

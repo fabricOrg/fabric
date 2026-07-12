@@ -22,9 +22,12 @@ identity for Ghana / Nigeria (West Africa). Region `eu-west-1` (af-south-1 unava
   BYPASSRLS) or the owner/super role for migrations/tests only.
 - **Money = `bigint` minor units**, branded `MinorUnits`. Never floats. **Double-entry** wallet —
   every movement is a balanced set of ledger entries; credits are **idempotent on a reference**.
-- **Auth = WorkOS AuthKit SSO**, invite-only. No password/email forms we own. `@app/fe-auth` holds
-  the realm logic; sessions are sealed cookies. Authorization is the **local membership role**, never
-  WorkOS claims.
+- **Auth = WorkOS AuthKit (hosted, branded)** — email+password + Google + passkeys, with SSO as an
+  option. The **customer realm is self-serve sign-up** (PI-6); the **staff realm stays
+  invite-only/allowlist**. WorkOS hosts every credential form (register/reset/MFA) — **we still own
+  none**. `@app/fe-auth` holds the realm logic; sessions are sealed cookies. Authorization is the
+  **local membership role**, never WorkOS claims. (No local dev-login bypass — local sign-in goes
+  through the WorkOS Test env like every other environment.)
 - **BFF pattern**: a browser never calls the API directly. Next route handler → server-only client →
   NestJS `/internal/*` guarded by `BFF_INTERNAL_TOKEN`; data-plane `/v1/*` calls use a short-lived
   minted tenant token (ADR-0003), customer integrations use `sk_*` keys. The BFF
@@ -81,9 +84,11 @@ no secret in logs/prose, respect RLS + the redlines below.
 
 ## 4. Patterns to reuse (don't reinvent)
 
-- **Session resolution** (`services/api/src/identity`): invite-only. A user + membership must
-  pre-exist (provisioned by email); `resolve*` only **binds** the WorkOS subject on first login and
-  activates the invite. No membership → denied. Never JIT-create access.
+- **Session resolution** (`services/api/src/identity`): the **customer realm self-serve provisions**
+  on first login (ADR-0002/0004) — a verified stranger gets a fresh workspace + membership; a
+  returning user binds their WorkOS subject and activates any pending invite. The **staff realm stays
+  invite-only** — a staff user + allowlist row must pre-exist; no membership → denied, never
+  JIT-create staff access.
 - **Roles.** Customer membership: `owner | admin | member | developer`. `developer` is least-privilege
   (API keys + logs + wallet-read; NOT sms:send or org management) and is what clears the dev-portal
   gate. Staff (`staff_users`, no tenant / no RLS): `operator | admin`. Permissions come from a

@@ -11,6 +11,8 @@
 
 // Admin control-plane DTOs — ops-provisioned tenant onboarding (WorkOS org + account + invite).
 export * from "./admin.js";
+// Workspace -> Application -> Environment hierarchy (ADR-0004). Scoped resources ref an environment.
+export * from "./applications.js";
 // Audit log — append-only record of consequential staff actions.
 export * from "./audit.js";
 // Dev-portal DTOs (F8.6/F2.3) — API keys, webhook endpoints, request logs.
@@ -35,12 +37,15 @@ export * from "./money.js";
 export * from "./opt-outs.js";
 // Platform plugin registry (control-plane) — provider instances per capability.
 export * from "./plugins.js";
+export * from "./privacy.js";
 // Maker-checker — two-person control for consequential tenant changes.
 export * from "./proposals.js";
+export * from "./request-logs.js";
 export * from "./senders.js";
 export * from "./sms.js";
 // Wallet top-up (E4) — initiate a provider charge; the webhook credits the ledger.
 export * from "./topup.js";
 export * from "./verify.js";
+export * from "./virtual-phone.js";
 export * from "./wallet.js";
 export * from "./webhooks.js";

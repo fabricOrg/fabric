@@ -4,6 +4,7 @@ import { ApiContextController } from "./api-context.controller.js";
 import { ApiKeyGuard } from "./api-key.guard.js";
 import { ApiKeysController } from "./api-keys.controller.js";
 import { ApiKeyService } from "./api-keys.service.js";
+import { OperatorOrTenantGuard } from "./operator-or-tenant.guard.js";
 import { OperatorTokenGuard } from "./operator-token.guard.js";
 import { TenantTokenService } from "./tenant-token.service.js";
 
@@ -21,8 +22,15 @@ import { TenantTokenService } from "./tenant-token.service.js";
     ApiKeyService,
     ApiKeyGuard,
     OperatorTokenGuard,
+    OperatorOrTenantGuard,
     TenantTokenService,
   ],
-  exports: [ApiKeyService, ApiKeyGuard, RateLimitModule, TenantTokenService],
+  exports: [
+    ApiKeyService,
+    ApiKeyGuard,
+    OperatorOrTenantGuard,
+    RateLimitModule,
+    TenantTokenService,
+  ],
 })
 export class ApiKeysModule {}

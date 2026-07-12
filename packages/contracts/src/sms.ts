@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { messageStatus } from "./message-status.js";
 import { money } from "./money.js";
+import { deliveryMode } from "./virtual-phone.js";
 
 /** GSM-7 vs UCS-2 — surfaced on responses (drives the segment count + cost). */
 export const encoding = z.enum(["gsm7", "ucs2"]);
@@ -26,6 +27,7 @@ export const messageSummary = z.object({
   segments: z.number().int().positive(),
   cost: money,
   provider: z.string(),
+  deliveryMode: deliveryMode.optional().default("live"),
   createdAt: z.string(),
 });
 export type MessageSummary = z.infer<typeof messageSummary>;

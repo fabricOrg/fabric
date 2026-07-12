@@ -29,16 +29,14 @@ import {
 import { toastApiError } from "@/lib/error-toast";
 
 function Shell({ children }: { children: ReactNode }) {
-  return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">{children}</div>
-  );
+  return <div className="flex w-full flex-col gap-6">{children}</div>;
 }
 
 function PageHeader() {
   return (
     <div className="flex flex-col gap-1">
       <h1 className="font-display text-2xl font-semibold tracking-tight">
-        Verify
+        Number verification
       </h1>
       <p className="text-sm text-muted-foreground">
         One API to confirm a user across SMS, voice, WhatsApp, and email — with
@@ -138,6 +136,16 @@ export default function VerifyPage() {
   return (
     <Shell>
       <PageHeader />
+
+      <Alert>
+        <TriangleAlert />
+        <AlertTitle>Tests follow your workspace environment</AlertTitle>
+        <AlertDescription>
+          In sandbox, verification attempts use test delivery and do not reach a
+          real recipient. Live delivery and charges begin only after your
+          workspace is approved for production.
+        </AlertDescription>
+      </Alert>
 
       <ConversionStats stats={data.stats} />
 

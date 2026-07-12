@@ -18,6 +18,11 @@ export interface RequestTenant {
   readonly scopes: string[];
   /** Rate-limit bucket id for the presenting key (hash prefix — never raw key material). */
   readonly keyId: string;
+  /** ADR-0004: the application-environment the presenting key belongs to (drives routing, #8).
+   *  Null for the BFF tenant-token path, which asserts tenant containment only — app/env selection
+   *  for BFF calls is a later concern (the dashboard picks an application/environment). */
+  readonly applicationId: string | null;
+  readonly environmentId: string | null;
 }
 
 /** Minimal shape we read/attach — avoids coupling to a specific HTTP adapter's request type. */
@@ -65,7 +70,13 @@ export class ApiKeyGuard implements CanActivate {
         );
       }
       await this.rateLimit.consume(token.keyId, token.tenantId);
-      req.tenant = { id: token.tenantId, scopes: ["*"], keyId: token.keyId };
+      req.tenant = {
+        id: token.tenantId,
+        scopes: ["*"],
+        keyId: token.keyId,
+        applicationId: null,
+        environmentId: null,
+      };
       return true;
     }
     const resolved = await this.apiKeys.resolve(raw);
@@ -79,6 +90,8 @@ export class ApiKeyGuard implements CanActivate {
       id: resolved.tenantId,
       scopes: resolved.scopes,
       keyId: resolved.keyId,
+      applicationId: resolved.applicationId,
+      environmentId: resolved.environmentId,
     };
     return true;
   }

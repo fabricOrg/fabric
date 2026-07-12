@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@app/ui/components/ui/card";
+import { ErrorState, TableEmptyState } from "@app/ui/components/ui/states";
 import {
   Table,
   TableBody,
@@ -30,7 +31,6 @@ const ROLE_LABEL: Record<Role, string> = {
   owner: "Owner",
   admin: "Admin",
   member: "Member",
-  developer: "Developer",
 };
 
 function initials(value: string): string {
@@ -83,7 +83,7 @@ export default async function TeamPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-display text-2xl font-semibold tracking-tight">
           Team
@@ -110,13 +110,16 @@ export default async function TeamPage() {
           </CardHeader>
           <CardContent>
             {loadError ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Couldn&apos;t load members right now. Try again shortly.
-              </p>
+              <ErrorState
+                title="Couldn't load team members"
+                message="The member directory is temporarily unavailable. Refresh the page to try again."
+              />
             ) : members.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                No members yet.
-              </p>
+              <TableEmptyState
+                title="No team members yet"
+                description="Invite a teammate and assign the minimum role they need."
+                action={canInvite ? <InviteMemberDialog /> : undefined}
+              />
             ) : (
               <section
                 className="overflow-x-auto"
@@ -153,27 +156,47 @@ export default async function TeamPage() {
                               <span className="text-xs text-muted-foreground">
                                 {m.email}
                               </span>
+                              {m.status === "invited" ? (
+                                <span className="text-xs text-muted-foreground">
+                                  Invited{" "}
+                                  {new Date(m.updated_at).toLocaleDateString(
+                                    "en",
+                                    {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    },
+                                  )}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <RoleBadge role={m.role} />
+                          <div className="flex flex-wrap gap-1.5">
+                            <RoleBadge role={m.role} />
+                            {m.developer_access ? (
+                              <Badge variant="outline">Developer access</Badge>
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <StatusBadge status={m.status} />
                         </TableCell>
                         {canInvite ? (
                           <TableCell className="text-right">
-                            {m.role !== "owner" &&
-                            m.user_id !== session.userId ? (
-                              <MemberRowActions
-                                userId={m.user_id}
-                                email={m.email}
-                                label={m.name ?? m.email}
-                                role={m.role}
-                                status={m.status}
-                              />
-                            ) : null}
+                            <MemberRowActions
+                              userId={m.user_id}
+                              email={m.email}
+                              label={m.name ?? m.email}
+                              role={m.role}
+                              developerAccess={m.developer_access}
+                              status={m.status}
+                              canChangeRole={
+                                m.role !== "owner" &&
+                                m.user_id !== session.userId
+                              }
+                            />
                           </TableCell>
                         ) : null}
                       </TableRow>
@@ -187,19 +210,23 @@ export default async function TeamPage() {
 
         <Card className="h-fit">
           <CardHeader>
-            <CardTitle>Your organisation</CardTitle>
+            <CardTitle>Your access</CardTitle>
             <CardDescription>
-              The org this session is scoped to.
+              Your current role controls what you can view and change.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between gap-2 rounded-lg border p-3">
               <div className="flex flex-col">
                 <span className="text-sm font-medium">
-                  Current organisation
+                  {ROLE_LABEL[session.role as Role] ?? session.role}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {ROLE_LABEL[session.role as Role] ?? session.role}
+                  {session.role === "owner"
+                    ? "Full workspace, billing, and team control"
+                    : session.role === "admin"
+                      ? "Operational and team management access"
+                      : "Messaging and reporting access"}
                 </span>
               </div>
               <Badge variant="secondary" className="gap-1">

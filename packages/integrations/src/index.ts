@@ -19,3 +19,4 @@ export * from "./arkesel/provider.js";
 export * from "./paystack/provider.js";
 export * from "./plugin.js";
 export * from "./status.js";
+export * from "./virtual-phone/provider.js";

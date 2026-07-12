@@ -277,5 +277,4 @@ function secretsEqual(left: string, right: string): boolean {
   );
 }
 
-export * from "./development.js";
 export * from "./impersonation.js";

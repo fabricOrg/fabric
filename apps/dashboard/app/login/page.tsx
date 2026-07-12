@@ -14,8 +14,9 @@ import {
 
 /**
  * Production sign-in — Notion-style: a single, quiet, centered column on a warm canvas. No split
- * hero, no card chrome. WorkOS SSO is the only path (register/MFA/reset are WorkOS-hosted). Theme
- * aware via design tokens (light + dark).
+ * hero, no card chrome. Sign-in + self-serve sign-up run through the WorkOS AuthKit hosted page
+ * (email+password / Google / passkeys / SSO; register/MFA/reset are all WorkOS-hosted — we own no
+ * credential forms). Theme aware via design tokens (light + dark).
  *
  * Two feedback channels: `?error=` (direct failures the routes set inline) and a flash NOTICE cookie
  * (access_denied / signed_out) that survives the WorkOS logout hop. Denials render destructive; a
@@ -95,6 +96,16 @@ export default async function LoginPage({
       ? (NOTICE_COPY[notice] ?? null)
       : null;
 
+  // No intermediate "click again" page: when sign-in is available and there's nothing to explain
+  // (no error, no sign-out/denied notice), forward straight to the WorkOS AuthKit hosted page. A
+  // user arriving from a "Sign in" link — in the docs, marketing, or another Fabric app — lands
+  // directly on the auth experience, and passes straight through if they already hold a WorkOS
+  // session. This page then renders ONLY to explain a denial/sign-out (with a retry), never as a
+  // dead-end landing.
+  if (workosEnabled && !banner) {
+    redirect("/auth/login");
+  }
+
   return (
     <main className="relative flex min-h-screen flex-col bg-background">
       {/* centered column */}
@@ -125,7 +136,7 @@ export default async function LoginPage({
             <div className="mt-8 flex flex-col gap-3">
               <ContinueWithWorkOS />
               <p className="text-center text-xs text-muted-foreground">
-                Secured by WorkOS · access is managed by your organization.
+                Secured by WorkOS · email, Google, passkey, or SSO.
               </p>
               <p className="mt-2 text-center text-sm text-muted-foreground">
                 New to Fabric?{" "}
@@ -133,7 +144,7 @@ export default async function LoginPage({
                   href="/auth/login?screen_hint=sign-up"
                   className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
                 >
-                  Create a workspace
+                  Create an account
                 </a>
               </p>
             </div>
@@ -141,7 +152,7 @@ export default async function LoginPage({
             <Alert role="alert" className="mt-8 text-left">
               <AlertTitle>Sign-in unavailable</AlertTitle>
               <AlertDescription>
-                Single sign-on isn't configured for this environment.
+                Sign-in isn't configured for this environment.
               </AlertDescription>
             </Alert>
           )}
