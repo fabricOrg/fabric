@@ -73,6 +73,23 @@ fallback) + owner/admin. Added `applications:read` (universal — the switcher i
 stub matched. Verified: dashboard typecheck + production build green (`/applications` +
 `/api/applications` compile), identity specs green (21). NOTHING pushed.
 
+**Auth pivot — DONE (`4bf5a4c`), locked rule OVERRIDDEN per user directive.** SSO-only → **WorkOS
+AuthKit hosted self-serve** (email+password + Google + passkeys, SSO optional; WorkOS hosts every
+credential form, we own none). Customer realm self-serve; staff realm invite-only. CLAUDE.md §1+§4
+rewritten. **Dev-login bypass DELETED** (shared `fe-auth/development.ts` + all 3 apps + dashboard
+`/auth/development` route + bypass e2e + `DEV_AUTH_ENABLED`/`DEV_SESSION_PASSWORD`/`DEV_TENANT_ID`
+env) — local sign-in now goes through the WorkOS Test env like every env. **`/login` no longer an
+intermediate "click again" page** — 302s straight to the AuthKit hosted page (renders only for a
+denial/sign-out banner); verified live (forwards to `…authkit.app`). Copy de-SSO'd → "Sign in" /
+"Create an account". dev-portal edits were mandatory-only (it imported the deleted shared module) —
+it's being deleted in W-B, don't invest.
+- **Stripe-style LOOK is WorkOS-dashboard config (EXTERNAL — human):** enable Email+Password /
+  Google / Passkeys, apply Fabric branding + one-screen layout, optional custom auth domain; confirm
+  each `<APP>_BASE_URL/auth/callback` + `/login` redirect URIs.
+- **"Access denied" after sign-in = `SELF_SERVE_SIGNUP_ENABLED` gate OFF** (a new WorkOS account
+  isn't auto-provisioned a workspace). Flipping it = **W-A**, testing-only, staging/prod human-gated
+  redline. Enabling locally to test the full sign-up→workspace flow is a pending decision.
+
 **Next — Phases 1–5** per `docs/PI-6/PLAN.md` (frontend-heavy): global environment SWITCHER (chrome
 control that pins the selected app/env into subsequent calls — keys, sends; tied to task #9 moving
 `delivery_mode` onto the environment); **W-B dev-portal→dashboard merge** — real-wire the still-MOCK
@@ -88,8 +105,8 @@ integration-proven.
 `16b081d` backfill · `c523157` key/webhook columns · `a58d2f4` key mint/resolve · `8f6b512` webhook
 scope · `7451ed8` provisioning · `912cd03` env routing · `f30a65a` go-live env-unlock · `c5814c4`
 applications API · `af4419d` applications API tenant-token path · `e0f87e5` dashboard Applications
-surface + permissions (+ HANDOFF/doc commits). Merge order when done: E13→`dev` first, then this
-rebases (fifi merges).
+surface + permissions · `4bf5a4c` remove dev-login bypass + login forwards to AuthKit (auth pivot)
+(+ HANDOFF/doc commits). Merge order when done: E13→`dev` first, then this rebases (fifi merges).
 
 _Milestone rule (user directive 2026-07-12): update this HANDOFF.md at every milestone._
 
