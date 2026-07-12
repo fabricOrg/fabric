@@ -344,6 +344,20 @@
       "when": 1783862254762,
       "tag": "0048_dazzling_grandmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1783865276145,
+      "tag": "0049_absent_mad_thinker",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1783865300000,
+      "tag": "0050_request_logs_rls",
+      "breakpoints": true
     }
   ]
 }

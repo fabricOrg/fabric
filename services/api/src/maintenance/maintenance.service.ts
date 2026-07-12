@@ -49,6 +49,14 @@ export class MaintenanceService {
   /** Advisory lock keys (arbitrary but stable app-wide constants; one per job). */
   private static readonly SWEEP_LOCK_KEY = 727_001;
   private static readonly INVARIANT_LOCK_KEY = 727_002;
+  private static readonly LOG_RETENTION_LOCK_KEY = 727_003;
+
+  /** How long request_logs are kept before the daily retention sweep deletes them. */
+  private logRetentionDays(): number {
+    const raw = this.config.get<string>("REQUEST_LOG_RETENTION_DAYS");
+    const parsed = raw ? Number(raw) : Number.NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+  }
 
   /** Reservation TTL: how long a message may sit non-terminal before the sweeper expires it. */
   private ttlMinutes(): number {
@@ -85,6 +93,46 @@ export class MaintenanceService {
         `invariant run failed: ${error instanceof Error ? error.message : "unknown"}`,
       );
     }
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async logRetentionTick(): Promise<void> {
+    if (!this.cronEnabled()) return;
+    try {
+      await this.runLogRetention();
+    } catch (error) {
+      this.logger.error(
+        `log retention run failed: ${error instanceof Error ? error.message : "unknown"}`,
+      );
+    }
+  }
+
+  /**
+   * One request-log retention pass (also the test entry point). Deletes rows past the retention
+   * window across all tenants on the provisioner connection (request_logs grants app_provisioner
+   * DELETE; cross-tenant by design — no per-tenant loop for a pure purge). Advisory-locked so
+   * overlapping ticks are a no-op. Returns rows deleted.
+   */
+  async runLogRetention(): Promise<{ locked: boolean; deleted: number }> {
+    return this.provisioning.db.transaction(async (tx) => {
+      const lockRows = (await tx.execute(
+        sql`SELECT pg_try_advisory_xact_lock(${MaintenanceService.LOG_RETENTION_LOCK_KEY}) AS locked`,
+      )) as Array<{ locked: boolean }>;
+      if (lockRows[0]?.locked !== true) return { locked: false, deleted: 0 };
+
+      const cutoffIso = new Date(
+        Date.now() - this.logRetentionDays() * 86_400_000,
+      ).toISOString();
+      const deletedRows = (await tx.execute(
+        sql`DELETE FROM request_logs WHERE created_at < ${cutoffIso}::timestamptz RETURNING id`,
+      )) as Array<{ id: string }>;
+      if (deletedRows.length > 0) {
+        this.logger.log(
+          `log retention: deleted ${deletedRows.length} request log(s) older than ${this.logRetentionDays()}d`,
+        );
+      }
+      return { locked: true, deleted: deletedRows.length };
+    });
   }
 
   /**

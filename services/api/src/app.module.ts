@@ -20,6 +20,7 @@ import { PaymentsModule } from "./payments/payments.module.js";
 import { PluginsModule } from "./plugins/plugins.module.js";
 import { PrivacyModule } from "./privacy/privacy.module.js";
 import { ProposalsModule } from "./proposals/proposals.module.js";
+import { RequestLogsModule } from "./request-logs/request-logs.module.js";
 import { SendersModule } from "./senders/senders.module.js";
 import { SmsModule } from "./sms/sms.module.js";
 import { VerifyModule } from "./verify/verify.module.js";
@@ -53,6 +54,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     ProposalsModule,
     ApiKeysModule,
     ApplicationsModule,
+    RequestLogsModule,
     ConsentModule,
     SendersModule,
     // COMPLIANCE §6: the staff DSR surface. Registered here, not only via SmsModule — erasure is a

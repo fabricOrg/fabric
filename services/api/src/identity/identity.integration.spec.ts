@@ -89,6 +89,7 @@ describeDb("identity provisioning (invite-only)", () => {
         "applications:write",
         "api_keys:read",
         "api_keys:write",
+        "request_logs:read",
       ],
       session_id: "session_test",
     });
