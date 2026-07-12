@@ -1,4 +1,12 @@
 import type { AdminSenderDto } from "@app/contracts";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@app/ui/components/ui/empty";
+import { TriangleAlert } from "lucide-react";
 import { SendersReviewBoard } from "@/components/senders-review-board";
 import { requireAdminSession } from "@/lib/server/auth";
 import { listSenderQueue, SenderApiError } from "@/lib/server/senders-client";
@@ -29,9 +37,18 @@ export default async function SendersPage() {
       </div>
 
       {loadError ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          Couldn&apos;t load the review queue right now. Try again shortly.
-        </p>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <TriangleAlert />
+            </EmptyMedia>
+            <EmptyTitle>Couldn&apos;t load the review queue</EmptyTitle>
+            <EmptyDescription>
+              Something went wrong reaching the control plane. Try again
+              shortly.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <SendersReviewBoard senders={senders} canManage={canManage} />
       )}

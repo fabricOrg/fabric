@@ -4,6 +4,7 @@ import { ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { AppBreadcrumbs } from "@/components/app-breadcrumbs";
 import { AppSidebar } from "@/components/app-sidebar";
+import { BreadcrumbTitleProvider } from "@/components/breadcrumb-title";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { readImpersonationClaim, requireAdminSession } from "@/lib/server/auth";
@@ -17,46 +18,48 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await requireAdminSession();
   const impersonation = await readImpersonationClaim();
   return (
-    <AppShell
-      sidebar={
-        <AppSidebar
-          role={session.role}
-          email={session.email}
-          name={session.name}
-        />
-      }
-      banner={
-        <ImpersonationBanner
-          claim={
-            impersonation
-              ? {
-                  tenantLabel:
-                    impersonation.targetLabel ?? impersonation.targetTenantId,
-                  endsAt: impersonation.expiresAt,
-                }
-              : null
-          }
-        />
-      }
-      breadcrumbs={<AppBreadcrumbs />}
-      headerContext={
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <ShieldCheck className="size-4" />
-          <span>Staff console</span>
-        </div>
-      }
-      headerActions={
-        <>
-          <ThemeToggle />
-          <UserMenu
+    <BreadcrumbTitleProvider>
+      <AppShell
+        sidebar={
+          <AppSidebar
+            role={session.role}
             email={session.email}
             name={session.name}
-            role={session.role}
           />
-        </>
-      }
-    >
-      {children}
-    </AppShell>
+        }
+        banner={
+          <ImpersonationBanner
+            claim={
+              impersonation
+                ? {
+                    tenantLabel:
+                      impersonation.targetLabel ?? impersonation.targetTenantId,
+                    endsAt: impersonation.expiresAt,
+                  }
+                : null
+            }
+          />
+        }
+        breadcrumbs={<AppBreadcrumbs />}
+        headerContext={
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <ShieldCheck className="size-4" />
+            <span>Staff console</span>
+          </div>
+        }
+        headerActions={
+          <>
+            <ThemeToggle />
+            <UserMenu
+              email={session.email}
+              name={session.name}
+              role={session.role}
+            />
+          </>
+        }
+      >
+        {children}
+      </AppShell>
+    </BreadcrumbTitleProvider>
   );
 }

@@ -2,6 +2,7 @@
 
 import { RouteBreadcrumbs } from "@app/ui/components/ui/route-breadcrumbs";
 import { usePathname } from "next/navigation";
+import { useBreadcrumbTitle } from "@/components/breadcrumb-title";
 import { navGroups } from "@/lib/nav";
 
 const routes = [
@@ -12,11 +13,13 @@ const routes = [
 ];
 
 export function AppBreadcrumbs() {
+  const { title } = useBreadcrumbTitle();
   return (
     <RouteBreadcrumbs
       appLabel="Admin"
       pathname={usePathname()}
       routes={routes}
+      current={title ?? undefined}
     />
   );
 }

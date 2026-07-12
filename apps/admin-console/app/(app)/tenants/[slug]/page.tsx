@@ -17,9 +17,8 @@ import {
   TableHeader,
   TableRow,
 } from "@app/ui/components/ui/table";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SetBreadcrumbTitle } from "@/components/breadcrumb-title";
 import { InviteTenantMemberDialog } from "@/components/forms/invite-tenant-member-dialog";
 import { TenantMemberRowActions } from "@/components/tenant-member-row-actions";
 import { TenantStatusActions } from "@/components/tenant-status-actions";
@@ -77,35 +76,28 @@ export default async function TenantDetailPage({
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <Link
-          href="/"
-          className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Tenants
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <h1 className="font-display text-2xl font-semibold tracking-tight">
-              {tenant.name}
-            </h1>
-            <p className="font-mono text-sm text-muted-foreground">
-              {tenant.slug} · {tenant.plan} · {tenant.data_region}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Badge variant="outline" className="capitalize">
-              {tenant.status}
-            </Badge>
-            {canManage ? (
-              <TenantStatusActions
-                tenantId={tenant.tenant_id}
-                name={tenant.name}
-                status={tenant.status}
-              />
-            ) : null}
-          </div>
+      {/* The breadcrumb (Admin › <tenant>) is the way back to the list, so no separate back button. */}
+      <SetBreadcrumbTitle title={tenant.name} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-display text-2xl font-semibold tracking-tight">
+            {tenant.name}
+          </h1>
+          <p className="font-mono text-sm text-muted-foreground">
+            {tenant.slug} · {tenant.plan} · {tenant.data_region}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Badge variant="outline" className="capitalize">
+            {tenant.status}
+          </Badge>
+          {canManage ? (
+            <TenantStatusActions
+              tenantId={tenant.tenant_id}
+              name={tenant.name}
+              status={tenant.status}
+            />
+          ) : null}
         </div>
       </div>
 
