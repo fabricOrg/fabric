@@ -54,23 +54,22 @@ async function main(url: string) {
 
     for (const acct of accounts) {
       try {
-        // Already backfilled? (default app + at least one env) → skip, keep the run a no-op.
-        const [existing] = await sql<Array<{ env_count: number }>>`
-          SELECT count(e.id)::int AS env_count
-          FROM applications a
-          LEFT JOIN environments e ON e.application_id = a.id
-          WHERE a.tenant_id = ${acct.id} AND a.slug = 'default'`;
-        if (existing && existing.env_count >= 2) {
-          alreadyHad += 1;
-          continue;
-        }
+        // Reporting only: did the default app already exist before this run? (The writes below are
+        // all idempotent, so we run them every time regardless — this just labels created vs no-op.)
+        const [existing] = await sql<Array<{ n: number }>>`
+          SELECT count(*)::int AS n FROM applications
+          WHERE tenant_id = ${acct.id} AND slug = 'default'`;
+        const isNew = !existing || existing.n === 0;
 
         const liveStatus = acct.plan === "sandbox" ? "locked" : "active";
         if (!commit) {
           console.log(
-            `  would create default app + sandbox(active) + live(${liveStatus}) for ${acct.id}`,
+            isNew
+              ? `  would create default app + sandbox(active) + live(${liveStatus}) for ${acct.id}, and point its keys/webhooks at it`
+              : `  would re-point any unassigned keys/webhooks for ${acct.id}`,
           );
-          created += 1;
+          if (isNew) created += 1;
+          else alreadyHad += 1;
           continue;
         }
 
@@ -88,8 +87,31 @@ async function main(url: string) {
               (${acct.id}, ${app.id}, 'sandbox', 'active'),
               (${acct.id}, ${app.id}, 'live', ${liveStatus})
             ON CONFLICT (application_id, type) DO NOTHING`;
+
+          const envs = await tx<Array<{ id: string; type: string }>>`
+            SELECT id, type FROM environments WHERE application_id = ${app.id}`;
+          const sandboxEnv = envs.find((e) => e.type === "sandbox")?.id;
+          const liveEnv = envs.find((e) => e.type === "live")?.id;
+          if (!sandboxEnv || !liveEnv) {
+            throw new Error("expected both sandbox and live environments");
+          }
+
+          // Point existing keys at the env matching their prefix: sk_test_ -> sandbox, sk_live_ ->
+          // live. Only rows not yet assigned (idempotent). New keys set this at mint time (#6b).
+          await tx`
+            UPDATE api_keys SET application_id = ${app.id},
+              environment_id = CASE WHEN env = 'test' THEN ${sandboxEnv}::uuid ELSE ${liveEnv}::uuid END
+            WHERE tenant_id = ${acct.id} AND application_id IS NULL`;
+
+          // Existing webhook endpoints predate the env split — point them at the environment matching
+          // the account's current liveness (a live account's endpoints are for live traffic).
+          const webhookEnv = liveStatus === "active" ? liveEnv : sandboxEnv;
+          await tx`
+            UPDATE webhook_endpoints SET application_id = ${app.id}, environment_id = ${webhookEnv}
+            WHERE tenant_id = ${acct.id} AND application_id IS NULL`;
         });
-        created += 1;
+        if (isNew) created += 1;
+        else alreadyHad += 1;
       } catch (error) {
         failures.push(
           `${acct.id}: ${error instanceof Error ? error.message : "unknown"}`,

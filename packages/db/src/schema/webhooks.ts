@@ -8,7 +8,13 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
-import { type TenantId, timestamps } from "./_shared.js";
+import {
+  type ApplicationId,
+  type EnvironmentId,
+  type TenantId,
+  timestamps,
+} from "./_shared.js";
+import { applications, environments } from "./applications.js";
 
 /**
  * TENANT WEBHOOKS + TRANSACTIONAL OUTBOX (ARCHITECTURE §4/§9, remediation finding 8).
@@ -32,6 +38,14 @@ export const webhookEndpoints = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().$type<TenantId>(),
+    // ADR-0004: an endpoint belongs to one application-environment (events fire per environment).
+    // Nullable during the two-step backfill; new endpoints always set both.
+    applicationId: uuid("application_id")
+      .references(() => applications.id, { onDelete: "cascade" })
+      .$type<ApplicationId>(),
+    environmentId: uuid("environment_id")
+      .references(() => environments.id, { onDelete: "cascade" })
+      .$type<EnvironmentId>(),
     url: text("url").notNull(),
     /** whsec_… signing secret — shown once at creation, needed raw for HMAC. RLS-guarded. */
     secret: text("secret").notNull(),

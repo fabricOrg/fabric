@@ -330,6 +330,13 @@
       "when": 1783851321650,
       "tag": "0046_applications_environments_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1783852560464,
+      "tag": "0047_chemical_fat_cobra",
+      "breakpoints": true
     }
   ]
 }

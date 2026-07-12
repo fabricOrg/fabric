@@ -8,7 +8,13 @@ import {
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
-import { tenantIdCol, timestamps } from "./_shared.js";
+import {
+  type ApplicationId,
+  type EnvironmentId,
+  tenantIdCol,
+  timestamps,
+} from "./_shared.js";
+import { applications, environments } from "./applications.js";
 import { accounts } from "./identity.js";
 
 /**
@@ -35,6 +41,15 @@ export const apiKeys = pgTable(
     tenantId: tenantIdCol().references(() => accounts.id, {
       onDelete: "cascade",
     }),
+    // ADR-0004: a key belongs to one application-environment. Nullable during the two-step backfill
+    // (0047 adds them, the ops backfill points existing keys at the default app's matching env, a
+    // follow-up makes them NOT NULL once every writer sets them). New keys always set both.
+    applicationId: uuid("application_id")
+      .references(() => applications.id, { onDelete: "cascade" })
+      .$type<ApplicationId>(),
+    environmentId: uuid("environment_id")
+      .references(() => environments.id, { onDelete: "cascade" })
+      .$type<EnvironmentId>(),
     name: text("name").notNull().default(""), // human label, e.g. "server prod"
     prefix: text("prefix").notNull(), // e.g. "sk_test_ab3d" — displayed to identify the key
     keyHash: text("key_hash").notNull(), // SHA-256(raw) hex — the only stored representation
