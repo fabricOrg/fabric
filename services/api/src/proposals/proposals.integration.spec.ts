@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import {
   accounts,
+  applications,
   auditEvents,
   createProvisioningDb,
+  environments,
   proposals,
 } from "@app/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { AuditService } from "../audit/audit.service.js";
 import { ProposalService } from "./proposals.service.js";
@@ -142,6 +144,32 @@ describeDb(
         plan: "sandbox",
         status: "active",
       });
+      // ADR-0004: a sandbox workspace has a default app with a sandbox env (active) and a live env
+      // that is LOCKED until go-live unlocks it — the state the approval test asserts flips.
+      const [app] = await db.db
+        .insert(applications)
+        .values({
+          tenantId: tenantId as never,
+          name: "Default",
+          slug: "default",
+        })
+        .returning({ id: applications.id });
+      if (!app)
+        throw new Error("seed: default application insert returned no row");
+      await db.db.insert(environments).values([
+        {
+          tenantId: tenantId as never,
+          applicationId: app.id,
+          type: "sandbox",
+          status: "active",
+        },
+        {
+          tenantId: tenantId as never,
+          applicationId: app.id,
+          type: "live",
+          status: "locked",
+        },
+      ]);
       const created = await service.requestGoLive(
         tenantId,
         {
@@ -189,6 +217,18 @@ describeDb(
         .from(accounts)
         .where(eq(accounts.id, tenantId as never));
       expect(account?.plan).toBe("free");
+      // ADR-0004: the functional unlock — the live environment flips locked → active, which is what
+      // lets live keys mint and live routing run.
+      const [liveEnv] = await db.db
+        .select({ status: environments.status })
+        .from(environments)
+        .where(
+          and(
+            eq(environments.tenantId, tenantId as never),
+            eq(environments.type, "live"),
+          ),
+        );
+      expect(liveEnv?.status).toBe("active");
       await expect(
         service.requestGoLive(
           tenantId,
