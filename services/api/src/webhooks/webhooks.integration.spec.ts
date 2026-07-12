@@ -187,4 +187,18 @@ describeDb("transactional outbox + signed webhook delivery", () => {
       expect((e as { secret?: string }).secret).toBeUndefined();
     }
   });
+
+  it("endpoints carry their environment (ADR-0004): a live endpoint reports env 'live'", async () => {
+    const live = await webhooks.create(
+      tenantId,
+      { url: "https://example.com/live-hook" },
+      { envType: "live" },
+    );
+    expect(live.env).toBe("live");
+    const endpoints = await webhooks.list(tenantId);
+    const found = endpoints.find((e) => e.id === live.id);
+    expect(found?.env).toBe("live");
+    // The default-sandbox endpoint from earlier still reports 'sandbox'.
+    expect(endpoints.some((e) => e.env === "sandbox")).toBe(true);
+  });
 });
