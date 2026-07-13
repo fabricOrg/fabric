@@ -123,7 +123,14 @@ createServer(async (request, response) => {
     const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
     if (!apiKey)
       return json(response, 400, { error: "Enter a Fabric API key." });
-    const fabric = new Fabric({ apiKey });
+    // baseUrl override: the request field wins, else FABRIC_BASE_URL, else the SDK default. Lets you
+    // point the playground at a local API (http://localhost:3000). The SDK only permits https or a
+    // loopback host, so an invalid override throws below and surfaces as a 400.
+    const baseUrl =
+      (typeof body.baseUrl === "string" && body.baseUrl.trim()) ||
+      process.env.FABRIC_BASE_URL ||
+      "";
+    const fabric = new Fabric({ apiKey, ...(baseUrl ? { baseUrl } : {}) });
     const actions = actionsFor(fabric);
     const action = typeof body.action === "string" ? body.action : "";
     const handler = actions[action];

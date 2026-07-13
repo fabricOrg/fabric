@@ -8,10 +8,11 @@
   </style>
 </head>
 <body><main>
-  <header><p class="hint">HOSTED TEST LAB · @fabric-messaging/sdk</p><h1>Try every shipped capability.</h1><p>Enter a sandbox API key, choose an operation, and run it against Fabric's deployed API. No API base URL is required. The key is sent only with the request and is never stored by this playground.</p></header>
+  <header><p class="hint">HOSTED TEST LAB · @fabric-messaging/sdk</p><h1>Try every shipped capability.</h1><p>Enter a sandbox API key, choose an operation, and run it against Fabric's deployed API — or set a base URL to point at a local API (e.g. http://localhost:3000). The key is sent only with the request and is never stored by this playground.</p></header>
   <div class="notice"><strong>Virtual phone is two-way:</strong> every workspace has a stable <code>+999…</code> number. Open Dashboard → Virtual phone to reply, test STOP/START, page history, or reset the inbox. The presets below exercise deterministic delivery outcomes.</div>
   <div class="layout"><section class="card">
     <label for="apiKey">Fabric sandbox API key</label><input id="apiKey" type="password" autocomplete="off" placeholder="sk_test_…" spellcheck="false">
+    <label for="baseUrl">API base URL <span class="hint">(optional — point at a local API)</span></label><input id="baseUrl" type="text" autocomplete="off" placeholder="https://… or http://localhost:3000" spellcheck="false">
     <label for="action">SDK operation</label><select id="action"></select>
     <label for="params">Parameters (JSON)</label><textarea id="params" spellcheck="false"></textarea>
     <button id="run" type="button">Run operation</button><p class="hint">Create or copy a sandbox key from the deployed Fabric Dashboard. Live-key mutations fail closed.</p>
@@ -33,8 +34,8 @@ const examples={
 "virtualPhone.platformFault":{senderId:"SANDBOX",body:"Platform failure test",idempotencyKey:"vp-fault-001"},
 "virtualPhone.delayedDlr":{senderId:"SANDBOX",body:"Delayed delivery test",idempotencyKey:"vp-delay-001"},
 "virtualPhone.autoStop":{senderId:"SANDBOX",body:"Automatic STOP test",idempotencyKey:"vp-stop-001"}}
-const apiKey=document.querySelector("#apiKey"),action=document.querySelector("#action"),params=document.querySelector("#params"),output=document.querySelector("#output"),run=document.querySelector("#run");
+const apiKey=document.querySelector("#apiKey"),baseUrl=document.querySelector("#baseUrl"),action=document.querySelector("#action"),params=document.querySelector("#params"),output=document.querySelector("#output"),run=document.querySelector("#run");
 for(const key of Object.keys(examples)){const option=document.createElement("option");option.value=key;option.textContent=key;action.append(option)}
 function load(){params.value=JSON.stringify(examples[action.value],null,2)}action.addEventListener("change",load);load();
-run.addEventListener("click",async()=>{run.disabled=true;output.textContent="Running…";try{const response=await fetch("/api/run",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({apiKey:apiKey.value,action:action.value,params:JSON.parse(params.value)})});output.textContent=JSON.stringify(await response.json(),null,2)}catch(error){output.textContent=String(error)}finally{run.disabled=false}})
+run.addEventListener("click",async()=>{run.disabled=true;output.textContent="Running…";try{const response=await fetch("/api/run",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({apiKey:apiKey.value,baseUrl:baseUrl.value,action:action.value,params:JSON.parse(params.value)})});output.textContent=JSON.stringify(await response.json(),null,2)}catch(error){output.textContent=String(error)}finally{run.disabled=false}})
 </script></body></html>
