@@ -189,8 +189,9 @@ export default function SendPage() {
     if (!recipient || !senderId || !context) return;
     const input: SendSmsRequest = {
       to: recipient,
-      senderId,
+      sender_id: senderId,
       body: previewBody,
+      currency: CURRENCY,
       class: messageClass,
     };
     const fingerprint = JSON.stringify(input);
