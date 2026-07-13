@@ -206,13 +206,16 @@ export class VirtualPhoneService {
     messageId: string;
     subjectId: string;
     body: string;
+    bodyPiiId?: string;
   }): Promise<void> {
-    const bodyPiiId = await this.vault.put(
-      input.tenantId,
-      input.subjectId,
-      "body",
-      input.body,
-    );
+    const bodyPiiId =
+      input.bodyPiiId ??
+      (await this.vault.put(
+        input.tenantId,
+        input.subjectId,
+        "body",
+        input.body,
+      ));
     await this.db.withTenant(
       input.tenantId,
       (tx) => tx`

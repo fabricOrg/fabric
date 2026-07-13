@@ -8,6 +8,7 @@ import { ApplicationsModule } from "./applications/applications.module.js";
 import { AuditModule } from "./audit/audit.module.js";
 import { ConsentModule } from "./consent/consent.module.js";
 import { DbModule } from "./db/db.module.js";
+import { EmailModule } from "./email/email.module.js";
 import { FlowsModule } from "./flows/flows.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { loggerParams } from "./http/logging.config.js";
@@ -45,6 +46,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     IdentityModule,
     AdminModule,
     AuditModule,
+    EmailModule,
     FlowsModule,
     ImpersonationModule,
     KillSwitchModule,

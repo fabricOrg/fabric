@@ -79,15 +79,18 @@ export class WebhookDeliveryService {
       let retried = 0;
       let dead = 0;
       for (const event of pending) {
-        const endpoints = await tx
-          .select()
-          .from(webhookEndpoints)
-          .where(
-            and(
-              eq(webhookEndpoints.tenantId, event.tenantId),
-              eq(webhookEndpoints.status, "active"),
-            ),
-          );
+        const endpoints = event.environmentId
+          ? await tx
+              .select()
+              .from(webhookEndpoints)
+              .where(
+                and(
+                  eq(webhookEndpoints.tenantId, event.tenantId),
+                  eq(webhookEndpoints.environmentId, event.environmentId),
+                  eq(webhookEndpoints.status, "active"),
+                ),
+              )
+          : [];
         // No endpoints registered → nothing to fan out; mark delivered so the row retires.
         const allAcked =
           endpoints.length === 0

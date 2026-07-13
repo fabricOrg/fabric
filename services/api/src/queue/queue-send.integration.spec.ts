@@ -159,6 +159,37 @@ describeDb("queued send pipeline (BullMQ)", () => {
     const response = await smsQueued.send(sendInput("+233209999001"));
     expect(response.status).toBe("sending"); // reserved + enqueued, provider outcome pending
 
+    const job = await queueOn.queue(SMS_SEND_QUEUE).getJob(response.id);
+    expect(job?.data).toEqual({
+      tenantId,
+      messageId: response.id,
+      deliveryMode: "live",
+    });
+    expect(JSON.stringify(job?.data)).not.toContain("+233209999001");
+    expect(JSON.stringify(job?.data)).not.toContain("queued pipeline test");
+
+    await waitFor(
+      async () => (await messageStatus(response.id)) === "accepted",
+    );
+    expect(await commitCount(response.id)).toBe(1);
+    const dispatch = await owner`
+      SELECT completed_at FROM message_dispatches WHERE message_id = ${response.id}`;
+    expect(dispatch[0]?.completed_at).not.toBeNull();
+  });
+
+  it("recovers a committed dispatch intent when the original queue job is lost", async () => {
+    const queue = queueOn.queue(SMS_SEND_QUEUE);
+    await queue.pause();
+    const response = await smsQueued.send(sendInput("+233209999004"));
+    const original = await queue.getJob(response.id);
+    await original?.remove();
+
+    const before = await owner`
+      SELECT completed_at FROM message_dispatches WHERE message_id = ${response.id}`;
+    expect(before[0]?.completed_at).toBeNull();
+    expect(await smsQueued.enqueuePending(tenantId)).toBeGreaterThanOrEqual(1);
+
+    await queue.resume();
     await waitFor(
       async () => (await messageStatus(response.id)) === "accepted",
     );
