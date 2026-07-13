@@ -1,8 +1,16 @@
+import type { VirtualPhoneMessage } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import { Input } from "@app/ui/components/ui/input";
-import { ArrowLeft, MessageSquareText, MoreVertical, Send } from "lucide-react";
+import {
+  ArrowLeft,
+  Maximize2,
+  MessageSquareText,
+  MoreVertical,
+  Send,
+} from "lucide-react";
 import { useState } from "react";
 import type { VirtualThread } from "@/lib/virtual-phone/threads";
+import { MessageDialog } from "./message-dialog";
 
 export function Handset({
   thread,
@@ -17,6 +25,7 @@ export function Handset({
 }) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [expanded, setExpanded] = useState<VirtualPhoneMessage | null>(null);
 
   async function submit() {
     if (!thread || body.trim().length === 0 || sending) return;
@@ -86,29 +95,44 @@ export function Handset({
                       })}
                     </p>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => onSelectMessage(message.id)}
-                    className={`group block max-w-[85%] rounded-2xl px-3.5 py-2.5 text-left shadow-sm outline-none ring-border hover:ring-1 focus-visible:ring-2 focus-visible:ring-ring ${message.direction === "inbound" ? "ml-auto rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-card"}`}
+                  <div
+                    className={`flex ${message.direction === "inbound" ? "justify-end" : "justify-start"}`}
                   >
-                    <span className="sr-only">
-                      From {message.from}, {message.status}, at{" "}
-                      {new Date(message.created_at).toLocaleString()}.
-                    </span>
-                    <span className="block whitespace-pre-wrap text-sm leading-5">
-                      {message.body}
-                    </span>
-                    <span className="mt-1 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
-                      <time dateTime={message.created_at}>
-                        {new Date(message.created_at).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </time>
-                      <span>·</span>
-                      <span>{message.status}</span>
-                    </span>
-                  </button>
+                    <div className="group/msg relative max-w-[85%]">
+                      <button
+                        type="button"
+                        onClick={() => onSelectMessage(message.id)}
+                        className={`block w-full rounded-2xl px-3.5 py-2.5 text-left shadow-sm outline-none ring-border hover:ring-1 focus-visible:ring-2 focus-visible:ring-ring ${message.direction === "inbound" ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-card"}`}
+                      >
+                        <span className="sr-only">
+                          From {message.from}, {message.status}, at{" "}
+                          {new Date(message.created_at).toLocaleString()}.
+                        </span>
+                        <span className="block whitespace-pre-wrap text-sm leading-5">
+                          {message.body}
+                        </span>
+                        <span className="mt-1 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
+                          <time dateTime={message.created_at}>
+                            {new Date(message.created_at).toLocaleTimeString(
+                              [],
+                              { hour: "2-digit", minute: "2-digit" },
+                            )}
+                          </time>
+                          <span>·</span>
+                          <span>{message.status}</span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(message)}
+                        aria-label="Expand message"
+                        title="Expand message"
+                        className="absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full border bg-background text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none group-hover/msg:opacity-100"
+                      >
+                        <Maximize2 className="size-3" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -149,6 +173,13 @@ export function Handset({
           </div>
         )}
       </div>
+      <MessageDialog
+        message={expanded ?? undefined}
+        open={expanded !== null}
+        onOpenChange={(open) => {
+          if (!open) setExpanded(null);
+        }}
+      />
     </section>
   );
 }
