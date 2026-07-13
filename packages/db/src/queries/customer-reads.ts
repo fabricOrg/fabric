@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { TenantDrizzleTx } from "../client.js";
 import { ledgerAccounts, ledgerEntries, messages } from "../schema/index.js";
 
@@ -102,10 +102,16 @@ const messageSelection = {
 
 export async function listCustomerMessages(
   db: TenantDrizzleTx,
+  environmentId?: string | null,
 ): Promise<CustomerMessageRead[]> {
   const rows = await db
     .select(messageSelection)
     .from(messages)
+    .where(
+      environmentId
+        ? sql`${messages.environmentId} = ${environmentId}::uuid`
+        : undefined,
+    )
     .orderBy(desc(messages.createdAt), desc(messages.id))
     .limit(100);
   return rows.map((row) => ({ ...row, costMinor: BigInt(row.costMinor) }));
@@ -114,11 +120,19 @@ export async function listCustomerMessages(
 export async function findCustomerMessage(
   db: TenantDrizzleTx,
   id: string,
+  environmentId?: string | null,
 ): Promise<CustomerMessageRead | null> {
   const rows = await db
     .select(messageSelection)
     .from(messages)
-    .where(eq(messages.id, id))
+    .where(
+      environmentId
+        ? and(
+            eq(messages.id, id),
+            sql`${messages.environmentId} = ${environmentId}::uuid`,
+          )
+        : eq(messages.id, id),
+    )
     .limit(1);
   const row = rows[0];
   return row ? { ...row, costMinor: BigInt(row.costMinor) } : null;

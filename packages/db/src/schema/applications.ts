@@ -1,4 +1,11 @@
-import { pgEnum, pgTable, text, unique, uuid } from "drizzle-orm/pg-core";
+import {
+  foreignKey,
+  pgEnum,
+  pgTable,
+  text,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
 import {
   type ApplicationId,
   type EnvironmentId,
@@ -46,6 +53,7 @@ export const applications = pgTable(
   (t) => [
     // slug identifies an application inside its workspace; two workspaces may reuse a slug.
     unique("uniq_application_tenant_slug").on(t.tenantId, t.slug),
+    unique("uniq_application_id_tenant").on(t.id, t.tenantId),
   ],
 );
 
@@ -68,6 +76,16 @@ export const environments = pgTable(
   (t) => [
     // an application has at most one environment of each type (one sandbox, one live)
     unique("uniq_environment_application_type").on(t.applicationId, t.type),
+    unique("uniq_environment_id_application_tenant").on(
+      t.id,
+      t.applicationId,
+      t.tenantId,
+    ),
+    foreignKey({
+      columns: [t.applicationId, t.tenantId],
+      foreignColumns: [applications.id, applications.tenantId],
+      name: "environments_application_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 

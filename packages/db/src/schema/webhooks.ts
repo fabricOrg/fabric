@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -53,7 +54,23 @@ export const webhookEndpoints = pgTable(
     description: text("description"),
     ...timestamps,
   },
-  (t) => [index("idx_webhook_endpoints_tenant").on(t.tenantId)],
+  (t) => [
+    index("idx_webhook_endpoints_tenant").on(t.tenantId),
+    foreignKey({
+      columns: [t.applicationId, t.tenantId],
+      foreignColumns: [applications.id, applications.tenantId],
+      name: "webhook_endpoints_application_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.environmentId, t.applicationId, t.tenantId],
+      foreignColumns: [
+        environments.id,
+        environments.applicationId,
+        environments.tenantId,
+      ],
+      name: "webhook_endpoints_environment_application_tenant_fk",
+    }).onDelete("cascade"),
+  ],
 );
 
 export const outboxEvents = pgTable(
@@ -61,6 +78,12 @@ export const outboxEvents = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().$type<TenantId>(),
+    applicationId: uuid("application_id")
+      .references(() => applications.id, { onDelete: "cascade" })
+      .$type<ApplicationId>(),
+    environmentId: uuid("environment_id")
+      .references(() => environments.id, { onDelete: "cascade" })
+      .$type<EnvironmentId>(),
     eventType: text("event_type").notNull(), // e.g. message.updated | topup.succeeded
     payload: jsonb("payload").notNull(),
     /** Delivery bookkeeping: null until every active endpoint acked (or attempts exhausted). */
@@ -73,6 +96,20 @@ export const outboxEvents = pgTable(
     index("idx_outbox_undelivered")
       .on(t.createdAt)
       .where(sql`delivered_at IS NULL`),
+    foreignKey({
+      columns: [t.applicationId, t.tenantId],
+      foreignColumns: [applications.id, applications.tenantId],
+      name: "outbox_events_application_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.environmentId, t.applicationId, t.tenantId],
+      foreignColumns: [
+        environments.id,
+        environments.applicationId,
+        environments.tenantId,
+      ],
+      name: "outbox_events_environment_application_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 

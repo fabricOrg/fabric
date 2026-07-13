@@ -11,6 +11,10 @@
     "./testing": {
       "development": "./src/testing/fake-provider.ts",
       "default": "./dist/testing/fake-provider.js"
+    },
+    "./testing/email": {
+      "development": "./src/testing/fake-email-provider.ts",
+      "default": "./dist/testing/fake-email-provider.js"
     }
   },
   "scripts": {
