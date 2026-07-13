@@ -7,3 +7,35 @@
 @source "../app";
 @source "../components";
 @source "../../../packages/ui/src/components";
+
+/* Virtual-phone notifier: a short handset shake when a new message lands (see VirtualPhoneNotifier). */
+@keyframes vp-buzz {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  15% {
+    transform: rotate(-13deg);
+  }
+  30% {
+    transform: rotate(11deg);
+  }
+  45% {
+    transform: rotate(-8deg);
+  }
+  60% {
+    transform: rotate(6deg);
+  }
+  75% {
+    transform: rotate(-4deg);
+  }
+}
+.vp-buzz {
+  animation: vp-buzz 0.6s ease-in-out;
+  transform-origin: 50% 60%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vp-buzz {
+    animation: none;
+  }
+}
