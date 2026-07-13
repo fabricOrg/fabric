@@ -34,7 +34,13 @@ import { z } from "zod";
 import { toastApiError } from "@/lib/error-toast";
 
 /** Scopes a customer key can carry today (the data-plane routes that check them). */
-const AVAILABLE_SCOPES = ["sms:send", "sms:read", "wallet:read"] as const;
+const AVAILABLE_SCOPES = [
+  "sms:send",
+  "sms:read",
+  "email:send",
+  "email:read",
+  "wallet:read",
+] as const;
 
 const schema = z.object({
   name: z.string().trim().min(1, "Name your key."),
