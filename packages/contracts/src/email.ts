@@ -47,3 +47,25 @@ export const emailMessageListResponse = z.object({
   request_id: z.string(),
 });
 export type EmailMessageListResponse = z.infer<typeof emailMessageListResponse>;
+
+/** Dashboard-facing (BFF/internal) email inbox for the current workspace environment. */
+export const emailInboxResponse = z.object({
+  messages: z.array(emailMessage),
+});
+export type EmailInboxResponse = z.infer<typeof emailInboxResponse>;
+
+/**
+ * Decrypted email content for the sandbox viewer — the vault-stored body, exposed only through the
+ * BFF (never the public message DTO). `erased` mirrors the SMS virtual phone: the recipient's data
+ * was crypto-shredded, so subject/body are gone for good.
+ */
+export const emailContentResponse = z.object({
+  id: z.string().uuid(),
+  to: z.string(),
+  from: z.string(),
+  subject: z.string(),
+  text: z.string().nullable(),
+  html: z.string().nullable(),
+  erased: z.boolean(),
+});
+export type EmailContentResponse = z.infer<typeof emailContentResponse>;

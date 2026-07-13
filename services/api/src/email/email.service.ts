@@ -12,7 +12,11 @@ import { invalidRequest, newRequestId, notFound } from "../http/api-error.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
-import { isTerminalEmailStatus, parseEmailContent } from "./email-content.js";
+import {
+  hydrateEmailRows,
+  isTerminalEmailStatus,
+  parseEmailContent,
+} from "./email-content.js";
 import { EMAIL_SEND_QUEUE, type EmailSendJob } from "./email-send.job.js";
 
 type Row = Record<string, unknown>;
@@ -126,7 +130,7 @@ export class EmailService {
         ORDER BY created_at DESC, id DESC
         LIMIT 100`,
     )) as Row[];
-    return this.hydrate(tenantId, rows);
+    return hydrateEmailRows(this.vault, tenantId, rows);
   }
 
   async get(
@@ -144,7 +148,7 @@ export class EmailService {
         LIMIT 1`,
     )) as Row[];
     if (!rows[0]) throw notFound("email_not_found", "Email message not found.");
-    const hydrated = await this.hydrate(tenantId, rows);
+    const hydrated = await hydrateEmailRows(this.vault, tenantId, rows);
     const message = hydrated[0];
     if (!message) throw notFound("email_not_found", "Email message not found.");
     return message;
@@ -264,32 +268,6 @@ export class EmailService {
           ${JSON.stringify({ message_id: messageId, channel: "email", status, previous_status: prior })}::jsonb
         )`;
       return status;
-    });
-  }
-
-  private async hydrate(
-    tenantId: string,
-    rows: Row[],
-  ): Promise<EmailMessage[]> {
-    const contentIds = rows.flatMap((row) =>
-      row.content_pii_id ? [String(row.content_pii_id)] : [],
-    );
-    const contents = await this.vault.readMany(tenantId, contentIds);
-    return rows.map((row) => {
-      const raw = row.content_pii_id
-        ? contents.get(String(row.content_pii_id))
-        : null;
-      const content = parseEmailContent(raw);
-      return {
-        id: String(row.id),
-        status: String(row.status) as EmailMessage["status"],
-        to: content?.to ?? "[erased]",
-        from: content?.from ?? "[erased]",
-        subject: content?.subject ?? "[erased]",
-        provider: String(row.provider_slug),
-        created_at: new Date(String(row.created_at)).toISOString(),
-        error_code: row.error_code ? String(row.error_code) : null,
-      };
     });
   }
 }

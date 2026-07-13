@@ -7,6 +7,8 @@ import { PrivacyModule } from "../privacy/privacy.module.js";
 import { QueueModule } from "../queue/queue.module.js";
 import { EmailController } from "./email.controller.js";
 import { EmailService } from "./email.service.js";
+import { EmailInboxController } from "./email-inbox.controller.js";
+import { EmailInboxService } from "./email-inbox.service.js";
 import { EmailSendWorker } from "./email-send.worker.js";
 
 @Module({
@@ -18,8 +20,8 @@ import { EmailSendWorker } from "./email-send.worker.js";
     PrivacyModule,
     QueueModule,
   ],
-  controllers: [EmailController],
-  providers: [EmailService, EmailSendWorker],
+  controllers: [EmailController, EmailInboxController],
+  providers: [EmailService, EmailInboxService, EmailSendWorker],
   exports: [EmailService],
 })
 export class EmailModule {}

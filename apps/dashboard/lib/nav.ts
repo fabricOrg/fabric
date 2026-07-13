@@ -6,6 +6,7 @@ import {
   Library,
   List,
   type LucideIcon,
+  Mail,
   Megaphone,
   Send,
   ShieldCheck,
@@ -64,6 +65,7 @@ export const navGroups: readonly NavGroup[] = [
         preview: true,
       },
       { title: "Messages", href: "/messages", icon: List },
+      { title: "Emails", href: "/emails", icon: Mail },
       {
         title: "Number verification",
         href: "/verify",
