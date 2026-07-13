@@ -21,7 +21,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@app/ui/components/ui/dialog";
-import { TableEmptyState } from "@app/ui/components/ui/states";
+import {
+  LoadingRows,
+  TableEmptyState,
+  TableLoadingState,
+} from "@app/ui/components/ui/states";
 import {
   Table,
   TableBody,
@@ -77,9 +81,7 @@ export default function EmailsPage() {
           </AlertDescription>
         </Alert>
       ) : isPending ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">
-          Loading emails…
-        </p>
+        <TableLoadingState />
       ) : data.messages.length === 0 ? (
         <Card>
           <CardHeader>
@@ -193,9 +195,7 @@ function EmailContentDialog({
             </div>
 
             {isPending ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Loading content…
-              </p>
+              <LoadingRows rows={3} />
             ) : data?.erased ? (
               <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground italic">
                 [erased — the recipient&apos;s data was crypto-shredded]
