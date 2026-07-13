@@ -16,14 +16,14 @@ production concerns that should not obscure first success.
 
 | Capability | SDK | Public API | Notes |
 | --- | --- | --- | --- |
-| Send SMS | Yes | `POST /v1/sms/send` | Idempotency supported |
+| Send SMS | Yes | `POST /v1/sms/messages` | Idempotency supported; `/sms/send` is a compatibility alias |
 | Retrieve/list SMS | Yes | `GET /v1/sms/:id`, `GET /v1/messages` | List is not yet paginated |
 | Verify OTP | Yes | `POST /v1/verify`, `/check` | Sandbox may return a debug code |
 | Sender IDs | Create/list | `POST/GET /v1/senders` | Retrieve-by-ID is not available |
 | Webhooks | Create/list/delete + local verification | `/v1/webhooks` | Secret shown once |
 | Wallet | Retrieve | `GET /v1/wallet` | Exact minor-unit strings |
-| Email | Not exposed | Not implemented | Must not fake success |
-| Batch send | Not exposed | Not implemented | No atomicity claim |
+| Email | Send/retrieve/list | `/v1/email/messages` | Sandbox simulation; live fails closed pending provider/domain approval |
+| SMS batch send | Send/retrieve | `/v1/sms/batches` | Up to 100 items with durable per-item outcomes |
 
 Documentation must be updated with the public API and SDK in the same change whenever this table
 changes.

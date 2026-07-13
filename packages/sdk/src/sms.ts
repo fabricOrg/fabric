@@ -4,8 +4,10 @@ import type {
   MessageDetail,
   MessageSummary,
   RequestOptions,
+  SendSmsBatchItem,
   SendSmsParams,
   SentSms,
+  SmsBatch,
 } from "./types.js";
 import {
   ApiShapeError,
@@ -41,7 +43,7 @@ export class SmsResource {
     requireNonEmpty(params.body, "body");
     const response = await this.transport.request<Record<string, unknown>>({
       method: "POST",
-      path: "/v1/sms/send",
+      path: "/v1/sms/messages",
       body: {
         to: params.to,
         sender_id: params.senderId,
@@ -52,6 +54,51 @@ export class SmsResource {
       ...(options ? { options } : {}),
     });
     return { ...response, data: sentSms(response.data) };
+  }
+
+  async sendBatch(
+    items: ReadonlyArray<SendSmsBatchItem>,
+    options: RequestOptions & { idempotencyKey: string },
+  ): Promise<FabricResponse<SmsBatch>> {
+    requireNonEmpty(options.idempotencyKey, "idempotencyKey");
+    if (items.length < 1 || items.length > 100) {
+      throw new TypeError("`items` must contain between 1 and 100 messages.");
+    }
+    const response = await this.transport.request<Record<string, unknown>>({
+      method: "POST",
+      path: "/v1/sms/batches",
+      body: {
+        items: items.map((item) => {
+          requireNonEmpty(item.clientReference, "clientReference");
+          requireE164(item.to);
+          requireNonEmpty(item.senderId, "senderId");
+          requireNonEmpty(item.body, "body");
+          return {
+            client_reference: item.clientReference,
+            to: item.to,
+            sender_id: item.senderId,
+            body: item.body,
+            currency: item.currency ?? "GHS",
+            class: item.class ?? "transactional",
+          };
+        }),
+      },
+      options,
+    });
+    return { ...response, data: smsBatch(response.data) };
+  }
+
+  async retrieveBatch(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<FabricResponse<SmsBatch>> {
+    requireNonEmpty(id, "id");
+    const response = await this.transport.request<Record<string, unknown>>({
+      method: "GET",
+      path: `/v1/sms/batches/${encodeURIComponent(id)}`,
+      ...(options ? { options } : {}),
+    });
+    return { ...response, data: smsBatch(response.data) };
   }
 
   async retrieve(
@@ -82,6 +129,30 @@ export class SmsResource {
       data: response.data.messages.map((item) => messageSummary(record(item))),
     };
   }
+}
+
+function smsBatch(data: Record<string, unknown>): SmsBatch {
+  if (!Array.isArray(data.items)) throw new ApiShapeError("items");
+  return {
+    id: stringField(data.id, "id"),
+    status: enumField(
+      data.status,
+      ["processing", "completed"] as const,
+      "status",
+    ),
+    totalCount: numberField(data.total_count, "total_count"),
+    acceptedCount: numberField(data.accepted_count, "accepted_count"),
+    failedCount: numberField(data.failed_count, "failed_count"),
+    items: data.items.map((value) => {
+      const item = record(value);
+      return {
+        clientReference: stringField(item.client_reference, "client_reference"),
+        messageId: typeof item.message_id === "string" ? item.message_id : null,
+        status: enumField(item.status, MESSAGE_STATUSES, "status"),
+        errorCode: typeof item.error_code === "string" ? item.error_code : null,
+      };
+    }),
+  };
 }
 
 function sentSms(data: Record<string, unknown>): SentSms {

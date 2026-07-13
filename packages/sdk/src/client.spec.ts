@@ -37,6 +37,16 @@ describe("Fabric client", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("uses the deployed Fabric API without consumer endpoint configuration", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(json({ messages: [], request_id: "req_default" }));
+    await new Fabric({ apiKey: "sk_test_example", fetch }).sms.list();
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(
+      "https://d2umm5b2x22zvp.cloudfront.net/v1/messages",
+    );
+  });
+
   it("maps SMS input, authentication, idempotency, and response metadata", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
       json(

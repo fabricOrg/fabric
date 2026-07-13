@@ -1,4 +1,5 @@
 import {
+  emailMessageResponse,
   listSendersResponseSchema,
   listWebhookEndpointsResponseSchema,
   verifyCheckResponse,
@@ -99,6 +100,63 @@ describe("canonical contract parity", () => {
     });
   });
 
+  it("maps canonical Email responses", async () => {
+    const payload = emailMessageResponse.parse({
+      message: {
+        id: "98393ec2-2a34-4cb8-b3cc-4e25ec8b6c17",
+        status: "delivered",
+        to: "recipient@example.com",
+        from: "hello@merchant.example",
+        subject: "Welcome",
+        provider: "sandbox-email",
+        created_at: "2026-07-13T01:00:00.000Z",
+        error_code: null,
+      },
+      request_id: "req_email",
+    });
+    await expect(
+      clientReturning(payload).email.retrieve(payload.message.id),
+    ).resolves.toMatchObject({
+      requestId: "req_email",
+      data: { status: "delivered", subject: "Welcome", errorCode: null },
+    });
+  });
+
+  it("maps durable SMS batch outcomes", async () => {
+    const payload = {
+      id: "98393ec2-2a34-4cb8-b3cc-4e25ec8b6c17",
+      status: "completed",
+      total_count: 2,
+      accepted_count: 1,
+      failed_count: 1,
+      items: [
+        {
+          client_reference: "one",
+          message_id: "5a344e61-16c4-4e07-924f-fabdfb81fa14",
+          status: "delivered",
+          error_code: null,
+        },
+        {
+          client_reference: "two",
+          message_id: null,
+          status: "failed",
+          error_code: "invalid_sms",
+        },
+      ],
+      request_id: "req_batch",
+    };
+    await expect(
+      clientReturning(payload).sms.retrieveBatch(payload.id),
+    ).resolves.toMatchObject({
+      requestId: "req_batch",
+      data: {
+        status: "completed",
+        acceptedCount: 1,
+        items: [{ clientReference: "one" }, { errorCode: "invalid_sms" }],
+      },
+    });
+  });
+
   it.each([
     [
       "sender IDs",
@@ -121,6 +179,13 @@ describe("canonical contract parity", () => {
           balances: [{ balance: { minor: 1, currency: "GHS" } }],
           ledger: [],
         }).wallet.retrieve(),
+    ],
+    [
+      "Email",
+      () =>
+        clientReturning({ message: { status: "unknown" } }).email.retrieve(
+          "email_1",
+        ),
     ],
     [
       "Webhooks",
