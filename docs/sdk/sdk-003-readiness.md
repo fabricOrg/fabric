@@ -82,9 +82,11 @@ tests. The feature stays **invisible** until slice 6's gate conditions all pass 
 0. **Design lock** — close the readiness gaps: ADR-0005 product+security review sign-off; specify the
    variable-schema subset + compatibility algorithm; name owners. *No code.* Design note drafted:
    [sdk-003-slice0-design.md](./sdk-003-slice0-design.md) — awaiting product+security sign-off.
-1. **Schema + RLS + invariants** — the three tables, migrations (drizzle + hand-written RLS/grants),
-   composite FKs. Real-Postgres tests: uniqueness, version immutability (runtime role UPDATE/DELETE
-   denied), one-release-per-env, publish-race, cross-tenant denial, cross-app release rejection.
+1. **Schema + RLS + invariants** — DONE (`699a86e`). The three tables (migrations `0075` DDL + `0076`
+   RLS), composite containment FKs, functional case-insensitive key index, version immutability via
+   explicit REVOKE. Real-Postgres gate: 9 tests (isolation + fail-closed, WITH CHECK denial, key
+   uniqueness, version UPDATE/DELETE immutability, one-release-per-env, cross-app release rejection).
+   `db:assert` + `db:assert:drift` green.
 2. **Contracts + compatibility engine** — zod for definition/version/release + the variable-schema
    subset; pure `analyzeCompatibility`. Unit + schema tests. OpenAPI stubs.
 3. **Server-side renderer + preview core** — new pure renderer (port `preflight.ts` tokens) composed

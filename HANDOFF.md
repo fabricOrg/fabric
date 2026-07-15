@@ -36,8 +36,19 @@ no package publication** (external gate intentionally closed).
   not cross.
 - Slice-0 design: `docs/sdk/sdk-003-slice0-design.md` (`9657b89`) — locks stable-key grammar, the
   portable closed JSON-Schema variable subset, and the pure `analyzeCompatibility` verdict table.
-- **Blocker:** ADR-0005 is still `proposed` (needs product+security review); slice-0 design awaits that
-  sign-off before slice 1 (schema + RLS + real-Postgres invariant tests) begins.
+- Slice 1 DONE (`699a86e`) — proceeded on ADR-0005 per explicit go. `message_definitions` /
+  `_versions` / `_releases` (migrations `0075` DDL + `0076` RLS): stable key unique per app
+  case-insensitively, version immutability enforced by REVOKE (a default-privilege grant hands
+  app_runtime full DML, so it must be revoked, not merely un-granted), one-release-per-env, composite
+  containment FKs blocking cross-app/tenant releases. 9 real-Postgres invariant tests +
+  `db:assert`/`db:assert:drift` green. Next: slice 2 (contracts + `analyzeCompatibility` + schema-subset
+  validator).
+- **Still open:** ADR-0005 remains `proposed` (product+security review pending — slice-0 §5 lists the
+  asks); the runtime-vs-management authority split lands at the API layer in slice 4, not the DB grants.
+- Local-env note: this dev DB has `app_owner`/`app_migrator` table-ownership drift; running the
+  migration needed a one-off `GRANT REFERENCES ON applications, environments TO app_migrator` (not in any
+  migration — a single-owner DB, i.e. CI, does not need it). Also `drizzle-kit generate` emits composite
+  FKs before the unique indexes they reference; the `0075` SQL was hand-reordered (indexes first).
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 
