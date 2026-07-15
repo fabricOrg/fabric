@@ -1,9 +1,10 @@
 // Send-composer intelligence — pure, dependency-free logic the UI renders. This is the wedge vs a
 // raw vendor "text box": we validate + dedupe recipients, suppress opt-outs BEFORE charging, and
 // preflight the send for the mistakes that waste money (UCS-2 downgrade) or break delivery
-// (unregistered sender ID, DND). Kept pure so it's trivially unit-testable and reusable server-side.
-// TODO(BFF): the real /v1/messages should run the SAME rules server-side (single source of truth).
+// (unregistered sender ID, DND). The API independently enforces the authoritative compliance gates;
+// this pure preview exists to explain failures before the operator submits a money-moving request.
 
+import type { DeliveryMode, MessageClass } from "@app/contracts";
 import type { OptOut } from "@/lib/client/consent-api";
 import type { SenderId } from "@/lib/client/senders-api";
 
@@ -95,11 +96,6 @@ export interface PreflightCheck {
   readonly detail: string;
 }
 
-/** A message is transactional (OTP/alerts) if it reads like one — those are exempt from the
- * opt-out-phrase nudge and from DND on promotional-scope opt-outs. Heuristic, mock-side only. */
-const TRANSACTIONAL =
-  /\b(otp|code|verify|verification|password|balance|receipt|delivery|order)\b/i;
-
 export interface PreflightInput {
   readonly report: RecipientReport;
   readonly body: string;
@@ -107,11 +103,22 @@ export interface PreflightInput {
   readonly segments: number;
   readonly senderId: string;
   readonly senders: readonly SenderId[];
+  readonly messageClass: MessageClass;
+  readonly deliveryMode: DeliveryMode;
 }
 
 /** The preflight panel: the money/deliverability/compliance mistakes, caught before Send. */
 export function buildPreflight(input: PreflightInput): PreflightCheck[] {
-  const { report, body, encoding, segments, senderId, senders } = input;
+  const {
+    report,
+    body,
+    encoding,
+    segments,
+    senderId,
+    senders,
+    messageClass,
+    deliveryMode,
+  } = input;
   const checks: PreflightCheck[] = [];
 
   if (body.trim().length === 0) return checks;
@@ -134,8 +141,7 @@ export function buildPreflight(input: PreflightInput): PreflightCheck[] {
   }
 
   // 2) Opt-out phrase — promotional traffic in GH/NG should carry an opt-out; transactional exempt.
-  const transactional = TRANSACTIONAL.test(body);
-  if (!transactional && !/\bstop\b/i.test(body)) {
+  if (messageClass === "promotional" && !/\bstop\b/i.test(body)) {
     checks.push({
       id: "optout",
       level: "info",
@@ -146,30 +152,40 @@ export function buildPreflight(input: PreflightInput): PreflightCheck[] {
   }
 
   // 3) Sender-ID registration — GH/NG gate delivery on a registered, active originator per country.
-  const active = new Set(
-    senders
-      .filter((s) => s.senderId === senderId && s.status === "active")
-      .map((s) => s.country),
-  );
-  const unregistered = (["GH", "NG"] as const).filter(
-    (c) => report.byCountry[c] > 0 && !active.has(c),
-  );
-  if (unregistered.length > 0) {
-    const where = unregistered.map((c) => COUNTRY_LABEL[c]).join(" and ");
-    const affected = unregistered.reduce((n, c) => n + report.byCountry[c], 0);
+  if (deliveryMode === "virtual") {
     checks.push({
       id: "sender",
-      level: "warn",
-      title: `“${senderId}” isn't registered in ${where}`,
-      detail: `${affected} recipient${affected === 1 ? "" : "s"} may not receive delivery until this sender ID is approved there. Register it under Compliance → Sender IDs.`,
+      level: "info",
+      title: `“${senderId}” is a sandbox sender`,
+      detail: "Virtual-phone delivery does not require carrier approval.",
     });
-  } else if (senderId.length > 0) {
-    checks.push({
-      id: "sender",
-      level: "pass",
-      title: `“${senderId}” is registered for your recipients`,
-      detail: "Active originator in every destination country in this send.",
-    });
+  } else {
+    const active = new Set(
+      senders
+        .filter((s) => s.senderId === senderId && s.status === "active")
+        .map((s) => s.country),
+    );
+    const unregistered = (["GH", "NG"] as const).filter(
+      (c) => report.byCountry[c] > 0 && !active.has(c),
+    );
+    if (unregistered.length > 0 || senderId.length === 0) {
+      const where = unregistered.map((c) => COUNTRY_LABEL[c]).join(" and ");
+      checks.push({
+        id: "sender",
+        level: "block",
+        title: "Choose an active sender ID",
+        detail: where
+          ? `This sender is not active in ${where}. Register it under Compliance → Sender IDs.`
+          : "A live carrier send requires an active sender ID.",
+      });
+    } else {
+      checks.push({
+        id: "sender",
+        level: "pass",
+        title: `“${senderId}” is active for this destination`,
+        detail: "The sender registration gate is satisfied for this send.",
+      });
+    }
   }
 
   // 4) International — no per-country sender registry beyond GH/NG at launch.
@@ -233,6 +249,7 @@ export function apiSnippets(input: {
   to: readonly string[];
   from: string;
   body: string;
+  messageClass: MessageClass;
 }): { curl: string; node: string } {
   const shown = input.to.slice(0, 5);
   const more = input.to.length - shown.length;
@@ -250,6 +267,7 @@ export function apiSnippets(input: {
     "to": "${firstRecipient}",
     "sender_id": "${from}",
     "body": ${body},
+    "class": "${input.messageClass}",
     "currency": "GHS"
   }'`;
 
@@ -260,7 +278,7 @@ const recipients = [${toDisplay}${tail}];
 
 for (const [index, to] of recipients.entries()) {
   await fabric.sms.send(
-    { to, senderId: "${from}", body: ${body} },
+    { to, senderId: "${from}", body: ${body}, class: "${input.messageClass}" },
     { idempotencyKey: \`notification-123-\${index}\` },
   );
 }`;

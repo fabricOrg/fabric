@@ -1,3 +1,4 @@
+import { sendSmsRequest } from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
 import { hasTrustedOrigin } from "@/lib/server/origin";
@@ -16,25 +17,43 @@ export async function POST(request: Request) {
     );
   }
   try {
-    const input = (await request.json()) as {
-      to?: unknown;
-      senderId?: unknown;
-      body?: unknown;
-    };
+    const parsed = sendSmsRequest.safeParse(await request.json());
+    if (!parsed.success) {
+      return invalidRequest("The send request is invalid.");
+    }
+    const idempotencyKey = request.headers.get("idempotency-key")?.trim();
+    if (!idempotencyKey) {
+      return invalidRequest("An Idempotency-Key is required.");
+    }
     return NextResponse.json(
       await dashboardApi("/v1/sms/send", "sms:send", {
         method: "POST",
+        headers: { "idempotency-key": idempotencyKey },
         body: JSON.stringify({
-          to: input.to,
-          sender_id: input.senderId,
-          body: input.body,
+          to: parsed.data.to,
+          sender_id: parsed.data.senderId,
+          body: parsed.data.body,
           currency: "GHS",
+          class: parsed.data.class,
         }),
       }),
     );
   } catch (error) {
     return errorResponse(error);
   }
+}
+
+function invalidRequest(message: string) {
+  return NextResponse.json(
+    {
+      error: {
+        type: "invalid_request_error",
+        code: "invalid_send_request",
+        message,
+      },
+    },
+    { status: 400 },
+  );
 }
 
 function errorResponse(error: unknown) {

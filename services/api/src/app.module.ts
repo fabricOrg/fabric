@@ -23,6 +23,7 @@ import { ProposalsModule } from "./proposals/proposals.module.js";
 import { RequestLogsModule } from "./request-logs/request-logs.module.js";
 import { SendersModule } from "./senders/senders.module.js";
 import { SmsModule } from "./sms/sms.module.js";
+import { SmsTemplatesModule } from "./sms-templates/sms-templates.module.js";
 import { VerifyModule } from "./verify/verify.module.js";
 import { WalletModule } from "./wallet/wallet.module.js";
 import { WebhooksModule } from "./webhooks/webhooks.module.js";
@@ -61,6 +62,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     // platform capability, not an SMS one.
     PrivacyModule,
     SmsModule,
+    SmsTemplatesModule,
     VerifyModule,
     WalletModule,
     WebhooksModule,

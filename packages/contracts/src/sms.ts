@@ -51,9 +51,12 @@ export type MessageClass = z.infer<typeof messageClass>;
 
 /** POST /v1/sms/send request. Server re-computes segments/cost — client estimate is advisory. */
 export const sendSmsRequest = z.object({
-  to: z.string(), // E.164
-  senderId: z.string(),
-  body: z.string().min(1),
+  to: z.string().regex(/^\+[1-9]\d{7,14}$/, "Must be one E.164 number."),
+  senderId: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9 ]{0,10}$/, "Invalid sender ID."),
+  body: z.string().trim().min(1).max(1600),
   // Defaults to transactional: the platform's wedge traffic is OTP/receipts. Promotional MUST
   // be declared to get its (stricter) treatment.
   class: messageClass.default("transactional"),

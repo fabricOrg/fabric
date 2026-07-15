@@ -3,6 +3,7 @@ import {
   BellOff,
   Boxes,
   LayoutDashboard,
+  Library,
   List,
   type LucideIcon,
   Megaphone,
@@ -54,6 +55,7 @@ export const navGroups: readonly NavGroup[] = [
     label: "Messaging",
     items: [
       { title: "Send SMS", href: "/send", icon: Send },
+      { title: "SMS Templates", href: "/templates", icon: Library },
       { title: "Virtual phone", href: "/virtual-phone", icon: Smartphone },
       {
         title: "Campaigns",

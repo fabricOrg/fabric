@@ -26,6 +26,7 @@ export * from "./proposals.js";
 export * from "./request-logs.js";
 export * from "./senders.js";
 export * from "./sms.js";
+export * from "./sms-templates.js";
 export * from "./verify.js";
 export * from "./virtual-phone.js";
 export * from "./wallet.js";

@@ -379,6 +379,27 @@
       "when": 1783891620000,
       "tag": "0053_inbound_messages_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1784113561465,
+      "tag": "0054_sms-templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1784113572427,
+      "tag": "0055_sms-templates-rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1784114983158,
+      "tag": "0056_sms-template-length-constraints",
+      "breakpoints": true
     }
   ]
 }
