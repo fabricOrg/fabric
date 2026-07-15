@@ -1,7 +1,32 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-07-12. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-07-15. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
+
+## Latest (2026-07-15): SDK-002 — endpoint-specific webhook delivery
+
+Branch `feature/ops-neutral-surfaces-template-seeds`. Committed `8f47945`, **local only — no push,
+no package publication** (external gate intentionally closed).
+
+- One durable delivery per (outbox event × endpoint). Worker commits a recoverable lease before
+  network I/O, retries endpoints independently, keeps append-only attempt history, surfaces
+  pending/dead health, and supports owner/admin **replay** (resets the dead cycle, preserves
+  history, appends the successful attempt) with a `webhook_delivery.replay` audit record. Endpoint
+  removal is a **soft disable** so evidence is retained.
+- Outbound SSRF guard (`webhook-url-policy.ts`): resolve + pin the destination immediately before
+  connecting (closes the DNS-rebinding gap), reject non-public targets and any multi-A set with a
+  private member, HTTPS-only, no credentials/fragments, no redirect-follow, TLS validated, 10s
+  timeout, response bodies never buffered. `WEBHOOK_ALLOW_PRIVATE_NETWORKS` override is **local-test
+  only** — must never be set in a deployed env.
+- Migrations `0067`–`0074` (deliveries + attempts tables, RLS on both). SDK + contracts + dashboard
+  deliveries dialog/replay route + OpenAPI updated. DTO mappers extracted to `webhook-dto.ts` to
+  clear the 300-line file-length guard.
+- **Verification: full `pnpm verify` green** (guard, lint, typecheck, 141 API tests incl. webhook
+  delivery/event-contract/HTTP/URL-policy suites, all 4 app builds). Real-Postgres RLS + drift gates
+  passed. Evidence: `docs/sdk/evidence/sdk-002.md`. AC01–AC06 traced.
+- Env note: `next build` standalone needs **Windows Developer Mode ON** (unprivileged symlink) — a
+  prior verify run failed only on the admin-console sharp symlink until it was enabled; CI (Linux)
+  unaffected.
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 
