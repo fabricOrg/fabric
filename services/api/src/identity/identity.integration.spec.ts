@@ -84,6 +84,8 @@ describeDb("identity provisioning (invite-only)", () => {
       permissions: [
         "sms:send",
         "sms:read",
+        "email:send",
+        "email:read",
         "wallet:read",
         "applications:read",
         "applications:write",
@@ -148,6 +150,8 @@ describeDb("identity provisioning (invite-only)", () => {
       permissions: [
         "sms:send",
         "sms:read",
+        "email:send",
+        "email:read",
         "wallet:read",
         "applications:read",
         "api_keys:write",
