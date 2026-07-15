@@ -86,6 +86,19 @@ describe("ApiKeysController (F2.3 mgmt)", () => {
       });
     });
 
+    it("create: rejects scopes that no endpoint enforces", async () => {
+      const { ctl, svc } = controllerWith();
+      await expectInvalidRequest(
+        () =>
+          ctl.create(sessionReq(TID), {
+            env: "test",
+            scopes: ["admin:everything"],
+          }),
+        "scopes",
+      );
+      expect(svc.create).not.toHaveBeenCalled();
+    });
+
     it("list: passes the applicationId filter through", async () => {
       const { ctl, svc } = controllerWith();
       await ctl.list(sessionReq(TID), OTHER, OTHER);

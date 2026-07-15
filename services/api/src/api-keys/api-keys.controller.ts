@@ -1,4 +1,8 @@
-import type { ApiKey, CreateApiKeyResult } from "@app/contracts";
+import {
+  type ApiKey,
+  apiKeyScopes,
+  type CreateApiKeyResult,
+} from "@app/contracts";
 import {
   Body,
   Controller,
@@ -142,13 +146,13 @@ function requireEnv(value: unknown): ApiKeyEnv {
 }
 
 function requireScopes(value: unknown): string[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value) || value.some((s) => typeof s !== "string")) {
+  const parsed = apiKeyScopes.safeParse(value);
+  if (!parsed.success) {
     throw invalidRequest(
       "invalid_scopes",
-      "scopes must be an array of strings.",
+      "Choose at least one supported API key scope.",
       "scopes",
     );
   }
-  return value as string[];
+  return parsed.data;
 }

@@ -13,6 +13,19 @@ export type ApiKeyEnv = z.infer<typeof apiKeyEnv>;
 export const apiKeyStatus = z.enum(["active", "revoked"]);
 export type ApiKeyStatus = z.infer<typeof apiKeyStatus>;
 
+/** Closed catalog of permissions enforced by today's public data-plane endpoints. */
+export const apiKeyScopeValues = [
+  "sms:send",
+  "sms:read",
+  "wallet:read",
+  "request_logs:read",
+  "api_keys:read",
+  "api_keys:write",
+] as const;
+export const apiKeyScope = z.enum(apiKeyScopeValues);
+export type ApiKeyScope = z.infer<typeof apiKeyScope>;
+export const apiKeyScopes = z.array(apiKeyScope).min(1);
+
 /** A key as listed — the full secret is NEVER here, only the display prefix (e.g. "sk_test_ab3d…"). */
 export const apiKey = z.object({
   id: z.string(),
@@ -32,7 +45,7 @@ export type ApiKey = z.infer<typeof apiKey>;
 export const createApiKeyRequest = z.object({
   name: z.string().min(1),
   env: apiKeyEnv,
-  scopes: z.array(z.string()).min(1),
+  scopes: apiKeyScopes,
 });
 export type CreateApiKeyRequest = z.infer<typeof createApiKeyRequest>;
 
