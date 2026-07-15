@@ -4,7 +4,6 @@ import { ArkeselError, ArkeselSmsProvider } from "./provider.js";
 
 const CREDS: Creds = {
   apiKey: "test-api-key",
-  senderId: "Fabric",
   callbackUrl: "https://api.fabric.dev/webhooks/dlr/arkesel-sms",
 };
 const provider = new ArkeselSmsProvider();
@@ -12,7 +11,7 @@ const provider = new ArkeselSmsProvider();
 const MSG: NormalizedMessage = {
   messageId: "11111111-1111-1111-1111-111111111111",
   to: "+233544927189",
-  senderId: "Fabric",
+  senderId: "TENANTBRAND",
   body: "Hello from Fabric",
   encoding: "gsm7",
   segments: 1,
@@ -45,7 +44,7 @@ describe("ArkeselSmsProvider.send", () => {
     );
     const body = JSON.parse(init.body as string);
     expect(body).toMatchObject({
-      sender: "Fabric",
+      sender: "TENANTBRAND",
       message: "Hello from Fabric",
       recipients: ["233544927189"], // '+' stripped
       sandbox: true, // SAFE DEFAULT — no live delivery unless explicitly disabled
@@ -93,13 +92,14 @@ describe("ArkeselSmsProvider.send", () => {
     );
   });
 
-  it("requires apiKey and senderId", async () => {
-    await expect(provider.send(MSG, { senderId: "Fabric" })).rejects.toThrow(
-      ArkeselError,
-    );
-    await expect(provider.send(MSG, { apiKey: "k" })).rejects.toThrow(
-      ArkeselError,
-    );
+  it("requires the master apiKey and a valid per-message senderId", async () => {
+    await expect(provider.send(MSG, {})).rejects.toThrow(ArkeselError);
+    await expect(
+      provider.send({ ...MSG, senderId: "" }, { apiKey: "k" }),
+    ).rejects.toThrow(ArkeselError);
+    await expect(
+      provider.send({ ...MSG, senderId: "TOO-LONG-BRAND" }, { apiKey: "k" }),
+    ).rejects.toThrow(ArkeselError);
   });
 });
 

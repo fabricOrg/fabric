@@ -187,7 +187,7 @@ resource "aws_secretsmanager_secret" "pii_master_key" {
 
 resource "aws_secretsmanager_secret" "arkesel_sms" {
   name                    = "fabric/testing/arkesel-sms"
-  description             = "Arkesel SMS credentials for testing provider drills. Populate manually before selecting SMS_PROVIDER=arkesel."
+  description             = "Arkesel SMS credentials and verified live-recipient allowlist for testing provider drills. Populate manually before selecting SMS_PROVIDER=arkesel."
   recovery_window_in_days = 7
 }
 
@@ -325,8 +325,8 @@ resource "aws_secretsmanager_secret_version" "webhook_ingress_token" {
 resource "aws_secretsmanager_secret_version" "arkesel_sms" {
   secret_id = aws_secretsmanager_secret.arkesel_sms.id
   secret_string_wo = jsonencode({
-    ARKESEL_API_KEY   = "REPLACE_ME"
-    ARKESEL_SENDER_ID = "REPLACE_ME"
+    ARKESEL_API_KEY              = "REPLACE_ME"
+    SMS_LIVE_RECIPIENT_ALLOWLIST = "REPLACE_ME"
   })
   secret_string_wo_version = 1
 
@@ -439,4 +439,3 @@ resource "aws_secretsmanager_secret_version" "admin_console_workos" {
     ignore_changes = [secret_string_wo, secret_string_wo_version]
   }
 }
-
