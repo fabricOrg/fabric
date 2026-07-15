@@ -28,6 +28,17 @@ no package publication** (external gate intentionally closed).
   prior verify run failed only on the admin-console sharp symlink until it was enabled; CI (Linux)
   unaffected.
 
+**Next up — SDK-003** (author/version/release/**preview** managed SMS definitions). Planning committed,
+**no feature code yet, BLOCKED on sign-off**:
+- Readiness + 8-slice decomposition: `docs/sdk/sdk-003-readiness.md` (`f729494`). Reuse map: pure
+  `@app/domain` `encodeAndSegment`+`rateSegments` reusable; **server-side renderer is net-new** (only
+  exists client-side in `preflight.ts`); `sms-engine/engine.ts` is the side-effect boundary preview must
+  not cross.
+- Slice-0 design: `docs/sdk/sdk-003-slice0-design.md` (`9657b89`) — locks stable-key grammar, the
+  portable closed JSON-Schema variable subset, and the pure `analyzeCompatibility` verdict table.
+- **Blocker:** ADR-0005 is still `proposed` (needs product+security review); slice-0 design awaits that
+  sign-off before slice 1 (schema + RLS + real-Postgres invariant tests) begins.
+
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 
 Product direction pivoted to a **self-service developer platform** (Stripe/Twilio/Resend-class).
