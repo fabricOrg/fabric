@@ -3674,6 +3674,87 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.sms_templates": {
+      "name": "sms_templates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message_class": {
+          "name": "message_class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'transactional'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "uniq_sms_templates_tenant_name": {
+          "name": "uniq_sms_templates_tenant_name",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "sms_templates_message_class_check": {
+          "name": "sms_templates_message_class_check",
+          "value": "\"sms_templates\".\"message_class\" IN ('transactional', 'promotional')"
+        },
+        "sms_templates_name_length_check": {
+          "name": "sms_templates_name_length_check",
+          "value": "char_length(\"sms_templates\".\"name\") BETWEEN 1 AND 80"
+        },
+        "sms_templates_body_length_check": {
+          "name": "sms_templates_body_length_check",
+          "value": "char_length(\"sms_templates\".\"body\") BETWEEN 1 AND 1600"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.verifications": {
       "name": "verifications",
       "schema": "",
