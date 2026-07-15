@@ -29,6 +29,7 @@ All design, product, and process docs live here. Code/config stays at the repo r
 ## Build & process
 - [AGENT-DELIVERY-LOOPS.md](AGENT-DELIVERY-LOOPS.md) - vertical-slice agent ownership and gates
 - [../CONTRIBUTING.md](../CONTRIBUTING.md) — branches, commits, pull requests, and quality gates
+- [sdk/](sdk/README.md) — current SDK guides and the proposed managed-messaging DX
 - [IMPLEMENTATION-ROADMAP.md](IMPLEMENTATION-ROADMAP.md) — the two interleaved build tracks (AWS + app)
 - [CONVENTIONS.md](CONVENTIONS.md) — code-quality working agreement (ported from shop-app-v2)
 - [DEPLOYMENT-AND-DEVOPS.md](DEPLOYMENT-AND-DEVOPS.md) — AWS Cape Town, ECS, CI/CD, hardening

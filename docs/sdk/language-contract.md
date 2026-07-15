@@ -20,3 +20,17 @@ Future SDKs should preserve concepts while using native language idioms.
 TypeScript uses promises and `AbortSignal`; Go should use `context.Context`; Python should follow the
 chosen sync/async strategy; Java and .NET should expose native cancellation and builders/request
 objects; PHP should follow Composer and PSR conventions. Syntax uniformity is not a goal.
+
+## Planned managed messaging extension
+
+The first proposed extension adds channel-neutral, reusable message definitions and dashboard-owned
+messaging automations without replacing direct channel resources. SDKs expose generic
+`messages.send(messageKey, input)`, `messages.preview(messageKey, input)`, and
+`journeys.start(journeyKey, input)` contracts. Generated language-native catalogs provide known
+message/journey keys and payload types; the API repeats validation at runtime and renders or
+executes immutable published versions server-side.
+
+See the [final managed messaging SDK contract](sdk-dx-iteration-3.md) for the authoritative target
+contract, resource model, production semantics, implementation slices, safety requirements, and
+explicit non-goals. It refines the earlier managed-messaging proposals and is not part of the
+current public capability matrix.
