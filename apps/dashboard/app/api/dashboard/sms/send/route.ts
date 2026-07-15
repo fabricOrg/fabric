@@ -26,16 +26,10 @@ export async function POST(request: Request) {
       return invalidRequest("An Idempotency-Key is required.");
     }
     return NextResponse.json(
-      await dashboardApi("/v1/sms/send", "sms:send", {
+      await dashboardApi("/v1/sms/messages", "sms:send", {
         method: "POST",
         headers: { "idempotency-key": idempotencyKey },
-        body: JSON.stringify({
-          to: parsed.data.to,
-          sender_id: parsed.data.senderId,
-          body: parsed.data.body,
-          currency: "GHS",
-          class: parsed.data.class,
-        }),
+        body: JSON.stringify(parsed.data),
       }),
     );
   } catch (error) {

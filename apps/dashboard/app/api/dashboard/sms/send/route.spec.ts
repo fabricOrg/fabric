@@ -45,15 +45,16 @@ describe("dashboard SMS send BFF", () => {
     const response = await POST(
       request({
         to: "+233201234567",
-        senderId: "ACME",
+        sender_id: "ACME",
         body: "A real offer. Reply STOP to opt out.",
+        currency: "GHS",
         class: "promotional",
       }),
     );
 
     expect(response.status).toBe(200);
     expect(dashboardApi).toHaveBeenCalledWith(
-      "/v1/sms/send",
+      "/v1/sms/messages",
       "sms:send",
       expect.objectContaining({
         headers: { "idempotency-key": "send-attempt-1" },
@@ -73,8 +74,9 @@ describe("dashboard SMS send BFF", () => {
       request(
         {
           to: "+233201234567",
-          senderId: "ACME",
+          sender_id: "ACME",
           body: "Receipt",
+          currency: "GHS",
           class: "transactional",
         },
         null,
@@ -88,8 +90,9 @@ describe("dashboard SMS send BFF", () => {
     const response = await POST(
       request({
         to: "+233201234567",
-        senderId: "ACME",
+        sender_id: "ACME",
         body: "Message",
+        currency: "GHS",
         class: "unknown",
       }),
     );
@@ -101,8 +104,9 @@ describe("dashboard SMS send BFF", () => {
     const response = await POST(
       request({
         to: "+233201234567,+233501234567",
-        senderId: "ACME",
+        sender_id: "ACME",
         body: "Message",
+        currency: "GHS",
         class: "transactional",
       }),
     );

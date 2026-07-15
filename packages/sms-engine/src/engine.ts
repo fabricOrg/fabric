@@ -14,17 +14,7 @@ import {
 } from "@app/integrations";
 import { commit, refund, reserve } from "@app/wallet";
 
-/**
- * SEND PIPELINE (L5) — normalize → segment → rate → RESERVE → send → COMMIT-on-billable | REFUND,
- * DLR reconcile (out-of-order tolerant), and the TTL sweeper. Orchestrates @app/wallet primitives +
- * the SmsSenderPlugin over @app/db `withTenant`. The commit/refund DECISION is @app/domain
- * (decideResolution); money movement is @app/wallet; this is the I/O orchestration.
- *
- * Two-phase on purpose (B2): tx1 persists the message as `sending` + reserves BEFORE the network
- * call (so a crash/retry can't double-send/double-charge — reserve is idempotent on reserve:{id});
- * then send() runs OUTSIDE any open tx; then tx2 applies the outcome. commit/refund are idempotent
- * (commit:{id}/refund:{id}) and mutually exclusive (B6 index) — so reconcile/sweeper are safe to retry.
- */
+/** Two-phase SMS pipeline: persist + reserve, dispatch outside the transaction, then reconcile. */
 
 type Row = Record<string, unknown>;
 
@@ -37,11 +27,16 @@ export interface EngineDeps {
 
 export interface SendInput {
   tenantId: string;
+  /** Stable caller-assigned ID for durable batch-item replay. */
+  messageId?: string;
+  applicationId?: string | null;
+  environmentId?: string | null;
   to: string;
   senderId: string;
   body: string;
   currency: string;
   subjectId?: string;
+  bodyPiiId?: string;
   deliveryMode?: "virtual" | "live";
 }
 
@@ -68,7 +63,8 @@ async function resolveMessage(
   } = {},
 ): Promise<MessageStatus> {
   const rows = (await tx`
-    SELECT status FROM messages WHERE id = ${messageId} FOR UPDATE`) as Row[];
+    SELECT status, application_id, environment_id
+    FROM messages WHERE id = ${messageId} FOR UPDATE`) as Row[];
   const prior = String(rows[0]?.status) as MessageStatus;
   // Terminal-freeze + monotonicity: never regress a recorded status or overwrite a terminal one.
   if (isTerminalMessageStatus(prior)) return prior;
@@ -103,13 +99,23 @@ async function resolveMessage(
       error_code = COALESCE(${opts.errorCode ?? null}, error_code),
       updated_at = now()
     WHERE id = ${messageId}`;
+  const applicationId = rows[0]?.application_id
+    ? String(rows[0].application_id)
+    : null;
+  const environmentId = rows[0]?.environment_id
+    ? String(rows[0].environment_id)
+    : null;
   // Transactional outbox (finding 8): the domain event commits or rolls back WITH the status
   // change — never an event for a transition that didn't happen, never a lost transition.
   // Delivery to tenant-registered webhook endpoints is the poller/worker's job, not ours.
   await tx`
-    INSERT INTO outbox_events (tenant_id, event_type, payload)
+    INSERT INTO outbox_events (
+      tenant_id, application_id, environment_id, event_type, payload
+    )
     VALUES (
       current_setting('app.tenant_id')::uuid,
+      ${applicationId},
+      ${environmentId},
       'message.updated',
       ${JSON.stringify({
         message_id: messageId,
@@ -142,16 +148,42 @@ export async function prepareSend(
 
   const messageId = await deps.db.withTenant(input.tenantId, async (tx) => {
     const rows = (await tx`
-      INSERT INTO messages (tenant_id, subject_id, sender_id, status, status_rank, encoding, segments, cost_minor, currency, delivery_mode, provider_slug)
-      VALUES (current_setting('app.tenant_id')::uuid, ${input.subjectId ?? null}, ${input.senderId}, 'sending', ${STATUS_RANK.sending}, ${seg.encoding}, ${seg.segments}, ${cost.toString()}::bigint, ${input.currency}, ${input.deliveryMode ?? "live"}, ${deps.provider.slug})
+      INSERT INTO messages (
+        id, tenant_id, application_id, environment_id, subject_id, body_pii_id, sender_id,
+        status, status_rank, encoding, segments, cost_minor, currency, delivery_mode, provider_slug
+      )
+      VALUES (
+        COALESCE(${input.messageId ?? null}::uuid, gen_random_uuid()),
+        current_setting('app.tenant_id')::uuid, ${input.applicationId ?? null},
+        ${input.environmentId ?? null}, ${input.subjectId ?? null}, ${input.bodyPiiId ?? null},
+        ${input.senderId}, 'sending', ${STATUS_RANK.sending}, ${seg.encoding}, ${seg.segments},
+        ${cost.toString()}::bigint, ${input.currency}, ${input.deliveryMode ?? "live"},
+        ${deps.provider.slug}
+      ) ON CONFLICT (id) DO NOTHING
       RETURNING id`) as Row[];
-    const id = String(rows[0]?.id);
+    const createdId = rows[0]?.id;
+    const existing =
+      !createdId && input.messageId
+        ? (
+            (await tx`
+            SELECT id FROM messages WHERE id = ${input.messageId} LIMIT 1`) as Row[]
+          )[0]?.id
+        : null;
+    const resolvedId = createdId ?? existing;
+    if (!resolvedId) throw new Error("Could not persist the prepared message.");
+    const id = String(resolvedId);
     await reserve(tx, {
       currency: input.currency,
       amountMinor: cost,
       idempotencyKey: `reserve:${id}`,
       referenceId: id,
     });
+    // The dispatch intent commits with the message + reservation. Redis is an accelerator, not the
+    // source of truth: a crash or enqueue outage leaves a recoverable pending row.
+    await tx`
+      INSERT INTO message_dispatches (message_id, tenant_id)
+      VALUES (${id}, current_setting('app.tenant_id')::uuid)
+      ON CONFLICT (message_id) DO NOTHING`;
     return id;
   });
   return { messageId, encoding: seg.encoding, segments: seg.segments };

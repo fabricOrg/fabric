@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-beta.4
+
+- Added sandbox Email send, retrieve, and list through an application-scoped durable API.
+- Moved SDK SMS sends to canonical `POST /v1/sms/messages`; the previous route remains compatible.
+- Persisted encrypted dispatch material and atomic recovery intents for asynchronous SMS delivery.
+
+## 0.1.0-beta.3
+
+- Made the deployed Fabric API endpoint an SDK-owned default so consumers only need an API key.
+- Kept `baseUrl` as an optional override for loopback development and private test deployments.
+
 ## 0.1.0-beta.2
 
 - Documented the two-way sandbox Virtual Phone and deterministic test recipients.

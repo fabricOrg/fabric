@@ -12,6 +12,7 @@
 export {
   DEK_BYTES,
   decryptPii,
+  emailBlindIndex,
   encryptPii,
   maskMsisdn,
   newDek,

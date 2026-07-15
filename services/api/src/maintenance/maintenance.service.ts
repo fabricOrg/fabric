@@ -53,6 +53,7 @@ export class MaintenanceService {
   private static readonly SWEEP_LOCK_KEY = 727_001;
   private static readonly INVARIANT_LOCK_KEY = 727_002;
   private static readonly LOG_RETENTION_LOCK_KEY = 727_003;
+  private static readonly DISPATCH_LOCK_KEY = 727_004;
 
   /** How long request_logs are kept before the daily retention sweep deletes them. */
   private logRetentionDays(): number {
@@ -96,6 +97,44 @@ export class MaintenanceService {
         `invariant run failed: ${error instanceof Error ? error.message : "unknown"}`,
       );
     }
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async dispatchTick(): Promise<void> {
+    if (!this.cronEnabled()) return;
+    try {
+      await this.runDispatchRecovery();
+    } catch (error) {
+      this.logger.error(
+        `dispatch recovery failed: ${error instanceof Error ? error.message : "unknown"}`,
+      );
+    }
+  }
+
+  /** Recover dispatch intents that committed but were not durably accepted by Redis. */
+  async runDispatchRecovery(): Promise<{
+    locked: boolean;
+    enqueued: number;
+  }> {
+    return this.provisioning.db.transaction(async (tx) => {
+      const lockRows = (await tx.execute(
+        sql`SELECT pg_try_advisory_xact_lock(${MaintenanceService.DISPATCH_LOCK_KEY}) AS locked`,
+      )) as Array<{ locked: boolean }>;
+      if (lockRows[0]?.locked !== true) return { locked: false, enqueued: 0 };
+
+      const tenants = (await tx.execute(
+        sql`SELECT DISTINCT tenant_id FROM message_dispatches
+            WHERE completed_at IS NULL AND available_at <= now()`,
+      )) as Array<{ tenant_id: string }>;
+      let enqueued = 0;
+      for (const row of tenants) {
+        enqueued += await this.sms.enqueuePending(String(row.tenant_id));
+      }
+      if (enqueued > 0) {
+        this.logger.log(`dispatch recovery: enqueued ${enqueued} message(s)`);
+      }
+      return { locked: true, enqueued };
+    });
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)

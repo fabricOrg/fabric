@@ -1,3 +1,4 @@
+import { EmailResource } from "./email.js";
 import { SenderIdsResource } from "./sender-ids.js";
 import { SmsResource } from "./sms.js";
 import { type FabricLogger, Transport } from "./transport.js";
@@ -6,8 +7,10 @@ import { VerifyResource } from "./verify.js";
 import { WalletResource } from "./wallet.js";
 import { WebhooksResource } from "./webhooks.js";
 
-const VERSION = "0.1.0-beta.2";
-const DEFAULT_BASE_URL = "https://api.fabric.africa";
+const VERSION = "0.1.0-beta.4";
+// The SDK owns endpoint selection. Consumers only provide a key; `baseUrl` is reserved for
+// loopback development and private test deployments.
+const DEFAULT_BASE_URL = "https://d2umm5b2x22zvp.cloudfront.net";
 
 export interface FabricConfig {
   readonly apiKey: string;
@@ -21,6 +24,7 @@ export interface FabricConfig {
 export class Fabric {
   readonly environment: FabricEnvironment;
   readonly sms: SmsResource;
+  readonly email: EmailResource;
   readonly senderIds: SenderIdsResource;
   readonly verify: VerifyResource;
   readonly wallet: WalletResource;
@@ -53,6 +57,7 @@ export class Fabric {
       ...(config.logger ? { logger: config.logger } : {}),
     });
     this.sms = new SmsResource(transport);
+    this.email = new EmailResource(transport);
     this.senderIds = new SenderIdsResource(transport);
     this.verify = new VerifyResource(transport);
     this.wallet = new WalletResource(transport);

@@ -1,4 +1,5 @@
 export { Fabric, type FabricConfig, MessagingClient } from "./client.js";
+export { EmailResource } from "./email.js";
 export {
   ApiError,
   AuthenticationError,
@@ -17,6 +18,7 @@ export {
 export type { CreateSenderIdParams } from "./sender-ids.js";
 export type { FabricLogger } from "./transport.js";
 export type {
+  EmailMessage,
   FabricEnvironment,
   FabricResponse,
   MessageDetail,
@@ -24,9 +26,13 @@ export type {
   MessageSummary,
   Money,
   RequestOptions,
+  SendEmailParams,
   SenderId,
+  SendSmsBatchItem,
   SendSmsParams,
   SentSms,
+  SmsBatch,
+  SmsBatchItemResult,
   WebhookEndpoint,
 } from "./types.js";
 export type {

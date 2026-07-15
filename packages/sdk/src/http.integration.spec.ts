@@ -37,7 +37,7 @@ describe.sequential("real HTTP transport", () => {
       json(response, 200, { messages: [{ id: "msg_missing_fields" }] });
       return;
     }
-    if (request.url === "/v1/sms/send") {
+    if (request.url === "/v1/sms/messages") {
       void readBody(request).then((body) => {
         json(response, 201, {
           id: "msg_1",

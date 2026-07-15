@@ -60,6 +60,120 @@ export const schemas = {
       request_id: { type: "string" },
     },
   },
+  SendSmsBatchRequest: {
+    type: "object",
+    additionalProperties: false,
+    required: ["items"],
+    properties: {
+      items: {
+        type: "array",
+        minItems: 1,
+        maxItems: 100,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["client_reference", "to", "sender_id", "body"],
+          properties: {
+            client_reference: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+            },
+            to: { type: "string", pattern: "^\\+[1-9]\\d{7,14}$" },
+            sender_id: { type: "string", minLength: 1, maxLength: 11 },
+            body: { type: "string", minLength: 1 },
+            currency: {
+              enum: ["GHS", "NGN", "USD"],
+              default: "GHS",
+            },
+            class: {
+              enum: ["transactional", "promotional"],
+              default: "transactional",
+            },
+          },
+        },
+      },
+    },
+  },
+  SmsBatch: {
+    type: "object",
+    required: [
+      "id",
+      "status",
+      "total_count",
+      "accepted_count",
+      "failed_count",
+      "items",
+      "request_id",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      status: { enum: ["processing", "completed"] },
+      total_count: { type: "integer", minimum: 1 },
+      accepted_count: { type: "integer", minimum: 0 },
+      failed_count: { type: "integer", minimum: 0 },
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["client_reference", "message_id", "status", "error_code"],
+          properties: {
+            client_reference: { type: "string" },
+            message_id: { type: ["string", "null"], format: "uuid" },
+            status: ref("MessageStatus"),
+            error_code: { type: ["string", "null"] },
+          },
+        },
+      },
+      request_id: { type: "string" },
+    },
+  },
+  SendEmailRequest: {
+    type: "object",
+    additionalProperties: false,
+    required: ["to", "from", "subject"],
+    anyOf: [{ required: ["text"] }, { required: ["html"] }],
+    properties: {
+      to: { type: "string", format: "email", maxLength: 320 },
+      from: { type: "string", format: "email", maxLength: 320 },
+      subject: { type: "string", minLength: 1, maxLength: 998 },
+      text: { type: "string", minLength: 1, maxLength: 1000000 },
+      html: { type: "string", minLength: 1, maxLength: 2000000 },
+      reply_to: { type: "string", format: "email", maxLength: 320 },
+    },
+  },
+  SendEmailResponse: {
+    type: "object",
+    required: ["id", "status", "request_id"],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      status: ref("MessageStatus"),
+      request_id: { type: "string" },
+    },
+  },
+  EmailMessage: {
+    type: "object",
+    required: [
+      "id",
+      "status",
+      "to",
+      "from",
+      "subject",
+      "provider",
+      "created_at",
+      "error_code",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      status: ref("MessageStatus"),
+      to: { type: "string" },
+      from: { type: "string" },
+      subject: { type: "string" },
+      provider: { type: "string" },
+      created_at: { type: "string", format: "date-time" },
+      error_code: { type: ["string", "null"] },
+    },
+  },
   MessageSummary: {
     type: "object",
     required: [
@@ -263,7 +377,7 @@ const idParameter = {
 };
 
 export const paths = {
-  "/v1/sms/send": {
+  "/v1/sms/messages": {
     post: operation(
       "sendSms",
       "Send an SMS",
@@ -273,6 +387,20 @@ export const paths = {
       },
       ref("SendSmsRequest"),
     ),
+  },
+  "/v1/sms/send": {
+    post: {
+      ...operation(
+        "sendSmsLegacy",
+        "Send an SMS (deprecated compatibility alias)",
+        {
+          201: response("Accepted", ref("SendSmsResponse")),
+          409: response("Idempotency conflict", ref("ErrorEnvelope")),
+        },
+        ref("SendSmsRequest"),
+      ),
+      deprecated: true,
+    },
   },
   "/v1/messages": {
     get: operation("listMessages", "List recent messages", {
@@ -285,6 +413,63 @@ export const paths = {
         },
       }),
     }),
+  },
+  "/v1/sms/batches": {
+    post: operation(
+      "sendSmsBatch",
+      "Send an SMS batch",
+      {
+        201: response("Batch completed", ref("SmsBatch")),
+        409: response("Idempotency conflict", ref("ErrorEnvelope")),
+      },
+      ref("SendSmsBatchRequest"),
+    ),
+  },
+  "/v1/sms/batches/{id}": {
+    get: {
+      ...operation("retrieveSmsBatch", "Retrieve an SMS batch", {
+        200: response("SMS batch", ref("SmsBatch")),
+        404: response("Not found", ref("ErrorEnvelope")),
+      }),
+      parameters: [idParameter],
+    },
+  },
+  "/v1/email/messages": {
+    post: operation(
+      "sendEmail",
+      "Send an Email",
+      {
+        201: response("Accepted", ref("SendEmailResponse")),
+        409: response("Idempotency conflict", ref("ErrorEnvelope")),
+      },
+      ref("SendEmailRequest"),
+    ),
+    get: operation("listEmailMessages", "List Email messages", {
+      200: response("Email messages", {
+        type: "object",
+        required: ["messages", "request_id"],
+        properties: {
+          messages: { type: "array", items: ref("EmailMessage") },
+          request_id: { type: "string" },
+        },
+      }),
+    }),
+  },
+  "/v1/email/messages/{id}": {
+    get: {
+      ...operation("retrieveEmail", "Retrieve an Email message", {
+        200: response("Email message", {
+          type: "object",
+          required: ["message", "request_id"],
+          properties: {
+            message: ref("EmailMessage"),
+            request_id: { type: "string" },
+          },
+        }),
+        404: response("Not found", ref("ErrorEnvelope")),
+      }),
+      parameters: [idParameter],
+    },
   },
   "/v1/sms/{id}": {
     get: {

@@ -34,7 +34,12 @@ import { accounts } from "./identity.js";
  * All tables here are tenant-scoped (carry tenant_id → RLS applies, see sql/0001).
  */
 
-export const piiKind = pgEnum("pii_kind", ["phone", "body", "attribute"]);
+export const piiKind = pgEnum("pii_kind", [
+  "phone",
+  "email",
+  "body",
+  "attribute",
+]);
 export const dekStatus = pgEnum("dek_status", ["active", "destroyed"]);
 
 // A data subject = a person we hold PII about (typically an SMS recipient). The stable surrogate
@@ -57,6 +62,7 @@ export const dataSubjects = pgTable(
      * same number under two tenants is two subjects (RLS is the boundary).
      */
     phoneHash: text("phone_hash"),
+    emailHash: text("email_hash"),
     /**
      * Set when this subject was crypto-shredded. An erased subject is CLOSED, not deleted: the row
      * stays so history keeps its surrogate, but it stops being the tenant's subject for that number.
@@ -75,6 +81,9 @@ export const dataSubjects = pgTable(
     uniqueIndex("uniq_data_subject_tenant_phone_live")
       .on(t.tenantId, t.phoneHash)
       .where(sql`erased_at IS NULL`),
+    uniqueIndex("uniq_data_subject_tenant_email_live")
+      .on(t.tenantId, t.emailHash)
+      .where(sql`erased_at IS NULL AND email_hash IS NOT NULL`),
   ],
 );
 

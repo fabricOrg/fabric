@@ -2,8 +2,8 @@
 
 The official server-side TypeScript client for sending and inspecting messages with Fabric.
 
-> Public prerelease: `0.1.0-beta.2`. Email and batch messaging are not exposed because those public
-> API endpoints do not exist yet. Install the explicit `beta` channel until 1.0 is ready.
+> Public prerelease: `0.1.0-beta.4`. Batch messaging remains unavailable until its public contract
+> ships. Install the explicit `beta` channel until 1.0 is ready.
 
 ## Install
 
@@ -49,6 +49,23 @@ const messages = await fabric.sms.list();
 
 The current API returns a bounded message list without pagination. The SDK will add explicit pages
 and async iteration when the public API supports cursors; it does not pretend to paginate today.
+
+## Send a sandbox Email
+
+```ts
+const email = await fabric.email.send(
+  {
+    to: "recipient@example.com",
+    from: "hello@merchant.example",
+    subject: "Welcome",
+    text: "Your Fabric sandbox Email works.",
+  },
+  { idempotencyKey: "welcome-email-1" },
+);
+```
+
+Sandbox Email is simulated inside Fabric and never contacts an external provider. Live keys fail
+closed until an approved sending domain and production Email provider are configured.
 
 ## Verify webhooks
 
@@ -107,6 +124,8 @@ keys in client bundles, logs, commits, screenshots, or support tickets.
 ## Supported resources
 
 - `fabric.sms.send`, `retrieve`, `list`
+- `fabric.sms.sendBatch`, `retrieveBatch`
+- `fabric.email.send`, `retrieve`, `list`
 - `fabric.senderIds.create`, `list`
 - `fabric.verify.start`, `check`
 - `fabric.wallet.retrieve`

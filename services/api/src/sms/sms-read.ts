@@ -12,9 +12,10 @@ import { notFound } from "../http/api-error.js";
 export async function listMessages(
   db: AppDb,
   tenantId: string,
+  environmentId?: string | null,
 ): Promise<MessageSummary[]> {
   return db.withTenantDrizzle(tenantId, async (tx) => {
-    const rows = await listCustomerMessages(tx);
+    const rows = await listCustomerMessages(tx, environmentId);
     return rows.map(toMessageSummary);
   });
 }
@@ -23,9 +24,10 @@ export async function getMessage(
   db: AppDb,
   tenantId: string,
   id: string,
+  environmentId?: string | null,
 ): Promise<MessageDetail> {
   return db.withTenantDrizzle(tenantId, async (tx) => {
-    const row = await findCustomerMessage(tx, id);
+    const row = await findCustomerMessage(tx, id, environmentId);
     if (!row) {
       throw notFound("message_not_found", "No message exists with that id.");
     }

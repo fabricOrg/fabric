@@ -3,6 +3,7 @@ import type {
   MessageListResponse,
   SendSmsApiResponse,
 } from "@app/contracts";
+import { sendSmsRequest } from "@app/contracts";
 import {
   Body,
   Controller,
@@ -27,24 +28,6 @@ interface AuthedRequest {
   tenant?: RequestTenant;
 }
 
-interface SendBody {
-  to?: unknown;
-  sender_id?: unknown;
-  body?: unknown;
-  currency?: unknown;
-}
-
-function requireString(v: unknown, param: string): string {
-  if (typeof v !== "string" || v.length === 0) {
-    throw invalidRequest(
-      "invalid_field",
-      `\`${param}\` is required and must be a non-empty string.`,
-      param,
-    );
-  }
-  return v;
-}
-
 /**
  * POST /v1/sms/send — the public send endpoint (F5.2). ApiKeyGuard authenticates the key and attaches
  * req.tenant; the handler runs the L5 pipeline under that tenant. Segmentation/rating/reserve/commit
@@ -59,29 +42,34 @@ export class SmsController {
     private readonly idempotency: IdempotencyService,
   ) {}
 
-  @Post("sms/send")
+  @Post("sms/messages")
   async send(
     @Req() req: AuthedRequest,
-    @Body() body: SendBody,
+    @Body() body: unknown,
     @Headers("idempotency-key") idempotencyKey?: string,
   ): Promise<SendSmsApiResponse> {
     const tenant = requireScope(req.tenant, "sms:send");
     // E10-S5: promotional MUST be declared to receive its stricter DND/quiet-hours treatment;
     // anything else (or absence) is transactional — the platform's wedge traffic.
-    const messageClass =
-      (body as { class?: unknown }).class === "promotional"
-        ? ("promotional" as const)
-        : ("transactional" as const);
+    const parsed = sendSmsRequest.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest(
+        "invalid_sms",
+        parsed.error.issues[0]?.message ?? "Invalid SMS request.",
+        parsed.error.issues[0]?.path.join(".") || undefined,
+      );
+    }
     const input = {
       tenantId: tenant.id,
-      to: requireString(body.to, "to"),
-      senderId: requireString(body.sender_id, "sender_id"),
-      body: requireString(body.body, "body"),
-      currency: requireString(body.currency, "currency"),
-      messageClass,
+      to: parsed.data.to,
+      senderId: parsed.data.sender_id,
+      body: parsed.data.body,
+      currency: parsed.data.currency,
+      messageClass: parsed.data.class,
       // ADR-0004: route on the presenting key's environment (a sandbox key can never reach a
       // carrier). Null on the BFF token path, which falls back to the tenant/plan-based mode.
       environmentId: tenant.environmentId,
+      applicationId: tenant.applicationId,
     };
 
     // No header → the un-keyed path (a client that doesn't retry-protect gets today's behavior).
@@ -117,6 +105,16 @@ export class SmsController {
     }
   }
 
+  /** Compatibility alias for beta clients. New SDK releases use POST /v1/sms/messages. */
+  @Post("sms/send")
+  async legacySend(
+    @Req() req: AuthedRequest,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey?: string,
+  ): Promise<SendSmsApiResponse> {
+    return this.send(req, body, idempotencyKey);
+  }
+
   private async execute(input: {
     tenantId: string;
     to: string;
@@ -125,6 +123,7 @@ export class SmsController {
     currency: string;
     messageClass: "transactional" | "promotional";
     environmentId?: string | null;
+    applicationId?: string | null;
   }): Promise<SendSmsApiResponse> {
     const result = await this.sms.send(input);
     return {
@@ -141,7 +140,7 @@ export class SmsController {
   async list(@Req() req: AuthedRequest): Promise<MessageListResponse> {
     const tenant = requireScope(req.tenant, "sms:read");
     return {
-      messages: await this.sms.list(tenant.id),
+      messages: await this.sms.list(tenant.id, tenant.environmentId),
       request_id: newRequestId(),
     };
   }
@@ -153,7 +152,7 @@ export class SmsController {
   ): Promise<MessageDetailResponse> {
     const tenant = requireScope(req.tenant, "sms:read");
     return {
-      message: await this.sms.get(tenant.id, id),
+      message: await this.sms.get(tenant.id, id, tenant.environmentId),
       request_id: newRequestId(),
     };
   }

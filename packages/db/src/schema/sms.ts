@@ -1,16 +1,26 @@
 import { sql } from "drizzle-orm";
 import {
   char,
+  foreignKey,
   index,
   integer,
   pgEnum,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { moneyMinor, tenantIdCol, timestamps } from "./_shared.js";
+import {
+  type ApplicationId,
+  type EnvironmentId,
+  moneyMinor,
+  tenantIdCol,
+  timestamps,
+} from "./_shared.js";
+import { applications, environments } from "./applications.js";
 import { accounts } from "./identity.js";
+import { piiVault } from "./privacy.js";
 
 /**
  * SMS domain (L5) — the `messages` table: one row per send, the spine of the walking skeleton.
@@ -47,8 +57,17 @@ export const messages = pgTable(
     tenantId: tenantIdCol().references(() => accounts.id, {
       onDelete: "restrict",
     }),
+    applicationId: uuid("application_id")
+      .references(() => applications.id, { onDelete: "restrict" })
+      .$type<ApplicationId>(),
+    environmentId: uuid("environment_id")
+      .references(() => environments.id, { onDelete: "restrict" })
+      .$type<EnvironmentId>(),
     // recipient PII surrogate — raw number lives in pii_vault; nullable in the thin thread.
     subjectId: uuid("subject_id"),
+    bodyPiiId: uuid("body_pii_id").references(() => piiVault.id, {
+      onDelete: "set null",
+    }),
     senderId: text("sender_id").notNull(),
     status: messageStatus("status").notNull().default("queued"),
     // monotonic rank of `status` (STATUS_RANK) — the out-of-order-DLR guard (F5.4): a DLR whose rank
@@ -75,8 +94,51 @@ export const messages = pgTable(
       .on(t.providerSlug, t.providerRef)
       .where(sql`provider_ref IS NOT NULL`),
     uniqueIndex("uniq_messages_id_tenant").on(t.id, t.tenantId),
+    foreignKey({
+      columns: [t.applicationId, t.tenantId],
+      foreignColumns: [applications.id, applications.tenantId],
+      name: "messages_application_tenant_fk",
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [t.environmentId, t.applicationId, t.tenantId],
+      foreignColumns: [
+        environments.id,
+        environments.applicationId,
+        environments.tenantId,
+      ],
+      name: "messages_environment_application_tenant_fk",
+    }).onDelete("restrict"),
   ],
 );
 
 export type Message = typeof messages.$inferSelect;
 export type NewMessage = typeof messages.$inferInsert;
+
+/** Durable dispatch intent. It is inserted in the same transaction as the message and wallet
+ * reservation; only encrypted-vault references live on the message, never raw recipient/body. */
+export const messageDispatches = pgTable(
+  "message_dispatches",
+  {
+    messageId: uuid("message_id")
+      .primaryKey()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    tenantId: tenantIdCol().references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    availableAt: timestamp("available_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    ...timestamps,
+  },
+  (t) => [
+    index("idx_message_dispatches_pending")
+      .on(t.availableAt, t.messageId)
+      .where(sql`completed_at IS NULL`),
+  ],
+);
+
+export type MessageDispatch = typeof messageDispatches.$inferSelect;

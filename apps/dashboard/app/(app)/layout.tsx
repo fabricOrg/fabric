@@ -9,6 +9,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { CommandMenu, CommandMenuTrigger } from "@/components/command-menu";
 import { DeliveryModeToggle } from "@/components/delivery-mode-toggle";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { VirtualPhoneNotifier } from "@/components/virtual-phone-notifier";
 import { formatMoney } from "@/lib/money";
 import { requireDashboardSession } from "@/lib/server/auth";
 import { getWalletSnapshot } from "@/lib/server/dashboard-data";
@@ -69,6 +70,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               {primaryBalance ? formatMoney(primaryBalance) : "Wallet"}
             </Link>
           </Button>
+          <VirtualPhoneNotifier />
           <ThemeToggle />
           <UserMenu
             email={session.email}

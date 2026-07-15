@@ -20,6 +20,8 @@ const ROLE_PERMISSIONS = {
   owner: [
     "sms:send",
     "sms:read",
+    "email:send",
+    "email:read",
     "wallet:read",
     "applications:read",
     "applications:write",
@@ -30,6 +32,8 @@ const ROLE_PERMISSIONS = {
   admin: [
     "sms:send",
     "sms:read",
+    "email:send",
+    "email:read",
     "wallet:read",
     "applications:read",
     "applications:write",
@@ -37,7 +41,14 @@ const ROLE_PERMISSIONS = {
     "api_keys:write",
     "request_logs:read",
   ],
-  member: ["sms:send", "sms:read", "wallet:read", "applications:read"],
+  member: [
+    "sms:send",
+    "sms:read",
+    "email:send",
+    "email:read",
+    "wallet:read",
+    "applications:read",
+  ],
 } as const;
 
 const DEVELOPER_PERMISSIONS = [

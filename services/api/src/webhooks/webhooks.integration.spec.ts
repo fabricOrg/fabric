@@ -46,6 +46,8 @@ describeDb("transactional outbox + signed webhook delivery", () => {
   // Local receiver: records signed requests; response code is switchable per test.
   let server: Server;
   let port = 0;
+  let applicationId = "";
+  let sandboxEnvironmentId = "";
   let respondWith = 200;
   const received: Array<{ signature: string; body: string }> = [];
 
@@ -62,10 +64,20 @@ describeDb("transactional outbox + signed webhook delivery", () => {
       .returning();
     if (!app)
       throw new Error("seed: default application insert returned no row");
-    await provisioning.db.insert(environments).values([
-      { tenantId, applicationId: app.id, type: "sandbox", status: "active" },
-      { tenantId, applicationId: app.id, type: "live", status: "active" },
-    ]);
+    applicationId = app.id;
+    const seededEnvironments = await provisioning.db
+      .insert(environments)
+      .values([
+        { tenantId, applicationId: app.id, type: "sandbox", status: "active" },
+        { tenantId, applicationId: app.id, type: "live", status: "active" },
+      ])
+      .returning();
+    const sandbox = seededEnvironments.find(
+      (environment) => environment.type === "sandbox",
+    );
+    if (!sandbox)
+      throw new Error("seed: sandbox environment insert returned no row");
+    sandboxEnvironmentId = sandbox.id;
     server = createServer((req, res) => {
       let body = "";
       req.on("data", (c) => {
@@ -101,8 +113,13 @@ describeDb("transactional outbox + signed webhook delivery", () => {
   async function emitEvent(payload: Record<string, unknown>): Promise<void> {
     await appDb.withTenant(tenantId, async (tx) => {
       await tx`
-        INSERT INTO outbox_events (tenant_id, event_type, payload)
-        VALUES (current_setting('app.tenant_id')::uuid, 'message.updated', ${JSON.stringify(payload)}::jsonb)`;
+        INSERT INTO outbox_events (
+          tenant_id, application_id, environment_id, event_type, payload
+        )
+        VALUES (
+          current_setting('app.tenant_id')::uuid, ${applicationId},
+          ${sandboxEnvironmentId}, 'message.updated', ${JSON.stringify(payload)}::jsonb
+        )`;
     });
   }
 

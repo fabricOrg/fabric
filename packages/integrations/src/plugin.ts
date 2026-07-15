@@ -89,7 +89,7 @@ export interface CanonicalDlr {
 /** Generic base — every plugin declares what it is and what it can do. */
 export interface PluginManifest {
   readonly slug: string; // 'hubtel-sms', 'fake-sms', 'paystack'
-  readonly capability: "sms" | "payment";
+  readonly capability: "sms" | "email" | "payment";
   readonly version: string;
   supports(ctx: RequestContext): boolean; // country/currency/sender-id eligibility
   readonly configSchema: JsonSchema;
@@ -111,6 +111,27 @@ export interface SmsSenderPlugin extends PluginManifest {
   send(msg: NormalizedMessage, creds: Creds): Promise<ProviderResult>;
   parseDlr(payload: unknown): CanonicalDlr;
   verifyWebhook(req: IncomingRequest, creds: Creds): boolean;
+}
+
+export interface NormalizedEmail {
+  readonly messageId: string;
+  readonly to: string;
+  readonly from: string;
+  readonly subject: string;
+  readonly text?: string;
+  readonly html?: string;
+  readonly replyTo?: string;
+}
+
+export interface EmailProviderResult {
+  readonly status: MessageStatus;
+  readonly providerRef: string;
+  readonly errorCode?: string;
+}
+
+export interface EmailSenderPlugin extends PluginManifest {
+  readonly capability: "email";
+  send(message: NormalizedEmail, creds: Creds): Promise<EmailProviderResult>;
 }
 
 // ---- Payment capability (E4 top-up) --------------------------------------------------------------

@@ -45,6 +45,26 @@ export interface SentSms {
   readonly cost: Money;
 }
 
+export interface SendSmsBatchItem extends SendSmsParams {
+  readonly clientReference: string;
+}
+
+export interface SmsBatchItemResult {
+  readonly clientReference: string;
+  readonly messageId: string | null;
+  readonly status: MessageStatus | "failed";
+  readonly errorCode: string | null;
+}
+
+export interface SmsBatch {
+  readonly id: string;
+  readonly status: "processing" | "completed";
+  readonly totalCount: number;
+  readonly acceptedCount: number;
+  readonly failedCount: number;
+  readonly items: ReadonlyArray<SmsBatchItemResult>;
+}
+
 export interface MessageSummary extends SentSms {
   readonly to: string;
   readonly provider: string;
@@ -62,6 +82,26 @@ export interface MessageDetail extends MessageSummary {
     readonly note?: string;
   }>;
   readonly failureReason?: string;
+}
+
+export interface SendEmailParams {
+  readonly to: string;
+  readonly from: string;
+  readonly subject: string;
+  readonly text?: string;
+  readonly html?: string;
+  readonly replyTo?: string;
+}
+
+export interface EmailMessage {
+  readonly id: string;
+  readonly status: MessageStatus;
+  readonly to: string;
+  readonly from: string;
+  readonly subject: string;
+  readonly provider: string;
+  readonly createdAt: string;
+  readonly errorCode: string | null;
 }
 
 export interface SenderId {
