@@ -66,7 +66,7 @@ export class ApiKeysController {
       key: {
         id: created.id,
         name,
-        env: created.env,
+        env: publicEnv(created.env),
         prefix: created.prefix,
         scopes: created.scopes,
         status: "active",
@@ -79,17 +79,18 @@ export class ApiKeysController {
   }
 
   @Get()
-  list(
+  async list(
     @Req() req: AuthedRequest,
     @Query("tenantId") tenantId: unknown,
     @Query("applicationId") applicationId: unknown,
   ): Promise<ApiKey[]> {
-    return this.svc.list(
+    const keys = await this.svc.list(
       resolveTenantId(req, tenantId),
       typeof applicationId === "string"
         ? requireUuid(applicationId, "applicationId")
         : undefined,
     );
+    return keys.map((key) => ({ ...key, env: publicEnv(key.env) }));
   }
 
   @Delete(":id")
@@ -139,10 +140,18 @@ function optionalExpiryDays(value: unknown): number | undefined {
 }
 
 function requireEnv(value: unknown): ApiKeyEnv {
-  if (value !== "test" && value !== "live") {
-    throw invalidRequest("invalid_env", "env must be 'test' or 'live'.", "env");
+  if (value !== "sandbox" && value !== "live") {
+    throw invalidRequest(
+      "invalid_env",
+      "env must be 'sandbox' or 'live'.",
+      "env",
+    );
   }
-  return value;
+  return value === "sandbox" ? "test" : "live";
+}
+
+function publicEnv(value: ApiKeyEnv): ApiKey["env"] {
+  return value === "test" ? "sandbox" : "live";
 }
 
 function requireScopes(value: unknown): string[] {

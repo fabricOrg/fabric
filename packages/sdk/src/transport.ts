@@ -7,7 +7,7 @@ import {
   TimeoutError,
   UserAbortedError,
 } from "./errors.js";
-import type { FabricResponse, RequestOptions } from "./types.js";
+import type { FabricResponse, WriteOptions } from "./types.js";
 
 const PROTECTED_HEADERS = new Set([
   "authorization",
@@ -37,7 +37,7 @@ interface RequestInput {
   readonly method: "GET" | "POST" | "DELETE";
   readonly path: string;
   readonly body?: unknown;
-  readonly options?: RequestOptions;
+  readonly options?: WriteOptions;
 }
 
 export class Transport {

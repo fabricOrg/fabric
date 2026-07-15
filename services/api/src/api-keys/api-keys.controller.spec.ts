@@ -54,7 +54,7 @@ describe("ApiKeysController (F2.3 mgmt)", () => {
       const { ctl, svc } = controllerWith();
       const out = await ctl.create(sessionReq(TID), {
         tenantId: OTHER,
-        env: "test",
+        env: "sandbox",
         scopes: ["sms:send"],
         name: "CI",
       });
@@ -66,7 +66,7 @@ describe("ApiKeysController (F2.3 mgmt)", () => {
       expect(out.secret).toBe("sk_test_raw");
       expect(out.key).toMatchObject({
         prefix: "sk_test_ab3d",
-        env: "test",
+        env: "sandbox",
         name: "CI",
         status: "active",
       });
@@ -75,7 +75,7 @@ describe("ApiKeysController (F2.3 mgmt)", () => {
     it("create: scopes the key to the given application (application_id)", async () => {
       const { ctl, svc } = controllerWith();
       await ctl.create(sessionReq(TID), {
-        env: "test",
+        env: "sandbox",
         scopes: ["sms:send"],
         application_id: OTHER,
       });
@@ -91,7 +91,7 @@ describe("ApiKeysController (F2.3 mgmt)", () => {
       await expectInvalidRequest(
         () =>
           ctl.create(sessionReq(TID), {
-            env: "test",
+            env: "sandbox",
             scopes: ["admin:everything"],
           }),
         "scopes",
@@ -103,6 +103,27 @@ describe("ApiKeysController (F2.3 mgmt)", () => {
       const { ctl, svc } = controllerWith();
       await ctl.list(sessionReq(TID), OTHER, OTHER);
       expect(svc.list).toHaveBeenCalledWith(TID, OTHER);
+    });
+
+    it("list: serializes the storage-era test value as sandbox", async () => {
+      const { ctl } = controllerWith({
+        list: vi.fn(async () => [
+          {
+            id: "k1",
+            name: "CI",
+            prefix: "sk_test_ab3d",
+            env: "test",
+            scopes: ["sms:send"],
+            status: "active",
+            createdAt: "2026-07-15T00:00:00.000Z",
+            lastUsedAt: null,
+            expiresAt: null,
+          },
+        ]),
+      });
+      await expect(
+        ctl.list(sessionReq(TID), undefined, undefined),
+      ).resolves.toMatchObject([{ env: "sandbox" }]);
     });
 
     it("list: uses the token's tenant, ignores client tenantId", async () => {
@@ -123,7 +144,7 @@ describe("ApiKeysController (F2.3 mgmt)", () => {
       const { ctl, svc } = controllerWith();
       await ctl.create(
         {},
-        { tenantId: TID, env: "test", scopes: ["sms:send"] },
+        { tenantId: TID, env: "sandbox", scopes: ["sms:send"] },
       );
       expect(svc.create).toHaveBeenCalledWith(TID, {
         env: "test",
@@ -134,7 +155,7 @@ describe("ApiKeysController (F2.3 mgmt)", () => {
     it("create: 400 invalid_request_error on a bad tenantId (param=tenantId)", async () => {
       const { ctl } = controllerWith();
       await expectInvalidRequest(
-        () => ctl.create({}, { tenantId: "nope", env: "test" }),
+        () => ctl.create({}, { tenantId: "nope", env: "sandbox" }),
         "tenantId",
       );
     });

@@ -1,5 +1,10 @@
 import type { Transport } from "./transport.js";
-import type { FabricResponse, RequestOptions, SenderId } from "./types.js";
+import type {
+  FabricResponse,
+  RequestOptions,
+  SenderId,
+  WriteOptions,
+} from "./types.js";
 import {
   enumField,
   record,
@@ -19,7 +24,7 @@ export class SenderIdsResource {
 
   async create(
     params: CreateSenderIdParams,
-    options?: RequestOptions,
+    options?: WriteOptions,
   ): Promise<FabricResponse<SenderId>> {
     requireNonEmpty(params.senderId, "senderId");
     requireNonEmpty(params.useCase, "useCase");

@@ -155,7 +155,7 @@ export function CreateApiKeyDialog({
     router.refresh(); // re-SSR so the new key (prefix only) appears authoritatively
   }
 
-  const envLabel = env === "live" ? "live" : "test";
+  const envLabel = env === "live" ? "live" : "sandbox";
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
@@ -180,7 +180,7 @@ export function CreateApiKeyDialog({
               <DialogDescription>
                 {env === "live"
                   ? "A live key spends real money and delivers to carriers."
-                  : "A test key is sandboxed — it never charges or sends."}{" "}
+                  : "A sandbox key never charges or reaches real recipients."}{" "}
                 The secret is shown once after creation.
               </DialogDescription>
             </DialogHeader>

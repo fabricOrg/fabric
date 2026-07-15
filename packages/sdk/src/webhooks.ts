@@ -5,6 +5,7 @@ import type {
   FabricResponse,
   RequestOptions,
   WebhookEndpoint,
+  WriteOptions,
 } from "./types.js";
 import {
   enumField,
@@ -12,6 +13,7 @@ import {
   requireNonEmpty,
   stringField,
 } from "./validation.js";
+import { parseWebhookEvent, type WebhookEvent } from "./webhook-events.js";
 
 export interface CreateWebhookParams {
   readonly url: string;
@@ -29,19 +31,12 @@ export interface VerifyWebhookParams {
   readonly tolerance?: number;
   readonly now?: Date;
 }
-export interface WebhookEvent<T = unknown> {
-  readonly id?: string;
-  readonly type: string;
-  readonly createdAt?: string;
-  readonly data: T;
-}
-
 export class WebhooksResource {
   constructor(private readonly transport: Transport) {}
 
   async create(
     params: CreateWebhookParams,
-    options?: RequestOptions,
+    options?: WriteOptions,
   ): Promise<FabricResponse<CreatedWebhookEndpoint>> {
     requireNonEmpty(params.url, "url");
     const response = await this.transport.request<Record<string, unknown>>({
@@ -88,7 +83,7 @@ export class WebhooksResource {
 
   async remove(
     id: string,
-    options?: RequestOptions,
+    options?: WriteOptions,
   ): Promise<FabricResponse<void>> {
     requireNonEmpty(id, "id");
     return this.transport.request<void>({
@@ -98,7 +93,7 @@ export class WebhooksResource {
     });
   }
 
-  verify<T = unknown>(params: VerifyWebhookParams): WebhookEvent<T> {
+  verify(params: VerifyWebhookParams): WebhookEvent {
     const signature = Array.isArray(params.signature)
       ? params.signature[0]
       : params.signature;
@@ -163,15 +158,7 @@ export class WebhooksResource {
         { code: "invalid_payload", cause },
       );
     }
-    const event = record(parsed);
-    return {
-      type: typeof event.type === "string" ? event.type : "unknown",
-      data: (event.data ?? event) as T,
-      ...(typeof event.id === "string" ? { id: event.id } : {}),
-      ...(typeof event.created_at === "string"
-        ? { createdAt: event.created_at }
-        : {}),
-    };
+    return parseWebhookEvent(parsed);
   }
 }
 

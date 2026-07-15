@@ -4,6 +4,7 @@ import type {
   FabricResponse,
   RequestOptions,
   SendEmailParams,
+  WriteOptions,
 } from "./types.js";
 import {
   ApiShapeError,
@@ -30,7 +31,7 @@ export class EmailResource {
 
   async send(
     params: SendEmailParams,
-    options?: RequestOptions,
+    options?: WriteOptions,
   ): Promise<FabricResponse<{ id: string; status: EmailMessage["status"] }>> {
     validateEmail(params.to, "to");
     validateEmail(params.from, "from");

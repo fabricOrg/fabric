@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-beta.5
+
+- Normalized public environments to `sandbox | live` while retaining `sk_test_` and `sk_live_` key
+  prefixes.
+- Split read options from optional and required idempotent write options.
+- Replaced unchecked generic webhook parsing with canonical direct-message events and an explicit
+  signed unknown-event variant.
+- Added the already-enforced Email permissions to the closed API-key scope catalog.
+
 ## 0.1.0-beta.4
 
 - Added sandbox Email send, retrieve, and list through an application-scoped durable API.

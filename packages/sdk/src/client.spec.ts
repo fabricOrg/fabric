@@ -2,9 +2,34 @@ import { describe, expect, it, vi } from "vitest";
 import {
   type AuthenticationError,
   Fabric,
+  type FabricEnvironment,
+  type IdempotentWriteOptions,
   type RateLimitError,
+  type RequestOptions,
   ValidationError,
+  type WriteOptions,
 } from "./index.js";
+
+const requestOptions: RequestOptions = { timeout: 1_000 };
+// @ts-expect-error The public environment vocabulary is sandbox/live only.
+const invalidEnvironment: FabricEnvironment = "production";
+const writeOptions: WriteOptions = { idempotencyKey: "optional-for-direct" };
+const idempotentOptions: IdempotentWriteOptions = {
+  idempotencyKey: "required-for-managed",
+};
+// @ts-expect-error Read options cannot silently enable write retry semantics.
+const invalidRequestOptions: RequestOptions = { idempotencyKey: "wrong" };
+// @ts-expect-error Durable managed writes require a caller idempotency key.
+const invalidIdempotentOptions: IdempotentWriteOptions = {};
+
+void [
+  requestOptions,
+  writeOptions,
+  idempotentOptions,
+  invalidRequestOptions,
+  invalidIdempotentOptions,
+  invalidEnvironment,
+];
 
 function json(
   body: unknown,
@@ -22,9 +47,7 @@ describe("Fabric client", () => {
     expect(new Fabric({ apiKey: "sk_test_example" }).environment).toBe(
       "sandbox",
     );
-    expect(new Fabric({ apiKey: "sk_live_example" }).environment).toBe(
-      "production",
-    );
+    expect(new Fabric({ apiKey: "sk_live_example" }).environment).toBe("live");
     expect(() => new Fabric({ apiKey: "secret" })).toThrow(/sk_test_/);
   });
 

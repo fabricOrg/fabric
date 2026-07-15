@@ -21,6 +21,7 @@ export type {
   EmailMessage,
   FabricEnvironment,
   FabricResponse,
+  IdempotentWriteOptions,
   MessageDetail,
   MessageStatus,
   MessageSummary,
@@ -34,6 +35,7 @@ export type {
   SmsBatch,
   SmsBatchItemResult,
   WebhookEndpoint,
+  WriteOptions,
 } from "./types.js";
 export type {
   CheckedVerification,
@@ -43,8 +45,16 @@ export type {
 } from "./verify.js";
 export type { WalletSnapshot } from "./wallet.js";
 export type {
+  InboundMessageWebhookData,
+  KnownWebhookEvent,
+  KnownWebhookEventType,
+  MessageWebhookData,
+  UnknownWebhookEvent,
+  WebhookEvent,
+} from "./webhook-events.js";
+export { KNOWN_WEBHOOK_EVENT_TYPES } from "./webhook-events.js";
+export type {
   CreatedWebhookEndpoint,
   CreateWebhookParams,
   VerifyWebhookParams,
-  WebhookEvent,
 } from "./webhooks.js";

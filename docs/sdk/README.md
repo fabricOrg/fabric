@@ -15,6 +15,7 @@ production concerns that should not obscure first success.
 - [SDK DX — design iteration 2](sdk-dx-iteration-2.md) *(historical proposal; refined by iteration 3)*
 - [Final managed messaging SDK contract](sdk-dx-iteration-3.md) *(authoritative proposal; not implemented)*
 - [Managed messaging SDK delivery backlog](managed-messaging-sdk-backlog.md) *(vertical, testable work items)*
+- [SDK release evidence](evidence/README.md) *(criterion-to-test audits for release candidates)*
 - [Managed messaging and Journeys architecture plan](managed-messaging-architecture-plan.md) *(proposed; not implemented)*
 
 ## Current API capability matrix

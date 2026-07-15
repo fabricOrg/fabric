@@ -7,7 +7,7 @@ import { VerifyResource } from "./verify.js";
 import { WalletResource } from "./wallet.js";
 import { WebhooksResource } from "./webhooks.js";
 
-const VERSION = "0.1.0-beta.4";
+const VERSION = "0.1.0-beta.5";
 // The SDK owns endpoint selection. Consumers only provide a key; `baseUrl` is reserved for
 // loopback development and private test deployments.
 const DEFAULT_BASE_URL = "https://d2umm5b2x22zvp.cloudfront.net";
@@ -69,7 +69,7 @@ export { Fabric as MessagingClient };
 
 function environmentForKey(apiKey: string): FabricEnvironment {
   if (apiKey.startsWith("sk_test_")) return "sandbox";
-  if (apiKey.startsWith("sk_live_")) return "production";
+  if (apiKey.startsWith("sk_live_")) return "live";
   throw new TypeError(
     "`apiKey` must be a Fabric secret key beginning with `sk_test_` or `sk_live_`.",
   );

@@ -1,10 +1,19 @@
-export type FabricEnvironment = "sandbox" | "production";
+export type FabricEnvironment = "sandbox" | "live";
 
 export interface RequestOptions {
-  readonly idempotencyKey?: string;
   readonly signal?: AbortSignal;
   readonly timeout?: number;
   readonly headers?: Readonly<Record<string, string>>;
+}
+
+/** Options for direct writes where idempotency remains optional for beta compatibility. */
+export interface WriteOptions extends RequestOptions {
+  readonly idempotencyKey?: string;
+}
+
+/** Options for operations that cannot execute safely without durable caller idempotency. */
+export interface IdempotentWriteOptions extends RequestOptions {
+  readonly idempotencyKey: string;
 }
 
 export interface FabricResponse<T> {

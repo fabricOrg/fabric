@@ -1,6 +1,7 @@
 import type { Transport } from "./transport.js";
 import type {
   FabricResponse,
+  IdempotentWriteOptions,
   MessageDetail,
   MessageSummary,
   RequestOptions,
@@ -8,6 +9,7 @@ import type {
   SendSmsParams,
   SentSms,
   SmsBatch,
+  WriteOptions,
 } from "./types.js";
 import {
   ApiShapeError,
@@ -36,7 +38,7 @@ export class SmsResource {
 
   async send(
     params: SendSmsParams,
-    options?: RequestOptions,
+    options?: WriteOptions,
   ): Promise<FabricResponse<SentSms>> {
     requireE164(params.to);
     requireNonEmpty(params.senderId, "senderId");
@@ -58,7 +60,7 @@ export class SmsResource {
 
   async sendBatch(
     items: ReadonlyArray<SendSmsBatchItem>,
-    options: RequestOptions & { idempotencyKey: string },
+    options: IdempotentWriteOptions,
   ): Promise<FabricResponse<SmsBatch>> {
     requireNonEmpty(options.idempotencyKey, "idempotencyKey");
     if (items.length < 1 || items.length > 100) {

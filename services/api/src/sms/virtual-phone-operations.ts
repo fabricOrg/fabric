@@ -43,6 +43,17 @@ export async function recordVirtualReply(input: {
     ? (normalized as "STOP" | "START" | "HELP")
     : null;
   const result = await input.db.withTenant(input.tenantId, async (tx) => {
+    const contexts = (await tx`
+      SELECT a.id AS application_id, e.id AS environment_id
+      FROM applications a
+      JOIN environments e ON e.application_id = a.id AND e.tenant_id = a.tenant_id
+      WHERE a.tenant_id = current_setting('app.tenant_id')::uuid
+        AND a.slug = 'default' AND e.type = 'sandbox'
+      LIMIT 1`) as Row[];
+    const context = contexts[0];
+    if (!context) {
+      throw new Error("Default sandbox environment is not provisioned.");
+    }
     const inserted = (await tx`
       INSERT INTO inbound_messages (
         tenant_id, subject_id, body_pii_id, virtual_number, keyword
@@ -72,9 +83,12 @@ export async function recordVirtualReply(input: {
       consentChanged = removed.length > 0;
     }
     await tx`
-      INSERT INTO outbox_events (tenant_id, event_type, payload)
+      INSERT INTO outbox_events (
+        tenant_id, application_id, environment_id, event_type, payload
+      )
       VALUES (
-        current_setting('app.tenant_id')::uuid, 'message.received',
+        current_setting('app.tenant_id')::uuid, ${String(context.application_id)},
+        ${String(context.environment_id)}, 'message.received',
         ${JSON.stringify({ id, subject_id: subjectId, channel: "sms" })}::jsonb
       )`;
     if (consentChanged) {

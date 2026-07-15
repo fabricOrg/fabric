@@ -6,8 +6,8 @@ import { z } from "zod";
 
 // ── API keys ────────────────────────────────────────────────────────────────────────────────────
 
-/** test = sandbox (never charges/sends) · live = real money/delivery. Must be visually unmistakable. */
-export const apiKeyEnv = z.enum(["test", "live"]);
+/** Sandbox never charges/sends; live can spend money and contact real recipients. */
+export const apiKeyEnv = z.enum(["sandbox", "live"]);
 export type ApiKeyEnv = z.infer<typeof apiKeyEnv>;
 
 export const apiKeyStatus = z.enum(["active", "revoked"]);
@@ -17,6 +17,8 @@ export type ApiKeyStatus = z.infer<typeof apiKeyStatus>;
 export const apiKeyScopeValues = [
   "sms:send",
   "sms:read",
+  "email:send",
+  "email:read",
   "wallet:read",
   "request_logs:read",
   "api_keys:read",

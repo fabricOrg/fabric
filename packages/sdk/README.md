@@ -78,13 +78,19 @@ const event = fabric.webhooks.verify({
   secret: process.env.FABRIC_WEBHOOK_SECRET!,
 });
 
-if (event.type === "sms.delivered") {
+if (event.type === "message.delivered") {
   console.log(event.data);
+}
+
+if (event.type === "unknown") {
+  console.log("Upgrade the SDK to handle", event.originalType);
 }
 ```
 
 Verification uses HMAC-SHA256, constant-time comparison, and a five-minute timestamp tolerance by
-default. Invalid, malformed, or stale events throw `WebhookVerificationError`.
+default. Invalid, malformed, or stale events throw `WebhookVerificationError`. Known direct-message
+events are `message.sent`, `message.delivered`, `message.undelivered`, `message.failed`, and
+`message.inbound`; a correctly signed newer event returns the explicit `unknown` variant.
 
 ## Handle errors
 
@@ -107,10 +113,10 @@ try {
 Errors never include the API key, authorization header, or message body. Optional logger callbacks
 receive only method/path/status/retry/request metadata.
 
-## Environments and production
+## Sandbox and live environments
 
-`sk_test_...` keys set `fabric.environment` to `sandbox`; `sk_live_...` keys set it to `production`.
-No separate environment setting can conflict with the key. Moving to production changes only
+`sk_test_...` keys set `fabric.environment` to `sandbox`; `sk_live_...` keys set it to `live`.
+No separate environment setting can conflict with the key. Moving to live delivery changes only
 `FABRIC_API_KEY`, but requires an approved sender ID, billing, provider configuration, and applicable
 Ghana/Nigeria compliance approval.
 

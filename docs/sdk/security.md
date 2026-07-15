@@ -7,7 +7,7 @@ WorkOS authenticates people in Fabric Dashboard.
 - Never hard-code, commit, print, forward, or place a secret key in browser code.
 - Rotate a key by deploying the replacement, verifying traffic, then revoking the old key.
 - Treat `AuthenticationError` with `invalid_api_key`, expired, or revoked codes as a rotation signal.
-- The SDK derives sandbox/production from `sk_test_`/`sk_live_`; it has no conflicting environment flag.
+- The SDK derives `sandbox`/`live` from `sk_test_`/`sk_live_`; it has no conflicting environment flag.
 - Base URL overrides require HTTPS, except loopback HTTP for local tests.
 
 The SDK rejects obvious browser execution. Bundlers can still inspect imports before runtime, so keep

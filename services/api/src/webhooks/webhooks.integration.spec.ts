@@ -171,7 +171,7 @@ describeDb("transactional outbox + signed webhook delivery", () => {
       type: string;
       data: { message_id: string };
     };
-    expect(envelope.type).toBe("message.updated");
+    expect(envelope.type).toBe("message.sent");
     expect(envelope.data.message_id).toBe("m-1");
   });
 
