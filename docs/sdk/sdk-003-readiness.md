@@ -80,7 +80,8 @@ Each slice is independently shippable behind the release gate and carries its ow
 tests. The feature stays **invisible** until slice 6's gate conditions all pass (backlog release gate).
 
 0. **Design lock** — close the readiness gaps: ADR-0005 product+security review sign-off; specify the
-   variable-schema subset + compatibility algorithm; name owners. *No code.* Output: short design note.
+   variable-schema subset + compatibility algorithm; name owners. *No code.* Design note drafted:
+   [sdk-003-slice0-design.md](./sdk-003-slice0-design.md) — awaiting product+security sign-off.
 1. **Schema + RLS + invariants** — the three tables, migrations (drizzle + hand-written RLS/grants),
    composite FKs. Real-Postgres tests: uniqueness, version immutability (runtime role UPDATE/DELETE
    denied), one-release-per-env, publish-race, cross-tenant denial, cross-app release rejection.
