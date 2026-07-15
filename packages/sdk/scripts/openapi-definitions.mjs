@@ -309,6 +309,7 @@ export const schemas = {
       "env",
       "secret_prefix",
       "created_at",
+      "health",
     ],
     properties: {
       id: { type: "string", format: "uuid" },
@@ -318,6 +319,15 @@ export const schemas = {
       env: { enum: ["sandbox", "live"] },
       secret_prefix: { type: "string" },
       created_at: { type: "string", format: "date-time" },
+      health: {
+        type: "object",
+        required: ["pending", "dead", "last_delivered_at"],
+        properties: {
+          pending: { type: "integer", minimum: 0 },
+          dead: { type: "integer", minimum: 0 },
+          last_delivered_at: { type: ["string", "null"], format: "date-time" },
+        },
+      },
     },
   },
   CreateWebhookRequest: {
@@ -329,6 +339,37 @@ export const schemas = {
       description: { type: "string", maxLength: 200 },
       application_id: { type: "string", format: "uuid" },
       env: { enum: ["sandbox", "live"] },
+    },
+  },
+  WebhookDelivery: {
+    type: "object",
+    required: [
+      "id",
+      "endpoint_id",
+      "event_id",
+      "event_type",
+      "state",
+      "attempts",
+      "next_attempt_at",
+      "last_attempt_at",
+      "delivered_at",
+      "last_error_category",
+      "last_http_status",
+      "created_at",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      endpoint_id: { type: "string", format: "uuid" },
+      event_id: { type: "string", format: "uuid" },
+      event_type: { type: "string" },
+      state: { enum: ["pending", "delivering", "delivered", "dead"] },
+      attempts: { type: "integer", minimum: 0 },
+      next_attempt_at: { type: "string", format: "date-time" },
+      last_attempt_at: { type: ["string", "null"], format: "date-time" },
+      delivered_at: { type: ["string", "null"], format: "date-time" },
+      last_error_category: { type: ["string", "null"] },
+      last_http_status: { type: ["integer", "null"] },
+      created_at: { type: "string", format: "date-time" },
     },
   },
   ErrorEnvelope: {
@@ -572,10 +613,55 @@ export const paths = {
   },
   "/v1/webhooks/{id}": {
     delete: {
-      ...operation("deleteWebhookEndpoint", "Delete a webhook endpoint", {
-        204: { description: "Deleted" },
+      ...operation("disableWebhookEndpoint", "Disable a webhook endpoint", {
+        204: { description: "Disabled; delivery history retained" },
       }),
       parameters: [idParameter],
+    },
+  },
+  "/v1/webhooks/{id}/deliveries": {
+    get: {
+      ...operation("listWebhookDeliveries", "List endpoint deliveries", {
+        200: response("Webhook deliveries", {
+          type: "object",
+          required: ["deliveries", "request_id"],
+          properties: {
+            deliveries: { type: "array", items: ref("WebhookDelivery") },
+            request_id: { type: "string" },
+          },
+        }),
+      }),
+      parameters: [
+        idParameter,
+        {
+          name: "state",
+          in: "query",
+          schema: { enum: ["pending", "delivering", "delivered", "dead"] },
+        },
+      ],
+    },
+  },
+  "/v1/webhooks/{id}/deliveries/{deliveryId}/replay": {
+    post: {
+      ...operation("replayWebhookDelivery", "Replay a dead delivery", {
+        200: response("Delivery queued for replay", {
+          type: "object",
+          required: ["delivery", "request_id"],
+          properties: {
+            delivery: ref("WebhookDelivery"),
+            request_id: { type: "string" },
+          },
+        }),
+      }),
+      parameters: [
+        idParameter,
+        {
+          name: "deliveryId",
+          in: "path",
+          required: true,
+          schema: { type: "string", format: "uuid" },
+        },
+      ],
     },
   },
 };

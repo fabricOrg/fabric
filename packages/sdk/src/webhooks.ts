@@ -4,11 +4,13 @@ import type { Transport } from "./transport.js";
 import type {
   FabricResponse,
   RequestOptions,
+  WebhookDelivery,
   WebhookEndpoint,
   WriteOptions,
 } from "./types.js";
 import {
   enumField,
+  numberField,
   record,
   requireNonEmpty,
   stringField,
@@ -23,6 +25,9 @@ export interface CreateWebhookParams {
 }
 export interface CreatedWebhookEndpoint extends WebhookEndpoint {
   readonly secret: string;
+}
+export interface ListWebhookDeliveriesParams {
+  readonly state?: "pending" | "delivering" | "delivered" | "dead";
 }
 export interface VerifyWebhookParams {
   readonly payload: string | Uint8Array;
@@ -91,6 +96,50 @@ export class WebhooksResource {
       path: `/v1/webhooks/${encodeURIComponent(id)}`,
       ...(options ? { options } : {}),
     });
+  }
+
+  /** Disable an endpoint without deleting its delivery history. */
+  async disable(
+    id: string,
+    options?: WriteOptions,
+  ): Promise<FabricResponse<void>> {
+    return this.remove(id, options);
+  }
+
+  async listDeliveries(
+    endpointId: string,
+    params: ListWebhookDeliveriesParams = {},
+    options?: RequestOptions,
+  ): Promise<FabricResponse<ReadonlyArray<WebhookDelivery>>> {
+    requireNonEmpty(endpointId, "endpointId");
+    const query = params.state ? `?state=${params.state}` : "";
+    const response = await this.transport.request<Record<string, unknown>>({
+      method: "GET",
+      path: `/v1/webhooks/${encodeURIComponent(endpointId)}/deliveries${query}`,
+      ...(options ? { options } : {}),
+    });
+    if (!Array.isArray(response.data.deliveries)) {
+      throw new TypeError("Fabric returned an invalid webhook delivery list.");
+    }
+    return {
+      ...response,
+      data: response.data.deliveries.map((item) => parseDelivery(record(item))),
+    };
+  }
+
+  async replayDelivery(
+    endpointId: string,
+    deliveryId: string,
+    options?: WriteOptions,
+  ): Promise<FabricResponse<WebhookDelivery>> {
+    requireNonEmpty(endpointId, "endpointId");
+    requireNonEmpty(deliveryId, "deliveryId");
+    const response = await this.transport.request<Record<string, unknown>>({
+      method: "POST",
+      path: `/v1/webhooks/${encodeURIComponent(endpointId)}/deliveries/${encodeURIComponent(deliveryId)}/replay`,
+      ...(options ? { options } : {}),
+    });
+    return { ...response, data: parseDelivery(record(response.data.delivery)) };
   }
 
   verify(params: VerifyWebhookParams): WebhookEvent {
@@ -163,6 +212,7 @@ export class WebhooksResource {
 }
 
 function parseEndpoint(data: Record<string, unknown>): WebhookEndpoint {
+  const health = record(data.health);
   return {
     id: stringField(data.id, "id"),
     url: stringField(data.url, "url"),
@@ -174,7 +224,46 @@ function parseEndpoint(data: Record<string, unknown>): WebhookEndpoint {
     environment: enumField(data.env, ["sandbox", "live"] as const, "env"),
     secretPrefix: stringField(data.secret_prefix, "secret_prefix"),
     createdAt: stringField(data.created_at, "created_at"),
+    health: {
+      pending: numberField(health.pending, "health.pending"),
+      dead: numberField(health.dead, "health.dead"),
+      lastDeliveredAt: nullableString(
+        health.last_delivered_at,
+        "health.last_delivered_at",
+      ),
+    },
   };
+}
+
+function parseDelivery(data: Record<string, unknown>): WebhookDelivery {
+  return {
+    id: stringField(data.id, "id"),
+    endpointId: stringField(data.endpoint_id, "endpoint_id"),
+    eventId: stringField(data.event_id, "event_id"),
+    eventType: stringField(data.event_type, "event_type"),
+    state: enumField(
+      data.state,
+      ["pending", "delivering", "delivered", "dead"] as const,
+      "state",
+    ),
+    attempts: numberField(data.attempts, "attempts"),
+    nextAttemptAt: stringField(data.next_attempt_at, "next_attempt_at"),
+    lastAttemptAt: nullableString(data.last_attempt_at, "last_attempt_at"),
+    deliveredAt: nullableString(data.delivered_at, "delivered_at"),
+    lastErrorCategory: nullableString(
+      data.last_error_category,
+      "last_error_category",
+    ),
+    lastHttpStatus:
+      data.last_http_status === null
+        ? null
+        : numberField(data.last_http_status, "last_http_status"),
+    createdAt: stringField(data.created_at, "created_at"),
+  };
+}
+
+function nullableString(value: unknown, name: string): string | null {
+  return value === null ? null : stringField(value, name);
 }
 
 function verificationError(

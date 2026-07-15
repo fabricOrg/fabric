@@ -1,7 +1,9 @@
 import { Module } from "@nestjs/common";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
+import { AuditModule } from "../audit/audit.module.js";
 import { ProvisioningDbModule } from "../identity/provisioning-db.module.js";
 import { WebhookDeliveryService } from "./webhook-delivery.service.js";
+import { WebhookDeliveryStore } from "./webhook-delivery.store.js";
 import { WebhooksController } from "./webhooks.controller.js";
 import { WebhooksService } from "./webhooks.service.js";
 
@@ -11,8 +13,8 @@ import { WebhooksService } from "./webhooks.service.js";
  * resolveMessage, payments credit); this module only manages endpoints and delivers.
  */
 @Module({
-  imports: [ApiKeysModule, ProvisioningDbModule],
+  imports: [ApiKeysModule, AuditModule, ProvisioningDbModule],
   controllers: [WebhooksController],
-  providers: [WebhooksService, WebhookDeliveryService],
+  providers: [WebhooksService, WebhookDeliveryStore, WebhookDeliveryService],
 })
 export class WebhooksModule {}

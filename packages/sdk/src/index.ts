@@ -34,6 +34,7 @@ export type {
   SentSms,
   SmsBatch,
   SmsBatchItemResult,
+  WebhookDelivery,
   WebhookEndpoint,
   WriteOptions,
 } from "./types.js";
@@ -56,5 +57,6 @@ export { KNOWN_WEBHOOK_EVENT_TYPES } from "./webhook-events.js";
 export type {
   CreatedWebhookEndpoint,
   CreateWebhookParams,
+  ListWebhookDeliveriesParams,
   VerifyWebhookParams,
 } from "./webhooks.js";

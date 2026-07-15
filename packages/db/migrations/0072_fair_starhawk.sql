@@ -1,0 +1,2 @@
+ALTER TABLE "webhook_deliveries" ADD COLUMN "cycle_attempts" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_cycle_attempts_check" CHECK ("webhook_deliveries"."cycle_attempts" >= 0);

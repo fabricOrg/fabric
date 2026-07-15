@@ -92,6 +92,18 @@ default. Invalid, malformed, or stale events throw `WebhookVerificationError`. K
 events are `message.sent`, `message.delivered`, `message.undelivered`, `message.failed`, and
 `message.inbound`; a correctly signed newer event returns the explicit `unknown` variant.
 
+Inspect and replay a dead endpoint-specific delivery without changing its event ID:
+
+```ts
+const dead = await fabric.webhooks.listDeliveries(endpointId, { state: "dead" });
+if (dead.data[0]) {
+  await fabric.webhooks.replayDelivery(endpointId, dead.data[0].id);
+}
+```
+
+Webhook delivery is at least once. Persist event IDs under a unique constraint before applying side
+effects; timeout-after-accept and manual replay can legitimately deliver the same event again.
+
 ## Handle errors
 
 ```ts
@@ -135,7 +147,7 @@ keys in client bundles, logs, commits, screenshots, or support tickets.
 - `fabric.senderIds.create`, `list`
 - `fabric.verify.start`, `check`
 - `fabric.wallet.retrieve`
-- `fabric.webhooks.create`, `list`, `remove`, `verify`
+- `fabric.webhooks.create`, `list`, `disable`, `listDeliveries`, `replayDelivery`, `verify`
 
 See [the SDK guides](../../docs/sdk/README.md) and bundled [OpenAPI reference](./openapi.json)
 for retries, security, framework patterns, versioning, and the public wire contract. Report SDK issues through the repository issue tracker and

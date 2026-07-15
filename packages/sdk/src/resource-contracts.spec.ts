@@ -1,7 +1,9 @@
 import {
   emailMessageResponse,
   listSendersResponseSchema,
+  listWebhookDeliveriesResponseSchema,
   listWebhookEndpointsResponseSchema,
+  replayWebhookDeliveryResponseSchema,
   verifyCheckResponse,
   verifyStartResponse,
   walletSnapshot,
@@ -89,6 +91,7 @@ describe("canonical contract parity", () => {
           env: "sandbox",
           secret_prefix: "whsec_abcd",
           created_at: "2026-07-12T12:00:00.000Z",
+          health: { pending: 0, dead: 0, last_delivered_at: null },
         },
       ],
       request_id: "req_webhooks",
@@ -98,6 +101,44 @@ describe("canonical contract parity", () => {
     ).resolves.toMatchObject({
       data: [{ environment: "sandbox", secretPrefix: "whsec_abcd" }],
     });
+  });
+
+  it("maps delivery history and replay responses", async () => {
+    const delivery = {
+      id: "98393ec2-2a34-4cb8-b3cc-4e25ec8b6c18",
+      endpoint_id: "98393ec2-2a34-4cb8-b3cc-4e25ec8b6c17",
+      event_id: "98393ec2-2a34-4cb8-b3cc-4e25ec8b6c19",
+      event_type: "message.delivered",
+      state: "dead" as const,
+      attempts: 10,
+      next_attempt_at: "2026-07-12T12:10:00.000Z",
+      last_attempt_at: "2026-07-12T12:09:00.000Z",
+      delivered_at: null,
+      last_error_category: "http_5xx",
+      last_http_status: 500,
+      created_at: "2026-07-12T12:00:00.000Z",
+    };
+    const listed = listWebhookDeliveriesResponseSchema.parse({
+      deliveries: [delivery],
+      request_id: "req_deliveries",
+    });
+    await expect(
+      clientReturning(listed).webhooks.listDeliveries(delivery.endpoint_id, {
+        state: "dead",
+      }),
+    ).resolves.toMatchObject({
+      data: [{ eventId: delivery.event_id, lastHttpStatus: 500 }],
+    });
+    const replayed = replayWebhookDeliveryResponseSchema.parse({
+      delivery: { ...delivery, state: "pending", attempts: 10 },
+      request_id: "req_replay",
+    });
+    await expect(
+      clientReturning(replayed).webhooks.replayDelivery(
+        delivery.endpoint_id,
+        delivery.id,
+      ),
+    ).resolves.toMatchObject({ data: { state: "pending", attempts: 10 } });
   });
 
   it("maps canonical Email responses", async () => {

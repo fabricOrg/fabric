@@ -181,3 +181,38 @@ resource "aws_cloudwatch_metric_alarm" "ecs_service_memory" {
     ServiceName = each.value.name
   }
 }
+
+resource "aws_cloudwatch_log_metric_filter" "webhook_delivery_alerts" {
+  for_each = {
+    dead           = "webhook delivery sweep produced"
+    worker_failure = "webhook delivery sweep failed"
+    oldest_pending = "webhook delivery oldest pending age"
+    retry_volume   = "webhook delivery retry volume"
+  }
+
+  name           = "fabric-testing-webhook-${replace(each.key, "_", "-")}"
+  pattern        = each.value
+  log_group_name = aws_cloudwatch_log_group.api.name
+
+  metric_transformation {
+    name      = "Webhook${replace(title(each.key), "_", "")}"
+    namespace = "Fabric/Webhooks"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "webhook_delivery_alerts" {
+  for_each = toset(["dead", "worker_failure", "oldest_pending", "retry_volume"])
+
+  alarm_name          = "fabric-testing-webhook-${replace(each.key, "_", "-")}"
+  alarm_description   = "Testing webhook delivery raised ${replace(each.key, "_", " ")}."
+  namespace           = "Fabric/Webhooks"
+  metric_name         = "Webhook${replace(title(each.key), "_", "")}"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+}

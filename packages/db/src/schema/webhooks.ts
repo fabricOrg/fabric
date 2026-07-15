@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  check,
   foreignKey,
   index,
   integer,
@@ -7,6 +8,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import {
@@ -56,6 +58,12 @@ export const webhookEndpoints = pgTable(
   },
   (t) => [
     index("idx_webhook_endpoints_tenant").on(t.tenantId),
+    uniqueIndex("uniq_webhook_endpoints_containment").on(
+      t.id,
+      t.tenantId,
+      t.applicationId,
+      t.environmentId,
+    ),
     foreignKey({
       columns: [t.applicationId, t.tenantId],
       foreignColumns: [applications.id, applications.tenantId],
@@ -96,6 +104,12 @@ export const outboxEvents = pgTable(
     index("idx_outbox_undelivered")
       .on(t.createdAt)
       .where(sql`delivered_at IS NULL`),
+    uniqueIndex("uniq_outbox_events_containment").on(
+      t.id,
+      t.tenantId,
+      t.applicationId,
+      t.environmentId,
+    ),
     foreignKey({
       columns: [t.applicationId, t.tenantId],
       foreignColumns: [applications.id, applications.tenantId],
@@ -113,7 +127,153 @@ export const outboxEvents = pgTable(
   ],
 );
 
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().$type<TenantId>(),
+    applicationId: uuid("application_id").notNull().$type<ApplicationId>(),
+    environmentId: uuid("environment_id").notNull().$type<EnvironmentId>(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => outboxEvents.id, { onDelete: "cascade" }),
+    endpointId: uuid("endpoint_id")
+      .notNull()
+      .references(() => webhookEndpoints.id, { onDelete: "cascade" }),
+    state: text("state").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    cycleAttempts: integer("cycle_attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    leaseToken: uuid("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    lastErrorCategory: text("last_error_category"),
+    lastHttpStatus: integer("last_http_status"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("uniq_webhook_delivery_event_endpoint").on(
+      t.eventId,
+      t.endpointId,
+    ),
+    uniqueIndex("uniq_webhook_deliveries_tenant_containment").on(
+      t.id,
+      t.tenantId,
+    ),
+    index("idx_webhook_deliveries_due")
+      .on(t.nextAttemptAt, t.createdAt)
+      .where(sql`state IN ('pending', 'delivering')`),
+    index("idx_webhook_deliveries_endpoint_state").on(
+      t.endpointId,
+      t.state,
+      t.createdAt,
+    ),
+    check(
+      "webhook_deliveries_state_check",
+      sql`${t.state} IN ('pending', 'delivering', 'delivered', 'dead')`,
+    ),
+    check("webhook_deliveries_attempts_check", sql`${t.attempts} >= 0`),
+    check(
+      "webhook_deliveries_cycle_attempts_check",
+      sql`${t.cycleAttempts} >= 0`,
+    ),
+    check(
+      "webhook_deliveries_http_status_check",
+      sql`${t.lastHttpStatus} IS NULL OR (${t.lastHttpStatus} BETWEEN 100 AND 599)`,
+    ),
+    foreignKey({
+      columns: [t.eventId, t.tenantId, t.applicationId, t.environmentId],
+      foreignColumns: [
+        outboxEvents.id,
+        outboxEvents.tenantId,
+        outboxEvents.applicationId,
+        outboxEvents.environmentId,
+      ],
+      name: "webhook_deliveries_event_containment_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.endpointId, t.tenantId, t.applicationId, t.environmentId],
+      foreignColumns: [
+        webhookEndpoints.id,
+        webhookEndpoints.tenantId,
+        webhookEndpoints.applicationId,
+        webhookEndpoints.environmentId,
+      ],
+      name: "webhook_deliveries_endpoint_containment_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.applicationId, t.tenantId],
+      foreignColumns: [applications.id, applications.tenantId],
+      name: "webhook_deliveries_application_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.environmentId, t.applicationId, t.tenantId],
+      foreignColumns: [
+        environments.id,
+        environments.applicationId,
+        environments.tenantId,
+      ],
+      name: "webhook_deliveries_environment_application_tenant_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Append-only evidence for every network attempt, including replayed dead deliveries. */
+export const webhookDeliveryAttempts = pgTable(
+  "webhook_delivery_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().$type<TenantId>(),
+    deliveryId: uuid("delivery_id")
+      .notNull()
+      .references(() => webhookDeliveries.id, { onDelete: "cascade" }),
+    attemptNumber: integer("attempt_number").notNull(),
+    outcome: text("outcome").notNull(),
+    httpStatus: integer("http_status"),
+    errorCategory: text("error_category"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uniq_webhook_delivery_attempt_number").on(
+      t.deliveryId,
+      t.attemptNumber,
+    ),
+    index("idx_webhook_delivery_attempts_tenant_delivery").on(
+      t.tenantId,
+      t.deliveryId,
+      t.completedAt,
+    ),
+    check(
+      "webhook_delivery_attempts_outcome_check",
+      sql`${t.outcome} IN ('delivered', 'retry', 'dead')`,
+    ),
+    check(
+      "webhook_delivery_attempts_number_check",
+      sql`${t.attemptNumber} > 0`,
+    ),
+    check(
+      "webhook_delivery_attempts_http_status_check",
+      sql`${t.httpStatus} IS NULL OR (${t.httpStatus} BETWEEN 100 AND 599)`,
+    ),
+    foreignKey({
+      columns: [t.deliveryId, t.tenantId],
+      foreignColumns: [webhookDeliveries.id, webhookDeliveries.tenantId],
+      name: "webhook_delivery_attempts_tenant_containment_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
 export type WebhookEndpoint = typeof webhookEndpoints.$inferSelect;
 export type NewWebhookEndpoint = typeof webhookEndpoints.$inferInsert;
 export type OutboxEvent = typeof outboxEvents.$inferSelect;
 export type NewOutboxEvent = typeof outboxEvents.$inferInsert;
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+export type NewWebhookDelivery = typeof webhookDeliveries.$inferInsert;
+export type WebhookDeliveryAttempt =
+  typeof webhookDeliveryAttempts.$inferSelect;

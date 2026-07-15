@@ -132,4 +132,24 @@ export interface WebhookEndpoint {
   readonly environment: "sandbox" | "live";
   readonly secretPrefix: string;
   readonly createdAt: string;
+  readonly health: {
+    readonly pending: number;
+    readonly dead: number;
+    readonly lastDeliveredAt: string | null;
+  };
+}
+
+export interface WebhookDelivery {
+  readonly id: string;
+  readonly endpointId: string;
+  readonly eventId: string;
+  readonly eventType: string;
+  readonly state: "pending" | "delivering" | "delivered" | "dead";
+  readonly attempts: number;
+  readonly nextAttemptAt: string;
+  readonly lastAttemptAt: string | null;
+  readonly deliveredAt: string | null;
+  readonly lastErrorCategory: string | null;
+  readonly lastHttpStatus: number | null;
+  readonly createdAt: string;
 }
