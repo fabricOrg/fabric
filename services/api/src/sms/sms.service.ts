@@ -35,10 +35,6 @@ import { SmsRuntimeService } from "./sms-runtime.service.js";
 import type { SmsSendJob } from "./sms-send.job.js";
 import { VirtualPhoneService } from "./virtual-phone.service.js";
 
-/**
- * Coordinates the HTTP boundary, compliance gates, and durable send pipeline. SmsRuntimeService
- * owns provider wiring; live delivery still requires every configured safety gate to pass.
- */
 @Injectable()
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
@@ -95,7 +91,6 @@ export class SmsService {
       );
     }
     assertLiveRecipientAllowed(this.config, deliveryMode, input.to);
-    // (never a silent send, never a faked success) — the honest behavior until a 2nd provider lands.
     if (
       deliveryMode === "live" &&
       (await this.killSwitch.isPaused(`provider.${this.runtime.provider.slug}`))
@@ -231,8 +226,6 @@ export class SmsService {
       legacyDispatch: (input, prepared) =>
         this.runtime.legacyDispatch(input, prepared),
     });
-    // Route on the flag captured at send time (a plan change mid-flight must not flip provider);
-    // pre-F3 jobs without the flag came from live-configured tenants → configured provider.
   }
 
   async enqueuePending(tenantId: string): Promise<number> {
