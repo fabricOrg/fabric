@@ -1,5 +1,6 @@
 "use client";
 
+import type { MessageClass } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Dialog,
@@ -50,12 +51,14 @@ export function ViewAsApiDialog({
   to,
   from,
   body,
+  messageClass,
 }: {
   to: readonly string[];
   from: string;
   body: string;
+  messageClass: MessageClass;
 }) {
-  const { curl, node } = apiSnippets({ to, from, body });
+  const { curl, node } = apiSnippets({ to, from, body, messageClass });
 
   return (
     <Dialog>
