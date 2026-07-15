@@ -13,7 +13,7 @@ import {
 } from "@/lib/server/auth";
 
 /**
- * Production sign-in — Notion-style: a single, quiet, centered column on a warm canvas. No split
+ * Production sign-in — Notion-style: a single, quiet, centered column on a neutral canvas. No split
  * hero, no card chrome. Sign-in + self-serve sign-up run through the WorkOS AuthKit hosted page
  * (email+password / Google / passkeys / SSO; register/MFA/reset are all WorkOS-hosted — we own no
  * credential forms). Theme aware via design tokens (light + dark).
