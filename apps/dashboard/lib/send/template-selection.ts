@@ -7,3 +7,14 @@ export function resolveTemplateSelection(
   if (value === "custom") return null;
   return templates.find((template) => template.id === value) ?? null;
 }
+
+export function getTemplateSelectionLabel(
+  templates: readonly SmsTemplate[],
+  selectedId: string | null,
+): string {
+  if (!selectedId) return "Custom message";
+  return (
+    templates.find((template) => template.id === selectedId)?.name ??
+    "Custom message"
+  );
+}

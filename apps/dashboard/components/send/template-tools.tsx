@@ -13,7 +13,10 @@ import {
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
 import { renderTemplate } from "@/lib/send/preflight";
-import { resolveTemplateSelection } from "@/lib/send/template-selection";
+import {
+  getTemplateSelectionLabel,
+  resolveTemplateSelection,
+} from "@/lib/send/template-selection";
 
 /** Controlled template picker. Custom mode deliberately preserves the current body for editing. */
 export function TemplateBar({
@@ -25,6 +28,8 @@ export function TemplateBar({
   selectedId: string | null;
   onSelect: (template: SmsTemplate | null) => void;
 }) {
+  const selectedLabel = getTemplateSelectionLabel(templates, selectedId);
+
   return (
     <div className="flex items-center gap-2">
       <Select
@@ -37,7 +42,7 @@ export function TemplateBar({
           className="h-8 w-48 text-sm"
           aria-label="Message template"
         >
-          <SelectValue />
+          <SelectValue>{selectedLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="custom">Custom message</SelectItem>

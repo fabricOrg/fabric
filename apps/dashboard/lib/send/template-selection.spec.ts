@@ -1,6 +1,9 @@
 import type { SmsTemplate } from "@app/contracts";
 import { describe, expect, it } from "vitest";
-import { resolveTemplateSelection } from "./template-selection";
+import {
+  getTemplateSelectionLabel,
+  resolveTemplateSelection,
+} from "./template-selection";
 
 const template: SmsTemplate = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -18,5 +21,22 @@ describe("TemplateBar selection", () => {
 
   it("returns to custom-message mode explicitly", () => {
     expect(resolveTemplateSelection([template], "custom")).toBeNull();
+  });
+
+  it("renders the selected template name in the closed picker", () => {
+    expect(getTemplateSelectionLabel([template], template.id)).toBe("Receipt");
+  });
+
+  it("renders custom mode when no template is selected", () => {
+    expect(getTemplateSelectionLabel([template], null)).toBe("Custom message");
+  });
+
+  it("fails safely to custom mode for a stale template id", () => {
+    expect(
+      getTemplateSelectionLabel(
+        [template],
+        "22222222-2222-4222-8222-222222222222",
+      ),
+    ).toBe("Custom message");
   });
 });
