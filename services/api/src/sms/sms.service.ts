@@ -33,6 +33,7 @@ import { SendersService } from "../senders/senders.service.js";
 import { assertSendCompliant } from "./sms-compliance.js";
 import { dispatchSend as dispatchProviderSend } from "./sms-dispatch.js";
 import { ingestProviderDlr } from "./sms-dlr.js";
+import { assertLiveRecipientAllowed } from "./sms-live-safety.js";
 import { buildSmsProviders } from "./sms-providers.js";
 import { getMessage, listMessages } from "./sms-read.js";
 import { SMS_SEND_QUEUE, type SmsSendJob } from "./sms-send.job.js";
@@ -40,11 +41,9 @@ import { VirtualPhoneService } from "./virtual-phone.service.js";
 import { maybeAutoStop } from "./virtual-phone-auto-stop.js";
 
 /**
- * Wires the HTTP boundary to the L5 send pipeline. Holds the EngineDeps (the app_runtime AppDb + the
- * SMS provider + its creds) and exposes send + DLR-ingest. Provider is selected by SMS_PROVIDER:
+ * Wires the HTTP boundary to the L5 send pipeline. Holds the database and provider dependencies.
  * `fake` (default — sandbox/tests) or `arkesel` (real Ghana vendor). The engine + controllers stay
- * provider-agnostic via SmsSenderPlugin. Live SMS is a redline: Arkesel defaults to sandbox mode
- * (ARKESEL_SANDBOX) and every send is gated by the platform.sms_sending kill-switch.
+ * provider-agnostic. Live delivery requires every configured safety gate to pass.
  */
 @Injectable()
 export class SmsService {
@@ -121,6 +120,7 @@ export class SmsService {
         this.liveReadinessReason ?? "Live SMS is not configured.",
       );
     }
+    assertLiveRecipientAllowed(this.config, deliveryMode, input.to);
     // (never a silent send, never a faked success) — the honest behavior until a 2nd provider lands.
     if (
       deliveryMode === "live" &&
