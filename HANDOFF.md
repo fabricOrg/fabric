@@ -66,8 +66,19 @@ no package publication** (external gate intentionally closed).
   create dialog (key + body + JSON variable schema validated against the subset). 6 route-handler
   tests (role matrix). **Slice 6b deferred** (visual schema builder, interactive preview panel,
   template→draft conversion, member-draft/developer-read-only gating — a developer's session role
-  collapses to member, so that split needs a `definitions:write` permission). Next: slice 7 (SDK
-  method + OpenAPI parity + evidence doc + AC traceability).
+  collapses to member, so that split needs a `definitions:write` permission).
+- Slice 7 DONE (`a126861`) — `@fabric-messaging/sdk` `MessagesResource.preview` (typed
+  `MessagePreview`) wired + exported; `/v1/messages/preview` + schemas in the OpenAPI generator,
+  both artifacts regenerated + `openapi:check` current; SDK contract-parity test; evidence doc
+  `docs/sdk/evidence/sdk-003.md` (AC01–AC07; AC02 member-draft + AC07 template conversion deferred
+  to slice 6b).
+
+**SDK-003 STATUS: core slices 0–7 COMPLETE + verified (local, unpushed).** Full engine + API + SDK +
+OpenAPI + dashboard surface for author/version/release/preview managed SMS definitions. Remaining:
+**slice 6b** (visual schema builder, interactive preview panel, template→draft conversion,
+member-draft/developer-read-only gating). Redline: ADR-0005 still `proposed` — product+security
+sign-off required (slice-0 §5) before push/publish. Next backlog item after 6b: SDK-004 (typed
+definition catalog CLI).
 - Known pre-existing local failure (NOT SDK-003): `wallet/statement.integration` fails in isolation
   with a ledger balance drift (`expected 0n to be 9750n`) — a drifted account in the local dev DB; no
   wallet/ledger code was touched. Needs a local ledger reseed, unrelated to this work.

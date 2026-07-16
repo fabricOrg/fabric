@@ -116,8 +116,11 @@ tests. The feature stays **invisible** until slice 6's gate conditions all pass 
    **Slice 6b (deferred, best with browser verification):** visual schema builder, interactive preview
    panel, template→draft conversion, and member-draft / developer-read-only gating (a developer's
    session role collapses to member — needs a `definitions:write` permission or developer_access gate).
-7. **SDK + docs** — SDK `messages.preview` + read-only definition discovery; OpenAPI/contract parity;
-   evidence doc `docs/sdk/evidence/sdk-003.md` with AC traceability.
+7. **SDK + docs** — DONE (`a126861`). `MessagesResource.preview` in `@fabric-messaging/sdk` (typed
+   `MessagePreview`), wired + exported; `/v1/messages/preview` + schemas in the OpenAPI generator,
+   regenerated both artifacts, `openapi:check` current; SDK contract-parity test; evidence doc
+   `docs/sdk/evidence/sdk-003.md` (AC01–AC07, AC02/AC07 deferred to 6b). Read-only definition
+   discovery (a list endpoint on the SDK) folds into a later increment with the CLI catalog (SDK-004).
 
 ## 5. Key risks / watch-items
 
