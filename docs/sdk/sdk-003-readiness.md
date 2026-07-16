@@ -87,8 +87,10 @@ tests. The feature stays **invisible** until slice 6's gate conditions all pass 
    explicit REVOKE. Real-Postgres gate: 9 tests (isolation + fail-closed, WITH CHECK denial, key
    uniqueness, version UPDATE/DELETE immutability, one-release-per-env, cross-app release rejection).
    `db:assert` + `db:assert:drift` green.
-2. **Contracts + compatibility engine** — zod for definition/version/release + the variable-schema
-   subset; pure `analyzeCompatibility`. Unit + schema tests. OpenAPI stubs.
+2. **Contracts + compatibility engine** — DONE (`d4bfdc8`). `@app/contracts`: stable-key grammar,
+   closed variable-schema subset (strict nodes, path-coded bound checks), definition/version/release
+   DTOs. `@app/domain`: pure `analyzeCompatibility` (per-field verdict + JSON paths). 22 + 12 unit
+   tests. OpenAPI wiring deferred to slice 4/5 (endpoints don't exist yet).
 3. **Server-side renderer + preview core** — new pure renderer (port `preflight.ts` tokens) composed
    with `encodeAndSegment` + `rateSegments` + non-throwing compliance/sender checks. Returns structured
    blockers/warnings, rendered SMS, encoding, segments, exact-currency cost, resolved locale, sender

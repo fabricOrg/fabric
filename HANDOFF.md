@@ -41,8 +41,12 @@ no package publication** (external gate intentionally closed).
   case-insensitively, version immutability enforced by REVOKE (a default-privilege grant hands
   app_runtime full DML, so it must be revoked, not merely un-granted), one-release-per-env, composite
   containment FKs blocking cross-app/tenant releases. 9 real-Postgres invariant tests +
-  `db:assert`/`db:assert:drift` green. Next: slice 2 (contracts + `analyzeCompatibility` + schema-subset
-  validator).
+  `db:assert`/`db:assert:drift` green.
+- Slice 2 DONE (`d4bfdc8`) — `@app/contracts` stable-key grammar + closed variable-schema subset
+  (strict nodes reject `$ref`/`oneOf`; path-coded depth/size/count checks) + definition/version/release
+  DTOs; `@app/domain` pure `analyzeCompatibility` (per-field breaking/compatible verdict + JSON paths).
+  34 new unit tests. Next: slice 3 (server-side renderer + preview core — the net-new renderer that
+  becomes the single source preview and SDK-005 send both consume).
 - **Still open:** ADR-0005 remains `proposed` (product+security review pending — slice-0 §5 lists the
   asks); the runtime-vs-management authority split lands at the API layer in slice 4, not the DB grants.
 - Local-env note: this dev DB has `app_owner`/`app_migrator` table-ownership drift; running the
