@@ -108,12 +108,14 @@ tests. The feature stays **invisible** until slice 6's gate conditions all pass 
    (3) asserts messages/dispatches/outbox/PII counts unchanged; parity proven in the slice-3 render
    tests. Controller unit (3): scope gate + env passthrough. (`messages:read` scope deferred — reuses
    `sms:read` for now.)
-6. **Dashboard surface + release gate** — list/create/edit/validate/publish/archive + **Use-in-code**
-   panel (stable key, schema, env, untyped SDK example) + explicit template→draft conversion (review
-   key/schema/sender/locale/content; original template unchanged). Error/loading/empty as first-class
-   states. Accessible component/E2E for all states. **Gate: visible only when create, edit,
-   publish-to-sandbox, preview, permissions, and audit are all functional; no live button, no
-   unsupported channel selector.**
+6. **Dashboard surface** — DONE for the core (`d99c140`): server-only client + BFF routes (list any
+   member; create/publish/archive owner/admin; preview any member; trusted-origin gate), page listing
+   status/version/release state + a per-definition **Use-in-code** snippet + publish-to-sandbox /
+   archive actions, and a create dialog (key + body + JSON variable schema validated against the
+   subset). Error/empty/loading first-class. 6 route-handler tests (role matrix + out-of-subset 422).
+   **Slice 6b (deferred, best with browser verification):** visual schema builder, interactive preview
+   panel, template→draft conversion, and member-draft / developer-read-only gating (a developer's
+   session role collapses to member — needs a `definitions:write` permission or developer_access gate).
 7. **SDK + docs** — SDK `messages.preview` + read-only definition discovery; OpenAPI/contract parity;
    evidence doc `docs/sdk/evidence/sdk-003.md` with AC traceability.
 

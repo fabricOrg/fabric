@@ -60,9 +60,14 @@ no package publication** (external gate intentionally closed).
   env and renders via the shared `previewSms` core; `sms:read` scope (a dedicated `messages:read`
   scope deferred); unreleased key → 404; invalid payload → path-coded blockers. No-side-effect
   integration (3) asserts messages/dispatches/outbox/PII counts unchanged; 3 controller-unit tests.
-  Next: slice 6 (dashboard definitions surface — list/create/edit/validate/publish/archive +
-  Use-in-code panel + template→draft conversion + role gating at the BFF) then slice 7 (SDK +
-  OpenAPI + evidence doc).
+- Slice 6 core DONE (`d99c140`) — dashboard `/message-definitions`: server-only client + BFF routes
+  (list/create/publish/archive/preview with owner/admin write gating + trusted-origin), a page with
+  status/version/release state + per-definition Use-in-code snippet + publish/archive actions, and a
+  create dialog (key + body + JSON variable schema validated against the subset). 6 route-handler
+  tests (role matrix). **Slice 6b deferred** (visual schema builder, interactive preview panel,
+  template→draft conversion, member-draft/developer-read-only gating — a developer's session role
+  collapses to member, so that split needs a `definitions:write` permission). Next: slice 7 (SDK
+  method + OpenAPI parity + evidence doc + AC traceability).
 - Known pre-existing local failure (NOT SDK-003): `wallet/statement.integration` fails in isolation
   with a ledger balance drift (`expected 0n to be 9750n`) — a drifted account in the local dev DB; no
   wallet/ledger code was touched. Needs a local ledger reseed, unrelated to this work.
