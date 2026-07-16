@@ -96,10 +96,12 @@ tests. The feature stays **invisible** until slice 6's gate conditions all pass 
    → validate → render → `encodeAndSegment` → `rateSegments`; bounded; blockers ⇒ nothing rendered).
    11 tests incl. preview↔send parity + no-PII-in-errors. Sender/compliance + resolved-locale/version
    enrichment and the HTTP endpoint (with the no-side-effect integration test) move to slices 4/5.
-4. **Management API + authoring** — create/edit/validate/publish-to-sandbox/archive. **Runtime vs
-   management authority split** (ADR-0005 #6): drafting/publishing require a dashboard-session role, not
-   a runtime `sk_*` key; audit events on every write. Role/scope/BFF-containment tests; forged
-   app/env-ID rejection; member can draft+preview but not publish; developer read-only.
+4. **Management API + authoring** — DONE (`ec96a2d`). `v1/message-definitions`
+   create/list/add-version/publish/archive. Authority (ADR-0005 #6): operator or dashboard-session
+   (BFF token, `applicationId===null`); a scoped `sk_*` key is rejected (`management_requires_session`).
+   Breaking version rejected; publish upserts the single sandbox release + audits; live refused. 7
+   real-Postgres + 5 controller unit tests. Role gating (member draft-only / developer read-only) is
+   enforced at the BFF — lands with the dashboard surface in slice 6.
 5. **Public preview endpoint** (`messages.preview`) — released-definition preview via the slice-3 core.
    **Parity test:** preview render/encoding/segments/cost == a subsequent managed send on the same
    release + pricing state (this is why slice 3's renderer must be the single source SDK-005 also uses).

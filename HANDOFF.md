@@ -50,9 +50,16 @@ no package publication** (external gate intentionally closed).
   path-coded errors, never echoes the value) + `previewSms` (token-declared check → validate → render
   → `encodeAndSegment` → `rateSegments`, bounded, blockers ⇒ nothing rendered/priced). The single
   render source preview (slice 5) and SDK-005 send will share. 11 tests incl. preview↔send parity +
-  no-PII-in-errors. Next: slice 4 (management API — create/edit/publish/archive; dashboard-session
-  guard NOT `sk_*`; audit; forged app/env-id rejection) then slice 5 (public `messages.preview`
-  endpoint + no-side-effect integration test).
+  no-PII-in-errors.
+- Slice 4 DONE (`ec96a2d`) — `v1/message-definitions` create/list/add-version/publish/archive.
+  Authority (ADR-0005 #6): operator or dashboard session (BFF token → `applicationId===null`); a
+  scoped `sk_*` key is refused (`management_requires_session`). Breaking version rejected via
+  `analyzeCompatibility`; publish upserts the single sandbox release + audits; live refused. 7
+  real-Postgres + 5 controller-unit tests. Next: slice 5 (public `messages.preview` endpoint wiring
+  `previewSms` + the no-side-effect integration test asserting wallet/provider/outbox/PII untouched).
+- Known pre-existing local failure (NOT SDK-003): `wallet/statement.integration` fails in isolation
+  with a ledger balance drift (`expected 0n to be 9750n`) — a drifted account in the local dev DB; no
+  wallet/ledger code was touched. Needs a local ledger reseed, unrelated to this work.
 - **Still open:** ADR-0005 remains `proposed` (product+security review pending — slice-0 §5 lists the
   asks); the runtime-vs-management authority split lands at the API layer in slice 4, not the DB grants.
 - Local-env note: this dev DB has `app_owner`/`app_migrator` table-ownership drift; running the
