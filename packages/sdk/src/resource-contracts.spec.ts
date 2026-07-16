@@ -3,6 +3,7 @@ import {
   listSendersResponseSchema,
   listWebhookDeliveriesResponseSchema,
   listWebhookEndpointsResponseSchema,
+  previewMessageResponse,
   replayWebhookDeliveryResponseSchema,
   verifyCheckResponse,
   verifyStartResponse,
@@ -194,6 +195,37 @@ describe("canonical contract parity", () => {
         status: "completed",
         acceptedCount: 1,
         items: [{ clientReference: "one" }, { errorCode: "invalid_sms" }],
+      },
+    });
+  });
+
+  it("maps a canonical message preview response", async () => {
+    const payload = previewMessageResponse.parse({
+      version_id: "2ccb4b9f-384e-4f4e-8983-ff12555223d0",
+      environment: "sandbox",
+      resolved_locale: "en",
+      blockers: [],
+      preview: {
+        body: "Hi Ada",
+        encoding: "gsm7",
+        length: 6,
+        segments: 1,
+        cost_minor: "3",
+        currency: "GHS",
+      },
+      request_id: "req_1",
+    });
+    await expect(
+      clientReturning(payload).messages.preview("order.shipped", {
+        data: { name: "Ada" },
+      }),
+    ).resolves.toMatchObject({
+      data: {
+        versionId: "2ccb4b9f-384e-4f4e-8983-ff12555223d0",
+        environment: "sandbox",
+        resolvedLocale: "en",
+        blockers: [],
+        preview: { encoding: "gsm7", segments: 1, costMinor: "3" },
       },
     });
   });

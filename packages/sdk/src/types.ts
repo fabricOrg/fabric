@@ -153,3 +153,28 @@ export interface WebhookDelivery {
   readonly lastHttpStatus: number | null;
   readonly createdAt: string;
 }
+
+/** A field-path error that blocks a preview. Carries a path + stable code, never the rejected value. */
+export interface PreviewBlocker {
+  readonly path: string;
+  readonly code: string;
+}
+
+/** The rendered SMS a preview produced (present only when there are no blockers). */
+export interface SmsPreview {
+  readonly body: string;
+  readonly encoding: "gsm7" | "ucs2";
+  readonly length: number;
+  readonly segments: number;
+  readonly costMinor: string;
+  readonly currency: string;
+}
+
+/** Result of previewing a released definition — equals what a subsequent send would render. */
+export interface MessagePreview {
+  readonly versionId: string;
+  readonly environment: "sandbox" | "live";
+  readonly resolvedLocale: string;
+  readonly blockers: readonly PreviewBlocker[];
+  readonly preview: SmsPreview | null;
+}

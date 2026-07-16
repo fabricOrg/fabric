@@ -293,6 +293,84 @@
         }
       }
     },
+    "/v1/messages/preview": {
+      "post": {
+        "operationId": "previewMessage",
+        "summary": "Preview a released message definition (no side effects)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewMessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or missing API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Platform error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sms/batches": {
       "post": {
         "operationId": "sendSmsBatch",
@@ -1686,6 +1764,109 @@
           },
           "currency": {
             "enum": ["GHS", "NGN", "USD"]
+          }
+        }
+      },
+      "PreviewMessageRequest": {
+        "type": "object",
+        "required": ["key"],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          }
+        }
+      },
+      "PreviewBlocker": {
+        "type": "object",
+        "required": ["path", "code"],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "SmsPreview": {
+        "type": "object",
+        "required": [
+          "body",
+          "encoding",
+          "length",
+          "segments",
+          "cost_minor",
+          "currency"
+        ],
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "encoding": {
+            "enum": ["gsm7", "ucs2"]
+          },
+          "length": {
+            "type": "integer"
+          },
+          "segments": {
+            "type": "integer"
+          },
+          "cost_minor": {
+            "type": "string",
+            "pattern": "^-?\\d+$"
+          },
+          "currency": {
+            "type": "string"
+          }
+        }
+      },
+      "PreviewMessageResponse": {
+        "type": "object",
+        "required": [
+          "version_id",
+          "environment",
+          "resolved_locale",
+          "blockers",
+          "preview",
+          "request_id"
+        ],
+        "properties": {
+          "version_id": {
+            "type": "string"
+          },
+          "environment": {
+            "enum": ["sandbox", "live"]
+          },
+          "resolved_locale": {
+            "type": "string"
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PreviewBlocker"
+            }
+          },
+          "preview": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SmsPreview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_id": {
+            "type": "string"
           }
         }
       },

@@ -1,4 +1,5 @@
 import { EmailResource } from "./email.js";
+import { MessagesResource } from "./messages.js";
 import { SenderIdsResource } from "./sender-ids.js";
 import { SmsResource } from "./sms.js";
 import { type FabricLogger, Transport } from "./transport.js";
@@ -29,6 +30,7 @@ export class Fabric {
   readonly verify: VerifyResource;
   readonly wallet: WalletResource;
   readonly webhooks: WebhooksResource;
+  readonly messages: MessagesResource;
 
   constructor(config: FabricConfig) {
     assertServerRuntime();
@@ -62,6 +64,7 @@ export class Fabric {
     this.verify = new VerifyResource(transport);
     this.wallet = new WalletResource(transport);
     this.webhooks = new WebhooksResource(transport);
+    this.messages = new MessagesResource(transport);
   }
 }
 

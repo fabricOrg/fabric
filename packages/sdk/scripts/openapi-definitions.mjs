@@ -21,6 +21,61 @@ export const schemas = {
       currency: { enum: ["GHS", "NGN", "USD"] },
     },
   },
+  PreviewMessageRequest: {
+    type: "object",
+    required: ["key"],
+    properties: {
+      key: { type: "string" },
+      data: { type: "object", additionalProperties: true },
+      currency: { type: "string", minLength: 3, maxLength: 3 },
+    },
+  },
+  PreviewBlocker: {
+    type: "object",
+    required: ["path", "code"],
+    properties: {
+      path: { type: "string" },
+      code: { type: "string" },
+    },
+  },
+  SmsPreview: {
+    type: "object",
+    required: [
+      "body",
+      "encoding",
+      "length",
+      "segments",
+      "cost_minor",
+      "currency",
+    ],
+    properties: {
+      body: { type: "string" },
+      encoding: { enum: ["gsm7", "ucs2"] },
+      length: { type: "integer" },
+      segments: { type: "integer" },
+      cost_minor: { type: "string", pattern: "^-?\\d+$" },
+      currency: { type: "string" },
+    },
+  },
+  PreviewMessageResponse: {
+    type: "object",
+    required: [
+      "version_id",
+      "environment",
+      "resolved_locale",
+      "blockers",
+      "preview",
+      "request_id",
+    ],
+    properties: {
+      version_id: { type: "string" },
+      environment: { enum: ["sandbox", "live"] },
+      resolved_locale: { type: "string" },
+      blockers: { type: "array", items: ref("PreviewBlocker") },
+      preview: { oneOf: [ref("SmsPreview"), { type: "null" }] },
+      request_id: { type: "string" },
+    },
+  },
   MessageStatus: {
     enum: [
       "queued",
@@ -454,6 +509,14 @@ export const paths = {
         },
       }),
     }),
+  },
+  "/v1/messages/preview": {
+    post: operation(
+      "previewMessage",
+      "Preview a released message definition (no side effects)",
+      { 200: response("Preview", ref("PreviewMessageResponse")) },
+      ref("PreviewMessageRequest"),
+    ),
   },
   "/v1/sms/batches": {
     post: operation(
