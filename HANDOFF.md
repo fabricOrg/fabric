@@ -73,6 +73,29 @@ no package publication** (external gate intentionally closed).
   `docs/sdk/evidence/sdk-003.md` (AC01–AC07; AC02 member-draft + AC07 template conversion deferred
   to slice 6b).
 
+## Per-user permission management (2026-07-16, local, unpushed)
+
+Admin-managed per-user permissions on top of the role model (resolves the "tell a developer from a
+member" gap). Decisions: **full per-user override** (explicit set wins; role = template), **any admin
+grants anything** (escalation trade-off — commented at the seam), **existing catalog** + new
+`definitions:write` / `definitions:publish`. Safety rails: **owner is never editable** (no lock-out).
+
+- `@app/contracts/permissions` — single-source catalog + role baselines + pure
+  `baselinePermissions`/`effectivePermissions`. `memberships.permissions text[]` (migration `0077`;
+  NULL = baseline, set = exact override).
+- API: identity session = `effectivePermissions(override ?? baseline)`; `members.setPermissions`
+  (owner-immutable); `PUT /internal/tenants/:id/members/:userId/permissions`. identity.service local
+  role map removed (now one source with the dashboard).
+- Dashboard: message-definitions BFF gates on `definitions:write`/`definitions:publish` (not role);
+  Team page per-user permission editor (`MemberPermissionsDialog` + `PUT /api/team/.../permissions`,
+  owner/admin gated). Commits `63ee169`, `61ccc48`, `0f15b56`.
+- Baseline: member gains `definitions:write` (may draft), not publish; owner/admin get both;
+  developer-access adds only api_keys/logs (so a developer cannot author definitions — the original
+  ask, now enforced by permission, and an admin can override per user).
+- **Follow-ups:** member mutations (incl. permission grants) are still **unaudited** in the members
+  module (matches existing updateRole/remove — worth adding); a bounded-by-granter escalation rule if
+  the "any admin grants anything" trade-off is revisited; slice-6b definitions UI still open.
+
 **SDK-003 STATUS: core slices 0–7 COMPLETE + verified (local, unpushed).** Full engine + API + SDK +
 OpenAPI + dashboard surface for author/version/release/preview managed SMS definitions. Remaining:
 **slice 6b** (visual schema builder, interactive preview panel, template→draft conversion,
