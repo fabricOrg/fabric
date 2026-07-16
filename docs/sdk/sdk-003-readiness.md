@@ -102,10 +102,12 @@ tests. The feature stays **invisible** until slice 6's gate conditions all pass 
    Breaking version rejected; publish upserts the single sandbox release + audits; live refused. 7
    real-Postgres + 5 controller unit tests. Role gating (member draft-only / developer read-only) is
    enforced at the BFF — lands with the dashboard surface in slice 6.
-5. **Public preview endpoint** (`messages.preview`) — released-definition preview via the slice-3 core.
-   **Parity test:** preview render/encoding/segments/cost == a subsequent managed send on the same
-   release + pricing state (this is why slice 3's renderer must be the single source SDK-005 also uses).
-   No-side-effect integration test: assert wallet, provider, outbox, PII vault all untouched.
+5. **Public preview endpoint** (`messages.preview`) — DONE (`b13dd91`). `POST /v1/messages/preview`
+   resolves the released definition for the key's env and renders via the slice-3 core; `sms:read`
+   scope; unreleased key → 404; invalid payload → path-coded blockers. No-side-effect integration
+   (3) asserts messages/dispatches/outbox/PII counts unchanged; parity proven in the slice-3 render
+   tests. Controller unit (3): scope gate + env passthrough. (`messages:read` scope deferred — reuses
+   `sms:read` for now.)
 6. **Dashboard surface + release gate** — list/create/edit/validate/publish/archive + **Use-in-code**
    panel (stable key, schema, env, untyped SDK example) + explicit template→draft conversion (review
    key/schema/sender/locale/content; original template unchanged). Error/loading/empty as first-class

@@ -55,8 +55,14 @@ no package publication** (external gate intentionally closed).
   Authority (ADR-0005 #6): operator or dashboard session (BFF token → `applicationId===null`); a
   scoped `sk_*` key is refused (`management_requires_session`). Breaking version rejected via
   `analyzeCompatibility`; publish upserts the single sandbox release + audits; live refused. 7
-  real-Postgres + 5 controller-unit tests. Next: slice 5 (public `messages.preview` endpoint wiring
-  `previewSms` + the no-side-effect integration test asserting wallet/provider/outbox/PII untouched).
+  real-Postgres + 5 controller-unit tests.
+- Slice 5 DONE (`b13dd91`) — `POST /v1/messages/preview` resolves the released definition for the key's
+  env and renders via the shared `previewSms` core; `sms:read` scope (a dedicated `messages:read`
+  scope deferred); unreleased key → 404; invalid payload → path-coded blockers. No-side-effect
+  integration (3) asserts messages/dispatches/outbox/PII counts unchanged; 3 controller-unit tests.
+  Next: slice 6 (dashboard definitions surface — list/create/edit/validate/publish/archive +
+  Use-in-code panel + template→draft conversion + role gating at the BFF) then slice 7 (SDK +
+  OpenAPI + evidence doc).
 - Known pre-existing local failure (NOT SDK-003): `wallet/statement.integration` fails in isolation
   with a ledger balance drift (`expected 0n to be 9750n`) — a drifted account in the local dev DB; no
   wallet/ledger code was touched. Needs a local ledger reseed, unrelated to this work.
