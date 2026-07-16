@@ -34,6 +34,8 @@ export * from "./message-batches.js";
 // Managed message definitions (SDK-003) — stable keys, immutable versions, environment releases,
 // the portable variable-schema subset. Compatibility logic lives in @app/domain, not here.
 export * from "./message-definitions.js";
+// Public message preview (messages.preview) — render a released definition, no side effects.
+export * from "./message-preview.js";
 // F5.3 canonical message-status enum — public API value on responses/webhooks; @app/integrations
 // (raw→canonical mapping) and the L5 send pipeline import it from here (one source of truth).
 export * from "./message-status.js";
