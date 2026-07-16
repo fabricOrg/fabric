@@ -45,8 +45,14 @@ no package publication** (external gate intentionally closed).
 - Slice 2 DONE (`d4bfdc8`) — `@app/contracts` stable-key grammar + closed variable-schema subset
   (strict nodes reject `$ref`/`oneOf`; path-coded depth/size/count checks) + definition/version/release
   DTOs; `@app/domain` pure `analyzeCompatibility` (per-field breaking/compatible verdict + JSON paths).
-  34 new unit tests. Next: slice 3 (server-side renderer + preview core — the net-new renderer that
-  becomes the single source preview and SDK-005 send both consume).
+  34 new unit tests.
+- Slice 3 DONE (`8bb37a8`) — `@app/domain/message-render.ts`: pure `validatePayload` (subset →
+  path-coded errors, never echoes the value) + `previewSms` (token-declared check → validate → render
+  → `encodeAndSegment` → `rateSegments`, bounded, blockers ⇒ nothing rendered/priced). The single
+  render source preview (slice 5) and SDK-005 send will share. 11 tests incl. preview↔send parity +
+  no-PII-in-errors. Next: slice 4 (management API — create/edit/publish/archive; dashboard-session
+  guard NOT `sk_*`; audit; forged app/env-id rejection) then slice 5 (public `messages.preview`
+  endpoint + no-side-effect integration test).
 - **Still open:** ADR-0005 remains `proposed` (product+security review pending — slice-0 §5 lists the
   asks); the runtime-vs-management authority split lands at the API layer in slice 4, not the DB grants.
 - Local-env note: this dev DB has `app_owner`/`app_migrator` table-ownership drift; running the

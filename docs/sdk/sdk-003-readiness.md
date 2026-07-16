@@ -91,11 +91,11 @@ tests. The feature stays **invisible** until slice 6's gate conditions all pass 
    closed variable-schema subset (strict nodes, path-coded bound checks), definition/version/release
    DTOs. `@app/domain`: pure `analyzeCompatibility` (per-field verdict + JSON paths). 22 + 12 unit
    tests. OpenAPI wiring deferred to slice 4/5 (endpoints don't exist yet).
-3. **Server-side renderer + preview core** — new pure renderer (port `preflight.ts` tokens) composed
-   with `encodeAndSegment` + `rateSegments` + non-throwing compliance/sender checks. Returns structured
-   blockers/warnings, rendered SMS, encoding, segments, exact-currency cost, resolved locale, sender
-   status, version. Renderer security/limit tests (oversized/missing/extra/wrong-type → bounded
-   field-path errors, no PII persisted).
+3. **Server-side renderer + preview core** — DONE (`8bb37a8`). `@app/domain/message-render.ts`:
+   `validatePayload` (subset → path-coded errors, no value echoed) + `previewSms` (token-declared check
+   → validate → render → `encodeAndSegment` → `rateSegments`; bounded; blockers ⇒ nothing rendered).
+   11 tests incl. preview↔send parity + no-PII-in-errors. Sender/compliance + resolved-locale/version
+   enrichment and the HTTP endpoint (with the no-side-effect integration test) move to slices 4/5.
 4. **Management API + authoring** — create/edit/validate/publish-to-sandbox/archive. **Runtime vs
    management authority split** (ADR-0005 #6): drafting/publishing require a dashboard-session role, not
    a runtime `sk_*` key; audit events on every write. Role/scope/BFF-containment tests; forged
