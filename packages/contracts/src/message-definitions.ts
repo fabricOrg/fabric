@@ -218,8 +218,13 @@ export const messageDefinitionRelease = z.object({
 });
 export type MessageDefinitionRelease = z.infer<typeof messageDefinitionRelease>;
 
-// Author a draft (management path, SDK-003 slice 4). Content + schema authored together.
+export const definitionEnvironment = z.enum(["sandbox", "live"]);
+export type DefinitionEnvironment = z.infer<typeof definitionEnvironment>;
+
+// Author a draft (management path, SDK-003 slice 4). Content + schema authored together. Targets the
+// workspace default application unless application_id is given.
 export const createMessageDefinitionRequest = z.object({
+  application_id: z.string().uuid().optional(),
   key: stableKey,
   variable_schema: variableSchema,
   content: smsVariantContent,
@@ -227,4 +232,40 @@ export const createMessageDefinitionRequest = z.object({
 });
 export type CreateMessageDefinitionRequest = z.infer<
   typeof createMessageDefinitionRequest
+>;
+
+// Add a new immutable version to an existing definition. Rejected server-side if the schema change is
+// breaking versus the latest version (a breaking change must use a new stable key — slice-0 §3).
+export const addMessageDefinitionVersionRequest = z.object({
+  variable_schema: variableSchema,
+  content: smsVariantContent,
+  default_locale: z.string().min(2),
+});
+export type AddMessageDefinitionVersionRequest = z.infer<
+  typeof addMessageDefinitionVersionRequest
+>;
+
+// Publish an immutable version to an environment. SDK-003 keeps live promotion absent — only sandbox
+// is accepted here; the API rejects `live` until the live path lands (SDK-006).
+export const publishMessageDefinitionRequest = z.object({
+  environment: definitionEnvironment,
+  version_id: z.string().uuid(),
+});
+export type PublishMessageDefinitionRequest = z.infer<
+  typeof publishMessageDefinitionRequest
+>;
+
+// A definition with its latest version and current environment releases (list/detail response).
+export const messageDefinitionState = z.object({
+  definition: messageDefinition,
+  latest_version: messageDefinitionVersion.nullable(),
+  releases: z.array(messageDefinitionRelease),
+});
+export type MessageDefinitionState = z.infer<typeof messageDefinitionState>;
+
+export const listMessageDefinitionsResponse = z.object({
+  definitions: z.array(messageDefinitionState),
+});
+export type ListMessageDefinitionsResponse = z.infer<
+  typeof listMessageDefinitionsResponse
 >;

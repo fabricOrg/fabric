@@ -14,6 +14,7 @@
   "dependencies": {
     "@app/contracts": "workspace:*",
     "@app/db": "workspace:*",
+    "@app/domain": "workspace:*",
     "@app/integrations": "workspace:*",
     "@app/sms-engine": "workspace:*",
     "@app/wallet": "workspace:*",

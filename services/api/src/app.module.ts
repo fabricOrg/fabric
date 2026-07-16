@@ -17,6 +17,7 @@ import { ImpersonationModule } from "./impersonation/impersonation.module.js";
 import { KillSwitchModule } from "./kill-switches/kill-switches.module.js";
 import { MaintenanceModule } from "./maintenance/maintenance.module.js";
 import { MembersModule } from "./members/members.module.js";
+import { MessageDefinitionsModule } from "./message-definitions/message-definitions.module.js";
 import { PaymentsModule } from "./payments/payments.module.js";
 import { PluginsModule } from "./plugins/plugins.module.js";
 import { PrivacyModule } from "./privacy/privacy.module.js";
@@ -57,6 +58,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     ProposalsModule,
     ApiKeysModule,
     ApplicationsModule,
+    MessageDefinitionsModule,
     RequestLogsModule,
     ConsentModule,
     SendersModule,

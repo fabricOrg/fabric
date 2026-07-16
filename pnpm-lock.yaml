@@ -370,6 +370,9 @@ importers:
       '@app/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@app/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@app/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
