@@ -32,10 +32,12 @@ function useInCodeSnippet(state: MessageDefinitionState): string {
 
 function DefinitionCard({
   state,
-  canManage,
+  canWrite,
+  canPublish,
 }: {
   state: MessageDefinitionState;
-  canManage: boolean;
+  canWrite: boolean;
+  canPublish: boolean;
 }) {
   const { definition, latest_version, releases } = state;
   const releasedToSandbox = releases.length > 0;
@@ -66,12 +68,13 @@ function DefinitionCard({
         </pre>
       </div>
 
-      {canManage ? (
+      {canWrite ? (
         <div className="border-t pt-3">
           <DefinitionActions
             id={definition.id}
             latestVersionId={latest_version?.id ?? null}
             status={definition.status}
+            canPublish={canPublish}
           />
         </div>
       ) : null}
@@ -81,7 +84,8 @@ function DefinitionCard({
 
 export default async function MessageDefinitionsPage() {
   const session = await requireDashboardSession();
-  const canManage = session.role === "owner" || session.role === "admin";
+  const canWrite = session.permissions.includes("definitions:write");
+  const canPublish = session.permissions.includes("definitions:publish");
 
   let definitions: MessageDefinitionState[] = [];
   let loadError = false;
@@ -101,7 +105,7 @@ export default async function MessageDefinitionsPage() {
             Author once, publish to sandbox, and send by key from your code.
           </PageHeaderDescription>
         </PageHeaderHeading>
-        {canManage ? (
+        {canWrite ? (
           <PageHeaderActions>
             <CreateDefinitionDialog />
           </PageHeaderActions>
@@ -117,7 +121,7 @@ export default async function MessageDefinitionsPage() {
         <TableEmptyState
           title="No message definitions yet"
           description="Author a reusable message with a stable key and a variable schema, then publish it to sandbox."
-          action={canManage ? <CreateDefinitionDialog /> : undefined}
+          action={canWrite ? <CreateDefinitionDialog /> : undefined}
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -125,7 +129,8 @@ export default async function MessageDefinitionsPage() {
             <DefinitionCard
               key={state.definition.id}
               state={state}
-              canManage={canManage}
+              canWrite={canWrite}
+              canPublish={canPublish}
             />
           ))}
         </div>

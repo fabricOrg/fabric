@@ -92,6 +92,8 @@ describeDb("identity provisioning (invite-only)", () => {
         "api_keys:read",
         "api_keys:write",
         "request_logs:read",
+        "definitions:write",
+        "definitions:publish",
       ],
       session_id: "session_test",
     });
@@ -154,8 +156,9 @@ describeDb("identity provisioning (invite-only)", () => {
         "email:read",
         "wallet:read",
         "applications:read",
-        "api_keys:write",
+        "definitions:write",
         "api_keys:read",
+        "api_keys:write",
         "request_logs:read",
       ],
     });

@@ -20,10 +20,10 @@ export async function POST(
   if (!session) {
     return authError("invalid_session", "Sign in again to continue.", 401);
   }
-  if (session.role !== "owner" && session.role !== "admin") {
+  if (!session.permissions.includes("definitions:write")) {
     return authError(
       "insufficient_permission",
-      "Only owners and admins can archive.",
+      "You do not have permission to archive message definitions.",
       403,
     );
   }

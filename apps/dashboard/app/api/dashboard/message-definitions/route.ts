@@ -35,10 +35,10 @@ export async function POST(request: Request) {
   if (!session) {
     return authError("invalid_session", "Sign in again to continue.", 401);
   }
-  if (session.role !== "owner" && session.role !== "admin") {
+  if (!session.permissions.includes("definitions:write")) {
     return authError(
       "insufficient_permission",
-      "Only owners and admins can author message definitions.",
+      "You do not have permission to author message definitions.",
       403,
     );
   }

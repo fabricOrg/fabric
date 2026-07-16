@@ -2,6 +2,7 @@ import type {
   ResolveIdentitySessionRequest,
   ResolveIdentitySessionResponse,
 } from "@app/contracts";
+import { effectivePermissions } from "@app/contracts";
 import {
   accounts,
   memberships,
@@ -13,49 +14,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
 
-// ADR-0004: `applications:read` is universal — the dashboard's application/environment switcher is a
-// core surface everyone in the workspace sees. Creating an application structures the workspace, so
-// `applications:write` is an owner/admin action (mirrors org management, not the developer lane).
-const ROLE_PERMISSIONS = {
-  owner: [
-    "sms:send",
-    "sms:read",
-    "email:send",
-    "email:read",
-    "wallet:read",
-    "applications:read",
-    "applications:write",
-    "api_keys:read",
-    "api_keys:write",
-    "request_logs:read",
-  ],
-  admin: [
-    "sms:send",
-    "sms:read",
-    "email:send",
-    "email:read",
-    "wallet:read",
-    "applications:read",
-    "applications:write",
-    "api_keys:read",
-    "api_keys:write",
-    "request_logs:read",
-  ],
-  member: [
-    "sms:send",
-    "sms:read",
-    "email:send",
-    "email:read",
-    "wallet:read",
-    "applications:read",
-  ],
-} as const;
-
-const DEVELOPER_PERMISSIONS = [
-  "api_keys:write",
-  "api_keys:read",
-  "request_logs:read",
-] as const;
+// Permission baselines + the effective-permission resolver live in @app/contracts (one source of
+// truth shared with the dashboard permission editor). See effectivePermissions() usage below.
 
 @Injectable()
 export class IdentityService {
@@ -158,6 +118,7 @@ export class IdentityService {
           role: memberships.role,
           developerAccess: memberships.developerAccess,
           status: memberships.status,
+          permissions: memberships.permissions,
         })
         .from(memberships)
         .where(
@@ -183,10 +144,13 @@ export class IdentityService {
         user_id: user.id,
         role,
         developer_access: developerAccess,
-        permissions: [
-          ...ROLE_PERMISSIONS[role],
-          ...(developerAccess ? DEVELOPER_PERMISSIONS : []),
-        ],
+        // Effective set: the per-user override when an admin has customized it, else the role +
+        // developer-access baseline (shared catalog — one source of truth with the dashboard editor).
+        permissions: effectivePermissions({
+          role: membership.role,
+          developerAccess,
+          override: membership.permissions,
+        }),
         session_id: request.session_id,
         plan: account.plan,
       };

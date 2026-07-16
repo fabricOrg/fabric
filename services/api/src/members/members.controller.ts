@@ -1,5 +1,6 @@
 import {
   inviteMemberRequestSchema,
+  updateMemberPermissionsRequestSchema,
   updateMemberRequestSchema,
 } from "@app/contracts";
 import {
@@ -12,6 +13,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from "@nestjs/common";
@@ -74,6 +76,30 @@ export class MembersController {
       throw invalidRequest("invalid_role", "Provide a valid role.");
     }
     return this.members.updateRole(tenantId, userId, parsed.data);
+  }
+
+  @Put(":tenantId/members/:userId/permissions")
+  async setPermissions(
+    @Param("tenantId") tenantId: string,
+    @Param("userId") userId: string,
+    @Body() body: unknown,
+  ) {
+    if (!UUID.test(tenantId) || !UUID.test(userId)) {
+      throw invalidRequest("invalid_id", "Invalid tenant or member id.");
+    }
+    const parsed = updateMemberPermissionsRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest(
+        "invalid_permissions",
+        parsed.error.issues[0]?.message ?? "Provide a valid permission set.",
+        parsed.error.issues[0]?.path.map(String).join(".") || undefined,
+      );
+    }
+    return this.members.setPermissions(
+      tenantId,
+      userId,
+      parsed.data.permissions,
+    );
   }
 
   @Delete(":tenantId/members/:userId")

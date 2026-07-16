@@ -31,10 +31,12 @@ export function DefinitionActions({
   id,
   latestVersionId,
   status,
+  canPublish,
 }: {
   id: string;
   latestVersionId: string | null;
   status: "draft" | "active" | "archived";
+  canPublish: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -58,23 +60,25 @@ export function DefinitionActions({
 
   return (
     <div className="flex items-center gap-2">
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={busy || !latestVersionId}
-        onClick={() =>
-          run(
-            () =>
-              post(`/api/dashboard/message-definitions/${id}/publish`, {
-                environment: "sandbox",
-                version_id: latestVersionId,
-              }),
-            "Published to sandbox",
-          )
-        }
-      >
-        Publish to sandbox
-      </Button>
+      {canPublish ? (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy || !latestVersionId}
+          onClick={() =>
+            run(
+              () =>
+                post(`/api/dashboard/message-definitions/${id}/publish`, {
+                  environment: "sandbox",
+                  version_id: latestVersionId,
+                }),
+              "Published to sandbox",
+            )
+          }
+        >
+          Publish to sandbox
+        </Button>
+      ) : null}
       <Button
         size="sm"
         variant="ghost"

@@ -2,10 +2,10 @@ import type {
   InviteMemberRequest,
   ListMembersResponse,
   MemberDto,
+  MembershipPermission,
   UpdateMemberRequest,
 } from "@app/contracts";
 import {
-  accounts,
   clampLimit,
   decodeCursor,
   encodeCursor,
@@ -25,6 +25,8 @@ import {
   WORKOS_CLIENT,
   type WorkosClientProvider,
 } from "../identity/workos-client.provider.js";
+import { toMemberDto } from "./member-dto.js";
+import { inviteMember } from "./members-invite.js";
 
 /**
  * Team-member management for a tenant. Runs on the provisioning connection (cross-tenant: it reads
@@ -65,6 +67,7 @@ export class MembersService {
         developer_access: memberships.developerAccess,
         status: memberships.status,
         updated_at: memberships.updatedAt,
+        permissions: memberships.permissions,
       })
       .from(memberships)
       .innerJoin(users, eq(memberships.userId, users.id))
@@ -75,13 +78,18 @@ export class MembersService {
       encodeCursor(r.email, r.user_id),
     );
     return {
-      members: page.map((member) => ({
-        ...member,
-        role: member.role === "developer" ? "member" : member.role,
-        developer_access:
-          member.developer_access || member.role === "developer",
-        updated_at: member.updated_at.toISOString(),
-      })),
+      members: page.map((member) =>
+        toMemberDto({
+          userId: member.user_id,
+          email: member.email,
+          name: member.name,
+          role: member.role,
+          developerAccess: member.developer_access,
+          status: member.status,
+          updatedAt: member.updated_at,
+          override: member.permissions,
+        }),
+      ),
       next_cursor: nextCursor,
     };
   }
@@ -90,105 +98,12 @@ export class MembersService {
     tenantId: string,
     request: InviteMemberRequest,
   ): Promise<MemberDto> {
-    const scoped = tenantId as TenantId;
-    const email = request.email.trim().toLowerCase();
-
-    const [account] = await this.provisioning.db
-      .select({
-        status: accounts.status,
-        organizationId: accounts.workosOrganizationId,
-      })
-      .from(accounts)
-      .where(eq(accounts.id, scoped))
-      .limit(1);
-    if (!account || account.status !== "active") {
-      throw notFound("tenant_not_found", "This organisation is not active.");
-    }
-    if (!account.organizationId) {
-      throw invalidRequest(
-        "org_not_provisioned",
-        "This organisation has no WorkOS mapping; invites can't be sent.",
-      );
-    }
-
-    // Reject a re-invite of someone already active — the WorkOS call below would also fail, so guard
-    // early with a clear message.
-    const [existingUser] = await this.provisioning.db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
-    if (existingUser) {
-      const [existing] = await this.provisioning.db
-        .select({ status: memberships.status })
-        .from(memberships)
-        .where(
-          and(
-            eq(memberships.tenantId, scoped),
-            eq(memberships.userId, existingUser.id),
-          ),
-        )
-        .limit(1);
-      if (existing?.status === "active") {
-        throw invalidRequest(
-          "already_a_member",
-          "That person is already an active member of this organisation.",
-        );
-      }
-    }
-
-    // External write first — if WorkOS rejects, nothing is persisted. `developer` is a Fabric-local
-    // role with no matching WorkOS org role slug, so omit roleSlug (WorkOS assigns the org default) —
-    // our authz reads the LOCAL membership role, not the WorkOS one.
-    await this.workosClient().userManagement.sendInvitation({
-      email,
-      organizationId: account.organizationId,
-      roleSlug: request.role,
-    });
-
-    return this.provisioning.db.transaction(async (tx) => {
-      await tx
-        .insert(users)
-        .values({ email, name: request.name ?? null, status: "invited" })
-        .onConflictDoNothing({ target: users.email });
-      const [user] = await tx
-        .select({ id: users.id, name: users.name })
-        .from(users)
-        .where(eq(users.email, email))
-        .limit(1);
-      if (!user) throw new Error("Member user upsert returned no row.");
-
-      // Fresh invite, or re-arm a previously disabled/invited membership — but never silently demote
-      // an active one (guarded above).
-      await tx
-        .insert(memberships)
-        .values({
-          tenantId: scoped,
-          userId: user.id,
-          role: request.role,
-          developerAccess: request.developer_access,
-          status: "invited",
-        })
-        .onConflictDoUpdate({
-          target: [memberships.tenantId, memberships.userId],
-          set: {
-            role: request.role,
-            developerAccess: request.developer_access,
-            status: "invited",
-            updatedAt: new Date(),
-          },
-        });
-
-      return {
-        user_id: user.id,
-        email,
-        name: user.name,
-        role: request.role,
-        developer_access: request.developer_access,
-        status: "invited" as const,
-        updated_at: new Date().toISOString(),
-      };
-    });
+    return inviteMember(
+      this.provisioning,
+      this.workosClient,
+      tenantId,
+      request,
+    );
   }
 
   /**
@@ -209,7 +124,6 @@ export class MembersService {
         "The owner's role can't be changed here.",
       );
     }
-    const currentRole = current.role === "developer" ? "member" : current.role;
     const [updated] = await this.provisioning.db
       .update(memberships)
       .set({
@@ -230,17 +144,70 @@ export class MembersService {
         developerAccess: memberships.developerAccess,
         status: memberships.status,
         updatedAt: memberships.updatedAt,
+        permissions: memberships.permissions,
       });
     if (!updated) throw new Error("Membership update returned no row.");
-    return {
-      user_id: current.userId,
+    return toMemberDto({
+      userId: current.userId,
       email: current.email,
       name: current.name,
-      role: updated.role === "developer" ? currentRole : updated.role,
-      developer_access: updated.developerAccess || updated.role === "developer",
+      role: updated.role,
+      developerAccess: updated.developerAccess,
       status: updated.status,
-      updated_at: updated.updatedAt.toISOString(),
-    };
+      updatedAt: updated.updatedAt,
+      override: updated.permissions,
+    });
+  }
+
+  /**
+   * Set a member's EXACT effective permissions (per-user override). Full override: the array IS the
+   * effective set, so the role becomes a template. The owner is protected — its permissions can't be
+   * edited (never strip the owner; that would risk locking the workspace out).
+   *
+   * Authorization (who may call this) is enforced upstream in the BFF/controller. Per the chosen
+   * model any admin may grant any permission, INCLUDING ones they don't hold — a deliberate
+   * escalation trade-off; revisit if a bounded-by-granter rule is wanted.
+   */
+  async setPermissions(
+    tenantId: string,
+    userId: string,
+    permissions: readonly MembershipPermission[],
+  ): Promise<MemberDto> {
+    const scoped = tenantId as TenantId;
+    const current = await this.requireMembership(scoped, userId);
+    if (current.role === "owner") {
+      throw invalidRequest(
+        "owner_immutable",
+        "The owner's permissions can't be changed.",
+      );
+    }
+    const [updated] = await this.provisioning.db
+      .update(memberships)
+      .set({ permissions: [...permissions], updatedAt: new Date() })
+      .where(
+        and(
+          eq(memberships.tenantId, scoped),
+          eq(memberships.userId, current.userId),
+        ),
+      )
+      .returning({
+        role: memberships.role,
+        developerAccess: memberships.developerAccess,
+        status: memberships.status,
+        updatedAt: memberships.updatedAt,
+        permissions: memberships.permissions,
+      });
+    if (!updated) throw new Error("Membership update returned no row.");
+    return toMemberDto({
+      userId: current.userId,
+      email: current.email,
+      name: current.name,
+      role: updated.role,
+      developerAccess: updated.developerAccess,
+      status: updated.status,
+      updatedAt: updated.updatedAt,
+      override: updated.permissions,
+    });
   }
 
   /**

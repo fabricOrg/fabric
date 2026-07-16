@@ -50,20 +50,29 @@ describe("message-definition publish BFF route", () => {
     });
   });
 
-  it("allows an admin to publish", async () => {
-    readSession.mockResolvedValue({ role: "admin", permissions: [] });
+  it("allows a user with definitions:publish", async () => {
+    readSession.mockResolvedValue({
+      role: "admin",
+      permissions: ["definitions:publish"],
+    });
     expect((await POST(req(), { params })).status).toBe(200);
     expect(publishDef).toHaveBeenCalledWith("d1", body);
   });
 
-  it("denies a member", async () => {
-    readSession.mockResolvedValue({ role: "member", permissions: [] });
+  it("denies a user with only definitions:write (can draft, not publish)", async () => {
+    readSession.mockResolvedValue({
+      role: "member",
+      permissions: ["definitions:write"],
+    });
     expect((await POST(req(), { params })).status).toBe(403);
     expect(publishDef).not.toHaveBeenCalled();
   });
 
-  it("denies a developer", async () => {
-    readSession.mockResolvedValue({ role: "developer", permissions: [] });
+  it("denies a user with no definitions permission", async () => {
+    readSession.mockResolvedValue({
+      role: "member",
+      permissions: ["sms:send"],
+    });
     expect((await POST(req(), { params })).status).toBe(403);
     expect(publishDef).not.toHaveBeenCalled();
   });

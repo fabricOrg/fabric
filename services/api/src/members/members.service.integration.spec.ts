@@ -225,4 +225,37 @@ describeDb("member invites", () => {
       response: { error: { code: "member_not_found" } },
     });
   });
+
+  it("sets an explicit per-user permission override (full override)", async () => {
+    const [user] = await db.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email));
+    // biome-ignore lint/style/noNonNullAssertion: seeded by the invite test
+    const updated = await service.setPermissions(tenantId, user!.id, [
+      "sms:read",
+      "definitions:publish",
+    ]);
+    expect(updated.permissions).toEqual(["sms:read", "definitions:publish"]);
+    expect(updated.permissions_customized).toBe(true);
+    const [row] = await db.db
+      .select({ permissions: memberships.permissions })
+      // biome-ignore lint/style/noNonNullAssertion: seeded above
+      .from(memberships)
+      .where(eq(memberships.userId, user!.id));
+    expect(row?.permissions).toEqual(["sms:read", "definitions:publish"]);
+  });
+
+  it("refuses to set the owner's permissions (no lock-out)", async () => {
+    const [owner] = await db.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, ownerEmail));
+    await expect(
+      // biome-ignore lint/style/noNonNullAssertion: seeded by the owner test
+      service.setPermissions(tenantId, owner!.id, ["sms:read"]),
+    ).rejects.toMatchObject({
+      response: { error: { code: "owner_immutable" } },
+    });
+  });
 });

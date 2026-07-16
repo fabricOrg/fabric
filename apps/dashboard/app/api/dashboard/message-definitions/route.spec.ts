@@ -71,22 +71,31 @@ describe("message-definitions BFF route", () => {
     expect((await GET()).status).toBe(401);
   });
 
-  it("POST create allows an owner", async () => {
-    readSession.mockResolvedValue({ role: "owner", permissions: [] });
+  it("POST create allows a user with definitions:write", async () => {
+    readSession.mockResolvedValue({
+      role: "member",
+      permissions: ["definitions:write"],
+    });
     const res = await POST(req(validBody));
     expect(res.status).toBe(201);
     expect(createDef).toHaveBeenCalledOnce();
   });
 
-  it("POST create denies a member (authoring is owner/admin)", async () => {
-    readSession.mockResolvedValue({ role: "member", permissions: [] });
+  it("POST create denies a user without definitions:write", async () => {
+    readSession.mockResolvedValue({
+      role: "member",
+      permissions: ["sms:send", "applications:read"],
+    });
     const res = await POST(req(validBody));
     expect(res.status).toBe(403);
     expect(createDef).not.toHaveBeenCalled();
   });
 
   it("POST create 422s on an out-of-subset schema", async () => {
-    readSession.mockResolvedValue({ role: "owner", permissions: [] });
+    readSession.mockResolvedValue({
+      role: "member",
+      permissions: ["definitions:write"],
+    });
     const res = await POST(
       req({ ...validBody, variable_schema: { type: "object", $ref: "#/x" } }),
     );
