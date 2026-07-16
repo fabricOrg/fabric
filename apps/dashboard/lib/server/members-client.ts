@@ -5,6 +5,7 @@ import {
   type ListMembersResponse,
   listMembersResponseSchema,
   type MemberDto,
+  type MembershipPermission,
   memberDtoSchema,
   type UpdateMemberRequest,
 } from "@app/contracts";
@@ -75,6 +76,32 @@ export async function updateMemberRole(
         "x-bff-token": bffToken,
       },
       body: JSON.stringify(request),
+    },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw new BffError(response.status, payload);
+  return memberDtoSchema.parse(payload);
+}
+
+export async function setMemberPermissions(
+  tenantId: string,
+  userId: string,
+  permissions: readonly MembershipPermission[],
+): Promise<MemberDto> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL(
+      `/internal/tenants/${tenantId}/members/${userId}/permissions`,
+      baseUrl,
+    ),
+    {
+      method: "PUT",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-bff-token": bffToken,
+      },
+      body: JSON.stringify({ permissions }),
     },
   );
   const payload = (await response.json()) as unknown;
