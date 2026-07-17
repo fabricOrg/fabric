@@ -23,6 +23,7 @@ import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import { SendersService } from "../senders/senders.service.js";
 import { assertSendCompliant } from "./sms-compliance.js";
+import { recheckedDispatch } from "./sms-dispatch-recheck.js";
 import { completeStoredDispatch } from "./sms-dispatch-store.js";
 import { ingestProviderDlr } from "./sms-dlr.js";
 import { assertLiveRecipientAllowed } from "./sms-live-safety.js";
@@ -30,7 +31,7 @@ import { replayManagedSend } from "./sms-managed-replay.js";
 import {
   enqueueSmsJob,
   processSmsJob,
-  recoverPendingSms,
+  recoverPendingSmsSafely,
 } from "./sms-queue-operations.js";
 import { getMessage, listMessages } from "./sms-read.js";
 import { SmsRuntimeService } from "./sms-runtime.service.js";
@@ -215,8 +216,12 @@ export class SmsService {
       db: this.db,
       vault: this.piiVault,
       job,
-      dispatch: (input, prepared, mode) =>
-        this.runtime.dispatch(input, prepared, mode),
+      dispatch: recheckedDispatch({
+        killSwitch: this.killSwitch,
+        consent: this.consent,
+        senders: this.senders,
+        runtime: this.runtime,
+      }),
       fail: (input, prepared, mode) =>
         engineFailPreparedSend(
           this.runtime.deps(mode),
@@ -230,19 +235,12 @@ export class SmsService {
   }
 
   async enqueuePending(tenantId: string): Promise<number> {
-    if (!this.queue.enabled) return 0;
-    try {
-      return await recoverPendingSms({
-        db: this.db,
-        queue: this.queue,
-        tenantId,
-      });
-    } catch (error) {
-      this.logger.warn(
-        `sms-send recovery enqueue deferred for ${tenantId}: ${error instanceof Error ? error.message : "unknown"}`,
-      );
-      return 0;
-    }
+    return recoverPendingSmsSafely({
+      db: this.db,
+      queue: this.queue,
+      tenantId,
+      warn: (message) => this.logger.warn(message),
+    });
   }
 
   /**
