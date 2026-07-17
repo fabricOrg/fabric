@@ -19,18 +19,28 @@ describe("membership permission baselines", () => {
     expect(member).not.toContain("applications:write");
   });
 
-  it("developer access adds api_keys/logs but not sms:send or definitions", () => {
+  it("makes the member developer lane read-only for definitions", () => {
     const withDev = baselinePermissions("member", true);
     expect(withDev).toContain("api_keys:write");
     expect(withDev).toContain("request_logs:read");
-    // A member baseline already has sms:send; developer access adds nothing about definitions.
+    // Developer access is the read-only integration lane for managed definitions.
+    expect(withDev).not.toContain("definitions:write");
     expect(withDev).not.toContain("definitions:publish");
   });
 
-  it("legacy developer role maps to the member baseline", () => {
-    expect(new Set(baselinePermissions("developer", false))).toEqual(
-      new Set(baselinePermissions("member", false)),
+  it("does not reduce an owner or admin who also has developer access", () => {
+    expect(new Set(baselinePermissions("owner", true))).toEqual(
+      new Set(membershipPermissions),
     );
+    expect(new Set(baselinePermissions("admin", true))).toEqual(
+      new Set(membershipPermissions),
+    );
+  });
+
+  it("legacy developer role is read-only for definitions", () => {
+    const legacy = baselinePermissions("developer", true);
+    expect(legacy).not.toContain("definitions:write");
+    expect(legacy).toContain("api_keys:read");
   });
 });
 

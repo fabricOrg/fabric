@@ -1,6 +1,6 @@
 "use client";
 
-import { stableKey, variableSchema } from "@app/contracts";
+import { type SmsTemplate, stableKey } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Dialog,
@@ -23,34 +23,57 @@ import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+  type AuthoringVariable,
+  buildVariableSchema,
+  templateToDefinitionDraft,
+  variablesFromBody,
+} from "./definition-authoring";
+import { DefinitionPreviewPanel } from "./definition-preview-panel";
+import { VariableSchemaBuilder } from "./variable-schema-builder";
 
 interface BffErrorPayload {
   error?: { message?: string };
 }
 
-const SCHEMA_PLACEHOLDER = `{
-  "type": "object",
-  "properties": { "name": { "type": "string" } },
-  "required": ["name"]
-}`;
+interface DefinitionDraft {
+  key: string;
+  body: string;
+  variables: AuthoringVariable[];
+}
 
-/**
- * Author a draft definition (SDK-003 slice 6). The variable schema is entered as JSON and validated
- * client-side against the portable subset (@app/contracts variableSchema) before submit — the API
- * re-validates. A fuller visual schema builder is planned; this keeps authoring honest today.
- */
+function initialDraft(template?: SmsTemplate): DefinitionDraft {
+  return template
+    ? templateToDefinitionDraft(template)
+    : { key: "", body: "", variables: [] };
+}
+
 export function CreateDefinitionDialog({
   triggerLabel = "New definition",
+  triggerVariant = "default",
+  initialTemplate,
 }: {
   triggerLabel?: string;
+  triggerVariant?: "default" | "outline" | "ghost";
+  initialTemplate?: SmsTemplate;
 }) {
   const router = useRouter();
+  const initial = initialDraft(initialTemplate);
   const [open, setOpen] = useState(false);
-  const [key, setKey] = useState("");
-  const [body, setBody] = useState("");
-  const [schemaText, setSchemaText] = useState(SCHEMA_PLACEHOLDER);
+  const [key, setKey] = useState(initial.key);
+  const [body, setBody] = useState(initial.body);
+  const [variables, setVariables] = useState(initial.variables);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const builtSchema = buildVariableSchema(variables);
+
+  function reset(template?: SmsTemplate) {
+    const draft = initialDraft(template);
+    setKey(draft.key);
+    setBody(draft.body);
+    setVariables(draft.variables);
+    setError(null);
+  }
 
   async function submit() {
     setError(null);
@@ -62,19 +85,8 @@ export function CreateDefinitionDialog({
       setError("Enter the message body.");
       return;
     }
-    let parsedSchema: unknown;
-    try {
-      parsedSchema = JSON.parse(schemaText);
-    } catch {
-      setError("Variable schema is not valid JSON.");
-      return;
-    }
-    const schema = variableSchema.safeParse(parsedSchema);
-    if (!schema.success) {
-      setError(
-        schema.error.issues[0]?.message ??
-          "Variable schema is outside the supported subset.",
-      );
+    if (!builtSchema.schema) {
+      setError(builtSchema.error ?? "The variable schema is invalid.");
       return;
     }
     setSubmitting(true);
@@ -85,7 +97,7 @@ export function CreateDefinitionDialog({
         body: JSON.stringify({
           key: key.trim(),
           content: { body: body.trim() },
-          variable_schema: schema.data,
+          variable_schema: builtSchema.schema,
           default_locale: "en",
         }),
       });
@@ -101,13 +113,13 @@ export function CreateDefinitionDialog({
         description: "Publish it to sandbox to make it available.",
       });
       setOpen(false);
-      setKey("");
-      setBody("");
-      setSchemaText(SCHEMA_PLACEHOLDER);
+      reset();
       router.refresh();
-    } catch (e) {
+    } catch (cause) {
       setError(
-        e instanceof Error ? e.message : "Couldn't create the definition.",
+        cause instanceof Error
+          ? cause.message
+          : "Couldn't create the definition.",
       );
     } finally {
       setSubmitting(false);
@@ -115,19 +127,29 @@ export function CreateDefinitionDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        setError(null);
+        if (nextOpen && initialTemplate) reset(initialTemplate);
+      }}
+    >
       <DialogTrigger asChild>
-        <Button>
+        <Button variant={triggerVariant}>
           <Plus className="size-4" />
           {triggerLabel}
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>New message definition</DialogTitle>
           <DialogDescription>
-            A stable key, its message body, and a variable schema. Tokens like{" "}
-            {"{{name}}"} must be declared in the schema.
+            Review the stable key, message, variables, and live output before
+            creating the draft.
+            {initialTemplate
+              ? " The original SMS template will remain unchanged."
+              : " Tokens such as {{name}} are detected automatically."}
           </DialogDescription>
         </DialogHeader>
         <Field>
@@ -135,11 +157,11 @@ export function CreateDefinitionDialog({
           <Input
             id="def-key"
             value={key}
-            onChange={(e) => setKey(e.target.value)}
+            onChange={(event) => setKey(event.target.value)}
             placeholder="order.shipped"
           />
           <FieldDescription>
-            Lowercase, dotted. Immutable once created.
+            Lowercase, dotted, and immutable once created.
           </FieldDescription>
         </Field>
         <Field>
@@ -147,21 +169,21 @@ export function CreateDefinitionDialog({
           <Textarea
             id="def-body"
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={(event) => {
+              const nextBody = event.target.value;
+              setBody(nextBody);
+              setVariables((current) => variablesFromBody(nextBody, current));
+            }}
             placeholder="Hi {{name}}, your order shipped."
           />
         </Field>
-        <Field>
-          <FieldLabel htmlFor="def-schema">Variable schema (JSON)</FieldLabel>
-          <Textarea
-            id="def-schema"
-            className="font-mono text-xs"
-            rows={7}
-            value={schemaText}
-            onChange={(e) => setSchemaText(e.target.value)}
-          />
-          {error ? <FieldError>{error}</FieldError> : null}
-        </Field>
+        <VariableSchemaBuilder fields={variables} onChange={setVariables} />
+        <DefinitionPreviewPanel
+          body={body}
+          schema={builtSchema.schema}
+          fields={variables}
+        />
+        {error ? <FieldError>{error}</FieldError> : null}
         <DialogFooter>
           <Button onClick={submit} disabled={submitting}>
             {submitting ? "Creating…" : "Create draft"}

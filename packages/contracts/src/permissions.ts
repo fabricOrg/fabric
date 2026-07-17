@@ -68,9 +68,17 @@ export function baselinePermissions(
   role: string,
   developerAccess: boolean,
 ): MembershipPermission[] {
-  const base = ROLE_PERMISSION_BASELINE[normalizeRole(role)];
+  const governanceRole = normalizeRole(role);
+  const base = ROLE_PERMISSION_BASELINE[governanceRole];
+  // The developer lane is read-only for managed definitions by default. An admin can explicitly
+  // restore authoring with a per-user override, but merely enabling API-key/log access must not also
+  // grant content-authoring authority.
+  const governedBase =
+    developerAccess && governanceRole === "member"
+      ? base.filter((permission) => permission !== "definitions:write")
+      : base;
   const dev = developerAccess ? DEVELOPER_ACCESS_BASELINE : [];
-  return [...new Set([...base, ...dev])];
+  return [...new Set([...governedBase, ...dev])];
 }
 
 /**

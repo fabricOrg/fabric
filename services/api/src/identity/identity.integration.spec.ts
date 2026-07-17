@@ -156,7 +156,6 @@ describeDb("identity provisioning (invite-only)", () => {
         "email:read",
         "wallet:read",
         "applications:read",
-        "definitions:write",
         "api_keys:read",
         "api_keys:write",
         "request_logs:read",

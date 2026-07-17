@@ -11,6 +11,8 @@ import {
 import { ErrorState, TableEmptyState } from "@app/ui/components/ui/states";
 import { CreateDefinitionDialog } from "@/components/message-definitions/create-definition-dialog";
 import { DefinitionActions } from "@/components/message-definitions/definition-actions";
+import { variablesFromSchema } from "@/components/message-definitions/definition-authoring";
+import { DefinitionPreviewPanel } from "@/components/message-definitions/definition-preview-panel";
 import { BffError } from "@/lib/server/api-client";
 import { requireDashboardSession } from "@/lib/server/auth";
 import { listMessageDefinitions } from "@/lib/server/message-definitions-client";
@@ -67,6 +69,14 @@ function DefinitionCard({
           <code>{useInCodeSnippet(state)}</code>
         </pre>
       </div>
+
+      {latest_version ? (
+        <DefinitionPreviewPanel
+          body={latest_version.content.body}
+          schema={latest_version.variable_schema}
+          fields={variablesFromSchema(latest_version.variable_schema)}
+        />
+      ) : null}
 
       {canWrite ? (
         <div className="border-t pt-3">
