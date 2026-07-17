@@ -27,6 +27,8 @@ const appUrl = process.env.DATABASE_URL_APP;
 const describeDb = superUrl && appUrl ? describe : describe.skip;
 process.env.REDIS_QUEUE_URL = "";
 process.env.MAINTENANCE_CRON_ENABLED = "false";
+// CI has no tenant-token secret; the dual-authority test mints a real token in-process.
+process.env.TENANT_TOKEN_SECRET ??= "integration-test-tenant-token-secret";
 
 describeDb(
   "SDK-005 managed message deliveries (idempotent sandbox sends)",
