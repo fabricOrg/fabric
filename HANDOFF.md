@@ -149,8 +149,11 @@ provisioner policy, composite containment FKs, retention `expires_at` + `legal_h
   metadata, attempt timeline; list rows link through. Retrieve endpoint gained the same dual
   authority as list (sk_* own env / tenant token names app+env); 9-test spec incl. the
   tenant-token fail-closed + serve path.
-- **Remaining for SDK-005:** webhook status on the detail view, managed-path crash-injection +
-  post-acceptance recheck evidence, tenant export/deletion handling, typed terminal-webhook
+- **Crash recovery PROVEN (AC04):** `managed-crash-recovery.integration` — accept → crash (no
+  dispatch) → sweeper converges message/delivery/attempt on `expired`, terminal outbox event,
+  exactly-one refund, zero provider contact. Full API integration now 37 files / 164 tests.
+- **Remaining for SDK-005:** webhook status on the detail view, post-acceptance recheck evidence
+  (worker-path block/refund/reason), tenant export/deletion handling, typed terminal-webhook
   consumption + packed-example sandbox UAT.
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
