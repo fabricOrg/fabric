@@ -142,9 +142,12 @@ provisioner policy, composite containment FKs, retention `expires_at` + `legal_h
   key lists its own env, dashboard tenant token names `environment_id` + sms:read) + dashboard
   `/message-deliveries` page (per-application sandbox log, nav entry). Reads split into
   `managed-messages-reads.ts`. 8-test spec incl. list ordering + no-PII-in-list.
+- **Retention purge DONE:** daily maintenance cron purges past-`expires_at` deliveries + attempts;
+  `legal_hold` pins indefinitely; ledger/audit untouched; advisory-locked provisioner pass
+  (`maintenance-retention.ts`); 2-test real-Postgres spec (purge/hold/fresh + no-op second pass).
 - **Remaining for SDK-005:** delivery DETAIL view (attempts timeline, masked recipient, webhook
-  status), managed-path crash-injection + post-acceptance recheck evidence, retention purge job
-  (needs a production trigger), typed terminal-webhook consumption + packed-example sandbox UAT.
+  status), managed-path crash-injection + post-acceptance recheck evidence, tenant export/deletion
+  handling, typed terminal-webhook consumption + packed-example sandbox UAT.
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 
