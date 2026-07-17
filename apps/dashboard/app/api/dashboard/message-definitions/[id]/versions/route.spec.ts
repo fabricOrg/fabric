@@ -29,6 +29,7 @@ const body = {
     additionalProperties: false,
   },
   default_locale: "en",
+  sender_id: "FABRIC",
 };
 
 function request() {

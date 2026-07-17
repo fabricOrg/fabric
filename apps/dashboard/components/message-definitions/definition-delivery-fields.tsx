@@ -19,7 +19,6 @@ export function DefinitionDeliveryFields({
   locale,
   messageClass,
   senderId,
-  senderLocked,
   onLocaleChange,
   onMessageClassChange,
   onSenderIdChange,
@@ -27,7 +26,6 @@ export function DefinitionDeliveryFields({
   locale: string;
   messageClass: MessageClass;
   senderId: string;
-  senderLocked: boolean;
   onLocaleChange: (locale: string) => void;
   onMessageClassChange: (messageClass: MessageClass) => void;
   onSenderIdChange: (senderId: string) => void;
@@ -67,12 +65,9 @@ export function DefinitionDeliveryFields({
           value={senderId}
           onChange={(event) => onSenderIdChange(event.target.value)}
           placeholder="FABRIC"
-          disabled={senderLocked}
         />
         <FieldDescription>
-          {senderLocked
-            ? "Sender binding is environment configuration."
-            : "Reviewed with this draft and bound to sandbox."}
+          Reviewed with this version and bound to sandbox configuration.
         </FieldDescription>
       </Field>
     </div>

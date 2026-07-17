@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { readSession, refreshSession, listDefs, createDef } = vi.hoisted(() => ({
-  readSession: vi.fn(),
-  refreshSession: vi.fn(),
-  listDefs: vi.fn(),
-  createDef: vi.fn(),
-}));
+const { readSession, refreshSession, listDefs, createDef, listApps } =
+  vi.hoisted(() => ({
+    readSession: vi.fn(),
+    refreshSession: vi.fn(),
+    listDefs: vi.fn(),
+    createDef: vi.fn(),
+    listApps: vi.fn(),
+  }));
 
 vi.mock("@/lib/server/auth", () => ({
   readDashboardSession: readSession,
@@ -15,6 +17,9 @@ vi.mock("@/lib/server/origin", () => ({ hasTrustedOrigin: () => true }));
 vi.mock("@/lib/server/message-definitions-client", () => ({
   listMessageDefinitions: listDefs,
   createMessageDefinition: createDef,
+}));
+vi.mock("@/lib/server/applications-client", () => ({
+  listApplications: listApps,
 }));
 vi.mock("@/lib/server/api-client", () => ({
   BffError: class BffError extends Error {
@@ -30,6 +35,7 @@ vi.mock("@/lib/server/api-client", () => ({
 import { GET, POST } from "./route.js";
 
 const validBody = {
+  application_id: "5f61e20c-b096-44f8-95d8-3ca31b94643e",
   key: "order.shipped",
   content: { body: "Hi {{name}}", class: "transactional", locales: {} },
   variable_schema: {
@@ -48,6 +54,12 @@ function req(body?: unknown) {
   });
 }
 
+function getReq(applicationId = validBody.application_id) {
+  return new Request(
+    `http://localhost/api/dashboard/message-definitions?applicationId=${applicationId}`,
+  );
+}
+
 describe("message-definitions BFF route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -57,11 +69,14 @@ describe("message-definitions BFF route", () => {
       latest_version: null,
       releases: [],
     });
+    listApps.mockResolvedValue({
+      applications: [{ id: validBody.application_id }],
+    });
   });
 
   it("GET lists for any authenticated member", async () => {
     readSession.mockResolvedValue({ role: "member", permissions: [] });
-    const res = await GET();
+    const res = await GET(getReq());
     expect(res.status).toBe(200);
     expect(listDefs).toHaveBeenCalledOnce();
   });
@@ -69,7 +84,14 @@ describe("message-definitions BFF route", () => {
   it("GET 401s without a session", async () => {
     readSession.mockResolvedValue(null);
     refreshSession.mockResolvedValue(null);
-    expect((await GET()).status).toBe(401);
+    expect((await GET(getReq())).status).toBe(401);
+  });
+
+  it("rejects a forged application before calling the definitions API", async () => {
+    readSession.mockResolvedValue({ role: "member", permissions: [] });
+    const res = await GET(getReq("42a659ca-b4e9-4279-bb36-ad07f45ab99d"));
+    expect(res.status).toBe(403);
+    expect(listDefs).not.toHaveBeenCalled();
   });
 
   it("POST create allows a user with definitions:write", async () => {

@@ -106,9 +106,12 @@ export class MessageDefinitionsService {
     tenantId: string,
     applicationId?: string,
   ): Promise<ListMessageDefinitionsResponse> {
-    return this.db.withTenantDrizzle(tenantId, (tx) =>
-      listDefinitionStates(tx, tenantId, applicationId),
-    );
+    return this.db.withTenantDrizzle(tenantId, async (tx) => {
+      const containedApplicationId = applicationId
+        ? await resolveApplicationId(tx, tenantId, applicationId)
+        : undefined;
+      return listDefinitionStates(tx, tenantId, containedApplicationId);
+    });
   }
 
   async addVersion(
@@ -181,6 +184,12 @@ export class MessageDefinitionsService {
           "definition_version_create_failed",
           "The definition version could not be created.",
         );
+      await bindSandboxSender(tx, {
+        tenantId,
+        applicationId: definition.applicationId,
+        definitionId,
+        senderId: request.sender_id,
+      });
       return readState(tx, definition);
     });
     await auditDefinitionVersion(

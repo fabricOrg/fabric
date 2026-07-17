@@ -27,6 +27,7 @@ import { Pencil, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { DefinitionApplicationField } from "./definition-application-field";
 import {
   resolveAuthoringSchema,
   supportsVisualSchema,
@@ -51,11 +52,13 @@ export function CreateDefinitionDialog({
   triggerVariant = "default",
   initialTemplate,
   initialDefinition,
+  initialApplicationId = "",
 }: {
   triggerLabel?: string;
   triggerVariant?: "default" | "outline" | "ghost";
   initialTemplate?: SmsTemplate;
   initialDefinition?: MessageDefinitionState;
+  initialApplicationId?: string;
 }) {
   const router = useRouter();
   const initial = initialDefinitionDraft(initialTemplate, initialDefinition);
@@ -70,6 +73,9 @@ export function CreateDefinitionDialog({
   const [senderId, setSenderId] = useState(initial.senderId);
   const [localizedVariants, setLocalizedVariants] = useState(
     initial.localizedVariants,
+  );
+  const [applicationId, setApplicationId] = useState(
+    initialDefinition?.definition.application_id ?? initialApplicationId,
   );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -90,6 +96,9 @@ export function CreateDefinitionDialog({
     setMessageClass(draft.messageClass);
     setSenderId(draft.senderId);
     setLocalizedVariants(draft.localizedVariants);
+    setApplicationId(
+      definition?.definition.application_id ?? initialApplicationId,
+    );
     setError(null);
   }
 
@@ -109,6 +118,10 @@ export function CreateDefinitionDialog({
     }
     if (!initialDefinition && senderId.trim().length === 0) {
       setError("Choose the sandbox sender for this definition.");
+      return;
+    }
+    if (!initialDefinition && applicationId.length === 0) {
+      setError("Choose the application that owns this definition.");
       return;
     }
     const locales = buildLocales(localizedVariants, locale.trim());
@@ -131,6 +144,7 @@ export function CreateDefinitionDialog({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...(editing ? {} : { key: key.trim() }),
+          ...(editing ? {} : { application_id: applicationId }),
           content: {
             body: body.trim(),
             class: messageClass,
@@ -138,7 +152,7 @@ export function CreateDefinitionDialog({
           },
           variable_schema: builtSchema.schema,
           default_locale: locale.trim(),
-          ...(editing ? {} : { sender_id: senderId.trim() }),
+          sender_id: senderId.trim(),
         }),
       });
       if (!response.ok) {
@@ -205,6 +219,13 @@ export function CreateDefinitionDialog({
               : " Tokens such as {{name}} are detected automatically."}
           </DialogDescription>
         </DialogHeader>
+        {!initialDefinition ? (
+          <DefinitionApplicationField
+            enabled={open}
+            applicationId={applicationId}
+            onChange={setApplicationId}
+          />
+        ) : null}
         <Field>
           <FieldLabel htmlFor="def-key">Stable key</FieldLabel>
           <Input
@@ -226,7 +247,6 @@ export function CreateDefinitionDialog({
           locale={locale}
           messageClass={messageClass}
           senderId={senderId}
-          senderLocked={Boolean(initialDefinition)}
           onLocaleChange={setLocale}
           onMessageClassChange={setMessageClass}
           onSenderIdChange={setSenderId}

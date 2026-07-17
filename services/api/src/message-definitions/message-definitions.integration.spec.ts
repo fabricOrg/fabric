@@ -106,8 +106,10 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
         locales: { fr: { body: "Bonjour {{name}}" } },
       },
       default_locale: "en",
+      sender_id: "FABRIC2",
     });
     expect(compatible.latest_version?.version).toBe(2);
+    expect(compatible.sender_bindings[0]?.sender_id).toBe("FABRIC2");
     expect(auditRecords.map((record) => record.action)).toContain(
       "message_definition.version.create",
     );
@@ -126,6 +128,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
           locales: { fr: { body: "Bonjour" } },
         },
         default_locale: "en",
+        sender_id: "FABRIC",
       }),
     ).rejects.toMatchObject({
       status: 400,
@@ -141,6 +144,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
           locales: {},
         },
         default_locale: "en",
+        sender_id: "FABRIC",
       }),
     ).rejects.toMatchObject({
       status: 400,
@@ -181,6 +185,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
           locales: {},
         },
         default_locale: "en",
+        sender_id: "FABRIC",
       })
     ).latest_version?.id;
     const republished = await svc.publish(
@@ -248,6 +253,10 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
         sender_id: "FABRIC",
       }),
     ).rejects.toMatchObject({
+      status: 400,
+      response: { error: { code: "application_not_found" } },
+    });
+    await expect(svc.list(TENANT_A, bAppId)).rejects.toMatchObject({
       status: 400,
       response: { error: { code: "application_not_found" } },
     });

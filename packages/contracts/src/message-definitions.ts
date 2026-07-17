@@ -266,6 +266,7 @@ export const addMessageDefinitionVersionRequest = z
     variable_schema: variableSchema,
     content: smsVariantContent,
     default_locale: localeTag,
+    sender_id: z.string().trim().min(1).max(11),
   })
   .superRefine(withoutDuplicateDefaultLocale);
 export type AddMessageDefinitionVersionRequest = z.infer<
@@ -282,7 +283,6 @@ export type PublishMessageDefinitionRequest = z.infer<
   typeof publishMessageDefinitionRequest
 >;
 
-// A definition with its latest version and current environment releases (list/detail response).
 export const messageDefinitionState = z.object({
   definition: messageDefinition,
   latest_version: messageDefinitionVersion.nullable(),

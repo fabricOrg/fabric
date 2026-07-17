@@ -11,9 +11,11 @@ import {
 import { ErrorState, TableEmptyState } from "@app/ui/components/ui/states";
 import { CreateDefinitionDialog } from "@/components/message-definitions/create-definition-dialog";
 import { DefinitionActions } from "@/components/message-definitions/definition-actions";
+import { DefinitionApplicationSelector } from "@/components/message-definitions/definition-application-selector";
 import { variablesFromSchema } from "@/components/message-definitions/definition-authoring";
 import { DefinitionPreviewPanel } from "@/components/message-definitions/definition-preview-panel";
 import { BffError } from "@/lib/server/api-client";
+import { listApplications } from "@/lib/server/applications-client";
 import { requireDashboardSession } from "@/lib/server/auth";
 import { listMessageDefinitions } from "@/lib/server/message-definitions-client";
 
@@ -29,7 +31,8 @@ function useInCodeSnippet(state: MessageDefinitionState): string {
   const data = Object.keys(props)
     .map((k) => `    ${k}: "…"`)
     .join(",\n");
-  return `await fabric.messages.preview("${state.definition.key}", {\n${data}\n});`;
+  const locale = state.latest_version?.default_locale ?? "en";
+  return `await fabric.messages.preview("${state.definition.key}", {\n  data: {\n${data}\n  },\n  locale: "${locale}",\n});`;
 }
 
 function DefinitionCard({
@@ -99,15 +102,32 @@ function DefinitionCard({
   );
 }
 
-export default async function MessageDefinitionsPage() {
+export default async function MessageDefinitionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ application?: string }>;
+}) {
   const session = await requireDashboardSession();
   const canWrite = session.permissions.includes("definitions:write");
   const canPublish = session.permissions.includes("definitions:publish");
 
+  const requestedApplication = (await searchParams).application;
   let definitions: MessageDefinitionState[] = [];
+  let applications: Awaited<
+    ReturnType<typeof listApplications>
+  >["applications"] = [];
+  let selectedApplication: (typeof applications)[number] | undefined;
   let loadError = false;
   try {
-    definitions = (await listMessageDefinitions()).definitions;
+    applications = (await listApplications()).applications;
+    selectedApplication =
+      applications.find(
+        (application) => application.slug === requestedApplication,
+      ) ?? applications[0];
+    if (selectedApplication) {
+      definitions = (await listMessageDefinitions(selectedApplication.id))
+        .definitions;
+    }
   } catch (error) {
     loadError = error instanceof BffError || error instanceof Error;
   }
@@ -124,21 +144,49 @@ export default async function MessageDefinitionsPage() {
         </PageHeaderHeading>
         {canWrite ? (
           <PageHeaderActions>
-            <CreateDefinitionDialog />
+            {selectedApplication ? (
+              <CreateDefinitionDialog
+                initialApplicationId={selectedApplication.id}
+              />
+            ) : null}
           </PageHeaderActions>
         ) : null}
       </PageHeader>
+
+      {applications.length > 0 && selectedApplication ? (
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Definitions are isolated to one application and its sandbox
+            environment.
+          </p>
+          <DefinitionApplicationSelector
+            applications={applications}
+            selectedSlug={selectedApplication.slug}
+          />
+        </div>
+      ) : null}
 
       {loadError ? (
         <ErrorState
           title="Couldn't load definitions"
           message="The messaging service is temporarily unavailable. Refresh to try again."
         />
+      ) : applications.length === 0 ? (
+        <TableEmptyState
+          title="Create an application first"
+          description="Definitions belong to an application so keys, environments, and releases cannot cross boundaries."
+        />
       ) : definitions.length === 0 ? (
         <TableEmptyState
           title="No message definitions yet"
           description="Author a reusable message with a stable key and a variable schema, then publish it to sandbox."
-          action={canWrite ? <CreateDefinitionDialog /> : undefined}
+          action={
+            canWrite && selectedApplication ? (
+              <CreateDefinitionDialog
+                initialApplicationId={selectedApplication.id}
+              />
+            ) : undefined
+          }
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

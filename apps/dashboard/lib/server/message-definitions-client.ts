@@ -21,9 +21,14 @@ import { dashboardApi } from "./api-client";
  * universal `applications:read` permission; the write role gate (owner/admin) lives in the BFF route
  * handlers. Responses are parsed against the shared contract at the boundary.
  */
-export async function listMessageDefinitions(): Promise<ListMessageDefinitionsResponse> {
+export async function listMessageDefinitions(
+  applicationId?: string,
+): Promise<ListMessageDefinitionsResponse> {
+  const query = applicationId
+    ? `?applicationId=${encodeURIComponent(applicationId)}`
+    : "";
   const payload = await dashboardApi<unknown>(
-    "/v1/message-definitions",
+    `/v1/message-definitions${query}`,
     "applications:read",
   );
   return listMessageDefinitionsResponse.parse(payload);

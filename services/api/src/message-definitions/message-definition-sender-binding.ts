@@ -36,13 +36,23 @@ export async function bindSandboxSender(
       "The application has no sandbox environment.",
     );
   }
-  await tx.insert(messageDefinitionSenderBindings).values({
-    tenantId: input.tenantId as TenantId,
-    applicationId: input.applicationId as ApplicationId,
-    environmentId: sandbox.id,
-    definitionId: input.definitionId,
-    senderId: input.senderId,
-  });
+  await tx
+    .insert(messageDefinitionSenderBindings)
+    .values({
+      tenantId: input.tenantId as TenantId,
+      applicationId: input.applicationId as ApplicationId,
+      environmentId: sandbox.id,
+      definitionId: input.definitionId,
+      senderId: input.senderId,
+    })
+    .onConflictDoUpdate({
+      target: [
+        messageDefinitionSenderBindings.tenantId,
+        messageDefinitionSenderBindings.environmentId,
+        messageDefinitionSenderBindings.definitionId,
+      ],
+      set: { senderId: input.senderId, updatedAt: new Date() },
+    });
 }
 
 export async function requireSenderBinding(
