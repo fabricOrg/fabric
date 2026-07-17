@@ -21,6 +21,8 @@ export interface PreviewMessageOptions extends RequestOptions {
   readonly currency?: string;
   /** Optional E.164 recipient for sender, consent, and quiet-hour eligibility checks. */
   readonly to?: string;
+  /** Optional released locale; the definition's default is used when omitted. */
+  readonly locale?: string;
 }
 
 /**
@@ -36,7 +38,7 @@ export class MessagesResource {
     options?: PreviewMessageOptions,
   ): Promise<FabricResponse<MessagePreview>> {
     requireNonEmpty(key, "key");
-    const { data, currency, to, ...requestOptions } = options ?? {};
+    const { data, currency, to, locale, ...requestOptions } = options ?? {};
     const response = await this.transport.request<Record<string, unknown>>({
       method: "POST",
       path: "/v1/messages/preview",
@@ -45,6 +47,7 @@ export class MessagesResource {
         ...(data ? { data } : {}),
         ...(currency ? { currency } : {}),
         ...(to ? { to } : {}),
+        ...(locale ? { locale } : {}),
       },
       ...(Object.keys(requestOptions).length > 0
         ? { options: requestOptions }

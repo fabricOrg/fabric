@@ -31,7 +31,7 @@ import { GET, POST } from "./route.js";
 
 const validBody = {
   key: "order.shipped",
-  content: { body: "Hi {{name}}", class: "transactional" },
+  content: { body: "Hi {{name}}", class: "transactional", locales: {} },
   variable_schema: {
     type: "object",
     properties: { name: { type: "string" } },

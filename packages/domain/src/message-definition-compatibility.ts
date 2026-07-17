@@ -16,7 +16,8 @@ export type CompatibilityCode =
   | "property_removed"
   | "required_property_added"
   | "made_required"
-  | "constraint_narrowed";
+  | "constraint_narrowed"
+  | "locale_removed";
 
 export interface CompatibilityChange {
   readonly path: string;
@@ -34,6 +35,27 @@ export function analyzeCompatibility(
 ): CompatibilityResult {
   const breaking: CompatibilityChange[] = [];
   compareNode(released, candidate, "", breaking);
+  return {
+    verdict: breaking.length === 0 ? "compatible" : "breaking",
+    breaking,
+  };
+}
+
+export function analyzeDefinitionCompatibility(
+  released: VariableSchema,
+  candidate: VariableSchema,
+  releasedLocales: readonly string[],
+  candidateLocales: readonly string[],
+): CompatibilityResult {
+  const schema = analyzeCompatibility(released, candidate);
+  const candidateSet = new Set(candidateLocales);
+  const removed = releasedLocales
+    .filter((locale) => !candidateSet.has(locale))
+    .map((locale) => ({
+      path: `content.locales.${locale}`,
+      code: "locale_removed" as const,
+    }));
+  const breaking = [...schema.breaking, ...removed];
   return {
     verdict: breaking.length === 0 ? "compatible" : "breaking",
     breaking,

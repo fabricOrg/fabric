@@ -121,6 +121,27 @@ export function supportsVisualSchema(schema: VariableSchema): boolean {
   return Object.values(schema.properties).every(supportsVisualNode);
 }
 
+export function resolveAuthoringSchema(
+  advanced: boolean,
+  schemaText: string,
+  variables: readonly AuthoringVariable[],
+) {
+  if (!advanced) return buildVariableSchema(variables);
+  try {
+    const parsed = variableSchema.safeParse(JSON.parse(schemaText));
+    return parsed.success
+      ? { schema: parsed.data, error: null }
+      : {
+          schema: null,
+          error:
+            parsed.error.issues[0]?.message ??
+            "The variable schema is invalid.",
+        };
+  } catch {
+    return { schema: null, error: "The variable schema is not valid JSON." };
+  }
+}
+
 export function templateToDefinitionDraft(template: SmsTemplate): {
   key: string;
   body: string;

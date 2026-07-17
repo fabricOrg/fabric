@@ -67,7 +67,11 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
     return svc.create(tenant, {
       key,
       variable_schema: schemaV1,
-      content: { body: "Hi {{name}}", class: "transactional" },
+      content: {
+        body: "Hi {{name}}",
+        class: "transactional",
+        locales: {},
+      },
       default_locale: "en",
       sender_id: "FABRIC",
     });
@@ -96,7 +100,11 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
         properties: { name: { type: "string" }, note: { type: "string" } },
         required: ["name"],
       },
-      content: { body: "Hi {{name}}", class: "transactional" },
+      content: {
+        body: "Hi {{name}}",
+        class: "transactional",
+        locales: { fr: { body: "Bonjour {{name}}" } },
+      },
       default_locale: "en",
     });
     expect(compatible.latest_version?.version).toBe(2);
@@ -112,7 +120,26 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
           properties: { name: { type: "integer" } },
           required: ["name"],
         },
-        content: { body: "Hi", class: "transactional" },
+        content: {
+          body: "Hi",
+          class: "transactional",
+          locales: { fr: { body: "Bonjour" } },
+        },
+        default_locale: "en",
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: { code: "breaking_change_requires_new_key" } },
+    });
+
+    await expect(
+      svc.addVersion(TENANT_A, id, {
+        variable_schema: compatible.latest_version?.variable_schema ?? schemaV1,
+        content: {
+          body: "Hi {{name}}",
+          class: "transactional",
+          locales: {},
+        },
         default_locale: "en",
       }),
     ).rejects.toMatchObject({
@@ -148,7 +175,11 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
           properties: { name: { type: "string" }, extra: { type: "string" } },
           required: ["name"],
         },
-        content: { body: "Hi {{name}}", class: "transactional" },
+        content: {
+          body: "Hi {{name}}",
+          class: "transactional",
+          locales: {},
+        },
         default_locale: "en",
       })
     ).latest_version?.id;
@@ -212,7 +243,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
         application_id: bAppId,
         key: "cross.tenant",
         variable_schema: schemaV1,
-        content: { body: "x", class: "transactional" },
+        content: { body: "x", class: "transactional", locales: {} },
         default_locale: "en",
         sender_id: "FABRIC",
       }),

@@ -78,6 +78,7 @@ describeDb("SDK-003 MessagePreviewService (no side effects)", () => {
       content: {
         body: "Hi {{name}}, {{count}} orders.",
         class: "transactional",
+        locales: { fr: { body: "Bonjour {{name}}, {{count}} commandes." } },
       },
       default_locale: "en",
       sender_id: "FABRIC",
@@ -138,6 +139,33 @@ describeDb("SDK-003 MessagePreviewService (no side effects)", () => {
     expect(out.warnings).toContainEqual({
       path: "to",
       code: "recipient_not_provided",
+    });
+    expect(await sideEffectCounts()).toEqual(before);
+  });
+
+  it("resolves a released locale and blocks an unsupported locale without writes", async () => {
+    const before = await sideEffectCounts();
+    const localized = await preview.preview(
+      TENANT,
+      {
+        key: "order.shipped",
+        data: { name: "Ada", count: 2 },
+        locale: "fr",
+      },
+      sandboxEnvId,
+    );
+    expect(localized.resolved_locale).toBe("fr");
+    expect(localized.preview?.body).toBe("Bonjour Ada, 2 commandes.");
+
+    const unsupported = await preview.preview(
+      TENANT,
+      { key: "order.shipped", data: { name: "Ada" }, locale: "es" },
+      sandboxEnvId,
+    );
+    expect(unsupported.preview).toBeNull();
+    expect(unsupported.blockers).toContainEqual({
+      path: "locale",
+      code: "locale_not_supported",
     });
     expect(await sideEffectCounts()).toEqual(before);
   });

@@ -1,11 +1,9 @@
 "use client";
 
 import {
-  type MessageClass,
   type MessageDefinitionState,
   type SmsTemplate,
   stableKey,
-  variableSchema,
 } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
@@ -30,74 +28,22 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
-  type AuthoringVariable,
-  buildVariableSchema,
+  resolveAuthoringSchema,
   supportsVisualSchema,
-  templateToDefinitionDraft,
   variablesFromBody,
   variablesFromSchema,
 } from "./definition-authoring";
 import { DefinitionDeliveryFields } from "./definition-delivery-fields";
+import { initialDefinitionDraft } from "./definition-draft";
 import { DefinitionPreviewPanel } from "./definition-preview-panel";
 import { DefinitionSchemaEditor } from "./definition-schema-editor";
+import {
+  buildLocales,
+  LocalizedVariantsEditor,
+} from "./localized-variants-editor";
 
 interface BffErrorPayload {
   error?: { message?: string };
-}
-
-interface DefinitionDraft {
-  key: string;
-  body: string;
-  variables: AuthoringVariable[];
-  locale: string;
-  schemaText: string;
-  advancedSchema: boolean;
-  messageClass: MessageClass;
-  senderId: string;
-}
-
-function initialDraft(
-  template?: SmsTemplate,
-  definition?: MessageDefinitionState,
-): DefinitionDraft {
-  if (definition?.latest_version) {
-    return {
-      key: definition.definition.key,
-      body: definition.latest_version.content.body,
-      variables: variablesFromSchema(definition.latest_version.variable_schema),
-      locale: definition.latest_version.default_locale,
-      schemaText: JSON.stringify(
-        definition.latest_version.variable_schema,
-        null,
-        2,
-      ),
-      advancedSchema: !supportsVisualSchema(
-        definition.latest_version.variable_schema,
-      ),
-      messageClass: definition.latest_version.content.class,
-      senderId: definition.sender_bindings[0]?.sender_id ?? "",
-    };
-  }
-  if (template) {
-    return {
-      ...templateToDefinitionDraft(template),
-      locale: "en",
-      schemaText: "",
-      advancedSchema: false,
-      messageClass: template.class,
-      senderId: "",
-    };
-  }
-  return {
-    key: "",
-    body: "",
-    variables: [],
-    locale: "en",
-    schemaText: "",
-    advancedSchema: false,
-    messageClass: "transactional",
-    senderId: "",
-  };
 }
 
 export function CreateDefinitionDialog({
@@ -112,7 +58,7 @@ export function CreateDefinitionDialog({
   initialDefinition?: MessageDefinitionState;
 }) {
   const router = useRouter();
-  const initial = initialDraft(initialTemplate, initialDefinition);
+  const initial = initialDefinitionDraft(initialTemplate, initialDefinition);
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState(initial.key);
   const [body, setBody] = useState(initial.body);
@@ -122,12 +68,19 @@ export function CreateDefinitionDialog({
   const [advancedSchema, setAdvancedSchema] = useState(initial.advancedSchema);
   const [messageClass, setMessageClass] = useState(initial.messageClass);
   const [senderId, setSenderId] = useState(initial.senderId);
+  const [localizedVariants, setLocalizedVariants] = useState(
+    initial.localizedVariants,
+  );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const builtSchema = resolveSchema(advancedSchema, schemaText, variables);
+  const builtSchema = resolveAuthoringSchema(
+    advancedSchema,
+    schemaText,
+    variables,
+  );
 
   function reset(template?: SmsTemplate, definition?: MessageDefinitionState) {
-    const draft = initialDraft(template, definition);
+    const draft = initialDefinitionDraft(template, definition);
     setKey(draft.key);
     setBody(draft.body);
     setVariables(draft.variables);
@@ -136,6 +89,7 @@ export function CreateDefinitionDialog({
     setAdvancedSchema(draft.advancedSchema);
     setMessageClass(draft.messageClass);
     setSenderId(draft.senderId);
+    setLocalizedVariants(draft.localizedVariants);
     setError(null);
   }
 
@@ -157,6 +111,11 @@ export function CreateDefinitionDialog({
       setError("Choose the sandbox sender for this definition.");
       return;
     }
+    const locales = buildLocales(localizedVariants, locale.trim());
+    if (!locales.value) {
+      setError(locales.error ?? "Review the additional locales.");
+      return;
+    }
     if (!builtSchema.schema) {
       setError(builtSchema.error ?? "The variable schema is invalid.");
       return;
@@ -172,7 +131,11 @@ export function CreateDefinitionDialog({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...(editing ? {} : { key: key.trim() }),
-          content: { body: body.trim(), class: messageClass },
+          content: {
+            body: body.trim(),
+            class: messageClass,
+            locales: locales.value,
+          },
           variable_schema: builtSchema.schema,
           default_locale: locale.trim(),
           ...(editing ? {} : { sender_id: senderId.trim() }),
@@ -255,6 +218,10 @@ export function CreateDefinitionDialog({
             Lowercase, dotted, and immutable once created.
           </FieldDescription>
         </Field>
+        <LocalizedVariantsEditor
+          variants={localizedVariants}
+          onChange={setLocalizedVariants}
+        />
         <DefinitionDeliveryFields
           locale={locale}
           messageClass={messageClass}
@@ -286,7 +253,11 @@ export function CreateDefinitionDialog({
               setSchemaText(JSON.stringify(builtSchema.schema, null, 2));
             }
             if (!advanced) {
-              const parsed = resolveSchema(true, schemaText, variables);
+              const parsed = resolveAuthoringSchema(
+                true,
+                schemaText,
+                variables,
+              );
               if (!parsed.schema || !supportsVisualSchema(parsed.schema)) {
                 setError(
                   parsed.error ??
@@ -320,25 +291,4 @@ export function CreateDefinitionDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-function resolveSchema(
-  advanced: boolean,
-  schemaText: string,
-  variables: readonly AuthoringVariable[],
-) {
-  if (!advanced) return buildVariableSchema(variables);
-  try {
-    const parsed = variableSchema.safeParse(JSON.parse(schemaText));
-    return parsed.success
-      ? { schema: parsed.data, error: null }
-      : {
-          schema: null,
-          error:
-            parsed.error.issues[0]?.message ??
-            "The variable schema is invalid.",
-        };
-  } catch {
-    return { schema: null, error: "The variable schema is not valid JSON." };
-  }
 }

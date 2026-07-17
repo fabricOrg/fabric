@@ -1,6 +1,9 @@
 import type { VariableSchema } from "@app/contracts";
 import { describe, expect, it } from "vitest";
-import { analyzeCompatibility } from "../src/message-definition-compatibility.js";
+import {
+  analyzeCompatibility,
+  analyzeDefinitionCompatibility,
+} from "../src/message-definition-compatibility.js";
 
 // A base released schema reused across cases.
 const base: VariableSchema = {
@@ -135,6 +138,23 @@ describe("analyzeCompatibility (SDK-003 slice-0 §3)", () => {
     expect(analyzeCompatibility(released, next).breaking).toContainEqual({
       path: "addr.zip",
       code: "type_changed",
+    });
+  });
+});
+
+describe("definition locale compatibility", () => {
+  it("allows a locale to be added", () => {
+    expect(
+      analyzeDefinitionCompatibility(base, base, ["en"], ["en", "fr"]).verdict,
+    ).toBe("compatible");
+  });
+
+  it("requires a new key when a locale is removed", () => {
+    expect(
+      analyzeDefinitionCompatibility(base, base, ["en", "fr"], ["en"]).breaking,
+    ).toContainEqual({
+      path: "content.locales.fr",
+      code: "locale_removed",
     });
   });
 });

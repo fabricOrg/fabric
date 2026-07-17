@@ -29,6 +29,7 @@ export const schemas = {
       data: { type: "object", additionalProperties: true },
       currency: { type: "string", minLength: 3, maxLength: 3 },
       to: { type: "string", pattern: "^\\+[1-9]\\d{7,14}$" },
+      locale: { type: "string", pattern: "^[a-z]{2,3}(?:-[A-Z]{2})?$" },
     },
   },
   PreviewBlocker: {

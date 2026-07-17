@@ -117,12 +117,24 @@ export class MessagePreviewService {
       }
       const content = released.content as SmsVariantContent;
       const messageClass = content.class ?? "transactional";
-      const outcome = previewSms({
-        template: content.body,
-        schema: released.schema as VariableSchema,
-        data: request.data ?? {},
-        currency: request.currency ?? "GHS",
-      });
+      const resolvedLocale = request.locale ?? released.locale;
+      const localizedBody =
+        resolvedLocale === released.locale
+          ? content.body
+          : content.locales?.[resolvedLocale]?.body;
+      const outcome = localizedBody
+        ? previewSms({
+            template: localizedBody,
+            schema: released.schema as VariableSchema,
+            data: request.data ?? {},
+            currency: request.currency ?? "GHS",
+          })
+        : {
+            blockers: [
+              { path: "locale", code: "locale_not_supported" },
+            ] satisfies RenderError[],
+            preview: null,
+          };
       const compliance = await assessSendCompliance({
         senders: this.senders,
         consent: this.consent,
@@ -139,7 +151,7 @@ export class MessagePreviewService {
       return {
         version_id: released.versionId,
         environment: released.envType,
-        resolved_locale: released.locale,
+        resolved_locale: resolvedLocale,
         blockers,
         warnings: compliance.warnings.map(({ path, code }) => ({ path, code })),
         eligible: blockers.length === 0,

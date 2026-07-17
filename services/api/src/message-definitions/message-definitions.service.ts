@@ -4,6 +4,7 @@ import type {
   ListMessageDefinitionsResponse,
   MessageDefinitionState,
   PublishMessageDefinitionRequest,
+  SmsVariantContent,
   VariableSchema,
 } from "@app/contracts";
 import {
@@ -13,7 +14,7 @@ import {
   messageDefinitionVersions,
   type TenantId,
 } from "@app/db";
-import { analyzeCompatibility } from "@app/domain";
+import { analyzeDefinitionCompatibility } from "@app/domain";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
@@ -147,9 +148,12 @@ export class MessageDefinitionsService {
 
       // A breaking schema change must use a NEW stable key (slice-0 §3), so stale-catalog callers
       // aren't silently broken.
-      const compat = analyzeCompatibility(
+      const releasedContent = latest.content as SmsVariantContent;
+      const compat = analyzeDefinitionCompatibility(
         latest.variableSchema as VariableSchema,
         request.variable_schema,
+        [latest.defaultLocale, ...Object.keys(releasedContent.locales ?? {})],
+        [request.default_locale, ...Object.keys(request.content.locales)],
       );
       if (compat.verdict === "breaking") {
         throw invalidRequest(

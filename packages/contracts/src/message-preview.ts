@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { definitionEnvironment, stableKey } from "./message-definitions.js";
+import {
+  definitionEnvironment,
+  localeTag,
+  stableKey,
+} from "./message-definitions.js";
 
 /**
  * Public message preview (messages.preview, SDK-003 slice 5). Preview a RELEASED definition for the
@@ -14,6 +18,7 @@ export const previewMessageRequest = z.object({
     .string()
     .regex(/^\+[1-9]\d{7,14}$/, "invalid_e164")
     .optional(),
+  locale: localeTag.optional(),
 });
 export type PreviewMessageRequest = z.infer<typeof previewMessageRequest>;
 

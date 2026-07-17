@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { stableKey, variableSchema } from "./message-definitions.js";
+import {
+  createMessageDefinitionRequest,
+  localeTag,
+  smsVariantContent,
+  stableKey,
+  variableSchema,
+} from "./message-definitions.js";
 
 describe("stable key grammar (SDK-003 slice-0 §1)", () => {
   it.each([
@@ -21,6 +27,40 @@ describe("stable key grammar (SDK-003 slice-0 §1)", () => {
     `${"a".repeat(129)}`, // >128 chars
   ])("rejects %s", (k) => {
     expect(stableKey.safeParse(k).success).toBe(false);
+  });
+});
+
+describe("localized SMS variants", () => {
+  it("accepts bounded locale tags and fills empty locale content", () => {
+    expect(localeTag.safeParse("en-GH").success).toBe(true);
+    expect(
+      smsVariantContent.parse({ body: "Hello", class: "transactional" }),
+    ).toEqual({ body: "Hello", class: "transactional", locales: {} });
+  });
+
+  it("rejects invalid locale keys", () => {
+    expect(
+      smsVariantContent.safeParse({
+        body: "Hello",
+        locales: { english: { body: "Hello" } },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects duplicating the default locale in the variants map", () => {
+    expect(
+      createMessageDefinitionRequest.safeParse({
+        key: "order.shipped",
+        variable_schema: { type: "object", properties: {} },
+        content: {
+          body: "Hello",
+          class: "transactional",
+          locales: { en: { body: "Hello again" } },
+        },
+        default_locale: "en",
+        sender_id: "FABRIC",
+      }).success,
+    ).toBe(false);
   });
 });
 

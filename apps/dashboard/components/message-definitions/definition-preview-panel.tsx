@@ -32,6 +32,7 @@ export function DefinitionPreviewPanel({
   const [samples, setSamples] = useState<Record<string, string>>({});
   const [sampleJson, setSampleJson] = useState("{}");
   const [recipient, setRecipient] = useState("");
+  const [releasedLocale, setReleasedLocale] = useState("");
   const [serverPreview, setServerPreview] =
     useState<PreviewMessageResponse | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export function DefinitionPreviewPanel({
             key: definitionKey,
             data: previewData,
             ...(recipient ? { to: recipient } : {}),
+            ...(releasedLocale ? { locale: releasedLocale } : {}),
           }),
         },
       );
@@ -185,7 +187,7 @@ export function DefinitionPreviewPanel({
       )}
       {definitionKey ? (
         <div className="space-y-2 border-t pt-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
             <Field className="flex-1">
               <FieldLabel htmlFor={`recipient-${definitionKey}`}>
                 Recipient for eligibility (optional)
@@ -195,6 +197,17 @@ export function DefinitionPreviewPanel({
                 value={recipient}
                 onChange={(event) => setRecipient(event.target.value)}
                 placeholder="+233201234567"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`released-locale-${definitionKey}`}>
+                Locale
+              </FieldLabel>
+              <Input
+                id={`released-locale-${definitionKey}`}
+                value={releasedLocale}
+                onChange={(event) => setReleasedLocale(event.target.value)}
+                placeholder="Default"
               />
             </Field>
             <Button
@@ -221,6 +234,7 @@ export function DefinitionPreviewPanel({
                 {serverPreview.sender.status}
               </Badge>
               <Badge variant="outline">{serverPreview.message_class}</Badge>
+              <Badge variant="outline">{serverPreview.resolved_locale}</Badge>
               {serverPreview.warnings.map((warning) => (
                 <Badge
                   key={`${warning.path}:${warning.code}`}

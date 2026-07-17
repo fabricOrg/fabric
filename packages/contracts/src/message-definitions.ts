@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { withoutDuplicateDefaultLocale } from "./message-definition-locale.js";
 import { messageClass } from "./sms.js";
 
 /**
@@ -182,10 +183,17 @@ function walkBounds(
 export const messageDefinitionStatus = z.enum(["draft", "active", "archived"]);
 export type MessageDefinitionStatus = z.infer<typeof messageDefinitionStatus>;
 
+export const localeTag = z
+  .string()
+  .regex(/^[a-z]{2,3}(?:-[A-Z]{2})?$/, "invalid_locale");
+
 // SMS variant content of a version. One channel today; the shape leaves room for more.
 export const smsVariantContent = z.object({
   body: z.string().min(1).max(1600),
   class: messageClass.default("transactional"),
+  locales: z
+    .record(localeTag, z.object({ body: z.string().min(1).max(1600) }).strict())
+    .default({}),
 });
 export type SmsVariantContent = z.infer<typeof smsVariantContent>;
 
@@ -205,7 +213,7 @@ export const messageDefinitionVersion = z.object({
   version: z.int().min(1),
   variable_schema: variableSchema,
   content: smsVariantContent,
-  default_locale: z.string().min(2),
+  default_locale: localeTag,
   created_at: z.string(),
 });
 export type MessageDefinitionVersion = z.infer<typeof messageDefinitionVersion>;
@@ -237,25 +245,29 @@ export type DefinitionEnvironment = z.infer<typeof definitionEnvironment>;
 
 // Author a draft (management path, SDK-003 slice 4). Content + schema authored together. Targets the
 // workspace default application unless application_id is given.
-export const createMessageDefinitionRequest = z.object({
-  application_id: z.string().uuid().optional(),
-  key: stableKey,
-  variable_schema: variableSchema,
-  content: smsVariantContent,
-  default_locale: z.string().min(2),
-  sender_id: z.string().trim().min(1).max(11),
-});
+export const createMessageDefinitionRequest = z
+  .object({
+    application_id: z.string().uuid().optional(),
+    key: stableKey,
+    variable_schema: variableSchema,
+    content: smsVariantContent,
+    default_locale: localeTag,
+    sender_id: z.string().trim().min(1).max(11),
+  })
+  .superRefine(withoutDuplicateDefaultLocale);
 export type CreateMessageDefinitionRequest = z.infer<
   typeof createMessageDefinitionRequest
 >;
 
 // Add a new immutable version to an existing definition. Rejected server-side if the schema change is
 // breaking versus the latest version (a breaking change must use a new stable key — slice-0 §3).
-export const addMessageDefinitionVersionRequest = z.object({
-  variable_schema: variableSchema,
-  content: smsVariantContent,
-  default_locale: z.string().min(2),
-});
+export const addMessageDefinitionVersionRequest = z
+  .object({
+    variable_schema: variableSchema,
+    content: smsVariantContent,
+    default_locale: localeTag,
+  })
+  .superRefine(withoutDuplicateDefaultLocale);
 export type AddMessageDefinitionVersionRequest = z.infer<
   typeof addMessageDefinitionVersionRequest
 >;
