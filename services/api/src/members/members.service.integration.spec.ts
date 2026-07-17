@@ -25,7 +25,14 @@ describeDb("member invites", () => {
   const workos = {
     userManagement: { sendInvitation },
   } as unknown as WorkOS;
-  const service = new MembersService(db, () => workos);
+  const auditRecords: Array<{ action: string; actorEmail?: string | null }> =
+    [];
+  const audit = {
+    record: async (input: { action: string; actorEmail?: string | null }) => {
+      auditRecords.push(input);
+    },
+  } as unknown as import("../audit/audit.service.js").AuditService;
+  const service = new MembersService(db, () => workos, audit);
 
   beforeAll(async () => {
     await db.db.insert(accounts).values({
@@ -232,12 +239,22 @@ describeDb("member invites", () => {
       .from(users)
       .where(eq(users.email, email));
     if (!user) throw new Error("member not seeded by the invite test");
-    const updated = await service.setPermissions(tenantId, user.id, [
-      "sms:read",
-      "definitions:publish",
-    ]);
+    auditRecords.length = 0;
+    const updated = await service.setPermissions(
+      tenantId,
+      user.id,
+      ["sms:read", "definitions:publish"],
+      "admin@example.com",
+    );
     expect(updated.permissions).toEqual(["sms:read", "definitions:publish"]);
     expect(updated.permissions_customized).toBe(true);
+    // The grant is audited with the acting admin's email.
+    expect(auditRecords).toContainEqual(
+      expect.objectContaining({
+        action: "member.permissions_changed",
+        actorEmail: "admin@example.com",
+      }),
+    );
     const [row] = await db.db
       .select({ permissions: memberships.permissions })
       .from(memberships)

@@ -14,12 +14,12 @@ import {
   type ProvisioningDb,
   type TenantId,
   takePage,
-  type UserId,
   users,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, asc, eq } from "drizzle-orm";
-import { invalidRequest, notFound } from "../http/api-error.js";
+import { AuditService } from "../audit/audit.service.js";
+import { invalidRequest } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import {
   WORKOS_CLIENT,
@@ -27,6 +27,7 @@ import {
 } from "../identity/workos-client.provider.js";
 import { toMemberDto } from "./member-dto.js";
 import { inviteMember } from "./members-invite.js";
+import { requireMembership } from "./members-support.js";
 
 /**
  * Team-member management for a tenant. Runs on the provisioning connection (cross-tenant: it reads
@@ -43,6 +44,7 @@ export class MembersService {
   constructor(
     @Inject(PROVISIONING_DB) private readonly provisioning: ProvisioningDb,
     @Inject(WORKOS_CLIENT) private readonly workosClient: WorkosClientProvider,
+    @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
   async list(
@@ -97,13 +99,22 @@ export class MembersService {
   async invite(
     tenantId: string,
     request: InviteMemberRequest,
+    actorEmail: string | null = null,
   ): Promise<MemberDto> {
-    return inviteMember(
+    const member = await inviteMember(
       this.provisioning,
       this.workosClient,
       tenantId,
       request,
     );
+    await this.record(
+      actorEmail,
+      "member.invited",
+      tenantId as TenantId,
+      member.user_id,
+      { role: request.role, developer_access: request.developer_access },
+    );
+    return member;
   }
 
   /**
@@ -115,9 +126,10 @@ export class MembersService {
     tenantId: string,
     userId: string,
     request: UpdateMemberRequest,
+    actorEmail: string | null = null,
   ): Promise<MemberDto> {
     const scoped = tenantId as TenantId;
-    const current = await this.requireMembership(scoped, userId);
+    const current = await requireMembership(this.provisioning, scoped, userId);
     if (current.role === "owner") {
       throw invalidRequest(
         "owner_immutable",
@@ -147,6 +159,16 @@ export class MembersService {
         permissions: memberships.permissions,
       });
     if (!updated) throw new Error("Membership update returned no row.");
+    await this.record(
+      actorEmail,
+      "member.role_changed",
+      scoped,
+      current.userId,
+      {
+        role: updated.role,
+        developer_access: updated.developerAccess,
+      },
+    );
     return toMemberDto({
       userId: current.userId,
       email: current.email,
@@ -172,9 +194,10 @@ export class MembersService {
     tenantId: string,
     userId: string,
     permissions: readonly MembershipPermission[],
+    actorEmail: string | null = null,
   ): Promise<MemberDto> {
     const scoped = tenantId as TenantId;
-    const current = await this.requireMembership(scoped, userId);
+    const current = await requireMembership(this.provisioning, scoped, userId);
     if (current.role === "owner") {
       throw invalidRequest(
         "owner_immutable",
@@ -198,6 +221,13 @@ export class MembersService {
         permissions: memberships.permissions,
       });
     if (!updated) throw new Error("Membership update returned no row.");
+    await this.record(
+      actorEmail,
+      "member.permissions_changed",
+      scoped,
+      current.userId,
+      { permissions: [...permissions] },
+    );
     return toMemberDto({
       userId: current.userId,
       email: current.email,
@@ -215,15 +245,20 @@ export class MembersService {
    * disabled membership). The owner can't be removed. WorkOS identity is left intact; access is
    * revoked at the Fabric layer.
    */
-  async remove(tenantId: string, userId: string): Promise<void> {
+  async remove(
+    tenantId: string,
+    userId: string,
+    actorEmail: string | null = null,
+  ): Promise<void> {
     const scoped = tenantId as TenantId;
-    const current = await this.requireMembership(scoped, userId);
+    const current = await requireMembership(this.provisioning, scoped, userId);
     if (current.role === "owner") {
       throw invalidRequest(
         "owner_immutable",
         "The owner can't be removed from the organisation.",
       );
     }
+    await this.record(actorEmail, "member.removed", scoped, current.userId, {});
     await this.provisioning.db
       .update(memberships)
       .set({ status: "disabled", updatedAt: new Date() })
@@ -235,32 +270,21 @@ export class MembersService {
       );
   }
 
-  /** Load a membership + its user's identity, or 404. Shared by role-change + remove. */
-  private async requireMembership(
+  /** Append an audit event for a member mutation. Actor attested by the BFF (x-actor-email). */
+  private async record(
+    actorEmail: string | null,
+    action: string,
     tenantId: TenantId,
-    userId: string,
-  ): Promise<{
-    userId: UserId;
-    email: string;
-    name: string | null;
-    role: (typeof memberships.$inferSelect)["role"];
-    developerAccess: boolean;
-  }> {
-    const [row] = await this.provisioning.db
-      .select({
-        userId: users.id,
-        email: users.email,
-        name: users.name,
-        role: memberships.role,
-        developerAccess: memberships.developerAccess,
-      })
-      .from(memberships)
-      .innerJoin(users, eq(memberships.userId, users.id))
-      .where(
-        and(eq(memberships.tenantId, tenantId), eq(users.id, userId as UserId)),
-      )
-      .limit(1);
-    if (!row) throw notFound("member_not_found", "No such member.");
-    return row;
+    targetUserId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    await this.audit.record({
+      actorEmail,
+      action,
+      targetType: "membership",
+      targetId: targetUserId,
+      summary: `${action} in workspace ${tenantId}`,
+      metadata: { tenant_id: tenantId, ...metadata },
+    });
   }
 }

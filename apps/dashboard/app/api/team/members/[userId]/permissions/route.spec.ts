@@ -41,8 +41,12 @@ describe("member permissions BFF route", () => {
     setPerms.mockResolvedValue({ user_id: "u1", permissions: ["sms:read"] });
   });
 
-  it("allows an admin to set permissions", async () => {
-    readSession.mockResolvedValue({ role: "admin", orgId: "org1" });
+  it("allows an admin to set permissions and forwards the actor", async () => {
+    readSession.mockResolvedValue({
+      role: "admin",
+      orgId: "org1",
+      email: "admin@example.com",
+    });
     const res = await PUT(
       req({ permissions: ["sms:read", "definitions:write"] }),
       {
@@ -50,10 +54,12 @@ describe("member permissions BFF route", () => {
       },
     );
     expect(res.status).toBe(200);
-    expect(setPerms).toHaveBeenCalledWith("org1", "u1", [
-      "sms:read",
-      "definitions:write",
-    ]);
+    expect(setPerms).toHaveBeenCalledWith(
+      "org1",
+      "u1",
+      ["sms:read", "definitions:write"],
+      "admin@example.com",
+    );
   });
 
   it("denies a member", async () => {

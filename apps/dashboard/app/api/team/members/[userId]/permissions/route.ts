@@ -55,6 +55,7 @@ export async function PUT(
       session.orgId,
       userId,
       parsed.data.permissions,
+      session.email ?? null,
     );
     return NextResponse.json(member);
   } catch (error) {

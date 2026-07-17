@@ -97,7 +97,7 @@ function isLoopback(url: URL): boolean {
 }
 
 function assertServerRuntime(): void {
-  if (typeof window !== "undefined" && typeof window.document !== "undefined") {
+  if (typeof window !== "undefined" && window.document !== undefined) {
     throw new TypeError(
       "@fabric-messaging/sdk contains secret API keys and can only run in a trusted server environment.",
     );
