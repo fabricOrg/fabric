@@ -102,15 +102,35 @@ OpenAPI + dashboard surface for author/version/release/preview managed SMS defin
 member-draft/developer-read-only gating). Redline: ADR-0005 still `proposed` — product+security
 sign-off required (slice-0 §5) before push/publish. Next backlog item after 6b: SDK-004 (typed
 definition catalog CLI).
-- Known pre-existing local failure (NOT SDK-003): `wallet/statement.integration` fails in isolation
-  with a ledger balance drift (`expected 0n to be 9750n`) — a drifted account in the local dev DB; no
-  wallet/ledger code was touched. Needs a local ledger reseed, unrelated to this work.
+- RESOLVED (2026-07-17): the `wallet/statement.integration` local failure was residue from crashed
+  test runs (fixed-hash `api_keys` + tenant rows whose `afterAll` never ran, colliding on
+  `uniq_api_key_hash`), not ledger drift. Stale tenants deleted; full API integration suite green.
 - **Still open:** ADR-0005 remains `proposed` (product+security review pending — slice-0 §5 lists the
   asks); the runtime-vs-management authority split lands at the API layer in slice 4, not the DB grants.
 - Local-env note: this dev DB has `app_owner`/`app_migrator` table-ownership drift; running the
   migration needed a one-off `GRANT REFERENCES ON applications, environments TO app_migrator` (not in any
   migration — a single-owner DB, i.e. CI, does not need it). Also `drizzle-kit generate` emits composite
   FKs before the unique indexes they reference; the `0075` SQL was hand-reordered (indexes first).
+
+## SDK-005 — managed message deliveries (2026-07-17, local, unpushed)
+
+**Persistence boundary DONE + verified** (`00dda4d`): `POST /v1/message-deliveries` sends a released
+definition by stable key through the two-phase SMS pipeline. Preview-gated eligibility; cost cap
+fails closed pre-write; atomic delivery+attempt+message+outbox insert keyed on `Idempotency-Key`;
+deterministic delivery id per tenant/app/env/key → identical replay returns the same resource with
+no second reserve/attempt/outbox; payload mismatch on a reused key → 409 via request fingerprint.
+Tables `message_deliveries`/`message_delivery_attempts` (migrations `0080`–`0082`): FORCE RLS +
+provisioner policy, composite containment FKs, retention `expires_at` + `legal_hold`.
+
+- Migration failure root-caused: drizzle-kit again emitted the attempts containment FK before its
+  target unique index — `0080` hand-reordered (same quirk as `0075`). Second bug: the tenant-tx
+  serializer rejects `Date` binds; `expiresAt` now binds `toISOString()::timestamptz`.
+- Verified: 6-test real-Postgres spec (`managed-messages.integration.spec.ts`) + full API
+  integration 158/158 + wallet/sms-engine tiers + unit suites + typecheck green.
+- Also fixed (`1a8ccce`): flaky `webhook-http-client.spec` — 20ms shared timeout misclassified
+  outcomes under parallel load; per-case timeouts now deterministic.
+- **Remaining for SDK-005:** SDK `messages.send`/deliveries resource + OpenAPI, dashboard surface
+  (deliveries visibility), DLR-driven delivery/attempt status reconciliation evidence, evidence doc.
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 
