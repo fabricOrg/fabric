@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@app/ui/components/ui/table";
+import Link from "next/link";
 import { DefinitionApplicationSelector } from "@/components/message-definitions/definition-application-selector";
 import { BffError } from "@/lib/server/api-client";
 import { listApplications } from "@/lib/server/applications-client";
@@ -38,8 +39,10 @@ function costLabel(cost: MessageDeliverySummary["cost"]): string {
 
 function DeliveriesTable({
   deliveries,
+  applicationSlug,
 }: {
   deliveries: MessageDeliverySummary[];
+  applicationSlug: string;
 }) {
   return (
     <Table>
@@ -56,7 +59,14 @@ function DeliveriesTable({
       <TableBody>
         {deliveries.map((delivery) => (
           <TableRow key={delivery.id}>
-            <TableCell className="font-mono text-xs">{delivery.key}</TableCell>
+            <TableCell className="font-mono text-xs">
+              <Link
+                href={`/message-deliveries/${delivery.id}?application=${encodeURIComponent(applicationSlug)}`}
+                className="underline-offset-2 hover:underline"
+              >
+                {delivery.key}
+              </Link>
+            </TableCell>
             <TableCell>
               <Badge
                 variant="outline"
@@ -154,7 +164,10 @@ export default async function MessageDeliveriesPage({
         />
       ) : (
         <div className="rounded-xl border bg-card">
-          <DeliveriesTable deliveries={deliveries} />
+          <DeliveriesTable
+            deliveries={deliveries}
+            applicationSlug={selectedApplication?.slug ?? ""}
+          />
         </div>
       )}
     </PageContainer>

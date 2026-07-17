@@ -3,6 +3,8 @@ import "server-only";
 import {
   type ListMessageDeliveriesResponse,
   listMessageDeliveriesResponse,
+  type RetrieveManagedMessageResponse,
+  retrieveManagedMessageResponse,
 } from "@app/contracts";
 import { dashboardApi } from "./api-client";
 
@@ -20,4 +22,17 @@ export async function listMessageDeliveries(
     "sms:read",
   );
   return listMessageDeliveriesResponse.parse(payload);
+}
+
+export async function retrieveMessageDelivery(
+  deliveryId: string,
+  applicationId: string,
+  environmentId: string,
+): Promise<RetrieveManagedMessageResponse> {
+  const query = `application_id=${encodeURIComponent(applicationId)}&environment_id=${encodeURIComponent(environmentId)}`;
+  const payload = await dashboardApi<unknown>(
+    `/v1/message-deliveries/${encodeURIComponent(deliveryId)}?${query}`,
+    "sms:read",
+  );
+  return retrieveManagedMessageResponse.parse(payload);
 }

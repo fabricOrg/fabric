@@ -35,6 +35,8 @@ describeDb(
     const db = createAppDb(appUrl ?? "");
     const tenantId = randomUUID();
     const rawKey = `sk_test_${"5".repeat(40)}`;
+    let applicationId = "";
+    let environmentId = "";
     let app: NestFastifyApplication;
 
     const payload = {
@@ -77,7 +79,9 @@ describeDb(
 
     beforeAll(async () => {
       process.env.DATABASE_URL_APP = appUrl;
-      await seedManagedTenant({ owner, db, tenantId, rawKey });
+      const seeded = await seedManagedTenant({ owner, db, tenantId, rawKey });
+      applicationId = seeded.applicationId;
+      environmentId = seeded.environmentId;
       app = await NestFactory.create<NestFastifyApplication>(
         AppModule,
         new FastifyAdapter(),
@@ -202,6 +206,42 @@ describeDb(
         expect(delivery).not.toHaveProperty("recipient");
         expect(delivery).not.toHaveProperty("attempts");
       }
+    });
+
+    it("serves the dashboard tenant token only with explicit app/env scope", async () => {
+      const { TenantTokenService } = await import(
+        "../api-keys/tenant-token.service.js"
+      );
+      const { token } = app.get(TenantTokenService).mint(tenantId);
+      const auth = { authorization: `Bearer ${token}` };
+      // A tenant token has no application scope — it must name the environment.
+      const missing = await app.inject({
+        method: "GET",
+        url: "/v1/message-deliveries",
+        headers: auth,
+      });
+      expect(missing.statusCode).toBe(400);
+      expect(missing.json()).toMatchObject({
+        error: { code: "environment_id_required" },
+      });
+      const listed = await app.inject({
+        method: "GET",
+        url: `/v1/message-deliveries?environment_id=${environmentId}`,
+        headers: auth,
+      });
+      expect(listed.statusCode).toBe(200);
+      const first = (listed.json() as { deliveries: Array<{ id: string }> })
+        .deliveries[0];
+      if (!first) throw new Error("expected at least one delivery");
+      const detail = await app.inject({
+        method: "GET",
+        url: `/v1/message-deliveries/${first.id}?application_id=${applicationId}&environment_id=${environmentId}`,
+        headers: auth,
+      });
+      expect(detail.statusCode).toBe(200);
+      const delivery = (detail.json() as { delivery: { attempts: unknown[] } })
+        .delivery;
+      expect(delivery.attempts).toHaveLength(1);
     });
 
     it("409s when the same Idempotency-Key carries a different request", async () => {
