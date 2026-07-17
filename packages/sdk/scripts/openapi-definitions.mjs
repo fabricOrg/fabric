@@ -28,7 +28,7 @@ export const schemas = {
       key: { type: "string" },
       data: { type: "object", additionalProperties: true },
       currency: { type: "string", minLength: 3, maxLength: 3 },
-      to: { type: "string", pattern: "^\\+[1-9]\\d{7,14}$" },
+      to: { type: "string", pattern: String.raw`^\+[1-9]\d{7,14}$` },
       locale: { type: "string", pattern: "^[a-z]{2,3}(?:-[A-Z]{2})?$" },
     },
   },
@@ -220,6 +220,52 @@ export const schemas = {
     required: ["delivery", "request_id"],
     properties: {
       delivery: ref("MessageDelivery"),
+      request_id: { type: "string" },
+    },
+  },
+  MessageDeliverySummary: {
+    type: "object",
+    required: [
+      "id",
+      "key",
+      "version_id",
+      "environment",
+      "locale",
+      "channel",
+      "status",
+      "resource_version",
+      "reference",
+      "metadata",
+      "cost",
+      "created_at",
+      "updated_at",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      key: { type: "string" },
+      version_id: { type: "string", format: "uuid" },
+      environment: { enum: ["sandbox", "live"] },
+      locale: { type: "string" },
+      channel: { enum: ["sms"] },
+      status: ref("MessageDeliveryStatus"),
+      resource_version: { type: "integer", minimum: 1 },
+      reference: { oneOf: [{ type: "string" }, { type: "null" }] },
+      metadata: {
+        type: "object",
+        additionalProperties: {
+          oneOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }],
+        },
+      },
+      cost: ref("Money"),
+      created_at: { type: "string", format: "date-time" },
+      updated_at: { type: "string", format: "date-time" },
+    },
+  },
+  ListMessageDeliveriesResponse: {
+    type: "object",
+    required: ["deliveries", "request_id"],
+    properties: {
+      deliveries: { type: "array", items: ref("MessageDeliverySummary") },
       request_id: { type: "string" },
     },
   },
@@ -725,6 +771,16 @@ export const paths = {
     ),
   },
   "/v1/message-deliveries": {
+    get: operation(
+      "listManagedMessages",
+      "List recent managed deliveries for the key's environment (summaries, no recipient)",
+      {
+        200: response(
+          "Managed deliveries",
+          ref("ListMessageDeliveriesResponse"),
+        ),
+      },
+    ),
     post: {
       ...operation(
         "sendManagedMessage",

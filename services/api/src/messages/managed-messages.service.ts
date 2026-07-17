@@ -1,27 +1,19 @@
 import { createHash } from "node:crypto";
-import {
-  type MessageDelivery,
-  messageDelivery as messageDeliverySchema,
-  type SendManagedMessageRequest,
+import type {
+  MessageDelivery,
+  MessageDeliverySummary,
+  SendManagedMessageRequest,
 } from "@app/contracts";
-import {
-  type AppDb,
-  type ApplicationId,
-  type EnvironmentId,
-  environments,
-  messageDeliveries,
-  messageDeliveryAttempts,
-  type TenantId,
-} from "@app/db";
+import type { AppDb } from "@app/db";
 import {
   ManagedCostLimitError,
   ManagedIdempotencyConflictError,
 } from "@app/sms-engine";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq } from "drizzle-orm";
 import { APP_DB } from "../db/db.module.js";
-import { apiError, invalidRequest, notFound } from "../http/api-error.js";
+import { apiError, invalidRequest } from "../http/api-error.js";
 import { SmsService } from "../sms/sms.service.js";
+import { listDeliveries, retrieveDelivery } from "./managed-messages-reads.js";
 import { MessagePreviewService } from "./message-preview.service.js";
 
 const CONTENT_RETENTION_DAYS = 30;
@@ -143,97 +135,14 @@ export class ManagedMessagesService {
     environmentId: string;
     deliveryId: string;
   }): Promise<MessageDelivery> {
-    const state = await this.db.withTenantDrizzle(
-      input.tenantId,
-      async (tx) => {
-        const [delivery] = await tx
-          .select({
-            id: messageDeliveries.id,
-            key: messageDeliveries.key,
-            versionId: messageDeliveries.versionId,
-            locale: messageDeliveries.locale,
-            channel: messageDeliveries.channel,
-            status: messageDeliveries.status,
-            resourceVersion: messageDeliveries.resourceVersion,
-            reference: messageDeliveries.reference,
-            metadata: messageDeliveries.metadata,
-            currency: messageDeliveries.currency,
-            totalCostMinor: messageDeliveries.totalCostMinor,
-            createdAt: messageDeliveries.createdAt,
-            updatedAt: messageDeliveries.updatedAt,
-            environment: environments.type,
-          })
-          .from(messageDeliveries)
-          .innerJoin(
-            environments,
-            eq(environments.id, messageDeliveries.environmentId),
-          )
-          .where(
-            and(
-              eq(messageDeliveries.tenantId, input.tenantId as TenantId),
-              eq(
-                messageDeliveries.applicationId,
-                input.applicationId as ApplicationId,
-              ),
-              eq(
-                messageDeliveries.environmentId,
-                input.environmentId as EnvironmentId,
-              ),
-              eq(messageDeliveries.id, input.deliveryId),
-            ),
-          )
-          .limit(1);
-        if (!delivery) {
-          throw notFound(
-            "message_delivery_not_found",
-            "No managed delivery with that id.",
-          );
-        }
-        const attempts = await tx
-          .select()
-          .from(messageDeliveryAttempts)
-          .where(eq(messageDeliveryAttempts.deliveryId, input.deliveryId))
-          .orderBy(asc(messageDeliveryAttempts.ordinal));
-        return { delivery, attempts };
-      },
-    );
-    const messageId = state.attempts[0]?.messageId;
-    const message = messageId
-      ? await this.sms.get(input.tenantId, messageId, input.environmentId)
-      : null;
-    return messageDeliverySchema.parse({
-      id: state.delivery.id,
-      key: state.delivery.key,
-      version_id: state.delivery.versionId,
-      environment: state.delivery.environment,
-      locale: state.delivery.locale,
-      channel: state.delivery.channel,
-      status: state.delivery.status,
-      resource_version: state.delivery.resourceVersion,
-      recipient: message?.to ?? "redacted",
-      reference: state.delivery.reference,
-      metadata: state.delivery.metadata,
-      cost: {
-        minor: state.delivery.totalCostMinor.toString(),
-        currency: state.delivery.currency,
-      },
-      attempts: state.attempts.map((attempt) => ({
-        id: attempt.id,
-        ordinal: attempt.ordinal,
-        channel: attempt.channel,
-        message_id: attempt.messageId,
-        status: attempt.status,
-        cost: {
-          minor: attempt.costMinor.toString(),
-          currency: attempt.currency,
-        },
-        error_code: attempt.errorCode,
-        created_at: attempt.createdAt.toISOString(),
-        updated_at: attempt.updatedAt.toISOString(),
-      })),
-      created_at: state.delivery.createdAt.toISOString(),
-      updated_at: state.delivery.updatedAt.toISOString(),
-    });
+    return retrieveDelivery(this.db, this.sms, input);
+  }
+
+  async list(input: {
+    tenantId: string;
+    environmentId: string;
+  }): Promise<MessageDeliverySummary[]> {
+    return listDeliveries(this.db, input);
   }
 }
 

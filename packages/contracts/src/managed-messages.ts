@@ -86,3 +86,19 @@ export type SendManagedMessageResponse = z.infer<
 
 export const retrieveManagedMessageResponse = sendManagedMessageResponse;
 export type RetrieveManagedMessageResponse = SendManagedMessageResponse;
+
+// List rows omit attempts (fetched on the detail read) and the recipient (which requires a
+// per-delivery PII-vault resolution — too costly and too sensitive for a log listing).
+export const messageDeliverySummary = messageDelivery.omit({
+  attempts: true,
+  recipient: true,
+});
+export type MessageDeliverySummary = z.infer<typeof messageDeliverySummary>;
+
+export const listMessageDeliveriesResponse = z.object({
+  deliveries: z.array(messageDeliverySummary),
+  request_id: z.string(),
+});
+export type ListMessageDeliveriesResponse = z.infer<
+  typeof listMessageDeliveriesResponse
+>;

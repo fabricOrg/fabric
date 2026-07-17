@@ -13,18 +13,18 @@ import { useRouter } from "next/navigation";
 export function DefinitionApplicationSelector({
   applications,
   selectedSlug,
+  basePath = "/message-definitions",
 }: {
   applications: ApplicationDto[];
   selectedSlug: string;
+  basePath?: string;
 }) {
   const router = useRouter();
   return (
     <Select
       value={selectedSlug}
       onValueChange={(slug) =>
-        router.replace(
-          `/message-definitions?application=${encodeURIComponent(slug)}`,
-        )
+        router.replace(`${basePath}?application=${encodeURIComponent(slug)}`)
       }
     >
       <SelectTrigger aria-label="Application" className="w-64">

@@ -1,4 +1,5 @@
 import type {
+  ListMessageDeliveriesResponse,
   RetrieveManagedMessageResponse,
   SendManagedMessageResponse,
 } from "@app/contracts";
@@ -12,6 +13,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -66,6 +68,42 @@ export class ManagedMessagesController {
         environmentId: tenant.environmentId,
         idempotencyKey,
         request: parsed.data,
+      }),
+      request_id: newRequestId(),
+    };
+  }
+
+  @Get()
+  async list(
+    @Req() request: AuthedRequest,
+    @Query("environment_id") environmentId?: string,
+  ): Promise<ListMessageDeliveriesResponse> {
+    // Two read authorities: an application-environment sk_* key lists its own environment
+    // (messages:read); the dashboard's minted tenant token (applicationId === null, ADR-0003)
+    // is a management read — it names the environment explicitly and carries sms:read, since
+    // membership permissions have no messages:* scope.
+    if (request.tenant?.applicationId) {
+      const tenant = scopedTenant(request, "messages:read");
+      return {
+        deliveries: await this.messages.list({
+          tenantId: tenant.id,
+          environmentId: tenant.environmentId,
+        }),
+        request_id: newRequestId(),
+      };
+    }
+    const tenant = requireScope(request.tenant, "sms:read");
+    if (!environmentId) {
+      throw invalidRequest(
+        "environment_id_required",
+        "Provide environment_id when listing with a tenant token.",
+        "environment_id",
+      );
+    }
+    return {
+      deliveries: await this.messages.list({
+        tenantId: tenant.id,
+        environmentId,
       }),
       request_id: newRequestId(),
     };

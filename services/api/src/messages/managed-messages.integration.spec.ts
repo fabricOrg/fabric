@@ -183,6 +183,27 @@ describeDb(
       expect(Number(attempts[0]?.n)).toBe(1);
     });
 
+    it("lists the environment's deliveries newest-first without recipient PII", async () => {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/message-deliveries",
+        headers: { authorization: `Bearer ${rawKey}` },
+      });
+      expect(response.statusCode).toBe(200);
+      const { deliveries } = response.json() as {
+        deliveries: Array<Record<string, unknown>>;
+      };
+      // send-001 + the concurrent-race delivery from the earlier tests.
+      expect(deliveries.length).toBeGreaterThanOrEqual(2);
+      const times = deliveries.map((d) => String(d.created_at));
+      expect([...times].sort().reverse()).toEqual(times);
+      for (const delivery of deliveries) {
+        expect(delivery.key).toBe("order.shipped");
+        expect(delivery).not.toHaveProperty("recipient");
+        expect(delivery).not.toHaveProperty("attempts");
+      }
+    });
+
     it("409s when the same Idempotency-Key carries a different request", async () => {
       const before = await counts();
       const response = await send(

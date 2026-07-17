@@ -372,6 +372,72 @@
       }
     },
     "/v1/message-deliveries": {
+      "get": {
+        "operationId": "listManagedMessages",
+        "summary": "List recent managed deliveries for the key's environment (summaries, no recipient)",
+        "responses": {
+          "200": {
+            "description": "Managed deliveries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMessageDeliveriesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or missing API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Platform error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "operationId": "sendManagedMessage",
         "summary": "Send a released message definition by stable key (idempotent)",
@@ -2414,6 +2480,105 @@
         "properties": {
           "delivery": {
             "$ref": "#/components/schemas/MessageDelivery"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        }
+      },
+      "MessageDeliverySummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "version_id",
+          "environment",
+          "locale",
+          "channel",
+          "status",
+          "resource_version",
+          "reference",
+          "metadata",
+          "cost",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment": {
+            "enum": ["sandbox", "live"]
+          },
+          "locale": {
+            "type": "string"
+          },
+          "channel": {
+            "enum": ["sms"]
+          },
+          "status": {
+            "$ref": "#/components/schemas/MessageDeliveryStatus"
+          },
+          "resource_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reference": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            }
+          },
+          "cost": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ListMessageDeliveriesResponse": {
+        "type": "object",
+        "required": ["deliveries", "request_id"],
+        "properties": {
+          "deliveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageDeliverySummary"
+            }
           },
           "request_id": {
             "type": "string"
