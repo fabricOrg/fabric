@@ -33,7 +33,7 @@ function useInCodeSnippet(state: MessageDefinitionState): string {
     .map((k) => `    ${k}: "…"`)
     .join(",\n");
   const locale = state.latest_version?.default_locale ?? "en";
-  return `await fabric.messages.preview("${state.definition.key}", {\n  data: {\n${data}\n  },\n  locale: "${locale}",\n});`;
+  return `await fabric.messages.send("${state.definition.key}", {\n  to: "+233…",\n  data: {\n${data}\n  },\n  locale: "${locale}",\n  idempotencyKey: "order-1042",\n});`;
 }
 
 function DefinitionCard({

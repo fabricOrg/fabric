@@ -9,7 +9,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import { createAppDb } from "@app/db";
-import { credit } from "@app/wallet";
 import { NestFactory } from "@nestjs/core";
 import {
   FastifyAdapter,
@@ -17,11 +16,11 @@ import {
 } from "@nestjs/platform-fastify";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { hashApiKey } from "../api-keys/api-key.crypto.js";
 import { AppModule } from "../app.module.js";
-import { ApplicationsService } from "../applications/applications.service.js";
-import type { AuditService } from "../audit/audit.service.js";
-import { MessageDefinitionsService } from "../message-definitions/message-definitions.service.js";
+import {
+  cleanManagedTenant,
+  seedManagedTenant,
+} from "./managed-messages.spec-harness.js";
 
 const superUrl = process.env.DATABASE_URL_SUPER;
 const appUrl = process.env.DATABASE_URL_APP;
@@ -36,8 +35,6 @@ describeDb(
     const db = createAppDb(appUrl ?? "");
     const tenantId = randomUUID();
     const rawKey = `sk_test_${"5".repeat(40)}`;
-    let applicationId = "";
-    let environmentId = "";
     let app: NestFastifyApplication;
 
     const payload = {
@@ -80,63 +77,7 @@ describeDb(
 
     beforeAll(async () => {
       process.env.DATABASE_URL_APP = appUrl;
-      await owner`
-      INSERT INTO accounts (id, name, slug)
-      VALUES (${tenantId}, 'Managed Sends', ${`managed-${tenantId}`})`;
-      const apps = new ApplicationsService(db);
-      const created = await apps.create(tenantId, {
-        name: "Default",
-        slug: "default",
-      });
-      applicationId = created.id;
-      environmentId =
-        created.environments.find((e) => e.type === "sandbox")?.id ?? "";
-      const audit = {
-        record: async () => undefined,
-      } as unknown as AuditService;
-      const defs = new MessageDefinitionsService(db, audit);
-      const definition = await defs.create(tenantId, {
-        key: "order.shipped",
-        application_id: applicationId,
-        variable_schema: {
-          type: "object",
-          properties: {
-            name: { type: "string" },
-            count: { type: "integer", minimum: 0 },
-          },
-          required: ["name"],
-        },
-        content: {
-          body: "Hi {{name}}, {{count}} orders.",
-          class: "transactional",
-          locales: {},
-        },
-        default_locale: "en",
-        sender_id: "FABRIC",
-      });
-      await defs.publish(
-        tenantId,
-        definition.definition.id,
-        {
-          environment: "sandbox",
-          version_id: definition.latest_version?.id ?? "",
-        },
-        "key_test",
-      );
-      await owner`
-      INSERT INTO api_keys (
-        tenant_id, application_id, environment_id, prefix, key_hash, env, scopes, status
-      ) VALUES (
-        ${tenantId}, ${applicationId}, ${environmentId}, 'sk_test_manag',
-        ${hashApiKey(rawKey)}, 'test', '["messages:send","messages:read"]'::jsonb, 'active'
-      )`;
-      await db.withTenant(tenantId, (tx) =>
-        credit(tx, {
-          currency: "GHS",
-          amountMinor: 10_000n,
-          idempotencyKey: `topup:managed-${tenantId}`,
-        }),
-      );
+      await seedManagedTenant({ owner, db, tenantId, rawKey });
       app = await NestFactory.create<NestFastifyApplication>(
         AppModule,
         new FastifyAdapter(),
@@ -148,20 +89,7 @@ describeDb(
 
     afterAll(async () => {
       await app?.close();
-      await owner`DELETE FROM outbox_events WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM message_delivery_attempts WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM message_deliveries WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM messages WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM message_definition_releases WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM message_definition_sender_bindings WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM message_definition_versions WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM message_definitions WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM ledger_entries WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM ledger_transactions WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM ledger_accounts WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM api_keys WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM applications WHERE tenant_id = ${tenantId}`;
-      await owner`DELETE FROM accounts WHERE id = ${tenantId}`;
+      await cleanManagedTenant(owner, tenantId);
       await Promise.all([owner.end(), db.end()]);
     });
 
@@ -178,9 +106,20 @@ describeDb(
         reference: "order-42",
         metadata: { source: "integration" },
       });
+      // Sandbox resolves inline (virtual provider, no queue), so the shared transition core has
+      // already reconciled the message outcome onto the delivery + attempt: status propagated,
+      // resource_version bumped past the initial `accepted`, and the attempt carries the real cost.
+      expect(delivery.status).toBe("delivered");
+      expect(delivery.resource_version as number).toBeGreaterThan(1);
+      expect(delivery.cost).toMatchObject({ minor: "3", currency: "GHS" });
       const attempts = delivery.attempts as Array<Record<string, unknown>>;
       expect(attempts).toHaveLength(1);
-      expect(attempts[0]).toMatchObject({ ordinal: 1, channel: "sms" });
+      expect(attempts[0]).toMatchObject({
+        ordinal: 1,
+        channel: "sms",
+        status: "delivered",
+        cost: { minor: "3", currency: "GHS" },
+      });
 
       const afterFirst = await counts();
       expect(afterFirst).toMatchObject({
@@ -214,6 +153,34 @@ describeDb(
       ).delivery;
       expect(delivery.id).toBe(id);
       expect(delivery.attempts).toHaveLength(1);
+    });
+
+    it("collapses concurrent identical sends onto one delivery", async () => {
+      const key = "send-concurrent";
+      const [a, b, c] = await Promise.all([
+        send(payload, key),
+        send(payload, key),
+        send(payload, key),
+      ]);
+      // Every caller gets the same accepted delivery; the FOR UPDATE replay probe + the
+      // ON CONFLICT insert guarantee the race produces exactly one message/attempt/reserve.
+      for (const response of [a, b, c]) expect(response.statusCode).toBe(202);
+      const ids = new Set(
+        [a, b, c].map(
+          (response) =>
+            (response.json() as { delivery: { id: string } }).delivery.id,
+        ),
+      );
+      expect(ids.size).toBe(1);
+      const rows = await owner`
+        SELECT count(*)::int AS n FROM message_deliveries
+        WHERE tenant_id = ${tenantId} AND idempotency_key = ${key}`;
+      expect(Number(rows[0]?.n)).toBe(1);
+      const attempts = await owner`
+        SELECT count(*)::int AS n FROM message_delivery_attempts
+        WHERE tenant_id = ${tenantId}
+          AND delivery_id = ${[...ids][0] ?? ""}`;
+      expect(Number(attempts[0]?.n)).toBe(1);
     });
 
     it("409s when the same Idempotency-Key carries a different request", async () => {

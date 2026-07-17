@@ -125,12 +125,22 @@ provisioner policy, composite containment FKs, retention `expires_at` + `legal_h
 - Migration failure root-caused: drizzle-kit again emitted the attempts containment FK before its
   target unique index — `0080` hand-reordered (same quirk as `0075`). Second bug: the tenant-tx
   serializer rejects `Date` binds; `expiresAt` now binds `toISOString()::timestamptz`.
-- Verified: 6-test real-Postgres spec (`managed-messages.integration.spec.ts`) + full API
-  integration 158/158 + wallet/sms-engine tiers + unit suites + typecheck green.
+- Verified: 7-test real-Postgres spec (`managed-messages.integration.spec.ts`, seeding split into
+  `managed-messages.spec-harness.ts`) incl. a **3-way concurrent same-key race → one delivery** and
+  reconciliation assertions (inline sandbox resolution propagates delivered + exact cost +
+  `resource_version` bump onto delivery/attempt); full API integration 158/158 + wallet/sms-engine
+  tiers + unit suites + typecheck green.
 - Also fixed (`1a8ccce`): flaky `webhook-http-client.spec` — 20ms shared timeout misclassified
   outcomes under parallel load; per-case timeouts now deterministic.
-- **Remaining for SDK-005:** SDK `messages.send`/deliveries resource + OpenAPI, dashboard surface
-  (deliveries visibility), DLR-driven delivery/attempt status reconciliation evidence, evidence doc.
+- **SDK surface DONE** (`e465876`): `fabric.messages.send(key, { to, data, idempotencyKey, … })` +
+  `retrieveDelivery(id)` with catalog-generated per-key typing; parser proven against canonical
+  `sendManagedMessageResponse`; OpenAPI paths/schemas regenerated; `release:check` green (39 tests).
+  Definitions-page Use-in-code snippet now shows `send`.
+- Evidence: `docs/sdk/evidence/sdk-005.md` (AC traceability; AC04/AC06 + purge job + dashboard
+  delivery logs + packed-example UAT still open).
+- **Remaining for SDK-005:** dashboard delivery logs/details, managed-path crash-injection +
+  post-acceptance recheck evidence, retention purge job (needs a production trigger), typed
+  terminal-webhook consumption + packed-example sandbox UAT.
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 
