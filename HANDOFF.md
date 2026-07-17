@@ -152,9 +152,14 @@ provisioner policy, composite containment FKs, retention `expires_at` + `legal_h
 - **Crash recovery PROVEN (AC04):** `managed-crash-recovery.integration` — accept → crash (no
   dispatch) → sweeper converges message/delivery/attempt on `expired`, terminal outbox event,
   exactly-one refund, zero provider contact. Full API integration now 37 files / 164 tests.
-- **Remaining for SDK-005:** webhook status on the detail view, post-acceptance recheck evidence
-  (worker-path block/refund/reason), tenant export/deletion handling, typed terminal-webhook
-  consumption + packed-example sandbox UAT.
+- **AC06 SHIPPED + PROVEN:** attempt-time rechecks on the queued dispatch path
+  (`sms-dispatch-recheck.ts` — kill-switch/consent/sender re-checked before provider contact;
+  block → refund-once + terminal event; fail-open on store errors). 3-test spec incl. replay
+  no-op. Also fixed the REAL cause of the intermittent statement-spec failures: integration specs
+  sharing raw API keys race on the globally-unique key_hash and authenticate as each other's
+  tenants — keys de-duplicated/randomized; failure-path diagnostic left in the statement spec.
+- **Remaining for SDK-005:** webhook status on the detail view, tenant export/deletion handling,
+  typed terminal-webhook consumption + packed-example sandbox UAT.
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 
