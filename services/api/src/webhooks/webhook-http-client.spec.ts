@@ -15,7 +15,7 @@ describe("webhook HTTP safety and outcomes", () => {
         return;
       }
       if (request.url === "/slow") {
-        setTimeout(() => response.end(), 100);
+        setTimeout(() => response.end(), 500);
         return;
       }
       response.statusCode = request.url === "/client" ? 400 : 500;
@@ -45,18 +45,21 @@ describe("webhook HTTP safety and outcomes", () => {
     updatedAt: new Date(),
   } as OutboxEvent;
 
+  // Non-timeout cases get a generous timeout: under parallel suite load even a local response
+  // can take tens of ms, and a premature timeout would misclassify the outcome. The slow path
+  // responds after 500ms, far beyond its 50ms timeout, so `timeout` still fires deterministically.
   it.each([
-    ["client", "http_4xx", 400],
-    ["server", "http_5xx", 500],
-    ["reset", "network", null],
-    ["slow", "timeout", null],
-  ])("classifies %s failures safely", async (path, category, status) => {
+    ["client", "http_4xx", 400, 2_000],
+    ["server", "http_5xx", 500, 2_000],
+    ["reset", "network", null, 2_000],
+    ["slow", "timeout", null, 50],
+  ])("classifies %s failures safely", async (path, category, status, timeoutMs) => {
     await expect(
       postWebhook({
         url: `http://127.0.0.1:${port}/${path}`,
         secret: "whsec_test",
         event,
-        timeoutMs: 20,
+        timeoutMs,
         allowPrivateNetworks: true,
       }),
     ).resolves.toEqual({
