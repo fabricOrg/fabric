@@ -34,7 +34,7 @@ describeDb(
     const owner = postgres(superUrl ?? "", { max: 2 });
     const db = createAppDb(appUrl ?? "");
     const tenantId = randomUUID();
-    const rawKey = `sk_test_${"5".repeat(40)}`;
+    const rawKey = `sk_test_${randomUUID().replace(/-/g, "")}${"0".repeat(8)}`;
     let applicationId = "";
     let environmentId = "";
     let app: NestFastifyApplication;

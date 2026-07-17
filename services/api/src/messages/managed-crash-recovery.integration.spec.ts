@@ -35,7 +35,7 @@ describeDb("SDK-005 managed crash recovery (accept → crash → sweep)", () => 
   const owner = postgres(superUrl ?? "", { max: 2 });
   const db = createAppDb(appUrl ?? "");
   const tenantId = randomUUID();
-  const rawKey = `sk_test_${"7".repeat(40)}`;
+  const rawKey = `sk_test_${randomUUID().replace(/-/g, "")}${"0".repeat(8)}`;
   const deliveryId = randomUUID();
   const CREDIT = 10_000n;
   const COST = 3n; // "Hi Ada, 2 orders." = 1 gsm7 segment at the GHS rate.
