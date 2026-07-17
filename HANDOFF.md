@@ -138,9 +138,13 @@ provisioner policy, composite containment FKs, retention `expires_at` + `legal_h
   Definitions-page Use-in-code snippet now shows `send`.
 - Evidence: `docs/sdk/evidence/sdk-005.md` (AC traceability; AC04/AC06 + purge job + dashboard
   delivery logs + packed-example UAT still open).
-- **Remaining for SDK-005:** dashboard delivery logs/details, managed-path crash-injection +
-  post-acceptance recheck evidence, retention purge job (needs a production trigger), typed
-  terminal-webhook consumption + packed-example sandbox UAT.
+- **Delivery log DONE (list):** `GET /v1/message-deliveries` (summary rows, no recipient PII; sk_*
+  key lists its own env, dashboard tenant token names `environment_id` + sms:read) + dashboard
+  `/message-deliveries` page (per-application sandbox log, nav entry). Reads split into
+  `managed-messages-reads.ts`. 8-test spec incl. list ordering + no-PII-in-list.
+- **Remaining for SDK-005:** delivery DETAIL view (attempts timeline, masked recipient, webhook
+  status), managed-path crash-injection + post-acceptance recheck evidence, retention purge job
+  (needs a production trigger), typed terminal-webhook consumption + packed-example sandbox UAT.
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 
