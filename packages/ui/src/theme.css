@@ -27,7 +27,7 @@
 :root {
   --radius: 0.5rem; /* 8px base → inputs/buttons 8, cards 12 (lg), modals 16 (xl) */
 
-  --background: #f5f6fa; /* cool neutral canvas */
+  --background: #fcfcfd; /* near-white canvas — surfaces read as white, elevation via border/shadow */
   --foreground: #1a1b2e; /* indigo-ink */
   --card: #ffffff; /* clean elevated surface */
   --card-foreground: #1a1b2e;
@@ -39,7 +39,7 @@
   --secondary: #eef0f5; /* cool muted surface */
   --secondary-foreground: #2a2b72;
   --muted: #eef0f5;
-  --muted-foreground: #667085; /* WCAG AA: 4.61:1 on canvas, 4.97:1 on card */
+  --muted-foreground: #667085; /* WCAG AA: ~4.9:1 on the near-white canvas and on card */
   --accent: #eef0f5; /* neutral hover/selected surface */
   --accent-foreground: #2a2b72; /* brand-ink on hover/active */
 

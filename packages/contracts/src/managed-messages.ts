@@ -87,6 +87,32 @@ export type SendManagedMessageResponse = z.infer<
 export const retrieveManagedMessageResponse = sendManagedMessageResponse;
 export type RetrieveManagedMessageResponse = SendManagedMessageResponse;
 
+// Webhook observability for one delivery: every fan-out row for the delivery's outbox events.
+// The endpoint URL is included (the tenant registered it); the signing secret never is.
+export const messageDeliveryWebhookStatus = z.object({
+  event_id: z.string().uuid(),
+  event_type: z.string(),
+  endpoint_id: z.string().uuid(),
+  endpoint_url: z.string(),
+  state: z.enum(["pending", "delivering", "delivered", "dead"]),
+  attempts: z.number().int().min(0),
+  last_http_status: z.number().int().nullable(),
+  last_error_category: z.string().nullable(),
+  delivered_at: z.string().nullable(),
+  created_at: z.string(),
+});
+export type MessageDeliveryWebhookStatus = z.infer<
+  typeof messageDeliveryWebhookStatus
+>;
+
+export const messageDeliveryWebhooksResponse = z.object({
+  webhooks: z.array(messageDeliveryWebhookStatus),
+  request_id: z.string(),
+});
+export type MessageDeliveryWebhooksResponse = z.infer<
+  typeof messageDeliveryWebhooksResponse
+>;
+
 // List rows omit attempts (fetched on the detail read) and the recipient (which requires a
 // per-delivery PII-vault resolution — too costly and too sensitive for a log listing).
 export const messageDeliverySummary = messageDelivery.omit({

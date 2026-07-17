@@ -1,4 +1,7 @@
-import type { MessageDelivery } from "@app/contracts";
+import type {
+  MessageDelivery,
+  MessageDeliveryWebhookStatus,
+} from "@app/contracts";
 import { PageContainer } from "@app/ui/components/ui/app-shell";
 import { Badge } from "@app/ui/components/ui/badge";
 import {
@@ -20,7 +23,10 @@ import Link from "next/link";
 import { BffError } from "@/lib/server/api-client";
 import { listApplications } from "@/lib/server/applications-client";
 import { requireDashboardSession } from "@/lib/server/auth";
-import { retrieveMessageDelivery } from "@/lib/server/message-deliveries-client";
+import {
+  retrieveMessageDelivery,
+  retrieveMessageDeliveryWebhooks,
+} from "@/lib/server/message-deliveries-client";
 
 const STATUS_STYLE: Record<string, string> = {
   delivered: "border-transparent bg-success/12 text-success",
@@ -100,6 +106,7 @@ export default async function MessageDeliveryDetailPage({
   const requestedApplication = (await searchParams).application;
 
   let delivery: MessageDelivery | undefined;
+  let webhooks: MessageDeliveryWebhookStatus[] = [];
   let requestId: string | undefined;
   let loadError = false;
   try {
@@ -111,12 +118,12 @@ export default async function MessageDeliveryDetailPage({
       (environment) => environment.type === "sandbox",
     );
     if (application && sandbox) {
-      const response = await retrieveMessageDelivery(
-        id,
-        application.id,
-        sandbox.id,
-      );
+      const [response, webhookStatus] = await Promise.all([
+        retrieveMessageDelivery(id, application.id, sandbox.id),
+        retrieveMessageDeliveryWebhooks(id, application.id, sandbox.id),
+      ]);
       delivery = response.delivery;
+      webhooks = webhookStatus.webhooks;
       requestId = response.request_id;
     }
   } catch (error) {
@@ -186,6 +193,18 @@ export default async function MessageDeliveryDetailPage({
         </div>
       </div>
 
+      <div className="mt-6 rounded-xl border bg-card">
+        <p className="border-b p-4 text-sm font-medium">Webhooks</p>
+        {webhooks.length === 0 ? (
+          <p className="p-4 text-sm text-muted-foreground">
+            No webhook deliveries for this message yet — register an endpoint to
+            receive its events.
+          </p>
+        ) : (
+          <WebhookStatusTable webhooks={webhooks} />
+        )}
+      </div>
+
       {Object.keys(delivery.metadata).length > 0 ? (
         <div className="mt-6 rounded-xl border bg-card p-5">
           <p className="mb-2 text-sm font-medium">Metadata</p>
@@ -195,5 +214,62 @@ export default async function MessageDeliveryDetailPage({
         </div>
       ) : null}
     </PageContainer>
+  );
+}
+
+const WEBHOOK_STATE_STYLE: Record<string, string> = {
+  delivered: "border-transparent bg-success/12 text-success",
+  pending: "border-transparent bg-muted text-muted-foreground",
+  delivering: "border-transparent bg-muted text-muted-foreground",
+  dead: "border-transparent bg-destructive/12 text-destructive",
+};
+
+function WebhookStatusTable({
+  webhooks,
+}: {
+  webhooks: MessageDeliveryWebhookStatus[];
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Event</TableHead>
+          <TableHead>Endpoint</TableHead>
+          <TableHead>State</TableHead>
+          <TableHead>Attempts</TableHead>
+          <TableHead>Last HTTP</TableHead>
+          <TableHead>Delivered</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {webhooks.map((webhook) => (
+          <TableRow key={`${webhook.event_id}-${webhook.endpoint_id}`}>
+            <TableCell className="font-mono text-xs">
+              {webhook.event_type}
+            </TableCell>
+            <TableCell className="max-w-64 truncate text-muted-foreground">
+              {webhook.endpoint_url}
+            </TableCell>
+            <TableCell>
+              <Badge
+                variant="outline"
+                className={WEBHOOK_STATE_STYLE[webhook.state]}
+              >
+                {webhook.state}
+              </Badge>
+            </TableCell>
+            <TableCell className="tabular-nums">{webhook.attempts}</TableCell>
+            <TableCell className="text-muted-foreground">
+              {webhook.last_http_status ?? webhook.last_error_category ?? "—"}
+            </TableCell>
+            <TableCell className="text-muted-foreground">
+              {webhook.delivered_at
+                ? new Date(webhook.delivered_at).toLocaleString()
+                : "—"}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }

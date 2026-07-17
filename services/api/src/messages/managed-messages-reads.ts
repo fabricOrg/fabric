@@ -1,8 +1,10 @@
 import {
   type MessageDelivery,
   type MessageDeliverySummary,
+  type MessageDeliveryWebhookStatus,
   messageDelivery as messageDeliverySchema,
   messageDeliverySummary as messageDeliverySummarySchema,
+  messageDeliveryWebhookStatus as messageDeliveryWebhookStatusSchema,
 } from "@app/contracts";
 import {
   type AppDb,
@@ -11,9 +13,12 @@ import {
   environments,
   messageDeliveries,
   messageDeliveryAttempts,
+  outboxEvents,
   type TenantId,
+  webhookDeliveries,
+  webhookEndpoints,
 } from "@app/db";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { notFound } from "../http/api-error.js";
 
 const LIST_LIMIT = 50;
@@ -164,4 +169,87 @@ export async function retrieveDelivery(
       updated_at: attempt.updatedAt.toISOString(),
     })),
   });
+}
+
+/**
+ * Webhook fan-out status for one delivery: every webhook_deliveries row whose outbox event
+ * belongs to this delivery. Managed sends reuse the delivery id as the message id, so the
+ * payload's message_id matches both the acceptance and every transition event. The delivery must
+ * exist in the requested app/env (containment) — 404 otherwise, same as the detail read.
+ */
+export async function listDeliveryWebhookStatus(
+  db: AppDb,
+  input: {
+    tenantId: string;
+    applicationId: string;
+    environmentId: string;
+    deliveryId: string;
+  },
+): Promise<MessageDeliveryWebhookStatus[]> {
+  const rows = await db.withTenantDrizzle(input.tenantId, async (tx) => {
+    const [delivery] = await tx
+      .select({ id: messageDeliveries.id })
+      .from(messageDeliveries)
+      .where(
+        and(
+          eq(messageDeliveries.tenantId, input.tenantId as TenantId),
+          eq(
+            messageDeliveries.applicationId,
+            input.applicationId as ApplicationId,
+          ),
+          eq(
+            messageDeliveries.environmentId,
+            input.environmentId as EnvironmentId,
+          ),
+          eq(messageDeliveries.id, input.deliveryId),
+        ),
+      )
+      .limit(1);
+    if (!delivery) {
+      throw notFound(
+        "message_delivery_not_found",
+        "No managed delivery with that id.",
+      );
+    }
+    return tx
+      .select({
+        eventId: outboxEvents.id,
+        eventType: outboxEvents.eventType,
+        endpointId: webhookEndpoints.id,
+        endpointUrl: webhookEndpoints.url,
+        state: webhookDeliveries.state,
+        attempts: webhookDeliveries.attempts,
+        lastHttpStatus: webhookDeliveries.lastHttpStatus,
+        lastErrorCategory: webhookDeliveries.lastErrorCategory,
+        deliveredAt: webhookDeliveries.deliveredAt,
+        createdAt: webhookDeliveries.createdAt,
+      })
+      .from(webhookDeliveries)
+      .innerJoin(outboxEvents, eq(outboxEvents.id, webhookDeliveries.eventId))
+      .innerJoin(
+        webhookEndpoints,
+        eq(webhookEndpoints.id, webhookDeliveries.endpointId),
+      )
+      .where(
+        and(
+          eq(webhookDeliveries.tenantId, input.tenantId as TenantId),
+          sql`${outboxEvents.payload}->>'message_id' = ${input.deliveryId}`,
+        ),
+      )
+      .orderBy(asc(webhookDeliveries.createdAt));
+  });
+  return rows.map((row) =>
+    messageDeliveryWebhookStatusSchema.parse({
+      event_id: row.eventId,
+      event_type: row.eventType,
+      endpoint_id: row.endpointId,
+      endpoint_url: row.endpointUrl,
+      state: row.state,
+      attempts: row.attempts,
+      last_http_status: row.lastHttpStatus,
+      last_error_category: row.lastErrorCategory,
+      delivered_at: row.deliveredAt ? row.deliveredAt.toISOString() : null,
+      created_at: row.createdAt.toISOString(),
+    }),
+  );
 }

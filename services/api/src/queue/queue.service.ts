@@ -31,11 +31,15 @@ import {
 export class QueueService implements OnModuleDestroy {
   private readonly logger = new Logger(QueueService.name);
   private readonly url: string | undefined;
+  /** BullMQ key prefix. Overridable (REDIS_QUEUE_PREFIX) so processes sharing one Redis — a dev
+   *  stack next to an integration-test run — consume their OWN queues, never each other's. */
+  private readonly prefix: string;
   private readonly queues = new Map<string, Queue>();
   private readonly workers: Worker[] = [];
 
   constructor(@Inject(ConfigService) config: ConfigService) {
     this.url = config.get<string>("REDIS_QUEUE_URL");
+    this.prefix = config.get<string>("REDIS_QUEUE_PREFIX") ?? "bull";
     this.logger.log(
       `queue: ${this.url ? "ENABLED (redis)" : "disabled — inline fallback"}`,
     );
@@ -58,7 +62,10 @@ export class QueueService implements OnModuleDestroy {
   queue(name: string): Queue {
     const existing = this.queues.get(name);
     if (existing) return existing;
-    const created = new Queue(name, { connection: this.connection() });
+    const created = new Queue(name, {
+      connection: this.connection(),
+      prefix: this.prefix,
+    });
     this.queues.set(name, created);
     return created;
   }
@@ -71,6 +78,7 @@ export class QueueService implements OnModuleDestroy {
   ): Worker {
     const worker = new Worker(name, processor, {
       connection: this.connection(),
+      prefix: this.prefix,
       ...opts,
     });
     worker.on("failed", (job, error) => {

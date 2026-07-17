@@ -261,6 +261,43 @@ export const schemas = {
       updated_at: { type: "string", format: "date-time" },
     },
   },
+  MessageDeliveryWebhookStatus: {
+    type: "object",
+    required: [
+      "event_id",
+      "event_type",
+      "endpoint_id",
+      "endpoint_url",
+      "state",
+      "attempts",
+      "last_http_status",
+      "last_error_category",
+      "delivered_at",
+      "created_at",
+    ],
+    properties: {
+      event_id: { type: "string", format: "uuid" },
+      event_type: { type: "string" },
+      endpoint_id: { type: "string", format: "uuid" },
+      endpoint_url: { type: "string" },
+      state: { enum: ["pending", "delivering", "delivered", "dead"] },
+      attempts: { type: "integer", minimum: 0 },
+      last_http_status: { oneOf: [{ type: "integer" }, { type: "null" }] },
+      last_error_category: { oneOf: [{ type: "string" }, { type: "null" }] },
+      delivered_at: {
+        oneOf: [{ type: "string", format: "date-time" }, { type: "null" }],
+      },
+      created_at: { type: "string", format: "date-time" },
+    },
+  },
+  MessageDeliveryWebhooksResponse: {
+    type: "object",
+    required: ["webhooks", "request_id"],
+    properties: {
+      webhooks: { type: "array", items: ref("MessageDeliveryWebhookStatus") },
+      request_id: { type: "string" },
+    },
+  },
   ListMessageDeliveriesResponse: {
     type: "object",
     required: ["deliveries", "request_id"],
@@ -801,6 +838,22 @@ export const paths = {
             "Required. A replay with the same key returns the same delivery; a different payload under the same key is rejected.",
         },
       ],
+    },
+  },
+  "/v1/message-deliveries/{id}/webhooks": {
+    get: {
+      ...operation(
+        "listManagedMessageWebhooks",
+        "Webhook fan-out status for a managed delivery's events",
+        {
+          200: response(
+            "Webhook deliveries",
+            ref("MessageDeliveryWebhooksResponse"),
+          ),
+          404: response("Not found", ref("ErrorEnvelope")),
+        },
+      ),
+      parameters: [idParameter],
     },
   },
   "/v1/message-deliveries/{id}": {

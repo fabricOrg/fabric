@@ -210,6 +210,57 @@ describeDb(
       }
     });
 
+    it("reports webhook fan-out status for a delivery's events", async () => {
+      const getWebhooks = (deliveryId: string) =>
+        app.inject({
+          method: "GET",
+          url: `/v1/message-deliveries/${deliveryId}/webhooks`,
+          headers: { authorization: `Bearer ${rawKey}` },
+        });
+      const sent = await send(payload, "send-001");
+      const id = (sent.json() as { delivery: { id: string } }).delivery.id;
+      // No endpoints registered → observable, just empty.
+      const before = await getWebhooks(id);
+      expect(before.statusCode).toBe(200);
+      expect((before.json() as { webhooks: unknown[] }).webhooks).toEqual([]);
+
+      // Register an endpoint and fan the acceptance event out to it (the poller's job — its own
+      // worker specs cover fan-out; here we assert the delivery-scoped observability read).
+      const [event] = await owner`
+        SELECT id FROM outbox_events
+        WHERE tenant_id = ${tenantId} AND payload->>'message_id' = ${id}
+        ORDER BY created_at LIMIT 1`;
+      if (!event) throw new Error("acceptance event missing");
+      const [endpoint] = await owner`
+        INSERT INTO webhook_endpoints (tenant_id, application_id, environment_id, url, secret, status)
+        VALUES (${tenantId}, ${applicationId}, ${environmentId},
+                'https://example.test/hooks', 'whsec_test_secret', 'active')
+        RETURNING id`;
+      await owner`
+        INSERT INTO webhook_deliveries (
+          tenant_id, application_id, environment_id, event_id, endpoint_id,
+          state, attempts, delivered_at, last_http_status
+        ) VALUES (
+          ${tenantId}, ${applicationId}, ${environmentId}, ${event.id},
+          ${endpoint?.id}, 'delivered', 1, now(), 200
+        )`;
+
+      const response = await getWebhooks(id);
+      expect(response.statusCode).toBe(200);
+      const { webhooks } = response.json() as {
+        webhooks: Array<Record<string, unknown>>;
+      };
+      expect(webhooks).toHaveLength(1);
+      expect(webhooks[0]).toMatchObject({
+        endpoint_url: "https://example.test/hooks",
+        state: "delivered",
+        attempts: 1,
+        last_http_status: 200,
+      });
+      // Containment: an unknown delivery 404s rather than leaking cross-scope rows.
+      expect((await getWebhooks(randomUUID())).statusCode).toBe(404);
+    });
+
     it("serves the dashboard tenant token only with explicit app/env scope", async () => {
       const { TenantTokenService } = await import(
         "../api-keys/tenant-token.service.js"

@@ -3,6 +3,8 @@ import "server-only";
 import {
   type ListMessageDeliveriesResponse,
   listMessageDeliveriesResponse,
+  type MessageDeliveryWebhooksResponse,
+  messageDeliveryWebhooksResponse,
   type RetrieveManagedMessageResponse,
   retrieveManagedMessageResponse,
 } from "@app/contracts";
@@ -22,6 +24,19 @@ export async function listMessageDeliveries(
     "sms:read",
   );
   return listMessageDeliveriesResponse.parse(payload);
+}
+
+export async function retrieveMessageDeliveryWebhooks(
+  deliveryId: string,
+  applicationId: string,
+  environmentId: string,
+): Promise<MessageDeliveryWebhooksResponse> {
+  const query = `application_id=${encodeURIComponent(applicationId)}&environment_id=${encodeURIComponent(environmentId)}`;
+  const payload = await dashboardApi<unknown>(
+    `/v1/message-deliveries/${encodeURIComponent(deliveryId)}/webhooks?${query}`,
+    "sms:read",
+  );
+  return messageDeliveryWebhooksResponse.parse(payload);
 }
 
 export async function retrieveMessageDelivery(
