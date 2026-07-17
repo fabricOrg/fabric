@@ -205,6 +205,10 @@ describe("canonical contract parity", () => {
       environment: "sandbox",
       resolved_locale: "en",
       blockers: [],
+      warnings: [{ path: "to", code: "recipient_not_provided" }],
+      eligible: true,
+      sender: { sender_id: "FABRIC", status: "sandbox" },
+      message_class: "transactional",
       preview: {
         body: "Hi Ada",
         encoding: "gsm7",
@@ -225,6 +229,10 @@ describe("canonical contract parity", () => {
         environment: "sandbox",
         resolvedLocale: "en",
         blockers: [],
+        warnings: [{ code: "recipient_not_provided" }],
+        eligible: true,
+        sender: { senderId: "FABRIC", status: "sandbox" },
+        messageClass: "transactional",
         preview: { encoding: "gsm7", segments: 1, costMinor: "3" },
       },
     });

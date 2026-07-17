@@ -1,7 +1,7 @@
 // ============================================================================================
 // MANAGED MESSAGE DEFINITIONS isolation + invariant gate (SDK-003 slice 1). tier: test:integration.
 // Asserts the database enforces, through the real RLS-constrained runtime role, every invariant the
-// architecture plan mandates for definitions/versions/releases:
+// architecture plan mandates for definitions/versions/releases/sender bindings:
 //   - tenant isolation (read + WITH CHECK write) and fail-closed on unset context;
 //   - stable key unique per application, CASE-INSENSITIVELY;
 //   - published version immutability (runtime role has no UPDATE/DELETE grant);
@@ -100,6 +100,10 @@ describe("SDK-003 — message definition isolation + invariants", () => {
         RETURNING id`;
       verA1 = first(v).id;
       await tx`
+        INSERT INTO message_definition_sender_bindings
+          (tenant_id, application_id, environment_id, definition_id, sender_id)
+        VALUES (${TENANT_A}, ${appA}, ${envA}, ${defA}, 'FABRIC')`;
+      await tx`
         INSERT INTO message_definition_releases
           (tenant_id, application_id, environment_id, definition_id, version_id)
         VALUES (${TENANT_A}, ${appA}, ${envA}, ${defA}, ${verA1})`;
@@ -123,9 +127,12 @@ describe("SDK-003 — message definition isolation + invariants", () => {
       const r = await tx<
         { n: number }[]
       >`SELECT count(*)::int AS n FROM message_definition_releases`;
-      return { d: first(d).n, v: first(v).n, r: first(r).n };
+      const s = await tx<
+        { n: number }[]
+      >`SELECT count(*)::int AS n FROM message_definition_sender_bindings`;
+      return { d: first(d).n, v: first(v).n, r: first(r).n, s: first(s).n };
     });
-    expect(seen).toEqual({ d: 1, v: 1, r: 1 });
+    expect(seen).toEqual({ d: 1, v: 1, r: 1, s: 1 });
   });
 
   it("tenant B sees zero of tenant A's definitions/versions/releases", async () => {
@@ -139,12 +146,16 @@ describe("SDK-003 — message definition isolation + invariants", () => {
       const r = await tx<
         { n: number }[]
       >`SELECT count(*)::int AS n FROM message_definition_releases`;
-      return { d: first(d).n, v: first(v).n, r: first(r).n };
+      const s = await tx<
+        { n: number }[]
+      >`SELECT count(*)::int AS n FROM message_definition_sender_bindings`;
+      return { d: first(d).n, v: first(v).n, r: first(r).n, s: first(s).n };
     });
     expect(seen, "tenant B must not see A's rows").toEqual({
       d: 0,
       v: 0,
       r: 0,
+      s: 0,
     });
   });
 
@@ -216,6 +227,29 @@ describe("SDK-003 — message definition isolation + invariants", () => {
           VALUES (${TENANT_A}, ${appA2}, ${envA2}, ${defA}, ${verA1})`;
       }),
       "cross-application release must fail the containment FK",
+    ).rejects.toThrow();
+  });
+
+  it("a sender binding cannot point into a different application", async () => {
+    await expect(
+      db.withTenant(TENANT_A, async (tx) => {
+        await tx`
+          INSERT INTO message_definition_sender_bindings
+            (tenant_id, application_id, environment_id, definition_id, sender_id)
+          VALUES (${TENANT_A}, ${appA2}, ${envA2}, ${defA}, 'FABRIC')`;
+      }),
+      "cross-application sender binding must fail the containment FK",
+    ).rejects.toThrow();
+  });
+
+  it("cross-tenant sender binding write is blocked by WITH CHECK", async () => {
+    await expect(
+      db.withTenant(TENANT_B, async (tx) => {
+        await tx`
+          INSERT INTO message_definition_sender_bindings
+            (tenant_id, application_id, environment_id, definition_id, sender_id)
+          VALUES (${TENANT_A}, ${appA}, ${envA}, ${defA}, 'EVIL')`;
+      }),
     ).rejects.toThrow();
   });
 

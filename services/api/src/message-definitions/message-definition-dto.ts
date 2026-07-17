@@ -1,11 +1,13 @@
 import type {
   MessageDefinition as MessageDefinitionDto,
   MessageDefinitionRelease as MessageDefinitionReleaseDto,
+  MessageDefinitionSenderBinding as MessageDefinitionSenderBindingDto,
   MessageDefinitionVersion as MessageDefinitionVersionDto,
 } from "@app/contracts";
 import type {
   MessageDefinition,
   MessageDefinitionRelease,
+  MessageDefinitionSenderBinding,
   MessageDefinitionVersion,
 } from "@app/db";
 
@@ -20,6 +22,19 @@ export function toDefinitionDto(row: MessageDefinition): MessageDefinitionDto {
         : row.status === "archived"
           ? "archived"
           : "draft",
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+  };
+}
+
+export function toSenderBindingDto(
+  row: MessageDefinitionSenderBinding,
+): MessageDefinitionSenderBindingDto {
+  return {
+    id: row.id,
+    environment_id: row.environmentId,
+    definition_id: row.definitionId,
+    sender_id: row.senderId,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };

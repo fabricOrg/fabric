@@ -6,6 +6,7 @@ import type {
   SmsPreview,
 } from "./types.js";
 import {
+  booleanField,
   enumField,
   numberField,
   record,
@@ -18,6 +19,8 @@ export interface PreviewMessageOptions extends RequestOptions {
   readonly data?: Record<string, unknown>;
   /** Pricing currency (ISO-4217). Defaults to the workspace currency server-side. */
   readonly currency?: string;
+  /** Optional E.164 recipient for sender, consent, and quiet-hour eligibility checks. */
+  readonly to?: string;
 }
 
 /**
@@ -33,7 +36,7 @@ export class MessagesResource {
     options?: PreviewMessageOptions,
   ): Promise<FabricResponse<MessagePreview>> {
     requireNonEmpty(key, "key");
-    const { data, currency, ...requestOptions } = options ?? {};
+    const { data, currency, to, ...requestOptions } = options ?? {};
     const response = await this.transport.request<Record<string, unknown>>({
       method: "POST",
       path: "/v1/messages/preview",
@@ -41,6 +44,7 @@ export class MessagesResource {
         key,
         ...(data ? { data } : {}),
         ...(currency ? { currency } : {}),
+        ...(to ? { to } : {}),
       },
       ...(Object.keys(requestOptions).length > 0
         ? { options: requestOptions }
@@ -52,6 +56,8 @@ export class MessagesResource {
 
 function parsePreview(data: Record<string, unknown>): MessagePreview {
   const rawBlockers = Array.isArray(data.blockers) ? data.blockers : [];
+  const rawWarnings = Array.isArray(data.warnings) ? data.warnings : [];
+  const sender = record(data.sender);
   const previewValue = data.preview;
   return {
     versionId: stringField(data.version_id, "version_id"),
@@ -68,6 +74,34 @@ function parsePreview(data: Record<string, unknown>): MessagePreview {
         code: stringField(blocker.code, "code"),
       };
     }),
+    warnings: rawWarnings.map((item) => {
+      const warning = record(item);
+      return {
+        path: stringField(warning.path, "path"),
+        code: stringField(warning.code, "code"),
+      };
+    }),
+    eligible: booleanField(data.eligible, "eligible"),
+    sender: {
+      senderId: stringField(sender.sender_id, "sender.sender_id"),
+      status: enumField(
+        sender.status,
+        [
+          "sandbox",
+          "active",
+          "pending",
+          "rejected",
+          "unregistered",
+          "not_evaluated",
+        ],
+        "sender.status",
+      ),
+    },
+    messageClass: enumField(
+      data.message_class,
+      ["transactional", "promotional"],
+      "message_class",
+    ),
     preview:
       previewValue == null ? null : parseSmsPreview(record(previewValue)),
   };

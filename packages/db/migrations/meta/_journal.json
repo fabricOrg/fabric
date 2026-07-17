@@ -547,6 +547,20 @@
       "when": 1784213112803,
       "tag": "0077_short_blue_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1784276661918,
+      "tag": "0078_message_definition_sender_bindings",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1784276672372,
+      "tag": "0079_message_definition_sender_bindings_rls",
+      "breakpoints": true
     }
   ]
 }

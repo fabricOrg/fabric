@@ -9,6 +9,7 @@ import {
   type MessageDefinition,
   type MessageDefinitionVersion,
   messageDefinitionReleases,
+  messageDefinitionSenderBindings,
   messageDefinitions,
   messageDefinitionVersions,
   type TenantId,
@@ -18,6 +19,7 @@ import { invalidRequest } from "../http/api-error.js";
 import {
   toDefinitionDto,
   toReleaseDto,
+  toSenderBindingDto,
   toVersionDto,
 } from "./message-definition-dto.js";
 
@@ -101,9 +103,14 @@ export async function readState(
     .select()
     .from(messageDefinitionReleases)
     .where(eq(messageDefinitionReleases.definitionId, definition.id));
+  const senderBindings = await tx
+    .select()
+    .from(messageDefinitionSenderBindings)
+    .where(eq(messageDefinitionSenderBindings.definitionId, definition.id));
   return {
     definition: toDefinitionDto(definition),
     latest_version: latest ? toVersionDto(latest) : null,
     releases: releases.map(toReleaseDto),
+    sender_bindings: senderBindings.map(toSenderBindingDto),
   };
 }

@@ -9,8 +9,6 @@ import type {
 import {
   type AppDb,
   type ApplicationId,
-  environments,
-  messageDefinitionReleases,
   messageDefinitions,
   messageDefinitionVersions,
   type TenantId,
@@ -24,9 +22,10 @@ import { invalidRequest, notFound } from "../http/api-error.js";
 import { archiveDefinition } from "./message-definition-archive.js";
 import {
   auditDefinitionCreate,
-  auditDefinitionPublish,
   auditDefinitionVersion,
 } from "./message-definition-audit.js";
+import { publishDefinition } from "./message-definition-publish.js";
+import { bindSandboxSender } from "./message-definition-sender-binding.js";
 import {
   latestVersion,
   listDefinitionStates,
@@ -87,6 +86,12 @@ export class MessageDefinitionsService {
           "definition_version_create_failed",
           "The definition version could not be created.",
         );
+      await bindSandboxSender(tx, {
+        tenantId,
+        applicationId: appId,
+        definitionId: definition.id,
+        senderId: request.sender_id,
+      });
       return readState(tx, definition);
     });
     await auditDefinitionCreate(
@@ -187,97 +192,14 @@ export class MessageDefinitionsService {
     request: PublishMessageDefinitionRequest,
     actorKeyId: string,
   ): Promise<MessageDefinitionState> {
-    if (request.environment !== "sandbox") {
-      throw invalidRequest(
-        "live_publish_unsupported",
-        "Publishing to the live environment is not available yet.",
-        "environment",
-      );
-    }
-    const state = await this.db.withTenantDrizzle(tenantId, async (tx) => {
-      const [definition] = await tx
-        .select()
-        .from(messageDefinitions)
-        .where(
-          and(
-            eq(messageDefinitions.tenantId, tenantId as TenantId),
-            eq(messageDefinitions.id, definitionId),
-          ),
-        )
-        .limit(1);
-      if (!definition) {
-        throw notFound("definition_not_found", "No definition with that id.");
-      }
-      if (definition.status === "archived") {
-        throw invalidRequest(
-          "definition_archived",
-          "An archived definition cannot be published.",
-        );
-      }
-      const [version] = await tx
-        .select({ id: messageDefinitionVersions.id })
-        .from(messageDefinitionVersions)
-        .where(
-          and(
-            eq(messageDefinitionVersions.id, request.version_id),
-            eq(messageDefinitionVersions.definitionId, definitionId),
-          ),
-        )
-        .limit(1);
-      if (!version) {
-        throw invalidRequest(
-          "version_not_found",
-          "That version does not belong to this definition.",
-          "version_id",
-        );
-      }
-      const [env] = await tx
-        .select({ id: environments.id })
-        .from(environments)
-        .where(
-          and(
-            eq(environments.applicationId, definition.applicationId),
-            eq(environments.type, "sandbox"),
-          ),
-        )
-        .limit(1);
-      if (!env) {
-        throw notFound(
-          "environment_not_found",
-          "The application has no sandbox environment.",
-        );
-      }
-      // Upsert the single (env, definition) release pointer to the chosen version.
-      await tx
-        .insert(messageDefinitionReleases)
-        .values({
-          tenantId: tenantId as TenantId,
-          applicationId: definition.applicationId as ApplicationId,
-          environmentId: env.id,
-          definitionId,
-          versionId: request.version_id,
-        })
-        .onConflictDoUpdate({
-          target: [
-            messageDefinitionReleases.tenantId,
-            messageDefinitionReleases.environmentId,
-            messageDefinitionReleases.definitionId,
-          ],
-          set: { versionId: request.version_id, updatedAt: new Date() },
-        });
-      const [updated] = await tx
-        .update(messageDefinitions)
-        .set({ status: "active", updatedAt: new Date() })
-        .where(eq(messageDefinitions.id, definitionId))
-        .returning();
-      return readState(tx, updated ?? definition);
-    });
-    await auditDefinitionPublish(
-      { audit: this.audit, tenantId, actorKeyId },
+    return publishDefinition(
+      this.db,
+      this.audit,
+      tenantId,
       definitionId,
-      request.version_id,
+      request,
+      actorKeyId,
     );
-    return state;
   }
 
   async archive(

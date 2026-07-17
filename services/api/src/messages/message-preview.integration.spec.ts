@@ -13,7 +13,9 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ApplicationsService } from "../applications/applications.service.js";
 import type { AuditService } from "../audit/audit.service.js";
+import type { ConsentService } from "../consent/consent.service.js";
 import { MessageDefinitionsService } from "../message-definitions/message-definitions.service.js";
+import type { SendersService } from "../senders/senders.service.js";
 import { MessagePreviewService } from "./message-preview.service.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
@@ -25,7 +27,13 @@ const db = createAppDb(APP_URL ?? "", { max: 1 });
 const apps = new ApplicationsService(db);
 const audit = { record: async () => undefined } as unknown as AuditService;
 const defs = new MessageDefinitionsService(db, audit);
-const preview = new MessagePreviewService(db);
+const senders = {
+  senderStatus: async () => "active" as const,
+} as unknown as SendersService;
+const consent = {
+  isSuppressed: async () => false,
+} as unknown as ConsentService;
+const preview = new MessagePreviewService(db, senders, consent);
 
 const TENANT = randomUUID();
 let sandboxEnvId = "";
@@ -67,8 +75,12 @@ describeDb("SDK-003 MessagePreviewService (no side effects)", () => {
     const created = await defs.create(TENANT, {
       key: "order.shipped",
       variable_schema: schema,
-      content: { body: "Hi {{name}}, {{count}} orders." },
+      content: {
+        body: "Hi {{name}}, {{count}} orders.",
+        class: "transactional",
+      },
       default_locale: "en",
+      sender_id: "FABRIC",
     });
     await defs.publish(
       TENANT,
@@ -91,12 +103,19 @@ describeDb("SDK-003 MessagePreviewService (no side effects)", () => {
         key: "order.shipped",
         data: { name: "Ada", count: 2 },
         currency: "GHS",
+        to: "+233201234567",
       },
       sandboxEnvId,
     );
     expect(out.blockers).toEqual([]);
     expect(out.environment).toBe("sandbox");
     expect(out.resolved_locale).toBe("en");
+    expect(out).toMatchObject({
+      eligible: true,
+      warnings: [],
+      sender: { sender_id: "FABRIC", status: "sandbox" },
+      message_class: "transactional",
+    });
     expect(out.preview?.body).toBe("Hi Ada, 2 orders.");
     expect(out.preview?.segments).toBe(1);
     expect(out.preview?.cost_minor).toBe("3");
@@ -115,6 +134,10 @@ describeDb("SDK-003 MessagePreviewService (no side effects)", () => {
     expect(out.blockers).toContainEqual({
       path: "name",
       code: "missing_required",
+    });
+    expect(out.warnings).toContainEqual({
+      path: "to",
+      code: "recipient_not_provided",
     });
     expect(await sideEffectCounts()).toEqual(before);
   });

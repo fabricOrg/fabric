@@ -10,6 +10,10 @@ export const previewMessageRequest = z.object({
   key: stableKey,
   data: z.record(z.string(), z.unknown()).optional(),
   currency: z.string().length(3).optional(),
+  to: z
+    .string()
+    .regex(/^\+[1-9]\d{7,14}$/, "invalid_e164")
+    .optional(),
 });
 export type PreviewMessageRequest = z.infer<typeof previewMessageRequest>;
 
@@ -35,6 +39,20 @@ export const previewMessageResponse = z.object({
   environment: definitionEnvironment,
   resolved_locale: z.string(),
   blockers: z.array(previewBlocker),
+  warnings: z.array(previewBlocker),
+  eligible: z.boolean(),
+  sender: z.object({
+    sender_id: z.string(),
+    status: z.enum([
+      "sandbox",
+      "active",
+      "pending",
+      "rejected",
+      "unregistered",
+      "not_evaluated",
+    ]),
+  }),
+  message_class: z.enum(["transactional", "promotional"]),
   preview: smsPreviewResult.nullable(),
   request_id: z.string(),
 });

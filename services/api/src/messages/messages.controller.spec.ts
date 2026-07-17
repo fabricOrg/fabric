@@ -12,6 +12,10 @@ function controllerWith() {
       environment: "sandbox" as const,
       resolved_locale: "en",
       blockers: [],
+      warnings: [],
+      eligible: true,
+      sender: { sender_id: "FABRIC", status: "sandbox" as const },
+      message_class: "transactional" as const,
       preview: null,
     })),
   };

@@ -1,8 +1,13 @@
 "use client";
 
-import type { VariableSchema } from "@app/contracts";
+import {
+  type PreviewMessageResponse,
+  previewMessageResponse,
+  type VariableSchema,
+} from "@app/contracts";
 import { previewSms } from "@app/domain";
 import { Badge } from "@app/ui/components/ui/badge";
+import { Button } from "@app/ui/components/ui/button";
 import { Field, FieldLabel } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import { Textarea } from "@app/ui/components/ui/textarea";
@@ -17,13 +22,20 @@ export function DefinitionPreviewPanel({
   body,
   schema,
   fields,
+  definitionKey,
 }: {
   body: string;
   schema: VariableSchema | null;
   fields: readonly AuthoringVariable[];
+  definitionKey?: string;
 }) {
   const [samples, setSamples] = useState<Record<string, string>>({});
   const [sampleJson, setSampleJson] = useState("{}");
+  const [recipient, setRecipient] = useState("");
+  const [serverPreview, setServerPreview] =
+    useState<PreviewMessageResponse | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
   const visual = schema ? supportsVisualSchema(schema) : true;
   const parsedAdvancedSample = useMemo(() => {
     if (visual) return { data: null, error: null };
@@ -37,18 +49,55 @@ export function DefinitionPreviewPanel({
       return { data: null, error: "Sample data is not valid JSON." };
     }
   }, [sampleJson, visual]);
+  const previewData = useMemo(() => {
+    if (!visual && !parsedAdvancedSample.data) return null;
+    return visual
+      ? samplePayload(fields, samples)
+      : (parsedAdvancedSample.data ?? {});
+  }, [fields, parsedAdvancedSample.data, samples, visual]);
   const outcome = useMemo(() => {
     if (!schema || !body.trim()) return null;
-    if (!visual && !parsedAdvancedSample.data) return null;
+    if (!previewData) return null;
     return previewSms({
       template: body,
       schema,
-      data: visual
-        ? samplePayload(fields, samples)
-        : (parsedAdvancedSample.data ?? {}),
+      data: previewData,
       currency: "GHS",
     });
-  }, [body, fields, parsedAdvancedSample.data, samples, schema, visual]);
+  }, [body, previewData, schema]);
+
+  async function checkReleasedDefinition() {
+    if (!definitionKey || !previewData) return;
+    setChecking(true);
+    setServerError(null);
+    try {
+      const response = await fetch(
+        "/api/dashboard/message-definitions/preview",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            key: definitionKey,
+            data: previewData,
+            ...(recipient ? { to: recipient } : {}),
+          }),
+        },
+      );
+      const payload = (await response.json()) as unknown;
+      if (!response.ok)
+        throw new Error("Couldn't check the released definition.");
+      setServerPreview(previewMessageResponse.parse(payload));
+    } catch (cause) {
+      setServerPreview(null);
+      setServerError(
+        cause instanceof Error
+          ? cause.message
+          : "Couldn't check the released definition.",
+      );
+    } finally {
+      setChecking(false);
+    }
+  }
 
   return (
     <section
@@ -134,6 +183,64 @@ export function DefinitionPreviewPanel({
           ))}
         </div>
       )}
+      {definitionKey ? (
+        <div className="space-y-2 border-t pt-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <Field className="flex-1">
+              <FieldLabel htmlFor={`recipient-${definitionKey}`}>
+                Recipient for eligibility (optional)
+              </FieldLabel>
+              <Input
+                id={`recipient-${definitionKey}`}
+                value={recipient}
+                onChange={(event) => setRecipient(event.target.value)}
+                placeholder="+233201234567"
+              />
+            </Field>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={checking || !previewData}
+              onClick={checkReleasedDefinition}
+            >
+              {checking ? "Checking…" : "Check released sandbox"}
+            </Button>
+          </div>
+          {serverError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {serverError}
+            </p>
+          ) : null}
+          {serverPreview ? (
+            <div className="flex flex-wrap gap-2 text-xs">
+              <Badge variant="outline">
+                {serverPreview.eligible ? "Eligible" : "Blocked"}
+              </Badge>
+              <Badge variant="outline">
+                Sender {serverPreview.sender.sender_id}:{" "}
+                {serverPreview.sender.status}
+              </Badge>
+              <Badge variant="outline">{serverPreview.message_class}</Badge>
+              {serverPreview.warnings.map((warning) => (
+                <Badge
+                  key={`${warning.path}:${warning.code}`}
+                  variant="secondary"
+                >
+                  {warning.code.replaceAll("_", " ")}
+                </Badge>
+              ))}
+              {serverPreview.blockers.map((blocker) => (
+                <Badge
+                  key={`${blocker.path}:${blocker.code}`}
+                  variant="destructive"
+                >
+                  {blocker.code.replaceAll("_", " ")}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

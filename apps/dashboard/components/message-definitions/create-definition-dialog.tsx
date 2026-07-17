@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  type MessageClass,
   type MessageDefinitionState,
   type SmsTemplate,
   stableKey,
@@ -36,6 +37,7 @@ import {
   variablesFromBody,
   variablesFromSchema,
 } from "./definition-authoring";
+import { DefinitionDeliveryFields } from "./definition-delivery-fields";
 import { DefinitionPreviewPanel } from "./definition-preview-panel";
 import { DefinitionSchemaEditor } from "./definition-schema-editor";
 
@@ -50,6 +52,8 @@ interface DefinitionDraft {
   locale: string;
   schemaText: string;
   advancedSchema: boolean;
+  messageClass: MessageClass;
+  senderId: string;
 }
 
 function initialDraft(
@@ -70,6 +74,8 @@ function initialDraft(
       advancedSchema: !supportsVisualSchema(
         definition.latest_version.variable_schema,
       ),
+      messageClass: definition.latest_version.content.class,
+      senderId: definition.sender_bindings[0]?.sender_id ?? "",
     };
   }
   if (template) {
@@ -78,6 +84,8 @@ function initialDraft(
       locale: "en",
       schemaText: "",
       advancedSchema: false,
+      messageClass: template.class,
+      senderId: "",
     };
   }
   return {
@@ -87,6 +95,8 @@ function initialDraft(
     locale: "en",
     schemaText: "",
     advancedSchema: false,
+    messageClass: "transactional",
+    senderId: "",
   };
 }
 
@@ -110,6 +120,8 @@ export function CreateDefinitionDialog({
   const [locale, setLocale] = useState(initial.locale);
   const [schemaText, setSchemaText] = useState(initial.schemaText);
   const [advancedSchema, setAdvancedSchema] = useState(initial.advancedSchema);
+  const [messageClass, setMessageClass] = useState(initial.messageClass);
+  const [senderId, setSenderId] = useState(initial.senderId);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const builtSchema = resolveSchema(advancedSchema, schemaText, variables);
@@ -122,6 +134,8 @@ export function CreateDefinitionDialog({
     setLocale(draft.locale);
     setSchemaText(draft.schemaText);
     setAdvancedSchema(draft.advancedSchema);
+    setMessageClass(draft.messageClass);
+    setSenderId(draft.senderId);
     setError(null);
   }
 
@@ -139,6 +153,10 @@ export function CreateDefinitionDialog({
       setError("Enter a valid default locale, such as en or en-GH.");
       return;
     }
+    if (!initialDefinition && senderId.trim().length === 0) {
+      setError("Choose the sandbox sender for this definition.");
+      return;
+    }
     if (!builtSchema.schema) {
       setError(builtSchema.error ?? "The variable schema is invalid.");
       return;
@@ -154,9 +172,10 @@ export function CreateDefinitionDialog({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...(editing ? {} : { key: key.trim() }),
-          content: { body: body.trim() },
+          content: { body: body.trim(), class: messageClass },
           variable_schema: builtSchema.schema,
           default_locale: locale.trim(),
+          ...(editing ? {} : { sender_id: senderId.trim() }),
         }),
       });
       if (!response.ok) {
@@ -236,18 +255,15 @@ export function CreateDefinitionDialog({
             Lowercase, dotted, and immutable once created.
           </FieldDescription>
         </Field>
-        <Field>
-          <FieldLabel htmlFor="def-locale">Default locale</FieldLabel>
-          <Input
-            id="def-locale"
-            value={locale}
-            onChange={(event) => setLocale(event.target.value)}
-            placeholder="en"
-          />
-          <FieldDescription>
-            Used when the caller does not request a locale.
-          </FieldDescription>
-        </Field>
+        <DefinitionDeliveryFields
+          locale={locale}
+          messageClass={messageClass}
+          senderId={senderId}
+          senderLocked={Boolean(initialDefinition)}
+          onLocaleChange={setLocale}
+          onMessageClassChange={setMessageClass}
+          onSenderIdChange={setSenderId}
+        />
         <Field>
           <FieldLabel htmlFor="def-body">Message body</FieldLabel>
           <Textarea

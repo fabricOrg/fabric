@@ -176,5 +176,18 @@ export interface MessagePreview {
   readonly environment: "sandbox" | "live";
   readonly resolvedLocale: string;
   readonly blockers: readonly PreviewBlocker[];
+  readonly warnings: readonly PreviewBlocker[];
+  readonly eligible: boolean;
+  readonly sender: {
+    readonly senderId: string;
+    readonly status:
+      | "sandbox"
+      | "active"
+      | "pending"
+      | "rejected"
+      | "unregistered"
+      | "not_evaluated";
+  };
+  readonly messageClass: "transactional" | "promotional";
   readonly preview: SmsPreview | null;
 }

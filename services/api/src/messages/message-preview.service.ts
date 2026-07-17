@@ -9,6 +9,7 @@ import {
   type EnvironmentId,
   environments,
   messageDefinitionReleases,
+  messageDefinitionSenderBindings,
   messageDefinitions,
   messageDefinitionVersions,
   type TenantId,
@@ -16,14 +17,30 @@ import {
 import { previewSms, type RenderError, type SmsPreview } from "@app/domain";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, eq, sql } from "drizzle-orm";
+import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { notFound } from "../http/api-error.js";
+import { SendersService } from "../senders/senders.service.js";
+import { assessSendCompliance } from "../sms/sms-compliance.js";
 
 export interface PreviewOutput {
   readonly version_id: string;
   readonly environment: "sandbox" | "live";
   readonly resolved_locale: string;
   readonly blockers: readonly RenderError[];
+  readonly warnings: readonly RenderError[];
+  readonly eligible: boolean;
+  readonly sender: {
+    readonly sender_id: string;
+    readonly status:
+      | "sandbox"
+      | "active"
+      | "pending"
+      | "rejected"
+      | "unregistered"
+      | "not_evaluated";
+  };
+  readonly message_class: "transactional" | "promotional";
   readonly preview: SmsPreview | null;
 }
 
@@ -35,7 +52,11 @@ export interface PreviewOutput {
  */
 @Injectable()
 export class MessagePreviewService {
-  constructor(@Inject(APP_DB) private readonly db: AppDb) {}
+  constructor(
+    @Inject(APP_DB) private readonly db: AppDb,
+    @Inject(SendersService) private readonly senders: SendersService,
+    @Inject(ConsentService) private readonly consent: ConsentService,
+  ) {}
 
   async preview(
     tenantId: string,
@@ -52,6 +73,7 @@ export class MessagePreviewService {
           schema: messageDefinitionVersions.variableSchema,
           locale: messageDefinitionVersions.defaultLocale,
           envType: environments.type,
+          senderId: messageDefinitionSenderBindings.senderId,
         })
         .from(messageDefinitionReleases)
         .innerJoin(
@@ -61,6 +83,19 @@ export class MessagePreviewService {
         .innerJoin(
           messageDefinitionVersions,
           eq(messageDefinitionVersions.id, messageDefinitionReleases.versionId),
+        )
+        .innerJoin(
+          messageDefinitionSenderBindings,
+          and(
+            eq(
+              messageDefinitionSenderBindings.definitionId,
+              messageDefinitionReleases.definitionId,
+            ),
+            eq(
+              messageDefinitionSenderBindings.environmentId,
+              messageDefinitionReleases.environmentId,
+            ),
+          ),
         )
         .innerJoin(
           environments,
@@ -81,18 +116,39 @@ export class MessagePreviewService {
         );
       }
       const content = released.content as SmsVariantContent;
+      const messageClass = content.class ?? "transactional";
       const outcome = previewSms({
         template: content.body,
         schema: released.schema as VariableSchema,
         data: request.data ?? {},
         currency: request.currency ?? "GHS",
       });
+      const compliance = await assessSendCompliance({
+        senders: this.senders,
+        consent: this.consent,
+        tenantId,
+        ...(request.to ? { to: request.to } : {}),
+        senderId: released.senderId,
+        messageClass,
+        virtual: released.envType === "sandbox",
+      });
+      const blockers = [
+        ...outcome.blockers,
+        ...compliance.blockers.map(({ path, code }) => ({ path, code })),
+      ];
       return {
         version_id: released.versionId,
         environment: released.envType,
         resolved_locale: released.locale,
-        blockers: outcome.blockers,
-        preview: outcome.preview,
+        blockers,
+        warnings: compliance.warnings.map(({ path, code }) => ({ path, code })),
+        eligible: blockers.length === 0,
+        sender: {
+          sender_id: released.senderId,
+          status: compliance.senderStatus,
+        },
+        message_class: messageClass,
+        preview: blockers.length === 0 ? outcome.preview : null,
       };
     });
   }

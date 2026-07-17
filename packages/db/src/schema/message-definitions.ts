@@ -190,6 +190,52 @@ export const messageDefinitionReleases = pgTable(
   ],
 );
 
+// The sender is environment configuration, not immutable content: sandbox and live may deliberately
+// use different registered identities while both release the exact same version.
+export const messageDefinitionSenderBindings = pgTable(
+  "message_definition_sender_bindings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: tenantIdCol().references(() => accounts.id, {
+      onDelete: "cascade",
+    }),
+    applicationId: uuid("application_id").notNull().$type<ApplicationId>(),
+    environmentId: uuid("environment_id").notNull().$type<EnvironmentId>(),
+    definitionId: uuid("definition_id").notNull(),
+    senderId: text("sender_id").notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("uniq_message_def_sender_env_definition").on(
+      t.tenantId,
+      t.environmentId,
+      t.definitionId,
+    ),
+    check(
+      "message_def_sender_id_length_check",
+      sql`length(${t.senderId}) BETWEEN 1 AND 11`,
+    ),
+    foreignKey({
+      columns: [t.definitionId, t.tenantId, t.applicationId],
+      foreignColumns: [
+        messageDefinitions.id,
+        messageDefinitions.tenantId,
+        messageDefinitions.applicationId,
+      ],
+      name: "message_def_sender_definition_containment_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.environmentId, t.applicationId, t.tenantId],
+      foreignColumns: [
+        environments.id,
+        environments.applicationId,
+        environments.tenantId,
+      ],
+      name: "message_def_sender_environment_containment_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
 export type MessageDefinition = typeof messageDefinitions.$inferSelect;
 export type NewMessageDefinition = typeof messageDefinitions.$inferInsert;
 export type MessageDefinitionVersion =
@@ -200,3 +246,7 @@ export type MessageDefinitionRelease =
   typeof messageDefinitionReleases.$inferSelect;
 export type NewMessageDefinitionRelease =
   typeof messageDefinitionReleases.$inferInsert;
+export type MessageDefinitionSenderBinding =
+  typeof messageDefinitionSenderBindings.$inferSelect;
+export type NewMessageDefinitionSenderBinding =
+  typeof messageDefinitionSenderBindings.$inferInsert;

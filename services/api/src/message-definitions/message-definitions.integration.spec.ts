@@ -67,8 +67,9 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
     return svc.create(tenant, {
       key,
       variable_schema: schemaV1,
-      content: { body: "Hi {{name}}" },
+      content: { body: "Hi {{name}}", class: "transactional" },
       default_locale: "en",
+      sender_id: "FABRIC",
     });
   }
 
@@ -79,6 +80,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
     expect(state.definition.key).toBe("order.shipped");
     expect(state.latest_version?.version).toBe(1);
     expect(state.releases).toEqual([]);
+    expect(state.sender_bindings).toMatchObject([{ sender_id: "FABRIC" }]);
     expect(auditRecords.map((record) => record.action)).toContain(
       "message_definition.create",
     );
@@ -94,7 +96,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
         properties: { name: { type: "string" }, note: { type: "string" } },
         required: ["name"],
       },
-      content: { body: "Hi {{name}}" },
+      content: { body: "Hi {{name}}", class: "transactional" },
       default_locale: "en",
     });
     expect(compatible.latest_version?.version).toBe(2);
@@ -110,7 +112,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
           properties: { name: { type: "integer" } },
           required: ["name"],
         },
-        content: { body: "Hi" },
+        content: { body: "Hi", class: "transactional" },
         default_locale: "en",
       }),
     ).rejects.toMatchObject({
@@ -146,7 +148,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
           properties: { name: { type: "string" }, extra: { type: "string" } },
           required: ["name"],
         },
-        content: { body: "Hi {{name}}" },
+        content: { body: "Hi {{name}}", class: "transactional" },
         default_locale: "en",
       })
     ).latest_version?.id;
@@ -210,8 +212,9 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
         application_id: bAppId,
         key: "cross.tenant",
         variable_schema: schemaV1,
-        content: { body: "x" },
+        content: { body: "x", class: "transactional" },
         default_locale: "en",
+        sender_id: "FABRIC",
       }),
     ).rejects.toMatchObject({
       status: 400,

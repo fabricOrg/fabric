@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { messageClass } from "./sms.js";
 
 /**
  * MANAGED MESSAGE DEFINITIONS contracts (SDK-003). Shapes + validation only — no logic (the
@@ -184,6 +185,7 @@ export type MessageDefinitionStatus = z.infer<typeof messageDefinitionStatus>;
 // SMS variant content of a version. One channel today; the shape leaves room for more.
 export const smsVariantContent = z.object({
   body: z.string().min(1).max(1600),
+  class: messageClass.default("transactional"),
 });
 export type SmsVariantContent = z.infer<typeof smsVariantContent>;
 
@@ -218,6 +220,18 @@ export const messageDefinitionRelease = z.object({
 });
 export type MessageDefinitionRelease = z.infer<typeof messageDefinitionRelease>;
 
+export const messageDefinitionSenderBinding = z.object({
+  id: z.string().uuid(),
+  environment_id: z.string().uuid(),
+  definition_id: z.string().uuid(),
+  sender_id: z.string().trim().min(1).max(11),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type MessageDefinitionSenderBinding = z.infer<
+  typeof messageDefinitionSenderBinding
+>;
+
 export const definitionEnvironment = z.enum(["sandbox", "live"]);
 export type DefinitionEnvironment = z.infer<typeof definitionEnvironment>;
 
@@ -229,6 +243,7 @@ export const createMessageDefinitionRequest = z.object({
   variable_schema: variableSchema,
   content: smsVariantContent,
   default_locale: z.string().min(2),
+  sender_id: z.string().trim().min(1).max(11),
 });
 export type CreateMessageDefinitionRequest = z.infer<
   typeof createMessageDefinitionRequest
@@ -260,6 +275,7 @@ export const messageDefinitionState = z.object({
   definition: messageDefinition,
   latest_version: messageDefinitionVersion.nullable(),
   releases: z.array(messageDefinitionRelease),
+  sender_bindings: z.array(messageDefinitionSenderBinding),
 });
 export type MessageDefinitionState = z.infer<typeof messageDefinitionState>;
 

@@ -1,5 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
+import { ConsentModule } from "../consent/consent.module.js";
+import { SendersModule } from "../senders/senders.module.js";
 import { MessagePreviewService } from "./message-preview.service.js";
 import { MessagesController } from "./messages.controller.js";
 
@@ -8,7 +10,7 @@ import { MessagesController } from "./messages.controller.js";
  * ApiKeyGuard (API key / BFF tenant token auth). DbModule is @Global.
  */
 @Module({
-  imports: [ApiKeysModule],
+  imports: [ApiKeysModule, ConsentModule, SendersModule],
   controllers: [MessagesController],
   providers: [MessagePreviewService],
   exports: [MessagePreviewService],

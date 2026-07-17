@@ -31,13 +31,14 @@ import { GET, POST } from "./route.js";
 
 const validBody = {
   key: "order.shipped",
-  content: { body: "Hi {{name}}" },
+  content: { body: "Hi {{name}}", class: "transactional" },
   variable_schema: {
     type: "object",
     properties: { name: { type: "string" } },
     required: ["name"],
   },
   default_locale: "en",
+  sender_id: "FABRIC",
 };
 
 function req(body?: unknown) {

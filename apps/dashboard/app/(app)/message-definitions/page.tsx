@@ -43,6 +43,7 @@ function DefinitionCard({
 }) {
   const { definition, latest_version, releases } = state;
   const releasedToSandbox = releases.length > 0;
+  const sandboxSender = state.sender_bindings[0]?.sender_id;
   return (
     <div className="flex flex-col gap-4 rounded-xl border bg-card p-5 text-card-foreground shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -60,6 +61,16 @@ function DefinitionCard({
         </Badge>
       </div>
 
+      {latest_version ? (
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary">{latest_version.default_locale}</Badge>
+          <Badge variant="secondary">{latest_version.content.class}</Badge>
+          <Badge variant="secondary">
+            Sender: {sandboxSender ?? "Not bound"}
+          </Badge>
+        </div>
+      ) : null}
+
       {/* Use in code — the stable key is the developer contract. */}
       <div>
         <p className="mb-1 text-xs font-medium text-muted-foreground">
@@ -75,6 +86,7 @@ function DefinitionCard({
           body={latest_version.content.body}
           schema={latest_version.variable_schema}
           fields={variablesFromSchema(latest_version.variable_schema)}
+          definitionKey={definition.key}
         />
       ) : null}
 

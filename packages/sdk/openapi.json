@@ -1782,6 +1782,10 @@
             "type": "string",
             "minLength": 3,
             "maxLength": 3
+          },
+          "to": {
+            "type": "string",
+            "pattern": "^\\+[1-9]\\d{7,14}$"
           }
         }
       },
@@ -1836,6 +1840,10 @@
           "environment",
           "resolved_locale",
           "blockers",
+          "warnings",
+          "eligible",
+          "sender",
+          "message_class",
           "preview",
           "request_id"
         ],
@@ -1854,6 +1862,37 @@
             "items": {
               "$ref": "#/components/schemas/PreviewBlocker"
             }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PreviewBlocker"
+            }
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "sender": {
+            "type": "object",
+            "required": ["sender_id", "status"],
+            "properties": {
+              "sender_id": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "sandbox",
+                  "active",
+                  "pending",
+                  "rejected",
+                  "unregistered",
+                  "not_evaluated"
+                ]
+              }
+            }
+          },
+          "message_class": {
+            "enum": ["transactional", "promotional"]
           },
           "preview": {
             "oneOf": [

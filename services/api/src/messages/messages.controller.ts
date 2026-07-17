@@ -52,6 +52,13 @@ export class MessagesController {
       environment: out.environment,
       resolved_locale: out.resolved_locale,
       blockers: out.blockers.map((b) => ({ path: b.path, code: b.code })),
+      warnings: out.warnings.map((warning) => ({
+        path: warning.path,
+        code: warning.code,
+      })),
+      eligible: out.eligible,
+      sender: out.sender,
+      message_class: out.message_class,
       preview: out.preview,
       request_id: newRequestId(),
     };
