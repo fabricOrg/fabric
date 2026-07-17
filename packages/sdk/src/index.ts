@@ -1,3 +1,9 @@
+export type {
+  CatalogMessageKey,
+  DefinitionCatalog,
+  DefinitionContract,
+  UngeneratedCatalog,
+} from "./catalog.js";
 export { Fabric, type FabricConfig, MessagingClient } from "./client.js";
 export { EmailResource } from "./email.js";
 export {

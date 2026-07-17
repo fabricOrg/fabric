@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
 import { AuditModule } from "../audit/audit.module.js";
+import { DefinitionCatalogController } from "./definition-catalog.controller.js";
+import { DefinitionCatalogService } from "./definition-catalog.service.js";
 import { MessageDefinitionsController } from "./message-definitions.controller.js";
 import { MessageDefinitionsService } from "./message-definitions.service.js";
 
@@ -11,8 +13,8 @@ import { MessageDefinitionsService } from "./message-definitions.service.js";
  */
 @Module({
   imports: [ApiKeysModule, AuditModule],
-  controllers: [MessageDefinitionsController],
-  providers: [MessageDefinitionsService],
+  controllers: [MessageDefinitionsController, DefinitionCatalogController],
+  providers: [MessageDefinitionsService, DefinitionCatalogService],
   exports: [MessageDefinitionsService],
 })
 export class MessageDefinitionsModule {}

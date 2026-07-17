@@ -13,6 +13,7 @@ import { CreateDefinitionDialog } from "@/components/message-definitions/create-
 import { DefinitionActions } from "@/components/message-definitions/definition-actions";
 import { DefinitionApplicationSelector } from "@/components/message-definitions/definition-application-selector";
 import { variablesFromSchema } from "@/components/message-definitions/definition-authoring";
+import { DefinitionDeveloperSetup } from "@/components/message-definitions/definition-developer-setup";
 import { DefinitionPreviewPanel } from "@/components/message-definitions/definition-preview-panel";
 import { BffError } from "@/lib/server/api-client";
 import { listApplications } from "@/lib/server/applications-client";
@@ -154,16 +155,21 @@ export default async function MessageDefinitionsPage({
       </PageHeader>
 
       {applications.length > 0 && selectedApplication ? (
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            Definitions are isolated to one application and its sandbox
-            environment.
-          </p>
-          <DefinitionApplicationSelector
-            applications={applications}
-            selectedSlug={selectedApplication.slug}
+        <>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Definitions are isolated to one application and its sandbox
+              environment.
+            </p>
+            <DefinitionApplicationSelector
+              applications={applications}
+              selectedSlug={selectedApplication.slug}
+            />
+          </div>
+          <DefinitionDeveloperSetup
+            applicationName={selectedApplication.name}
           />
-        </div>
+        </>
       ) : null}
 
       {loadError ? (

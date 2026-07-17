@@ -74,6 +74,11 @@ const SCOPE_DETAILS: Record<
     label: "Manage webhooks",
     description: "Create and remove webhook endpoints.",
   },
+  "definitions:read": {
+    label: "Read definition contracts",
+    description:
+      "Generate typed keys, payloads, channels, and locales for this environment.",
+  },
 };
 
 const schema = z.object({

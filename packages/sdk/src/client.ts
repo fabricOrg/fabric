@@ -1,3 +1,4 @@
+import type { DefinitionCatalog, UngeneratedCatalog } from "./catalog.js";
 import { EmailResource } from "./email.js";
 import { MessagesResource } from "./messages.js";
 import { SenderIdsResource } from "./sender-ids.js";
@@ -22,7 +23,7 @@ export interface FabricConfig {
   readonly logger?: FabricLogger;
 }
 
-export class Fabric {
+export class Fabric<Catalog extends DefinitionCatalog = UngeneratedCatalog> {
   readonly environment: FabricEnvironment;
   readonly sms: SmsResource;
   readonly email: EmailResource;
@@ -30,7 +31,7 @@ export class Fabric {
   readonly verify: VerifyResource;
   readonly wallet: WalletResource;
   readonly webhooks: WebhooksResource;
-  readonly messages: MessagesResource;
+  readonly messages: MessagesResource<Catalog>;
 
   constructor(config: FabricConfig) {
     assertServerRuntime();
@@ -64,7 +65,7 @@ export class Fabric {
     this.verify = new VerifyResource(transport);
     this.wallet = new WalletResource(transport);
     this.webhooks = new WebhooksResource(transport);
-    this.messages = new MessagesResource(transport);
+    this.messages = new MessagesResource<Catalog>(transport);
   }
 }
 

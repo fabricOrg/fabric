@@ -1,3 +1,9 @@
+import type {
+  CatalogMessageKey,
+  CatalogPreviewOptions,
+  DefinitionCatalog,
+  UngeneratedCatalog,
+} from "./catalog.js";
 import type { Transport } from "./transport.js";
 import type {
   FabricResponse,
@@ -30,15 +36,28 @@ export interface PreviewMessageOptions extends RequestOptions {
  * send uses — no send, charge, or persistence. Blockers (validation/render errors) carry a field path
  * and code, never a value.
  */
-export class MessagesResource {
+export class MessagesResource<
+  Catalog extends DefinitionCatalog = UngeneratedCatalog,
+> {
   constructor(private readonly transport: Transport) {}
 
-  async preview(
-    key: string,
-    options?: PreviewMessageOptions,
+  async preview<Key extends CatalogMessageKey<Catalog>>(
+    key: Key,
+    ...args: Catalog["generated"] extends true
+      ? [options: CatalogPreviewOptions<Catalog, Key, PreviewMessageOptions>]
+      : [options?: PreviewMessageOptions]
   ): Promise<FabricResponse<MessagePreview>> {
+    const options = args[0];
     requireNonEmpty(key, "key");
-    const { data, currency, to, locale, ...requestOptions } = options ?? {};
+    const data = options?.data;
+    const currency = options?.currency;
+    const to = options?.to;
+    const locale = options?.locale;
+    const requestOptions: RequestOptions = {
+      ...(options?.signal ? { signal: options.signal } : {}),
+      ...(options?.timeout !== undefined ? { timeout: options.timeout } : {}),
+      ...(options?.headers ? { headers: options.headers } : {}),
+    };
     const response = await this.transport.request<Record<string, unknown>>({
       method: "POST",
       path: "/v1/messages/preview",

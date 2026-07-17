@@ -102,6 +102,65 @@ export const schemas = {
       request_id: { type: "string" },
     },
   },
+  DefinitionCatalogManifest: {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "manifest_version",
+      "minimum_sdk_contract_version",
+      "minimum_cli_contract_version",
+      "application",
+      "environment",
+      "compatibility_digest",
+      "definitions",
+    ],
+    properties: {
+      manifest_version: { type: "integer", enum: [1] },
+      minimum_sdk_contract_version: { type: "integer", minimum: 1 },
+      minimum_cli_contract_version: { type: "integer", minimum: 1 },
+      application: {
+        type: "object",
+        required: ["id"],
+        properties: { id: { type: "string", format: "uuid" } },
+      },
+      environment: {
+        type: "object",
+        required: ["id", "type"],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          type: { enum: ["sandbox", "live"] },
+        },
+      },
+      compatibility_digest: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      definitions: {
+        type: "array",
+        items: {
+          type: "object",
+          required: [
+            "key",
+            "version",
+            "channels",
+            "default_locale",
+            "locales",
+            "data_schema",
+          ],
+          properties: {
+            key: { type: "string" },
+            version: { type: "integer", minimum: 1 },
+            channels: {
+              type: "array",
+              items: { enum: ["sms"] },
+              minItems: 1,
+              maxItems: 1,
+            },
+            default_locale: { type: "string" },
+            locales: { type: "array", items: { type: "string" } },
+            data_schema: { type: "object", additionalProperties: true },
+          },
+        },
+      },
+    },
+  },
   MessageStatus: {
     enum: [
       "queued",
@@ -542,6 +601,13 @@ export const paths = {
       "Preview a released message definition (no side effects)",
       { 200: response("Preview", ref("PreviewMessageResponse")) },
       ref("PreviewMessageRequest"),
+    ),
+  },
+  "/v1/definitions/catalog": {
+    get: operation(
+      "readDefinitionCatalog",
+      "Read the released definition contract for this API key environment",
+      { 200: response("Definition catalog", ref("DefinitionCatalogManifest")) },
     ),
   },
   "/v1/sms/batches": {
