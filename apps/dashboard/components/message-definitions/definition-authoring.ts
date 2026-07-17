@@ -13,6 +13,7 @@ export interface AuthoringVariable {
   readonly name: string;
   readonly type: AuthoringVariableType;
   readonly required: boolean;
+  readonly sourceNode?: VariableSchemaNode;
 }
 
 export function variablesFromBody(
@@ -64,7 +65,10 @@ export function buildVariableSchema(fields: readonly AuthoringVariable[]): {
             error: `“${field.name}” conflicts with a nested variable.`,
           };
         }
-        parent.properties[segment] = { type: field.type };
+        parent.properties[segment] =
+          field.sourceNode?.type === field.type
+            ? field.sourceNode
+            : { type: field.type };
         continue;
       }
       if (existing && existing.type !== "object") {
@@ -111,6 +115,10 @@ export function variablesFromSchema(
   const fields: AuthoringVariable[] = [];
   collectSchemaVariables(schema, "", true, fields);
   return fields;
+}
+
+export function supportsVisualSchema(schema: VariableSchema): boolean {
+  return Object.values(schema.properties).every(supportsVisualNode);
 }
 
 export function templateToDefinitionDraft(template: SmsTemplate): {
@@ -165,7 +173,14 @@ function collectSchemaVariables(
     name: prefix,
     type: node.type,
     required: parentRequired,
+    sourceNode: node,
   });
+}
+
+function supportsVisualNode(node: VariableSchemaNode): boolean {
+  if (node.type === "array") return false;
+  if (node.type !== "object") return true;
+  return Object.values(node.properties).every(supportsVisualNode);
 }
 
 function setDotted(

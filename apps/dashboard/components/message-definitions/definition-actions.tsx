@@ -1,9 +1,11 @@
 "use client";
 
+import type { MessageDefinitionState } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { CreateDefinitionDialog } from "./create-definition-dialog";
 
 interface BffErrorPayload {
   error?: { message?: string };
@@ -23,55 +25,58 @@ async function post(url: string, body: unknown): Promise<void> {
   }
 }
 
-/**
- * Owner/admin actions on a definition (SDK-003 slice 6): publish the latest version to sandbox, or
- * archive. Rendered only when the session can manage; the BFF re-checks the role.
- */
 export function DefinitionActions({
-  id,
-  latestVersionId,
-  status,
+  state,
   canPublish,
 }: {
-  id: string;
-  latestVersionId: string | null;
-  status: "draft" | "active" | "archived";
+  state: MessageDefinitionState;
   canPublish: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const { definition, latest_version: latestVersion } = state;
 
-  async function run(action: () => Promise<void>, ok: string) {
+  async function run(action: () => Promise<void>, successMessage: string) {
     setBusy(true);
     try {
       await action();
-      toast.success(ok);
+      toast.success(successMessage);
       router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Request failed.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Request failed.");
     } finally {
       setBusy(false);
     }
   }
 
-  if (status === "archived") {
+  if (definition.status === "archived") {
     return <span className="text-xs text-muted-foreground">Archived</span>;
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      {latestVersion ? (
+        <CreateDefinitionDialog
+          initialDefinition={state}
+          triggerLabel="Edit"
+          triggerVariant="outline"
+        />
+      ) : null}
       {canPublish ? (
         <Button
           size="sm"
           variant="outline"
-          disabled={busy || !latestVersionId}
+          disabled={busy || !latestVersion}
           onClick={() =>
             run(
               () =>
-                post(`/api/dashboard/message-definitions/${id}/publish`, {
-                  environment: "sandbox",
-                  version_id: latestVersionId,
-                }),
+                post(
+                  `/api/dashboard/message-definitions/${definition.id}/publish`,
+                  {
+                    environment: "sandbox",
+                    version_id: latestVersion?.id,
+                  },
+                ),
               "Published to sandbox",
             )
           }
@@ -85,7 +90,11 @@ export function DefinitionActions({
         disabled={busy}
         onClick={() =>
           run(
-            () => post(`/api/dashboard/message-definitions/${id}/archive`, {}),
+            () =>
+              post(
+                `/api/dashboard/message-definitions/${definition.id}/archive`,
+                {},
+              ),
             "Definition archived",
           )
         }

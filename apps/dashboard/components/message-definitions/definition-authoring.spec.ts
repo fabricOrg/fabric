@@ -1,8 +1,9 @@
-import type { SmsTemplate } from "@app/contracts";
+import type { SmsTemplate, VariableSchema } from "@app/contracts";
 import { describe, expect, it } from "vitest";
 import {
   buildVariableSchema,
   samplePayload,
+  supportsVisualSchema,
   templateToDefinitionDraft,
   variablesFromBody,
   variablesFromSchema,
@@ -24,6 +25,28 @@ describe("message definition authoring", () => {
         order: { required: ["id"] },
       },
     });
+  });
+
+  it("preserves supported constraints and detects schemas that need advanced editing", () => {
+    const schema: VariableSchema = {
+      type: "object",
+      properties: {
+        email: { type: "string", format: "email", maxLength: 100 },
+      },
+      required: ["email"],
+      additionalProperties: false,
+    };
+    expect(supportsVisualSchema(schema)).toBe(true);
+    const rebuilt = buildVariableSchema(variablesFromSchema(schema));
+    expect(rebuilt.schema).toEqual(schema);
+    expect(
+      supportsVisualSchema({
+        type: "object",
+        properties: {
+          tags: { type: "array", items: { type: "string" }, maxItems: 5 },
+        },
+      }),
+    ).toBe(false);
   });
 
   it("builds typed nested sample data", () => {

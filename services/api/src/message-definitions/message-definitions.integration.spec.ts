@@ -73,11 +73,15 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
   }
 
   it("create births a draft definition with version 1", async () => {
+    auditRecords.length = 0;
     const state = await createDefinition(TENANT_A, "order.shipped");
     expect(state.definition.status).toBe("draft");
     expect(state.definition.key).toBe("order.shipped");
     expect(state.latest_version?.version).toBe(1);
     expect(state.releases).toEqual([]);
+    expect(auditRecords.map((record) => record.action)).toContain(
+      "message_definition.create",
+    );
   });
 
   it("accepts a compatible new version and rejects a breaking one", async () => {
@@ -94,6 +98,9 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
       default_locale: "en",
     });
     expect(compatible.latest_version?.version).toBe(2);
+    expect(auditRecords.map((record) => record.action)).toContain(
+      "message_definition.version.create",
+    );
 
     await expect(
       svc.addVersion(TENANT_A, id, {

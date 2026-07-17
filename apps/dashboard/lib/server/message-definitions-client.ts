@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  type AddMessageDefinitionVersionRequest,
   type CreateMessageDefinitionRequest,
   type ListMessageDefinitionsResponse,
   listMessageDefinitionsResponse,
@@ -26,6 +27,18 @@ export async function listMessageDefinitions(): Promise<ListMessageDefinitionsRe
     "applications:read",
   );
   return listMessageDefinitionsResponse.parse(payload);
+}
+
+export async function addMessageDefinitionVersion(
+  id: string,
+  request: AddMessageDefinitionVersionRequest,
+): Promise<MessageDefinitionState> {
+  const payload = await dashboardApi<unknown>(
+    `/v1/message-definitions/${id}/versions`,
+    "applications:read",
+    { method: "POST", body: JSON.stringify(request) },
+  );
+  return messageDefinitionState.parse(payload);
 }
 
 export async function createMessageDefinition(

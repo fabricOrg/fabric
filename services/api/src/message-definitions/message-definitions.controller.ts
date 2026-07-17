@@ -67,7 +67,7 @@ export class MessageDefinitionsController {
     const tid = resolveManagementTenant(req, b.tenantId);
     const parsed = createMessageDefinitionRequest.safeParse(b);
     if (!parsed.success) throw fromZod(parsed.error, "invalid_definition");
-    return this.svc.create(tid, parsed.data);
+    return this.svc.create(tid, parsed.data, actorKeyId(req));
   }
 
   @Post(":id/versions")
@@ -80,7 +80,7 @@ export class MessageDefinitionsController {
     const tid = resolveManagementTenant(req, b.tenantId);
     const parsed = addMessageDefinitionVersionRequest.safeParse(b);
     if (!parsed.success) throw fromZod(parsed.error, "invalid_version");
-    return this.svc.addVersion(tid, id, parsed.data);
+    return this.svc.addVersion(tid, id, parsed.data, actorKeyId(req));
   }
 
   @Post(":id/publish")

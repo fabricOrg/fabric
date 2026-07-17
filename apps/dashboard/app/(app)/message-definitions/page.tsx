@@ -80,12 +80,7 @@ function DefinitionCard({
 
       {canWrite ? (
         <div className="border-t pt-3">
-          <DefinitionActions
-            id={definition.id}
-            latestVersionId={latest_version?.id ?? null}
-            status={definition.status}
-            canPublish={canPublish}
-          />
+          <DefinitionActions state={state} canPublish={canPublish} />
         </div>
       ) : null}
     </div>

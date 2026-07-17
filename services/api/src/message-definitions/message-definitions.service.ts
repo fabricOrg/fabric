@@ -21,17 +21,20 @@ import { and, eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
+import { archiveDefinition } from "./message-definition-archive.js";
+import {
+  auditDefinitionCreate,
+  auditDefinitionPublish,
+  auditDefinitionVersion,
+} from "./message-definition-audit.js";
 import {
   latestVersion,
+  listDefinitionStates,
   readState,
   resolveApplicationId,
 } from "./message-definitions.reads.js";
 
-/**
- * Managed message definition MANAGEMENT (SDK-003 slice 4). Draft/version/publish/archive of
- * application-owned definitions, tenant-scoped via withTenantDrizzle (RLS is the boundary). Authority
- * is gated at the controller; publish targets sandbox only (no live promotion in SDK-003).
- */
+/** Managed definition mutations; RLS scopes every transaction and the controller gates authority. */
 @Injectable()
 export class MessageDefinitionsService {
   constructor(
@@ -42,8 +45,9 @@ export class MessageDefinitionsService {
   async create(
     tenantId: string,
     request: CreateMessageDefinitionRequest,
+    actorKeyId = "operator",
   ): Promise<MessageDefinitionState> {
-    return this.db.withTenantDrizzle(tenantId, async (tx) => {
+    const state = await this.db.withTenantDrizzle(tenantId, async (tx) => {
       const appId = await resolveApplicationId(
         tx,
         tenantId,
@@ -79,42 +83,35 @@ export class MessageDefinitionsService {
         })
         .returning();
       if (!version)
-        throw new Error("definition version insert returned no row");
+        throw invalidRequest(
+          "definition_version_create_failed",
+          "The definition version could not be created.",
+        );
       return readState(tx, definition);
     });
+    await auditDefinitionCreate(
+      { audit: this.audit, tenantId, actorKeyId },
+      state,
+    );
+    return state;
   }
 
   async list(
     tenantId: string,
     applicationId?: string,
   ): Promise<ListMessageDefinitionsResponse> {
-    return this.db.withTenantDrizzle(tenantId, async (tx) => {
-      const defs = await tx
-        .select()
-        .from(messageDefinitions)
-        .where(
-          applicationId
-            ? and(
-                eq(messageDefinitions.tenantId, tenantId as TenantId),
-                eq(
-                  messageDefinitions.applicationId,
-                  applicationId as ApplicationId,
-                ),
-              )
-            : eq(messageDefinitions.tenantId, tenantId as TenantId),
-        );
-      const definitions: MessageDefinitionState[] = [];
-      for (const def of defs) definitions.push(await readState(tx, def));
-      return { definitions };
-    });
+    return this.db.withTenantDrizzle(tenantId, (tx) =>
+      listDefinitionStates(tx, tenantId, applicationId),
+    );
   }
 
   async addVersion(
     tenantId: string,
     definitionId: string,
     request: AddMessageDefinitionVersionRequest,
+    actorKeyId = "operator",
   ): Promise<MessageDefinitionState> {
-    return this.db.withTenantDrizzle(tenantId, async (tx) => {
+    const state = await this.db.withTenantDrizzle(tenantId, async (tx) => {
       const [definition] = await tx
         .select()
         .from(messageDefinitions)
@@ -124,12 +121,24 @@ export class MessageDefinitionsService {
             eq(messageDefinitions.id, definitionId),
           ),
         )
-        .limit(1);
+        .limit(1)
+        .for("update");
       if (!definition) {
         throw notFound("definition_not_found", "No definition with that id.");
       }
+      if (definition.status === "archived") {
+        throw invalidRequest(
+          "definition_archived",
+          "An archived definition cannot receive new versions.",
+        );
+      }
       const latest = await latestVersion(tx, definitionId);
-      if (!latest) throw new Error("definition has no versions");
+      if (!latest) {
+        throw notFound(
+          "definition_version_not_found",
+          "The definition has no version to edit.",
+        );
+      }
 
       // A breaking schema change must use a NEW stable key (slice-0 §3), so stale-catalog callers
       // aren't silently broken.
@@ -159,9 +168,17 @@ export class MessageDefinitionsService {
         })
         .returning();
       if (!version)
-        throw new Error("definition version insert returned no row");
+        throw invalidRequest(
+          "definition_version_create_failed",
+          "The definition version could not be created.",
+        );
       return readState(tx, definition);
     });
+    await auditDefinitionVersion(
+      { audit: this.audit, tenantId, actorKeyId },
+      state,
+    );
+    return state;
   }
 
   async publish(
@@ -191,6 +208,12 @@ export class MessageDefinitionsService {
       if (!definition) {
         throw notFound("definition_not_found", "No definition with that id.");
       }
+      if (definition.status === "archived") {
+        throw invalidRequest(
+          "definition_archived",
+          "An archived definition cannot be published.",
+        );
+      }
       const [version] = await tx
         .select({ id: messageDefinitionVersions.id })
         .from(messageDefinitionVersions)
@@ -218,7 +241,12 @@ export class MessageDefinitionsService {
           ),
         )
         .limit(1);
-      if (!env) throw new Error("application has no sandbox environment");
+      if (!env) {
+        throw notFound(
+          "environment_not_found",
+          "The application has no sandbox environment.",
+        );
+      }
       // Upsert the single (env, definition) release pointer to the chosen version.
       await tx
         .insert(messageDefinitionReleases)
@@ -244,17 +272,11 @@ export class MessageDefinitionsService {
         .returning();
       return readState(tx, updated ?? definition);
     });
-    await this.audit.record({
-      action: "message_definition.publish",
-      targetType: "message_definition",
-      targetId: definitionId,
-      summary: "Published a message definition version to sandbox.",
-      metadata: {
-        tenant_id: tenantId,
-        version_id: request.version_id,
-        actor_key_id: actorKeyId,
-      },
-    });
+    await auditDefinitionPublish(
+      { audit: this.audit, tenantId, actorKeyId },
+      definitionId,
+      request.version_id,
+    );
     return state;
   }
 
@@ -263,28 +285,12 @@ export class MessageDefinitionsService {
     definitionId: string,
     actorKeyId: string,
   ): Promise<void> {
-    const archived = await this.db.withTenantDrizzle(tenantId, async (tx) => {
-      const rows = await tx
-        .update(messageDefinitions)
-        .set({ status: "archived", updatedAt: new Date() })
-        .where(
-          and(
-            eq(messageDefinitions.tenantId, tenantId as TenantId),
-            eq(messageDefinitions.id, definitionId),
-          ),
-        )
-        .returning({ id: messageDefinitions.id });
-      return rows.length > 0;
-    });
-    if (!archived) {
-      throw notFound("definition_not_found", "No definition with that id.");
-    }
-    await this.audit.record({
-      action: "message_definition.archive",
-      targetType: "message_definition",
-      targetId: definitionId,
-      summary: "Archived a message definition.",
-      metadata: { tenant_id: tenantId, actor_key_id: actorKeyId },
-    });
+    await archiveDefinition(
+      this.db,
+      this.audit,
+      tenantId,
+      definitionId,
+      actorKeyId,
+    );
   }
 }

@@ -1,4 +1,7 @@
-import type { MessageDefinitionState } from "@app/contracts";
+import type {
+  ListMessageDefinitionsResponse,
+  MessageDefinitionState,
+} from "@app/contracts";
 import {
   type AppDb,
   type ApplicationId,
@@ -6,6 +9,7 @@ import {
   type MessageDefinition,
   type MessageDefinitionVersion,
   messageDefinitionReleases,
+  messageDefinitions,
   messageDefinitionVersions,
   type TenantId,
 } from "@app/db";
@@ -59,6 +63,32 @@ export async function latestVersion(
     .orderBy(desc(messageDefinitionVersions.version))
     .limit(1);
   return row ?? null;
+}
+
+export async function listDefinitionStates(
+  tx: Tx,
+  tenantId: string,
+  applicationId?: string,
+): Promise<ListMessageDefinitionsResponse> {
+  const definitions = await tx
+    .select()
+    .from(messageDefinitions)
+    .where(
+      applicationId
+        ? and(
+            eq(messageDefinitions.tenantId, tenantId as TenantId),
+            eq(
+              messageDefinitions.applicationId,
+              applicationId as ApplicationId,
+            ),
+          )
+        : eq(messageDefinitions.tenantId, tenantId as TenantId),
+    );
+  return {
+    definitions: await Promise.all(
+      definitions.map((definition) => readState(tx, definition)),
+    ),
+  };
 }
 
 /** Assemble the public state (definition + latest version + releases) for one definition row. */
