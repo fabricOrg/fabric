@@ -2,6 +2,7 @@ import { WebhookVerificationError } from "./errors.js";
 import type { MessageStatus } from "./types.js";
 
 export const KNOWN_WEBHOOK_EVENT_TYPES = [
+  "message.accepted",
   "message.sent",
   "message.delivered",
   "message.undelivered",
@@ -19,6 +20,10 @@ interface WebhookEventBase<TData> {
 
 export interface MessageWebhookData {
   readonly messageId: string;
+  readonly deliveryId?: string;
+  readonly key?: string;
+  readonly versionId?: string;
+  readonly resourceVersion?: number;
   readonly channel?: "sms" | "email";
   readonly status?: MessageStatus;
   readonly previousStatus?: MessageStatus;
@@ -96,6 +101,16 @@ function parseMessageData(value: unknown): MessageWebhookData {
   const data = webhookRecord(value);
   return {
     messageId: webhookString(data.message_id, "data.message_id"),
+    ...(typeof data.delivery_id === "string"
+      ? { deliveryId: data.delivery_id }
+      : {}),
+    ...(typeof data.key === "string" ? { key: data.key } : {}),
+    ...(typeof data.version_id === "string"
+      ? { versionId: data.version_id }
+      : {}),
+    ...(typeof data.resource_version === "number"
+      ? { resourceVersion: data.resource_version }
+      : {}),
     ...(data.channel === "sms" || data.channel === "email"
       ? { channel: data.channel }
       : {}),

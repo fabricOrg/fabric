@@ -19,6 +19,7 @@ export * from "./flows.js";
 export * from "./identity.js";
 export * from "./integrations.js";
 export * from "./kill-switches.js";
+export * from "./managed-messages.js";
 export * from "./message-batches.js";
 export * from "./message-definitions.js";
 export * from "./opt-outs.js";

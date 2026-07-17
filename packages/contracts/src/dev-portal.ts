@@ -24,6 +24,8 @@ export const apiKeyScopeValues = [
   "api_keys:read",
   "api_keys:write",
   "definitions:read",
+  "messages:send",
+  "messages:read",
 ] as const;
 export const apiKeyScope = z.enum(apiKeyScopeValues);
 export type ApiKeyScope = z.infer<typeof apiKeyScope>;
@@ -62,6 +64,7 @@ export type CreateApiKeyResult = z.infer<typeof createApiKeyResult>;
 // ── Webhooks ────────────────────────────────────────────────────────────────────────────────────
 
 export const webhookEventType = z.enum([
+  "message.accepted",
   "message.sent",
   "message.delivered",
   "message.undelivered",

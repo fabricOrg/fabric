@@ -24,6 +24,7 @@ import { SendersService } from "../senders/senders.service.js";
 import { assessSendCompliance } from "../sms/sms-compliance.js";
 
 export interface PreviewOutput {
+  readonly definition_id: string;
   readonly version_id: string;
   readonly environment: "sandbox" | "live";
   readonly resolved_locale: string;
@@ -68,6 +69,7 @@ export class MessagePreviewService {
       const envId = environmentId ?? (await defaultSandboxEnv(tx, tenantId));
       const [released] = await tx
         .select({
+          definitionId: messageDefinitions.id,
           versionId: messageDefinitionVersions.id,
           content: messageDefinitionVersions.content,
           schema: messageDefinitionVersions.variableSchema,
@@ -149,6 +151,7 @@ export class MessagePreviewService {
         ...compliance.blockers.map(({ path, code }) => ({ path, code })),
       ];
       return {
+        definition_id: released.definitionId,
         version_id: released.versionId,
         environment: released.envType,
         resolved_locale: resolvedLocale,

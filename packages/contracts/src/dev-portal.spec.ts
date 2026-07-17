@@ -13,6 +13,8 @@ describe("API key scope contract", () => {
       "api_keys:read",
       "api_keys:write",
       "definitions:read",
+      "messages:send",
+      "messages:read",
     ]);
   });
 

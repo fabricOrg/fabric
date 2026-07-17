@@ -79,6 +79,14 @@ const SCOPE_DETAILS: Record<
     description:
       "Generate typed keys, payloads, channels, and locales for this environment.",
   },
+  "messages:send": {
+    label: "Send managed messages",
+    description: "Send released definitions by stable key in this environment.",
+  },
+  "messages:read": {
+    label: "Read managed deliveries",
+    description: "Retrieve managed delivery status, attempts, and cost.",
+  },
 };
 
 const schema = z.object({

@@ -29,6 +29,7 @@ export * from "./identity.js";
 export * from "./impersonation.js";
 // Kill switches — platform circuit breakers (pause SMS, disable a provider…).
 export * from "./kill-switches.js";
+export * from "./managed-messages.js";
 // Team-member management — owners/admins invite teammates into their tenant (dashboard).
 export * from "./members.js";
 export * from "./message-batches.js";
