@@ -4,9 +4,12 @@ import type {
   DefinitionCatalog,
   UngeneratedCatalog,
 } from "./catalog.js";
+import { parseMessageDelivery } from "./message-delivery.js";
 import type { Transport } from "./transport.js";
 import type {
   FabricResponse,
+  IdempotentWriteOptions,
+  MessageDelivery,
   MessagePreview,
   RequestOptions,
   SmsPreview,
@@ -16,6 +19,7 @@ import {
   enumField,
   numberField,
   record,
+  requireE164,
   requireNonEmpty,
   stringField,
 } from "./validation.js";
@@ -31,10 +35,28 @@ export interface PreviewMessageOptions extends RequestOptions {
   readonly locale?: string;
 }
 
+export interface SendMessageOptions extends IdempotentWriteOptions {
+  /** E.164 recipient. */
+  readonly to: string;
+  /** Variables for the definition's schema; a validation failure fails the send before any charge. */
+  readonly data?: Record<string, unknown>;
+  /** Optional released locale; the definition's default is used when omitted. */
+  readonly locale?: string;
+  /** Pricing currency (ISO-4217). Defaults to GHS server-side. */
+  readonly currency?: string;
+  /** Caller correlation id surfaced on the delivery. */
+  readonly reference?: string;
+  /** Flat key/value annotations stored on the delivery (max 4KB serialized). */
+  readonly metadata?: Readonly<Record<string, string | number | boolean>>;
+  /** Fail closed (before any send or charge) if the rendered message would cost more than this. */
+  readonly maxCost?: { readonly minor: string; readonly currency: string };
+}
+
 /**
  * Managed messages. `preview` renders a released definition by stable key through the same engine a
  * send uses — no send, charge, or persistence. Blockers (validation/render errors) carry a field path
- * and code, never a value.
+ * and code, never a value. `send` executes that same render as a durable delivery: the required
+ * `idempotencyKey` makes retries safe — an identical replay returns the same delivery resource.
  */
 export class MessagesResource<
   Catalog extends DefinitionCatalog = UngeneratedCatalog,
@@ -73,6 +95,58 @@ export class MessagesResource<
         : {}),
     });
     return { ...response, data: parsePreview(response.data) };
+  }
+
+  async send<Key extends CatalogMessageKey<Catalog>>(
+    key: Key,
+    ...args: Catalog["generated"] extends true
+      ? [options: CatalogPreviewOptions<Catalog, Key, SendMessageOptions>]
+      : [options: SendMessageOptions]
+  ): Promise<FabricResponse<MessageDelivery>> {
+    const options = args[0];
+    requireNonEmpty(key, "key");
+    requireE164(options.to);
+    requireNonEmpty(options.idempotencyKey, "idempotencyKey");
+    const response = await this.transport.request<Record<string, unknown>>({
+      method: "POST",
+      path: "/v1/message-deliveries",
+      body: {
+        key,
+        to: options.to,
+        ...(options.data ? { data: options.data } : {}),
+        ...(options.locale ? { locale: options.locale } : {}),
+        ...(options.currency ? { currency: options.currency } : {}),
+        ...(options.reference ? { reference: options.reference } : {}),
+        ...(options.metadata ? { metadata: options.metadata } : {}),
+        ...(options.maxCost ? { limits: { max_cost: options.maxCost } } : {}),
+      },
+      options: {
+        idempotencyKey: options.idempotencyKey,
+        ...(options.signal ? { signal: options.signal } : {}),
+        ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
+        ...(options.headers ? { headers: options.headers } : {}),
+      },
+    });
+    return {
+      ...response,
+      data: parseMessageDelivery(record(response.data.delivery)),
+    };
+  }
+
+  async retrieveDelivery(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<FabricResponse<MessageDelivery>> {
+    requireNonEmpty(id, "id");
+    const response = await this.transport.request<Record<string, unknown>>({
+      method: "GET",
+      path: `/v1/message-deliveries/${encodeURIComponent(id)}`,
+      ...(options ? { options } : {}),
+    });
+    return {
+      ...response,
+      data: parseMessageDelivery(record(response.data.delivery)),
+    };
   }
 }
 

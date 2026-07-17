@@ -102,6 +102,127 @@ export const schemas = {
       request_id: { type: "string" },
     },
   },
+  SendManagedMessageRequest: {
+    type: "object",
+    required: ["key", "to"],
+    properties: {
+      key: { type: "string" },
+      to: { type: "string", pattern: "^\\+[1-9]\\d{7,14}$" },
+      data: { type: "object", additionalProperties: true },
+      locale: { type: "string", pattern: "^[a-z]{2,3}(?:-[A-Z]{2})?$" },
+      channel: { enum: ["sms"] },
+      currency: { type: "string", minLength: 3, maxLength: 3 },
+      reference: { type: "string", maxLength: 100 },
+      metadata: {
+        type: "object",
+        additionalProperties: {
+          oneOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }],
+        },
+      },
+      limits: {
+        type: "object",
+        required: ["max_cost"],
+        properties: {
+          max_cost: {
+            type: "object",
+            required: ["minor", "currency"],
+            properties: {
+              minor: { type: "string", pattern: "^\\d+$" },
+              currency: { type: "string", minLength: 3, maxLength: 3 },
+            },
+          },
+        },
+      },
+    },
+  },
+  MessageDeliveryAttempt: {
+    type: "object",
+    required: [
+      "id",
+      "ordinal",
+      "channel",
+      "message_id",
+      "status",
+      "cost",
+      "error_code",
+      "created_at",
+      "updated_at",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      ordinal: { type: "integer", minimum: 1 },
+      channel: { enum: ["sms"] },
+      message_id: {
+        oneOf: [{ type: "string", format: "uuid" }, { type: "null" }],
+      },
+      status: ref("MessageDeliveryStatus"),
+      cost: ref("Money"),
+      error_code: { oneOf: [{ type: "string" }, { type: "null" }] },
+      created_at: { type: "string", format: "date-time" },
+      updated_at: { type: "string", format: "date-time" },
+    },
+  },
+  MessageDeliveryStatus: {
+    enum: [
+      "accepted",
+      "processing",
+      "sent",
+      "delivered",
+      "undelivered",
+      "failed",
+      "expired",
+    ],
+  },
+  MessageDelivery: {
+    type: "object",
+    required: [
+      "id",
+      "key",
+      "version_id",
+      "environment",
+      "locale",
+      "channel",
+      "status",
+      "resource_version",
+      "recipient",
+      "reference",
+      "metadata",
+      "cost",
+      "attempts",
+      "created_at",
+      "updated_at",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      key: { type: "string" },
+      version_id: { type: "string", format: "uuid" },
+      environment: { enum: ["sandbox", "live"] },
+      locale: { type: "string" },
+      channel: { enum: ["sms"] },
+      status: ref("MessageDeliveryStatus"),
+      resource_version: { type: "integer", minimum: 1 },
+      recipient: { type: "string" },
+      reference: { oneOf: [{ type: "string" }, { type: "null" }] },
+      metadata: {
+        type: "object",
+        additionalProperties: {
+          oneOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }],
+        },
+      },
+      cost: ref("Money"),
+      attempts: { type: "array", items: ref("MessageDeliveryAttempt") },
+      created_at: { type: "string", format: "date-time" },
+      updated_at: { type: "string", format: "date-time" },
+    },
+  },
+  ManagedMessageResponse: {
+    type: "object",
+    required: ["delivery", "request_id"],
+    properties: {
+      delivery: ref("MessageDelivery"),
+      request_id: { type: "string" },
+    },
+  },
   DefinitionCatalogManifest: {
     type: "object",
     additionalProperties: false,
@@ -602,6 +723,38 @@ export const paths = {
       { 200: response("Preview", ref("PreviewMessageResponse")) },
       ref("PreviewMessageRequest"),
     ),
+  },
+  "/v1/message-deliveries": {
+    post: {
+      ...operation(
+        "sendManagedMessage",
+        "Send a released message definition by stable key (idempotent)",
+        {
+          202: response("Delivery accepted", ref("ManagedMessageResponse")),
+          409: response("Idempotency conflict", ref("ErrorEnvelope")),
+        },
+        ref("SendManagedMessageRequest"),
+      ),
+      parameters: [
+        {
+          name: "Idempotency-Key",
+          in: "header",
+          required: true,
+          schema: { type: "string", minLength: 1, maxLength: 255 },
+          description:
+            "Required. A replay with the same key returns the same delivery; a different payload under the same key is rejected.",
+        },
+      ],
+    },
+  },
+  "/v1/message-deliveries/{id}": {
+    get: {
+      ...operation("retrieveManagedMessage", "Retrieve a managed delivery", {
+        200: response("Managed delivery", ref("ManagedMessageResponse")),
+        404: response("Not found", ref("ErrorEnvelope")),
+      }),
+      parameters: [idParameter],
+    },
   },
   "/v1/definitions/catalog": {
     get: operation(

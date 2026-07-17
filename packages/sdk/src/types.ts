@@ -154,6 +154,51 @@ export interface WebhookDelivery {
   readonly createdAt: string;
 }
 
+/** Lifecycle of a managed delivery — mirrors the message pipeline, minus pre-dispatch queue states. */
+export type MessageDeliveryStatus =
+  | "accepted"
+  | "processing"
+  | "sent"
+  | "delivered"
+  | "undelivered"
+  | "failed"
+  | "expired";
+
+/** One provider attempt inside a managed delivery (ordinal 1 = the original send). */
+export interface MessageDeliveryAttempt {
+  readonly id: string;
+  readonly ordinal: number;
+  readonly channel: "sms";
+  readonly messageId: string | null;
+  readonly status: MessageDeliveryStatus;
+  readonly cost: Money;
+  readonly errorCode: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/**
+ * A managed send addressed by a definition's stable key. The id is deterministic per
+ * tenant/application/environment/idempotency-key, so a replayed request returns this same resource.
+ */
+export interface MessageDelivery {
+  readonly id: string;
+  readonly key: string;
+  readonly versionId: string;
+  readonly environment: FabricEnvironment;
+  readonly locale: string;
+  readonly channel: "sms";
+  readonly status: MessageDeliveryStatus;
+  readonly resourceVersion: number;
+  readonly recipient: string;
+  readonly reference: string | null;
+  readonly metadata: Readonly<Record<string, string | number | boolean>>;
+  readonly cost: Money;
+  readonly attempts: ReadonlyArray<MessageDeliveryAttempt>;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
 /** A field-path error that blocks a preview. Carries a path + stable code, never the rejected value. */
 export interface PreviewBlocker {
   readonly path: string;

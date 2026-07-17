@@ -21,7 +21,11 @@ export {
   ValidationError,
   WebhookVerificationError,
 } from "./errors.js";
-export { MessagesResource, type PreviewMessageOptions } from "./messages.js";
+export {
+  MessagesResource,
+  type PreviewMessageOptions,
+  type SendMessageOptions,
+} from "./messages.js";
 export type { CreateSenderIdParams } from "./sender-ids.js";
 export type { FabricLogger } from "./transport.js";
 export type {
@@ -29,6 +33,9 @@ export type {
   FabricEnvironment,
   FabricResponse,
   IdempotentWriteOptions,
+  MessageDelivery,
+  MessageDeliveryAttempt,
+  MessageDeliveryStatus,
   MessageDetail,
   MessagePreview,
   MessageStatus,
