@@ -1,0 +1,39 @@
+{
+  "name": "@fabric-messaging/cli",
+  "version": "0.1.0-beta.1",
+  "description": "Contract generation CLI for Fabric managed messaging",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bin": {
+    "fabric": "./dist/bin.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "pack:check": "pnpm pack --dry-run",
+    "packed:smoke": "node scripts/packed-smoke.mjs",
+    "release:check": "pnpm typecheck && pnpm test && pnpm build && pnpm packed:smoke && pnpm pack:check"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "vitest": "^2.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

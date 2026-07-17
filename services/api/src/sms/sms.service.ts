@@ -8,6 +8,7 @@ import {
   failPreparedSend as engineFailPreparedSend,
   prepareSend as enginePrepareSend,
   sweepExpired as engineSweepExpired,
+  type ManagedSendContext,
   type SendInput,
   type SendResult,
 } from "@app/sms-engine";
@@ -22,13 +23,15 @@ import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import { SendersService } from "../senders/senders.service.js";
 import { assertSendCompliant } from "./sms-compliance.js";
+import { recheckedDispatch } from "./sms-dispatch-recheck.js";
 import { completeStoredDispatch } from "./sms-dispatch-store.js";
 import { ingestProviderDlr } from "./sms-dlr.js";
 import { assertLiveRecipientAllowed } from "./sms-live-safety.js";
+import { replayManagedSend } from "./sms-managed-replay.js";
 import {
   enqueueSmsJob,
   processSmsJob,
-  recoverPendingSms,
+  recoverPendingSmsSafely,
 } from "./sms-queue-operations.js";
 import { getMessage, listMessages } from "./sms-read.js";
 import { SmsRuntimeService } from "./sms-runtime.service.js";
@@ -69,6 +72,7 @@ export class SmsService {
     environmentId?: string | null;
     /** Application resolved from the presenting key; null only on the legacy BFF token path. */
     applicationId?: string | null;
+    managed?: ManagedSendContext;
   }): Promise<SendSmsResponse> {
     if (await this.killSwitch.isPaused("platform.sms_sending")) {
       throw invalidRequest(
@@ -137,6 +141,9 @@ export class SmsService {
       this.runtime.deps(deliveryMode),
       routedInput,
     );
+    if (prepared.replayed && input.managed) {
+      return replayManagedSend(this, input.tenantId, prepared.messageId);
+    }
     if (deliveryMode === "virtual") {
       try {
         await this.virtualPhone.record({
@@ -177,7 +184,6 @@ export class SmsService {
       }
       status = "sending"; // truthful: reserved + persisted, provider outcome pending
     } else {
-      // Inline fallback (no Redis configured): the pre-queue behavior, unchanged.
       const result = await this.runtime.dispatch(
         routedInput,
         prepared,
@@ -204,18 +210,18 @@ export class SmsService {
     };
   }
 
-  /**
-   * Worker entry for a queued send: provider call + tx2. Throwing propagates to BullMQ, which
-   * retries with backoff — safe because dispatchSend is retry-idempotent (terminal-freeze + B6)
-   * and the TTL sweeper refunds anything that never resolves.
-   */
+  /** Worker retries are safe because provider contact and wallet resolution are idempotent. */
   async processQueuedSend(job: SmsSendJob): Promise<SendResult> {
     return processSmsJob({
       db: this.db,
       vault: this.piiVault,
       job,
-      dispatch: (input, prepared, mode) =>
-        this.runtime.dispatch(input, prepared, mode),
+      dispatch: recheckedDispatch({
+        killSwitch: this.killSwitch,
+        consent: this.consent,
+        senders: this.senders,
+        runtime: this.runtime,
+      }),
       fail: (input, prepared, mode) =>
         engineFailPreparedSend(
           this.runtime.deps(mode),
@@ -229,19 +235,12 @@ export class SmsService {
   }
 
   async enqueuePending(tenantId: string): Promise<number> {
-    if (!this.queue.enabled) return 0;
-    try {
-      return await recoverPendingSms({
-        db: this.db,
-        queue: this.queue,
-        tenantId,
-      });
-    } catch (error) {
-      this.logger.warn(
-        `sms-send recovery enqueue deferred for ${tenantId}: ${error instanceof Error ? error.message : "unknown"}`,
-      );
-      return 0;
-    }
+    return recoverPendingSmsSafely({
+      db: this.db,
+      queue: this.queue,
+      tenantId,
+      warn: (message) => this.logger.warn(message),
+    });
   }
 
   /**

@@ -1,3 +1,4 @@
+import type { ApiKeyScope } from "@app/contracts";
 import {
   type CanActivate,
   type ExecutionContext,
@@ -110,7 +111,7 @@ export function extractBearer(
 /** Enforce a resolved key's permission at the controller boundary. */
 export function requireScope(
   tenant: RequestTenant | undefined,
-  scope: string,
+  scope: ApiKeyScope,
 ): RequestTenant {
   const resolved = requireTenant(tenant);
   if (!resolved.scopes.includes(scope) && !resolved.scopes.includes("*")) {

@@ -11,6 +11,10 @@ import { sql } from "drizzle-orm";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { SmsService } from "../sms/sms.service.js";
 import { VirtualPhoneService } from "../sms/virtual-phone.service.js";
+import {
+  runDeliveryRetention,
+  runLogRetention,
+} from "./maintenance-retention.js";
 
 /**
  * SCHEDULED MAINTENANCE (ARCHITECTURE §10 made real) — two money-correctness jobs that previously
@@ -49,24 +53,25 @@ export class MaintenanceService {
     @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
-  /** Advisory lock keys (arbitrary but stable app-wide constants; one per job). */
+  /** Advisory lock keys (arbitrary but stable app-wide constants; one per job — retention keys
+   *  live in maintenance-retention.ts). */
   private static readonly SWEEP_LOCK_KEY = 727_001;
   private static readonly INVARIANT_LOCK_KEY = 727_002;
-  private static readonly LOG_RETENTION_LOCK_KEY = 727_003;
   private static readonly DISPATCH_LOCK_KEY = 727_004;
+
+  private positiveDaysConfig(key: string, fallback: number): number {
+    const parsed = Number(this.config.get<string>(key) ?? Number.NaN);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  }
 
   /** How long request_logs are kept before the daily retention sweep deletes them. */
   private logRetentionDays(): number {
-    const raw = this.config.get<string>("REQUEST_LOG_RETENTION_DAYS");
-    const parsed = raw ? Number(raw) : Number.NaN;
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+    return this.positiveDaysConfig("REQUEST_LOG_RETENTION_DAYS", 30);
   }
 
   /** Reservation TTL: how long a message may sit non-terminal before the sweeper expires it. */
   private ttlMinutes(): number {
-    const raw = this.config.get<string>("MAINTENANCE_SWEEP_TTL_MINUTES");
-    const parsed = raw ? Number(raw) : Number.NaN;
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
+    return this.positiveDaysConfig("MAINTENANCE_SWEEP_TTL_MINUTES", 15);
   }
 
   /** Cron gate so integration tests (which build the Nest app) don't run wall-clock jobs. */
@@ -74,41 +79,31 @@ export class MaintenanceService {
     return this.config.get<string>("MAINTENANCE_CRON_ENABLED") !== "false";
   }
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
-  async sweepTick(): Promise<void> {
+  /** Never let a maintenance failure crash the process; the next tick retries. */
+  private async tick(name: string, run: () => Promise<unknown>): Promise<void> {
     if (!this.cronEnabled()) return;
     try {
-      await this.runSweep();
+      await run();
     } catch (error) {
-      // Never let a maintenance failure crash the process; next tick retries.
       this.logger.error(
-        `sweep run failed: ${error instanceof Error ? error.message : "unknown"}`,
+        `${name} failed: ${error instanceof Error ? error.message : "unknown"}`,
       );
     }
+  }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async sweepTick(): Promise<void> {
+    return this.tick("sweep run", () => this.runSweep());
   }
 
   @Cron(CronExpression.EVERY_HOUR)
   async invariantTick(): Promise<void> {
-    if (!this.cronEnabled()) return;
-    try {
-      await this.runInvariant();
-    } catch (error) {
-      this.logger.error(
-        `invariant run failed: ${error instanceof Error ? error.message : "unknown"}`,
-      );
-    }
+    return this.tick("invariant run", () => this.runInvariant());
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
   async dispatchTick(): Promise<void> {
-    if (!this.cronEnabled()) return;
-    try {
-      await this.runDispatchRecovery();
-    } catch (error) {
-      this.logger.error(
-        `dispatch recovery failed: ${error instanceof Error ? error.message : "unknown"}`,
-      );
-    }
+    return this.tick("dispatch recovery", () => this.runDispatchRecovery());
   }
 
   /** Recover dispatch intents that committed but were not durably accepted by Redis. */
@@ -139,42 +134,32 @@ export class MaintenanceService {
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async logRetentionTick(): Promise<void> {
-    if (!this.cronEnabled()) return;
-    try {
-      await this.runLogRetention();
-    } catch (error) {
-      this.logger.error(
-        `log retention run failed: ${error instanceof Error ? error.message : "unknown"}`,
-      );
-    }
+    return this.tick("log retention run", () => this.runLogRetention());
   }
 
-  /**
-   * One request-log retention pass (also the test entry point). Deletes rows past the retention
-   * window across all tenants on the provisioner connection (request_logs grants app_provisioner
-   * DELETE; cross-tenant by design — no per-tenant loop for a pure purge). Advisory-locked so
-   * overlapping ticks are a no-op. Returns rows deleted.
-   */
-  async runLogRetention(): Promise<{ locked: boolean; deleted: number }> {
-    return this.provisioning.db.transaction(async (tx) => {
-      const lockRows = (await tx.execute(
-        sql`SELECT pg_try_advisory_xact_lock(${MaintenanceService.LOG_RETENTION_LOCK_KEY}) AS locked`,
-      )) as Array<{ locked: boolean }>;
-      if (lockRows[0]?.locked !== true) return { locked: false, deleted: 0 };
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async deliveryRetentionTick(): Promise<void> {
+    return this.tick("delivery retention run", () =>
+      this.runDeliveryRetention(),
+    );
+  }
 
-      const cutoffIso = new Date(
-        Date.now() - this.logRetentionDays() * 86_400_000,
-      ).toISOString();
-      const deletedRows = (await tx.execute(
-        sql`DELETE FROM request_logs WHERE created_at < ${cutoffIso}::timestamptz RETURNING id`,
-      )) as Array<{ id: string }>;
-      if (deletedRows.length > 0) {
-        this.logger.log(
-          `log retention: deleted ${deletedRows.length} request log(s) older than ${this.logRetentionDays()}d`,
-        );
-      }
-      return { locked: true, deleted: deletedRows.length };
-    });
+  /** One request-log retention pass (also the test entry point) — see maintenance-retention.ts. */
+  async runLogRetention(): Promise<{ locked: boolean; deleted: number }> {
+    return runLogRetention(
+      this.provisioning,
+      this.logger,
+      this.logRetentionDays(),
+    );
+  }
+
+  /** One managed-delivery retention pass (also the test entry point) — honors legal_hold. */
+  async runDeliveryRetention(): Promise<{
+    locked: boolean;
+    deliveries: number;
+    attempts: number;
+  }> {
+    return runDeliveryRetention(this.provisioning, this.logger);
   }
 
   /**
@@ -261,10 +246,9 @@ export class MaintenanceService {
   }
 
   private virtualPhoneRetentionDays(): number {
-    const parsed = Number(
-      this.config.get<string>("VIRTUAL_PHONE_RETENTION_DAYS") ?? "30",
+    return Math.floor(
+      this.positiveDaysConfig("VIRTUAL_PHONE_RETENTION_DAYS", 30),
     );
-    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 30;
   }
 
   /**

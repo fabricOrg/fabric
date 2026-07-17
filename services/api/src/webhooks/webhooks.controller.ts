@@ -1,7 +1,10 @@
 import {
   type CreateWebhookEndpointResponse,
   createWebhookEndpointRequestSchema,
+  type ListWebhookDeliveriesResponse,
   type ListWebhookEndpointsResponse,
+  type ReplayWebhookDeliveryResponse,
+  webhookDeliveryStateSchema,
 } from "@app/contracts";
 import {
   Body,
@@ -87,6 +90,49 @@ export class WebhooksController {
     @Param("id") id: string,
   ): Promise<void> {
     const tenant = requireScope(req.tenant, "api_keys:write");
-    await this.webhooks.remove(tenant.id, id);
+    await this.webhooks.disable(tenant.id, id);
+  }
+
+  @Get(":id/deliveries")
+  async deliveries(
+    @Req() req: AuthedRequest,
+    @Param("id") id: string,
+    @Query("state") state: unknown,
+  ): Promise<ListWebhookDeliveriesResponse> {
+    const tenant = requireScope(req.tenant, "api_keys:read");
+    const parsedState = webhookDeliveryStateSchema.safeParse(state);
+    if (state !== undefined && !parsedState.success) {
+      throw invalidRequest(
+        "invalid_delivery_state",
+        "State must be pending, delivering, delivered, or dead.",
+        "state",
+      );
+    }
+    return {
+      deliveries: await this.webhooks.listDeliveries(
+        tenant.id,
+        id,
+        parsedState.success ? parsedState.data : undefined,
+      ),
+      request_id: newRequestId(),
+    };
+  }
+
+  @Post(":id/deliveries/:deliveryId/replay")
+  async replay(
+    @Req() req: AuthedRequest,
+    @Param("id") id: string,
+    @Param("deliveryId") deliveryId: string,
+  ): Promise<ReplayWebhookDeliveryResponse> {
+    const tenant = requireScope(req.tenant, "api_keys:write");
+    return {
+      delivery: await this.webhooks.replay(
+        tenant.id,
+        id,
+        deliveryId,
+        tenant.keyId,
+      ),
+      request_id: newRequestId(),
+    };
   }
 }

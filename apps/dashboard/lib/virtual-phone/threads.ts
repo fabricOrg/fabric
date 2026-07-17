@@ -29,7 +29,7 @@ export function groupVirtualThreads(
           sorted.find((message) => message.direction === "outbound")?.from ??
           "Virtual phone",
         messages: sorted,
-        lastMessage: sorted[sorted.length - 1] as VirtualPhoneMessage,
+        lastMessage: sorted.at(-1) as VirtualPhoneMessage,
         unread: sorted.filter((message) => message.read_at === null).length,
       };
     })

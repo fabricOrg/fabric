@@ -20,6 +20,7 @@ import {
 } from "@app/ui/components/ui/table";
 import { Check } from "lucide-react";
 import { InviteMemberDialog } from "@/components/forms/invite-member-dialog";
+import { MemberPermissionsDialog } from "@/components/member-permissions-dialog";
 import { MemberRowActions } from "@/components/member-row-actions";
 import { BffError } from "@/lib/server/api-client";
 import { requireDashboardSession } from "@/lib/server/auth";
@@ -185,18 +186,27 @@ export default async function TeamPage() {
                         </TableCell>
                         {canInvite ? (
                           <TableCell className="text-right">
-                            <MemberRowActions
-                              userId={m.user_id}
-                              email={m.email}
-                              label={m.name ?? m.email}
-                              role={m.role}
-                              developerAccess={m.developer_access}
-                              status={m.status}
-                              canChangeRole={
-                                m.role !== "owner" &&
-                                m.user_id !== session.userId
-                              }
-                            />
+                            <div className="flex items-center justify-end gap-2">
+                              {m.role !== "owner" ? (
+                                <MemberPermissionsDialog
+                                  userId={m.user_id}
+                                  label={m.name ?? m.email}
+                                  permissions={m.permissions ?? []}
+                                />
+                              ) : null}
+                              <MemberRowActions
+                                userId={m.user_id}
+                                email={m.email}
+                                label={m.name ?? m.email}
+                                role={m.role}
+                                developerAccess={m.developer_access}
+                                status={m.status}
+                                canChangeRole={
+                                  m.role !== "owner" &&
+                                  m.user_id !== session.userId
+                                }
+                              />
+                            </div>
                           </TableCell>
                         ) : null}
                       </TableRow>

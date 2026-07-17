@@ -91,6 +91,10 @@ export const memberships = pgTable(
     workosMembershipId: text("workos_membership_id").unique(),
     role: membershipRole("role").notNull().default("member"),
     developerAccess: boolean("developer_access").notNull().default(false),
+    // Per-user permission OVERRIDE (admin-managed). NULL = use the role + developer-access baseline;
+    // a non-null array IS the exact effective set (role becomes a template). Validated against the
+    // shared catalog on write; effectivePermissions() resolves it at session time.
+    permissions: text("permissions").array().$type<string[]>(),
     status: membershipStatus("status").notNull().default("active"),
     workosUpdatedAt: timestamp("workos_updated_at", { withTimezone: true }),
     ...timestamps,

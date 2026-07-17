@@ -1,10 +1,19 @@
-export type FabricEnvironment = "sandbox" | "production";
+export type FabricEnvironment = "sandbox" | "live";
 
 export interface RequestOptions {
-  readonly idempotencyKey?: string;
   readonly signal?: AbortSignal;
   readonly timeout?: number;
   readonly headers?: Readonly<Record<string, string>>;
+}
+
+/** Options for direct writes where idempotency remains optional for beta compatibility. */
+export interface WriteOptions extends RequestOptions {
+  readonly idempotencyKey?: string;
+}
+
+/** Options for operations that cannot execute safely without durable caller idempotency. */
+export interface IdempotentWriteOptions extends RequestOptions {
+  readonly idempotencyKey: string;
 }
 
 export interface FabricResponse<T> {
@@ -123,4 +132,107 @@ export interface WebhookEndpoint {
   readonly environment: "sandbox" | "live";
   readonly secretPrefix: string;
   readonly createdAt: string;
+  readonly health: {
+    readonly pending: number;
+    readonly dead: number;
+    readonly lastDeliveredAt: string | null;
+  };
+}
+
+export interface WebhookDelivery {
+  readonly id: string;
+  readonly endpointId: string;
+  readonly eventId: string;
+  readonly eventType: string;
+  readonly state: "pending" | "delivering" | "delivered" | "dead";
+  readonly attempts: number;
+  readonly nextAttemptAt: string;
+  readonly lastAttemptAt: string | null;
+  readonly deliveredAt: string | null;
+  readonly lastErrorCategory: string | null;
+  readonly lastHttpStatus: number | null;
+  readonly createdAt: string;
+}
+
+/** Lifecycle of a managed delivery — mirrors the message pipeline, minus pre-dispatch queue states. */
+export type MessageDeliveryStatus =
+  | "accepted"
+  | "processing"
+  | "sent"
+  | "delivered"
+  | "undelivered"
+  | "failed"
+  | "expired";
+
+/** One provider attempt inside a managed delivery (ordinal 1 = the original send). */
+export interface MessageDeliveryAttempt {
+  readonly id: string;
+  readonly ordinal: number;
+  readonly channel: "sms";
+  readonly messageId: string | null;
+  readonly status: MessageDeliveryStatus;
+  readonly cost: Money;
+  readonly errorCode: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/**
+ * A managed send addressed by a definition's stable key. The id is deterministic per
+ * tenant/application/environment/idempotency-key, so a replayed request returns this same resource.
+ */
+export interface MessageDelivery {
+  readonly id: string;
+  readonly key: string;
+  readonly versionId: string;
+  readonly environment: FabricEnvironment;
+  readonly locale: string;
+  readonly channel: "sms";
+  readonly status: MessageDeliveryStatus;
+  readonly resourceVersion: number;
+  readonly recipient: string;
+  readonly reference: string | null;
+  readonly metadata: Readonly<Record<string, string | number | boolean>>;
+  readonly cost: Money;
+  readonly attempts: ReadonlyArray<MessageDeliveryAttempt>;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** A field-path error that blocks a preview. Carries a path + stable code, never the rejected value. */
+export interface PreviewBlocker {
+  readonly path: string;
+  readonly code: string;
+}
+
+/** The rendered SMS a preview produced (present only when there are no blockers). */
+export interface SmsPreview {
+  readonly body: string;
+  readonly encoding: "gsm7" | "ucs2";
+  readonly length: number;
+  readonly segments: number;
+  readonly costMinor: string;
+  readonly currency: string;
+}
+
+/** Result of previewing a released definition — equals what a subsequent send would render. */
+export interface MessagePreview {
+  readonly versionId: string;
+  readonly environment: "sandbox" | "live";
+  readonly resolvedLocale: string;
+  readonly blockers: readonly PreviewBlocker[];
+  readonly warnings: readonly PreviewBlocker[];
+  readonly eligible: boolean;
+  readonly sender: {
+    readonly senderId: string;
+    readonly status:
+      | "sandbox"
+      | "active"
+      | "pending"
+      | "rejected"
+      | "unregistered"
+      | "not_evaluated";
+  };
+  readonly messageClass: "transactional" | "promotional";
+  readonly preview: SmsPreview | null;
 }

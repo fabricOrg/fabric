@@ -1,7 +1,165 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-07-12. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-07-15. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
+
+## Latest (2026-07-15): SDK-002 — endpoint-specific webhook delivery
+
+Branch `feature/ops-neutral-surfaces-template-seeds`. Committed `8f47945`, **local only — no push,
+no package publication** (external gate intentionally closed).
+
+- One durable delivery per (outbox event × endpoint). Worker commits a recoverable lease before
+  network I/O, retries endpoints independently, keeps append-only attempt history, surfaces
+  pending/dead health, and supports owner/admin **replay** (resets the dead cycle, preserves
+  history, appends the successful attempt) with a `webhook_delivery.replay` audit record. Endpoint
+  removal is a **soft disable** so evidence is retained.
+- Outbound SSRF guard (`webhook-url-policy.ts`): resolve + pin the destination immediately before
+  connecting (closes the DNS-rebinding gap), reject non-public targets and any multi-A set with a
+  private member, HTTPS-only, no credentials/fragments, no redirect-follow, TLS validated, 10s
+  timeout, response bodies never buffered. `WEBHOOK_ALLOW_PRIVATE_NETWORKS` override is **local-test
+  only** — must never be set in a deployed env.
+- Migrations `0067`–`0074` (deliveries + attempts tables, RLS on both). SDK + contracts + dashboard
+  deliveries dialog/replay route + OpenAPI updated. DTO mappers extracted to `webhook-dto.ts` to
+  clear the 300-line file-length guard.
+- **Verification: full `pnpm verify` green** (guard, lint, typecheck, 141 API tests incl. webhook
+  delivery/event-contract/HTTP/URL-policy suites, all 4 app builds). Real-Postgres RLS + drift gates
+  passed. Evidence: `docs/sdk/evidence/sdk-002.md`. AC01–AC06 traced.
+- Env note: `next build` standalone needs **Windows Developer Mode ON** (unprivileged symlink) — a
+  prior verify run failed only on the admin-console sharp symlink until it was enabled; CI (Linux)
+  unaffected.
+
+**Next up — SDK-003** (author/version/release/**preview** managed SMS definitions). Planning committed,
+**no feature code yet, BLOCKED on sign-off**:
+- Readiness + 8-slice decomposition: `docs/sdk/sdk-003-readiness.md` (`f729494`). Reuse map: pure
+  `@app/domain` `encodeAndSegment`+`rateSegments` reusable; **server-side renderer is net-new** (only
+  exists client-side in `preflight.ts`); `sms-engine/engine.ts` is the side-effect boundary preview must
+  not cross.
+- Slice-0 design: `docs/sdk/sdk-003-slice0-design.md` (`9657b89`) — locks stable-key grammar, the
+  portable closed JSON-Schema variable subset, and the pure `analyzeCompatibility` verdict table.
+- Slice 1 DONE (`699a86e`) — proceeded on ADR-0005 per explicit go. `message_definitions` /
+  `_versions` / `_releases` (migrations `0075` DDL + `0076` RLS): stable key unique per app
+  case-insensitively, version immutability enforced by REVOKE (a default-privilege grant hands
+  app_runtime full DML, so it must be revoked, not merely un-granted), one-release-per-env, composite
+  containment FKs blocking cross-app/tenant releases. 9 real-Postgres invariant tests +
+  `db:assert`/`db:assert:drift` green.
+- Slice 2 DONE (`d4bfdc8`) — `@app/contracts` stable-key grammar + closed variable-schema subset
+  (strict nodes reject `$ref`/`oneOf`; path-coded depth/size/count checks) + definition/version/release
+  DTOs; `@app/domain` pure `analyzeCompatibility` (per-field breaking/compatible verdict + JSON paths).
+  34 new unit tests.
+- Slice 3 DONE (`8bb37a8`) — `@app/domain/message-render.ts`: pure `validatePayload` (subset →
+  path-coded errors, never echoes the value) + `previewSms` (token-declared check → validate → render
+  → `encodeAndSegment` → `rateSegments`, bounded, blockers ⇒ nothing rendered/priced). The single
+  render source preview (slice 5) and SDK-005 send will share. 11 tests incl. preview↔send parity +
+  no-PII-in-errors.
+- Slice 4 DONE (`ec96a2d`) — `v1/message-definitions` create/list/add-version/publish/archive.
+  Authority (ADR-0005 #6): operator or dashboard session (BFF token → `applicationId===null`); a
+  scoped `sk_*` key is refused (`management_requires_session`). Breaking version rejected via
+  `analyzeCompatibility`; publish upserts the single sandbox release + audits; live refused. 7
+  real-Postgres + 5 controller-unit tests.
+- Slice 5 DONE (`b13dd91`) — `POST /v1/messages/preview` resolves the released definition for the key's
+  env and renders via the shared `previewSms` core; `sms:read` scope (a dedicated `messages:read`
+  scope deferred); unreleased key → 404; invalid payload → path-coded blockers. No-side-effect
+  integration (3) asserts messages/dispatches/outbox/PII counts unchanged; 3 controller-unit tests.
+- Slice 6 core DONE (`d99c140`) — dashboard `/message-definitions`: server-only client + BFF routes
+  (list/create/publish/archive/preview with owner/admin write gating + trusted-origin), a page with
+  status/version/release state + per-definition Use-in-code snippet + publish/archive actions, and a
+  create dialog (key + body + JSON variable schema validated against the subset). 6 route-handler
+  tests (role matrix). **Slice 6b deferred** (visual schema builder, interactive preview panel,
+  template→draft conversion, member-draft/developer-read-only gating — a developer's session role
+  collapses to member, so that split needs a `definitions:write` permission).
+- Slice 7 DONE (`a126861`) — `@fabric-messaging/sdk` `MessagesResource.preview` (typed
+  `MessagePreview`) wired + exported; `/v1/messages/preview` + schemas in the OpenAPI generator,
+  both artifacts regenerated + `openapi:check` current; SDK contract-parity test; evidence doc
+  `docs/sdk/evidence/sdk-003.md` (AC01–AC07; AC02 member-draft + AC07 template conversion deferred
+  to slice 6b).
+
+## Per-user permission management (2026-07-16, local, unpushed)
+
+Admin-managed per-user permissions on top of the role model (resolves the "tell a developer from a
+member" gap). Decisions: **full per-user override** (explicit set wins; role = template), **any admin
+grants anything** (escalation trade-off — commented at the seam), **existing catalog** + new
+`definitions:write` / `definitions:publish`. Safety rails: **owner is never editable** (no lock-out).
+
+- `@app/contracts/permissions` — single-source catalog + role baselines + pure
+  `baselinePermissions`/`effectivePermissions`. `memberships.permissions text[]` (migration `0077`;
+  NULL = baseline, set = exact override).
+- API: identity session = `effectivePermissions(override ?? baseline)`; `members.setPermissions`
+  (owner-immutable); `PUT /internal/tenants/:id/members/:userId/permissions`. identity.service local
+  role map removed (now one source with the dashboard).
+- Dashboard: message-definitions BFF gates on `definitions:write`/`definitions:publish` (not role);
+  Team page per-user permission editor (`MemberPermissionsDialog` + `PUT /api/team/.../permissions`,
+  owner/admin gated). Commits `63ee169`, `61ccc48`, `0f15b56`.
+- Baseline: member gains `definitions:write` (may draft), not publish; owner/admin get both;
+  developer-access adds only api_keys/logs (so a developer cannot author definitions — the original
+  ask, now enforced by permission, and an admin can override per user).
+- **Follow-ups:** member mutations (incl. permission grants) are still **unaudited** in the members
+  module (matches existing updateRole/remove — worth adding); a bounded-by-granter escalation rule if
+  the "any admin grants anything" trade-off is revisited; slice-6b definitions UI still open.
+
+**SDK-003 STATUS: core slices 0–7 COMPLETE + verified (local, unpushed).** Full engine + API + SDK +
+OpenAPI + dashboard surface for author/version/release/preview managed SMS definitions. Remaining:
+**slice 6b** (visual schema builder, interactive preview panel, template→draft conversion,
+member-draft/developer-read-only gating). Redline: ADR-0005 still `proposed` — product+security
+sign-off required (slice-0 §5) before push/publish. Next backlog item after 6b: SDK-004 (typed
+definition catalog CLI).
+- RESOLVED (2026-07-17): the `wallet/statement.integration` local failure was residue from crashed
+  test runs (fixed-hash `api_keys` + tenant rows whose `afterAll` never ran, colliding on
+  `uniq_api_key_hash`), not ledger drift. Stale tenants deleted; full API integration suite green.
+- **Still open:** ADR-0005 remains `proposed` (product+security review pending — slice-0 §5 lists the
+  asks); the runtime-vs-management authority split lands at the API layer in slice 4, not the DB grants.
+- Local-env note: this dev DB has `app_owner`/`app_migrator` table-ownership drift; running the
+  migration needed a one-off `GRANT REFERENCES ON applications, environments TO app_migrator` (not in any
+  migration — a single-owner DB, i.e. CI, does not need it). Also `drizzle-kit generate` emits composite
+  FKs before the unique indexes they reference; the `0075` SQL was hand-reordered (indexes first).
+
+## SDK-005 — managed message deliveries (2026-07-17, local, unpushed)
+
+**Persistence boundary DONE + verified** (`00dda4d`): `POST /v1/message-deliveries` sends a released
+definition by stable key through the two-phase SMS pipeline. Preview-gated eligibility; cost cap
+fails closed pre-write; atomic delivery+attempt+message+outbox insert keyed on `Idempotency-Key`;
+deterministic delivery id per tenant/app/env/key → identical replay returns the same resource with
+no second reserve/attempt/outbox; payload mismatch on a reused key → 409 via request fingerprint.
+Tables `message_deliveries`/`message_delivery_attempts` (migrations `0080`–`0082`): FORCE RLS +
+provisioner policy, composite containment FKs, retention `expires_at` + `legal_hold`.
+
+- Migration failure root-caused: drizzle-kit again emitted the attempts containment FK before its
+  target unique index — `0080` hand-reordered (same quirk as `0075`). Second bug: the tenant-tx
+  serializer rejects `Date` binds; `expiresAt` now binds `toISOString()::timestamptz`.
+- Verified: 7-test real-Postgres spec (`managed-messages.integration.spec.ts`, seeding split into
+  `managed-messages.spec-harness.ts`) incl. a **3-way concurrent same-key race → one delivery** and
+  reconciliation assertions (inline sandbox resolution propagates delivered + exact cost +
+  `resource_version` bump onto delivery/attempt); full API integration 158/158 + wallet/sms-engine
+  tiers + unit suites + typecheck green.
+- Also fixed (`1a8ccce`): flaky `webhook-http-client.spec` — 20ms shared timeout misclassified
+  outcomes under parallel load; per-case timeouts now deterministic.
+- **SDK surface DONE** (`e465876`): `fabric.messages.send(key, { to, data, idempotencyKey, … })` +
+  `retrieveDelivery(id)` with catalog-generated per-key typing; parser proven against canonical
+  `sendManagedMessageResponse`; OpenAPI paths/schemas regenerated; `release:check` green (39 tests).
+  Definitions-page Use-in-code snippet now shows `send`.
+- Evidence: `docs/sdk/evidence/sdk-005.md` (AC traceability; AC04/AC06 + purge job + dashboard
+  delivery logs + packed-example UAT still open).
+- **Delivery log DONE (list):** `GET /v1/message-deliveries` (summary rows, no recipient PII; sk_*
+  key lists its own env, dashboard tenant token names `environment_id` + sms:read) + dashboard
+  `/message-deliveries` page (per-application sandbox log, nav entry). Reads split into
+  `managed-messages-reads.ts`. 8-test spec incl. list ordering + no-PII-in-list.
+- **Retention purge DONE:** daily maintenance cron purges past-`expires_at` deliveries + attempts;
+  `legal_hold` pins indefinitely; ledger/audit untouched; advisory-locked provisioner pass
+  (`maintenance-retention.ts`); 2-test real-Postgres spec (purge/hold/fresh + no-op second pass).
+- **Detail view DONE:** `/message-deliveries/[id]` — identity facts, masked recipient, exact cost,
+  metadata, attempt timeline; list rows link through. Retrieve endpoint gained the same dual
+  authority as list (sk_* own env / tenant token names app+env); 9-test spec incl. the
+  tenant-token fail-closed + serve path.
+- **Crash recovery PROVEN (AC04):** `managed-crash-recovery.integration` — accept → crash (no
+  dispatch) → sweeper converges message/delivery/attempt on `expired`, terminal outbox event,
+  exactly-one refund, zero provider contact. Full API integration now 37 files / 164 tests.
+- **AC06 SHIPPED + PROVEN:** attempt-time rechecks on the queued dispatch path
+  (`sms-dispatch-recheck.ts` — kill-switch/consent/sender re-checked before provider contact;
+  block → refund-once + terminal event; fail-open on store errors). 3-test spec incl. replay
+  no-op. Also fixed the REAL cause of the intermittent statement-spec failures: integration specs
+  sharing raw API keys race on the globally-unique key_hash and authenticate as each other's
+  tenants — keys de-duplicated/randomized; failure-path diagnostic left in the statement spec.
+- **Remaining for SDK-005:** webhook status on the detail view, tenant export/deletion handling,
+  typed terminal-webhook consumption + packed-example sandbox UAT.
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 

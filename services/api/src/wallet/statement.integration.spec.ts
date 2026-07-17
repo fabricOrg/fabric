@@ -25,7 +25,9 @@ process.env.DATABASE_URL_APP = APP_URL;
 process.env.REDIS_QUEUE_URL = "";
 
 const TENANT = "abcdabcd-7777-4777-8777-000000000b10";
-const KEY = `sk_test_${"4".repeat(40)}`;
+// Unique to THIS spec: api_keys hashes are globally unique, so two specs sharing a raw key race
+// on uniq_api_key_hash and authenticate as each other's tenant (sms-batch used "4".repeat(40)).
+const KEY = `sk_test_${"9".repeat(40)}`;
 
 const owner = postgres(SUPER_URL, { max: 2 });
 const db = createAppDb(APP_URL, { max: 2 });
@@ -122,6 +124,30 @@ describe("statement export (B1)", () => {
     }
     // The audit identity: opening + sum(lines) === closing.
     expect(openingMinor + sum).toBe(closingMinor);
+    if (closingMinor !== 9_750n) {
+      const entries = await owner.unsafe(
+        "SELECT count(*)::int AS n FROM ledger_entries WHERE tenant_id = $1",
+        [TENANT],
+      );
+      const txns = await owner.unsafe(
+        "SELECT idempotency_key, created_at FROM ledger_transactions WHERE tenant_id = $1",
+        [TENANT],
+      );
+      const key = await owner.unsafe(
+        "SELECT tenant_id, prefix FROM api_keys WHERE key_hash = $1",
+        [hashApiKey(KEY)],
+      );
+      console.error(
+        "STATEMENT DIAG entries:",
+        JSON.stringify(entries),
+        "txns:",
+        JSON.stringify(txns),
+        "key:",
+        JSON.stringify(key),
+        "body:",
+        res.body.slice(0, 400),
+      );
+    }
     expect(closingMinor).toBe(9_750n);
 
     // And closing equals the LIVE cached balance (maintained by the write-time trigger).

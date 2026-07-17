@@ -26,7 +26,7 @@ const consentAllowAll = {
   isSuppressed: async () => false,
 } as unknown as ConsentService;
 const sendersAlwaysActive = {
-  isActiveSender: async () => true,
+  senderStatus: async () => "active" as const,
 } as unknown as SendersService;
 const liveMode = {
   resolveMode: async () => "live",

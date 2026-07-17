@@ -78,13 +78,31 @@ const event = fabric.webhooks.verify({
   secret: process.env.FABRIC_WEBHOOK_SECRET!,
 });
 
-if (event.type === "sms.delivered") {
+if (event.type === "message.delivered") {
   console.log(event.data);
+}
+
+if (event.type === "unknown") {
+  console.log("Upgrade the SDK to handle", event.originalType);
 }
 ```
 
 Verification uses HMAC-SHA256, constant-time comparison, and a five-minute timestamp tolerance by
-default. Invalid, malformed, or stale events throw `WebhookVerificationError`.
+default. Invalid, malformed, or stale events throw `WebhookVerificationError`. Known direct-message
+events are `message.sent`, `message.delivered`, `message.undelivered`, `message.failed`, and
+`message.inbound`; a correctly signed newer event returns the explicit `unknown` variant.
+
+Inspect and replay a dead endpoint-specific delivery without changing its event ID:
+
+```ts
+const dead = await fabric.webhooks.listDeliveries(endpointId, { state: "dead" });
+if (dead.data[0]) {
+  await fabric.webhooks.replayDelivery(endpointId, dead.data[0].id);
+}
+```
+
+Webhook delivery is at least once. Persist event IDs under a unique constraint before applying side
+effects; timeout-after-accept and manual replay can legitimately deliver the same event again.
 
 ## Handle errors
 
@@ -107,10 +125,10 @@ try {
 Errors never include the API key, authorization header, or message body. Optional logger callbacks
 receive only method/path/status/retry/request metadata.
 
-## Environments and production
+## Sandbox and live environments
 
-`sk_test_...` keys set `fabric.environment` to `sandbox`; `sk_live_...` keys set it to `production`.
-No separate environment setting can conflict with the key. Moving to production changes only
+`sk_test_...` keys set `fabric.environment` to `sandbox`; `sk_live_...` keys set it to `live`.
+No separate environment setting can conflict with the key. Moving to live delivery changes only
 `FABRIC_API_KEY`, but requires an approved sender ID, billing, provider configuration, and applicable
 Ghana/Nigeria compliance approval.
 
@@ -129,7 +147,7 @@ keys in client bundles, logs, commits, screenshots, or support tickets.
 - `fabric.senderIds.create`, `list`
 - `fabric.verify.start`, `check`
 - `fabric.wallet.retrieve`
-- `fabric.webhooks.create`, `list`, `remove`, `verify`
+- `fabric.webhooks.create`, `list`, `disable`, `listDeliveries`, `replayDelivery`, `verify`
 
 See [the SDK guides](../../docs/sdk/README.md) and bundled [OpenAPI reference](./openapi.json)
 for retries, security, framework patterns, versioning, and the public wire contract. Report SDK issues through the repository issue tracker and

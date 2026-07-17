@@ -1,7 +1,10 @@
 import {
   emailMessageResponse,
   listSendersResponseSchema,
+  listWebhookDeliveriesResponseSchema,
   listWebhookEndpointsResponseSchema,
+  previewMessageResponse,
+  replayWebhookDeliveryResponseSchema,
   verifyCheckResponse,
   verifyStartResponse,
   walletSnapshot,
@@ -89,6 +92,7 @@ describe("canonical contract parity", () => {
           env: "sandbox",
           secret_prefix: "whsec_abcd",
           created_at: "2026-07-12T12:00:00.000Z",
+          health: { pending: 0, dead: 0, last_delivered_at: null },
         },
       ],
       request_id: "req_webhooks",
@@ -98,6 +102,44 @@ describe("canonical contract parity", () => {
     ).resolves.toMatchObject({
       data: [{ environment: "sandbox", secretPrefix: "whsec_abcd" }],
     });
+  });
+
+  it("maps delivery history and replay responses", async () => {
+    const delivery = {
+      id: "98393ec2-2a34-4cb8-b3cc-4e25ec8b6c18",
+      endpoint_id: "98393ec2-2a34-4cb8-b3cc-4e25ec8b6c17",
+      event_id: "98393ec2-2a34-4cb8-b3cc-4e25ec8b6c19",
+      event_type: "message.delivered",
+      state: "dead" as const,
+      attempts: 10,
+      next_attempt_at: "2026-07-12T12:10:00.000Z",
+      last_attempt_at: "2026-07-12T12:09:00.000Z",
+      delivered_at: null,
+      last_error_category: "http_5xx",
+      last_http_status: 500,
+      created_at: "2026-07-12T12:00:00.000Z",
+    };
+    const listed = listWebhookDeliveriesResponseSchema.parse({
+      deliveries: [delivery],
+      request_id: "req_deliveries",
+    });
+    await expect(
+      clientReturning(listed).webhooks.listDeliveries(delivery.endpoint_id, {
+        state: "dead",
+      }),
+    ).resolves.toMatchObject({
+      data: [{ eventId: delivery.event_id, lastHttpStatus: 500 }],
+    });
+    const replayed = replayWebhookDeliveryResponseSchema.parse({
+      delivery: { ...delivery, state: "pending", attempts: 10 },
+      request_id: "req_replay",
+    });
+    await expect(
+      clientReturning(replayed).webhooks.replayDelivery(
+        delivery.endpoint_id,
+        delivery.id,
+      ),
+    ).resolves.toMatchObject({ data: { state: "pending", attempts: 10 } });
   });
 
   it("maps canonical Email responses", async () => {
@@ -153,6 +195,45 @@ describe("canonical contract parity", () => {
         status: "completed",
         acceptedCount: 1,
         items: [{ clientReference: "one" }, { errorCode: "invalid_sms" }],
+      },
+    });
+  });
+
+  it("maps a canonical message preview response", async () => {
+    const payload = previewMessageResponse.parse({
+      version_id: "2ccb4b9f-384e-4f4e-8983-ff12555223d0",
+      environment: "sandbox",
+      resolved_locale: "en",
+      blockers: [],
+      warnings: [{ path: "to", code: "recipient_not_provided" }],
+      eligible: true,
+      sender: { sender_id: "FABRIC", status: "sandbox" },
+      message_class: "transactional",
+      preview: {
+        body: "Hi Ada",
+        encoding: "gsm7",
+        length: 6,
+        segments: 1,
+        cost_minor: "3",
+        currency: "GHS",
+      },
+      request_id: "req_1",
+    });
+    await expect(
+      clientReturning(payload).messages.preview("order.shipped", {
+        data: { name: "Ada" },
+      }),
+    ).resolves.toMatchObject({
+      data: {
+        versionId: "2ccb4b9f-384e-4f4e-8983-ff12555223d0",
+        environment: "sandbox",
+        resolvedLocale: "en",
+        blockers: [],
+        warnings: [{ code: "recipient_not_provided" }],
+        eligible: true,
+        sender: { senderId: "FABRIC", status: "sandbox" },
+        messageClass: "transactional",
+        preview: { encoding: "gsm7", segments: 1, costMinor: "3" },
       },
     });
   });

@@ -23,6 +23,24 @@ export async function enqueueSmsJob(
   });
 }
 
+/** Best-effort recovery enqueue: a queue outage defers to the next maintenance tick, never throws. */
+export async function recoverPendingSmsSafely(input: {
+  db: AppDb;
+  queue: QueueService;
+  tenantId: string;
+  warn: (message: string) => void;
+}): Promise<number> {
+  if (!input.queue.enabled) return 0;
+  try {
+    return await recoverPendingSms(input);
+  } catch (error) {
+    input.warn(
+      `sms-send recovery enqueue deferred for ${input.tenantId}: ${error instanceof Error ? error.message : "unknown"}`,
+    );
+    return 0;
+  }
+}
+
 export async function recoverPendingSms(input: {
   db: AppDb;
   queue: QueueService;

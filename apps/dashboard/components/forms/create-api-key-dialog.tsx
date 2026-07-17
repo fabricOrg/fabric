@@ -1,6 +1,11 @@
 "use client";
 
-import type { ApiKeyEnv } from "@app/contracts";
+import {
+  type ApiKeyEnv,
+  type ApiKeyScope,
+  apiKeyScopes,
+  apiKeyScopeValues,
+} from "@app/contracts";
 import {
   Alert,
   AlertDescription,
@@ -33,18 +38,60 @@ import { useState } from "react";
 import { z } from "zod";
 import { toastApiError } from "@/lib/error-toast";
 
-/** Scopes a customer key can carry today (the data-plane routes that check them). */
-const AVAILABLE_SCOPES = [
-  "sms:send",
-  "sms:read",
-  "email:send",
-  "email:read",
-  "wallet:read",
-] as const;
+const SCOPE_DETAILS: Record<
+  ApiKeyScope,
+  { readonly label: string; readonly description: string }
+> = {
+  "sms:send": {
+    label: "Send and manage SMS",
+    description: "Send messages and manage templates, senders, and consent.",
+  },
+  "sms:read": {
+    label: "Read SMS activity",
+    description: "Read messages, templates, senders, and consent records.",
+  },
+  "email:send": {
+    label: "Send email",
+    description: "Send transactional email through this environment.",
+  },
+  "email:read": {
+    label: "Read email activity",
+    description: "Read email messages, delivery records, and content previews.",
+  },
+  "wallet:read": {
+    label: "Wallet and payments",
+    description: "Read wallet data and initiate payment transaction flows.",
+  },
+  "request_logs:read": {
+    label: "Read request logs",
+    description: "Inspect this application's API request history.",
+  },
+  "api_keys:read": {
+    label: "Read webhooks",
+    description: "List webhook endpoints for this application.",
+  },
+  "api_keys:write": {
+    label: "Manage webhooks",
+    description: "Create and remove webhook endpoints.",
+  },
+  "definitions:read": {
+    label: "Read definition contracts",
+    description:
+      "Generate typed keys, payloads, channels, and locales for this environment.",
+  },
+  "messages:send": {
+    label: "Send managed messages",
+    description: "Send released definitions by stable key in this environment.",
+  },
+  "messages:read": {
+    label: "Read managed deliveries",
+    description: "Retrieve managed delivery status, attempts, and cost.",
+  },
+};
 
 const schema = z.object({
   name: z.string().trim().min(1, "Name your key."),
-  scopes: z.array(z.string()).min(1, "Pick at least one scope."),
+  scopes: apiKeyScopes,
   expiresInDays: z.number(), // 0 = never expires
 });
 
@@ -82,7 +129,7 @@ export function CreateApiKeyDialog({
   const form = useForm({
     defaultValues: {
       name: "",
-      scopes: ["sms:send"] as string[],
+      scopes: ["sms:send"] as ApiKeyScope[],
       expiresInDays: 0,
     },
     validators: { onChange: schema },
@@ -121,7 +168,7 @@ export function CreateApiKeyDialog({
     router.refresh(); // re-SSR so the new key (prefix only) appears authoritatively
   }
 
-  const envLabel = env === "live" ? "live" : "test";
+  const envLabel = env === "live" ? "live" : "sandbox";
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
@@ -146,7 +193,7 @@ export function CreateApiKeyDialog({
               <DialogDescription>
                 {env === "live"
                   ? "A live key spends real money and delivers to carriers."
-                  : "A test key is sandboxed — it never charges or sends."}{" "}
+                  : "A sandbox key never charges or reaches real recipients."}{" "}
                 The secret is shown once after creation.
               </DialogDescription>
             </DialogHeader>
@@ -175,7 +222,7 @@ export function CreateApiKeyDialog({
                 {(field) => {
                   const invalid = fieldInvalid(field);
                   const selected = field.state.value;
-                  const toggleScope = (s: string) =>
+                  const toggleScope = (s: ApiKeyScope) =>
                     field.handleChange(
                       selected.includes(s)
                         ? selected.filter((x) => x !== s)
@@ -183,10 +230,11 @@ export function CreateApiKeyDialog({
                     );
                   return (
                     <Field data-invalid={invalid || undefined}>
-                      <FieldLabel>Scopes</FieldLabel>
-                      <div className="flex flex-wrap gap-2">
-                        {AVAILABLE_SCOPES.map((s) => {
+                      <FieldLabel>Permissions</FieldLabel>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {apiKeyScopeValues.map((s) => {
                           const on = selected.includes(s);
+                          const detail = SCOPE_DETAILS[s];
                           return (
                             <Button
                               key={s}
@@ -194,11 +242,31 @@ export function CreateApiKeyDialog({
                               size="sm"
                               variant={on ? "default" : "outline"}
                               aria-pressed={on}
-                              className="font-mono"
+                              className="h-auto min-h-16 justify-start whitespace-normal px-3 py-2 text-left"
                               onClick={() => toggleScope(s)}
                             >
                               {on ? <Check data-icon="inline-start" /> : null}
-                              {s}
+                              <span className="flex flex-col items-start gap-0.5">
+                                <span>{detail.label}</span>
+                                <span
+                                  className={
+                                    on
+                                      ? "text-xs text-primary-foreground/80"
+                                      : "text-xs text-muted-foreground"
+                                  }
+                                >
+                                  {detail.description}
+                                </span>
+                                <span
+                                  className={
+                                    on
+                                      ? "font-mono text-xs text-primary-foreground/80"
+                                      : "font-mono text-xs text-muted-foreground"
+                                  }
+                                >
+                                  {s}
+                                </span>
+                              </span>
                             </Button>
                           );
                         })}

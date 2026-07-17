@@ -5,6 +5,7 @@ import {
   type ListMembersResponse,
   listMembersResponseSchema,
   type MemberDto,
+  type MembershipPermission,
   memberDtoSchema,
   type UpdateMemberRequest,
 } from "@app/contracts";
@@ -40,6 +41,7 @@ export async function listMembers(
 export async function inviteMember(
   tenantId: string,
   request: InviteMemberRequest,
+  actorEmail: string | null,
 ): Promise<MemberDto> {
   const { baseUrl, bffToken } = backendConfiguration();
   const response = await fetch(
@@ -50,6 +52,7 @@ export async function inviteMember(
       headers: {
         "content-type": "application/json",
         "x-bff-token": bffToken,
+        ...(actorEmail ? { "x-actor-email": actorEmail } : {}),
       },
       body: JSON.stringify(request),
     },
@@ -63,6 +66,7 @@ export async function updateMemberRole(
   tenantId: string,
   userId: string,
   request: UpdateMemberRequest,
+  actorEmail: string | null,
 ): Promise<MemberDto> {
   const { baseUrl, bffToken } = backendConfiguration();
   const response = await fetch(
@@ -73,8 +77,37 @@ export async function updateMemberRole(
       headers: {
         "content-type": "application/json",
         "x-bff-token": bffToken,
+        ...(actorEmail ? { "x-actor-email": actorEmail } : {}),
       },
       body: JSON.stringify(request),
+    },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw new BffError(response.status, payload);
+  return memberDtoSchema.parse(payload);
+}
+
+export async function setMemberPermissions(
+  tenantId: string,
+  userId: string,
+  permissions: readonly MembershipPermission[],
+  actorEmail: string | null,
+): Promise<MemberDto> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL(
+      `/internal/tenants/${tenantId}/members/${userId}/permissions`,
+      baseUrl,
+    ),
+    {
+      method: "PUT",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-bff-token": bffToken,
+        ...(actorEmail ? { "x-actor-email": actorEmail } : {}),
+      },
+      body: JSON.stringify({ permissions }),
     },
   );
   const payload = (await response.json()) as unknown;
@@ -85,6 +118,7 @@ export async function updateMemberRole(
 export async function removeMember(
   tenantId: string,
   userId: string,
+  actorEmail: string | null,
 ): Promise<void> {
   const { baseUrl, bffToken } = backendConfiguration();
   const response = await fetch(
@@ -92,7 +126,10 @@ export async function removeMember(
     {
       method: "DELETE",
       cache: "no-store",
-      headers: { "x-bff-token": bffToken },
+      headers: {
+        "x-bff-token": bffToken,
+        ...(actorEmail ? { "x-actor-email": actorEmail } : {}),
+      },
     },
   );
   if (!response.ok) {

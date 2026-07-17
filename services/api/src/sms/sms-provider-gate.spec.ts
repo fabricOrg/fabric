@@ -33,7 +33,7 @@ const config = { get: () => undefined } as unknown as ConfigService; // provider
 const queue = { enabled: false } as unknown as QueueService;
 // E10-S4: sender enforcement has its own spec — always registered here.
 const senderStub = {
-  isActiveSender: async () => true,
+  senderStatus: async () => "active" as const,
 } as unknown as SendersService;
 const consentStub = {
   isSuppressed: async () => false,
@@ -105,7 +105,7 @@ describe("SmsService provider kill-switch gate", () => {
       get: (key: string) => liveValues[key],
     } as unknown as ConfigService;
     const isPaused = vi.fn(async () => false);
-    const isActiveSender = vi.fn(async () => true);
+    const senderStatus = vi.fn(async () => "active" as const);
     const subjectForPhone = vi.fn(async () => randomUUID());
     const svc = new SmsService(
       db,
@@ -113,7 +113,7 @@ describe("SmsService provider kill-switch gate", () => {
       { isPaused } as unknown as KillSwitchService,
       liveConfig,
       queue,
-      { isActiveSender } as unknown as SendersService,
+      { senderStatus } as unknown as SendersService,
       consentStub,
       virtualPhoneStub,
       { subjectForPhone } as unknown as PiiVaultService,
@@ -126,7 +126,7 @@ describe("SmsService provider kill-switch gate", () => {
         (error.getResponse() as { error?: { code?: string } }).error?.code ===
           "live_recipient_not_allowed",
     );
-    expect(isActiveSender).not.toHaveBeenCalled();
+    expect(senderStatus).not.toHaveBeenCalled();
     expect(subjectForPhone).not.toHaveBeenCalled();
   });
 });

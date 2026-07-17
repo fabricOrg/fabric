@@ -39,7 +39,11 @@ export async function POST(request: Request) {
         { status: 422 },
       );
     }
-    const member = await inviteMember(session.orgId, parsed.data);
+    const member = await inviteMember(
+      session.orgId,
+      parsed.data,
+      session.email ?? null,
+    );
     return NextResponse.json(member, { status: 201 });
   } catch (error) {
     return error instanceof BffError

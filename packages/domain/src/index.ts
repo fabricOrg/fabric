@@ -8,5 +8,7 @@
 // No I/O, no NestJS, no Drizzle — just types (from @app/contracts) in, decisions out.
 
 export * from "./billing.js";
+export * from "./message-definition-compatibility.js";
+export * from "./message-render.js";
 export * from "./rating.js";
 export * from "./segmentation.js";

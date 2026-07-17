@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type {
   CreateWebhookEndpointRequest,
   CreateWebhookEndpointResponse,
+  WebhookDeliveryDto,
   WebhookEndpointDto,
 } from "@app/contracts";
 import {
@@ -9,42 +10,39 @@ import {
   type ApplicationId,
   applications,
   environments,
+  outboxEvents,
   type TenantId,
-  type WebhookEndpoint,
+  webhookDeliveries,
   webhookEndpoints,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq } from "drizzle-orm";
+import { ConfigService } from "@nestjs/config";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { AuditService } from "../audit/audit.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
+import { emptyHealth, toDeliveryDto, toEndpointDto } from "./webhook-dto.js";
+import { resolveWebhookTarget } from "./webhook-url-policy.js";
 
-/**
- * Tenant webhook endpoint CRUD (finding 8) — /v1/webhooks. Tenant-scoped via withTenantDrizzle
- * (RLS guards the raw signing secret; only this tenant's context can read it). The secret is
- * generated here, returned ONCE, and afterwards only its prefix ever leaves the API.
- */
 @Injectable()
 export class WebhooksService {
-  constructor(@Inject(APP_DB) private readonly db: AppDb) {}
+  constructor(
+    @Inject(APP_DB) private readonly db: AppDb,
+    @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(AuditService) private readonly audit: AuditService,
+  ) {}
 
   async create(
     tenantId: string,
     request: CreateWebhookEndpointRequest,
     opts: { applicationId?: string; envType?: "sandbox" | "live" } = {},
   ): Promise<CreateWebhookEndpointResponse> {
-    // whsec_ + 32 random bytes — verifiable HMAC key, recognizable prefix (Stripe convention).
+    await resolveWebhookTarget(request.url, this.allowPrivateNetworks());
     const secret = `whsec_${randomBytes(32).toString("base64url")}`;
     const envType = opts.envType ?? "sandbox";
     const row = await this.db.withTenantDrizzle(tenantId, async (tx) => {
-      // ADR-0004: an endpoint belongs to one application-environment. Mint into the NAMED application
-      // (the dashboard's app-detail page) or the workspace's `default` app; the env is the chosen
-      // type. Env-filtered DELIVERY (only an env's events reach its endpoints) lands with #8, once
-      // outbox events carry an env — endpoints are already partitioned by env here.
       const [env] = await tx
-        .select({
-          appId: environments.applicationId,
-          envId: environments.id,
-        })
+        .select({ appId: environments.applicationId, envId: environments.id })
         .from(environments)
         .innerJoin(
           applications,
@@ -61,8 +59,6 @@ export class WebhooksService {
         )
         .limit(1);
       if (!env) {
-        // A named application with no such env → the caller referenced an app not in this workspace
-        // (RLS scopes the join); without one, the default app is missing — a provisioning bug.
         if (opts.applicationId) {
           throw invalidRequest(
             "application_not_found",
@@ -88,7 +84,7 @@ export class WebhooksService {
       if (!created) throw new Error("webhook endpoint insert returned no row");
       return created;
     });
-    return { ...toDto(row, envType), secret };
+    return { ...toEndpointDto(row, envType, emptyHealth()), secret };
   }
 
   async list(
@@ -100,6 +96,19 @@ export class WebhooksService {
         .select({
           endpoint: webhookEndpoints,
           envType: environments.type,
+          pending: sql<number>`(
+            SELECT count(*)::int FROM webhook_deliveries d
+            WHERE d.endpoint_id = ${webhookEndpoints.id}
+              AND d.state IN ('pending', 'delivering')
+          )`,
+          dead: sql<number>`(
+            SELECT count(*)::int FROM webhook_deliveries d
+            WHERE d.endpoint_id = ${webhookEndpoints.id} AND d.state = 'dead'
+          )`,
+          lastDeliveredAt: sql<Date | null>`(
+            SELECT max(d.delivered_at) FROM webhook_deliveries d
+            WHERE d.endpoint_id = ${webhookEndpoints.id}
+          )`,
         })
         .from(webhookEndpoints)
         .innerJoin(
@@ -119,38 +128,142 @@ export class WebhooksService {
         )
         .orderBy(asc(webhookEndpoints.createdAt)),
     );
-    return rows.map((r) => toDto(r.endpoint, r.envType));
+    return rows.map((row) =>
+      toEndpointDto(row.endpoint, row.envType, {
+        pending: Number(row.pending),
+        dead: Number(row.dead),
+        last_delivered_at: row.lastDeliveredAt
+          ? new Date(String(row.lastDeliveredAt)).toISOString()
+          : null,
+      }),
+    );
   }
 
-  async remove(tenantId: string, id: string): Promise<void> {
-    const deleted = await this.db.withTenantDrizzle(tenantId, (tx) =>
-      tx
-        .delete(webhookEndpoints)
+  async listDeliveries(
+    tenantId: string,
+    endpointId: string,
+    state?: "pending" | "delivering" | "delivered" | "dead",
+  ): Promise<WebhookDeliveryDto[]> {
+    return this.db.withTenantDrizzle(tenantId, async (tx) => {
+      const rows = await tx
+        .select({
+          delivery: webhookDeliveries,
+          eventType: outboxEvents.eventType,
+        })
+        .from(webhookDeliveries)
+        .innerJoin(outboxEvents, eq(outboxEvents.id, webhookDeliveries.eventId))
+        .where(
+          and(
+            eq(webhookDeliveries.tenantId, tenantId as TenantId),
+            eq(webhookDeliveries.endpointId, endpointId),
+            state ? eq(webhookDeliveries.state, state) : undefined,
+          ),
+        )
+        .orderBy(desc(webhookDeliveries.createdAt))
+        .limit(100);
+      return rows.map((row) => toDeliveryDto(row.delivery, row.eventType));
+    });
+  }
+
+  async disable(tenantId: string, id: string): Promise<void> {
+    const disabled = await this.db.withTenantDrizzle(tenantId, async (tx) => {
+      const rows = await tx
+        .update(webhookEndpoints)
+        .set({ status: "disabled", updatedAt: new Date() })
         .where(
           and(
             eq(webhookEndpoints.tenantId, tenantId as TenantId),
             eq(webhookEndpoints.id, id),
           ),
         )
-        .returning({ id: webhookEndpoints.id }),
-    );
-    if (deleted.length === 0) {
+        .returning({ id: webhookEndpoints.id });
+      if (rows.length === 0) return rows;
+      await tx.execute(sql`
+        UPDATE webhook_deliveries
+        SET state = 'dead', lease_token = NULL, lease_expires_at = NULL,
+            last_error_category = 'endpoint_disabled', updated_at = now()
+        WHERE endpoint_id = ${id}::uuid AND state IN ('pending', 'delivering')
+      `);
+      await tx.execute(sql`
+        UPDATE outbox_events o SET delivered_at = now(), updated_at = now()
+        WHERE o.delivered_at IS NULL
+          AND EXISTS (SELECT 1 FROM webhook_deliveries d WHERE d.event_id = o.id)
+          AND NOT EXISTS (
+            SELECT 1 FROM webhook_deliveries d
+            WHERE d.event_id = o.id AND d.state IN ('pending', 'delivering')
+          )
+      `);
+      return rows;
+    });
+    if (disabled.length === 0) {
       throw notFound("webhook_not_found", "No webhook endpoint with that id.");
     }
   }
-}
 
-function toDto(
-  row: WebhookEndpoint,
-  env: "sandbox" | "live",
-): WebhookEndpointDto {
-  return {
-    id: row.id,
-    url: row.url,
-    status: row.status === "disabled" ? "disabled" : "active",
-    description: row.description,
-    env,
-    secret_prefix: `${row.secret.slice(0, 10)}…`,
-    created_at: row.createdAt.toISOString(),
-  };
+  async replay(
+    tenantId: string,
+    endpointId: string,
+    deliveryId: string,
+    actorKeyId: string,
+  ): Promise<WebhookDeliveryDto> {
+    const replayed = await this.db.withTenantDrizzle(tenantId, async (tx) => {
+      const [row] = await tx
+        .update(webhookDeliveries)
+        .set({
+          state: "pending",
+          cycleAttempts: 0,
+          nextAttemptAt: new Date(),
+          leaseToken: null,
+          leaseExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(webhookDeliveries.tenantId, tenantId as TenantId),
+            eq(webhookDeliveries.endpointId, endpointId),
+            eq(webhookDeliveries.id, deliveryId),
+            eq(webhookDeliveries.state, "dead"),
+            sql`EXISTS (
+              SELECT 1 FROM webhook_endpoints e
+              WHERE e.id = ${endpointId}::uuid AND e.status = 'active'
+            )`,
+          ),
+        )
+        .returning();
+      if (!row) return null;
+      const [event] = await tx
+        .select({ eventType: outboxEvents.eventType })
+        .from(outboxEvents)
+        .where(eq(outboxEvents.id, row.eventId))
+        .limit(1);
+      if (!event) throw new Error("webhook delivery has no outbox event");
+      await tx
+        .update(outboxEvents)
+        .set({ deliveredAt: null, updatedAt: new Date() })
+        .where(eq(outboxEvents.id, row.eventId));
+      return toDeliveryDto(row, event.eventType);
+    });
+    if (!replayed) {
+      throw notFound(
+        "webhook_delivery_not_replayable",
+        "No dead webhook delivery with that id exists for this endpoint.",
+      );
+    }
+    await this.audit.record({
+      action: "webhook_delivery.replay",
+      targetType: "webhook_delivery",
+      targetId: deliveryId,
+      summary: "Customer replayed a dead webhook delivery.",
+      metadata: {
+        tenant_id: tenantId,
+        endpoint_id: endpointId,
+        actor_key_id: actorKeyId,
+      },
+    });
+    return replayed;
+  }
+
+  private allowPrivateNetworks(): boolean {
+    return this.config.get<string>("WEBHOOK_ALLOW_PRIVATE_NETWORKS") === "true";
+  }
 }

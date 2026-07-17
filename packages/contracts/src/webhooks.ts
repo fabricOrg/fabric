@@ -29,6 +29,11 @@ export const webhookEndpointSchema = z.object({
   /** whsec_ prefix only — the full secret is shown once at creation. */
   secret_prefix: z.string(),
   created_at: z.string(),
+  health: z.object({
+    pending: z.number().int().nonnegative(),
+    dead: z.number().int().nonnegative(),
+    last_delivered_at: z.string().nullable(),
+  }),
 });
 export type WebhookEndpointDto = z.infer<typeof webhookEndpointSchema>;
 
@@ -48,4 +53,43 @@ export const listWebhookEndpointsResponseSchema = z.object({
 });
 export type ListWebhookEndpointsResponse = z.infer<
   typeof listWebhookEndpointsResponseSchema
+>;
+
+export const webhookDeliveryStateSchema = z.enum([
+  "pending",
+  "delivering",
+  "delivered",
+  "dead",
+]);
+
+export const webhookDeliverySchema = z.object({
+  id: z.string().uuid(),
+  endpoint_id: z.string().uuid(),
+  event_id: z.string().uuid(),
+  event_type: z.string(),
+  state: webhookDeliveryStateSchema,
+  attempts: z.number().int().nonnegative(),
+  next_attempt_at: z.string(),
+  last_attempt_at: z.string().nullable(),
+  delivered_at: z.string().nullable(),
+  last_error_category: z.string().nullable(),
+  last_http_status: z.number().int().nullable(),
+  created_at: z.string(),
+});
+export type WebhookDeliveryDto = z.infer<typeof webhookDeliverySchema>;
+
+export const listWebhookDeliveriesResponseSchema = z.object({
+  deliveries: z.array(webhookDeliverySchema),
+  request_id: z.string(),
+});
+export type ListWebhookDeliveriesResponse = z.infer<
+  typeof listWebhookDeliveriesResponseSchema
+>;
+
+export const replayWebhookDeliveryResponseSchema = z.object({
+  delivery: webhookDeliverySchema,
+  request_id: z.string(),
+});
+export type ReplayWebhookDeliveryResponse = z.infer<
+  typeof replayWebhookDeliveryResponseSchema
 >;

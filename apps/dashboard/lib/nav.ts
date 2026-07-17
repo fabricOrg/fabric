@@ -8,6 +8,7 @@ import {
   type LucideIcon,
   Mail,
   Megaphone,
+  PackageCheck,
   Send,
   ShieldCheck,
   Smartphone,
@@ -65,6 +66,11 @@ export const navGroups: readonly NavGroup[] = [
         preview: true,
       },
       { title: "Messages", href: "/messages", icon: List },
+      {
+        title: "Managed deliveries",
+        href: "/message-deliveries",
+        icon: PackageCheck,
+      },
       { title: "Emails", href: "/emails", icon: Mail },
       {
         title: "Number verification",

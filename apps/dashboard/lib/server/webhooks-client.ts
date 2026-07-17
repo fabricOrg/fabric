@@ -3,7 +3,10 @@ import "server-only";
 import {
   type CreateWebhookEndpointResponse,
   createWebhookEndpointResponseSchema,
+  listWebhookDeliveriesResponseSchema,
   listWebhookEndpointsResponseSchema,
+  replayWebhookDeliveryResponseSchema,
+  type WebhookDeliveryDto,
   type WebhookEndpointDto,
 } from "@app/contracts";
 import { dashboardApi } from "./api-client";
@@ -47,4 +50,28 @@ export async function deleteWebhook(id: string): Promise<void> {
     "api_keys:write",
     { method: "DELETE" },
   );
+}
+
+export async function listWebhookDeliveries(
+  endpointId: string,
+  state?: "pending" | "delivering" | "delivered" | "dead",
+): Promise<WebhookDeliveryDto[]> {
+  const query = state ? `?state=${state}` : "";
+  const payload = await dashboardApi<unknown>(
+    `/v1/webhooks/${encodeURIComponent(endpointId)}/deliveries${query}`,
+    "api_keys:read",
+  );
+  return listWebhookDeliveriesResponseSchema.parse(payload).deliveries;
+}
+
+export async function replayWebhookDelivery(
+  endpointId: string,
+  deliveryId: string,
+): Promise<WebhookDeliveryDto> {
+  const payload = await dashboardApi<unknown>(
+    `/v1/webhooks/${encodeURIComponent(endpointId)}/deliveries/${encodeURIComponent(deliveryId)}/replay`,
+    "api_keys:write",
+    { method: "POST" },
+  );
+  return replayWebhookDeliveryResponseSchema.parse(payload).delivery;
 }

@@ -1,14 +1,19 @@
 import { createHmac } from "node:crypto";
+import { webhookEventType } from "@app/contracts";
 import { describe, expect, it } from "vitest";
-import { Fabric, WebhookVerificationError } from "./index.js";
+import {
+  Fabric,
+  KNOWN_WEBHOOK_EVENT_TYPES,
+  WebhookVerificationError,
+} from "./index.js";
 
 const secret = "whsec_example";
 const now = new Date("2026-07-12T12:00:00.000Z");
 const timestamp = Math.floor(now.getTime() / 1000);
 const payload = JSON.stringify({
   id: "evt_1",
-  type: "sms.delivered",
-  data: { messageId: "msg_1" },
+  type: "message.delivered",
+  data: { message_id: "msg_1", status: "delivered" },
 });
 
 function signature(body = payload, time = timestamp): string {
@@ -21,8 +26,12 @@ function signature(body = payload, time = timestamp): string {
 describe("webhook verification", () => {
   const webhooks = new Fabric({ apiKey: "sk_test_example" }).webhooks;
 
+  it("matches the canonical shared event catalog", () => {
+    expect(KNOWN_WEBHOOK_EVENT_TYPES).toEqual(webhookEventType.options);
+  });
+
   it("verifies and parses the exact raw payload", () => {
-    const event = webhooks.verify<{ messageId: string }>({
+    const event = webhooks.verify({
       payload,
       signature: signature(),
       secret,
@@ -30,8 +39,8 @@ describe("webhook verification", () => {
     });
     expect(event).toEqual({
       id: "evt_1",
-      type: "sms.delivered",
-      data: { messageId: "msg_1" },
+      type: "message.delivered",
+      data: { messageId: "msg_1", status: "delivered" },
     });
   });
 
@@ -59,7 +68,40 @@ describe("webhook verification", () => {
         signature: signature(body),
         secret,
         now,
-      }).type,
-    ).toBe("future.created");
+      }),
+    ).toMatchObject({ type: "unknown", originalType: "future.created" });
+  });
+
+  it("maps canonical inbound event data", () => {
+    const body = JSON.stringify({
+      type: "message.inbound",
+      data: { id: "inbound_1", channel: "sms" },
+    });
+    expect(
+      webhooks.verify({
+        payload: body,
+        signature: signature(body),
+        secret,
+        now,
+      }),
+    ).toMatchObject({
+      type: "message.inbound",
+      data: { messageId: "inbound_1", channel: "sms" },
+    });
+  });
+
+  it("rejects a signed known event whose data violates the SDK contract", () => {
+    const body = JSON.stringify({
+      type: "message.delivered",
+      data: { status: "delivered" },
+    });
+    expect(() =>
+      webhooks.verify({
+        payload: body,
+        signature: signature(body),
+        secret,
+        now,
+      }),
+    ).toThrow(WebhookVerificationError);
   });
 });

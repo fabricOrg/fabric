@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { customerRoleWireSchema } from "./identity.js";
+import { membershipPermission } from "./permissions.js";
 
 /**
  * Team-member management for a tenant (dashboard). Owners/admins invite teammates into their org.
@@ -42,6 +43,11 @@ export const memberDtoSchema = z
     developer_access: z.boolean().optional(),
     status: z.enum(["active", "invited", "disabled"]),
     updated_at: z.string(),
+    // Effective permission set (per-user override if set, else the role baseline). Drives the
+    // per-user permission editor and reflects exactly what the session will carry. Present on list.
+    permissions: z.array(membershipPermission).optional(),
+    // True when this user has an explicit per-user override (role is no longer just its template).
+    permissions_customized: z.boolean().optional(),
   })
   .transform((value) => ({
     ...value,
