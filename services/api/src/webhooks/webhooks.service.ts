@@ -9,6 +9,7 @@ import {
   type AppDb,
   type ApplicationId,
   applications,
+  type EnvironmentId,
   environments,
   outboxEvents,
   type TenantId,
@@ -35,14 +36,22 @@ export class WebhooksService {
   async create(
     tenantId: string,
     request: CreateWebhookEndpointRequest,
-    opts: { applicationId?: string; envType?: "sandbox" | "live" } = {},
+    opts: {
+      applicationId?: string;
+      environmentId?: string;
+      envType?: "sandbox" | "live";
+    } = {},
   ): Promise<CreateWebhookEndpointResponse> {
     await resolveWebhookTarget(request.url, this.allowPrivateNetworks());
     const secret = `whsec_${randomBytes(32).toString("base64url")}`;
-    const envType = opts.envType ?? "sandbox";
-    const row = await this.db.withTenantDrizzle(tenantId, async (tx) => {
+    const requestedEnvType = opts.envType ?? "sandbox";
+    const resolved = await this.db.withTenantDrizzle(tenantId, async (tx) => {
       const [env] = await tx
-        .select({ appId: environments.applicationId, envId: environments.id })
+        .select({
+          appId: environments.applicationId,
+          envId: environments.id,
+          envType: environments.type,
+        })
         .from(environments)
         .innerJoin(
           applications,
@@ -51,14 +60,28 @@ export class WebhooksService {
         .where(
           and(
             eq(applications.tenantId, tenantId as TenantId),
-            opts.applicationId
-              ? eq(applications.id, opts.applicationId as ApplicationId)
-              : eq(applications.slug, "default"),
-            eq(environments.type, envType),
+            // sk_* key → its exact env (ADR-0004); BFF token → named app, else legacy default app.
+            opts.environmentId
+              ? eq(environments.id, opts.environmentId as EnvironmentId)
+              : opts.applicationId
+                ? and(
+                    eq(applications.id, opts.applicationId as ApplicationId),
+                    eq(environments.type, requestedEnvType),
+                  )
+                : and(
+                    eq(applications.slug, "default"),
+                    eq(environments.type, requestedEnvType),
+                  ),
           ),
         )
         .limit(1);
       if (!env) {
+        if (opts.environmentId) {
+          throw notFound(
+            "environment_not_found",
+            "This key's environment no longer exists.",
+          );
+        }
         if (opts.applicationId) {
           throw invalidRequest(
             "application_not_found",
@@ -66,8 +89,12 @@ export class WebhooksService {
             "application_id",
           );
         }
-        throw new Error(
-          `workspace ${tenantId} has no default ${envType} environment`,
+        // Structured, never a bare throw (which surfaced as a 500) — a workspace whose app isn't
+        // slugged "default" is told to name one.
+        throw invalidRequest(
+          "application_required",
+          "Specify which application this webhook belongs to.",
+          "application_id",
         );
       }
       const [created] = await tx
@@ -82,9 +109,12 @@ export class WebhooksService {
         })
         .returning();
       if (!created) throw new Error("webhook endpoint insert returned no row");
-      return created;
+      return { created, envType: env.envType };
     });
-    return { ...toEndpointDto(row, envType, emptyHealth()), secret };
+    return {
+      ...toEndpointDto(resolved.created, resolved.envType, emptyHealth()),
+      secret,
+    };
   }
 
   async list(
