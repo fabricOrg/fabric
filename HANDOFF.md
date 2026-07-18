@@ -3,7 +3,49 @@
 _Snapshot: 2026-07-18. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-18): ADR-0008 — Fabric-owned auth screens (WorkOS behind the scenes)
+## Latest (2026-07-18): stakeholder-testing hardening — customer journey verified end-to-end (PRs #151–#153)
+
+All four apps live on the free testing stack (Neon + Render + Vercel). Swept the whole customer
+journey with a real all-permissions **sandbox** key against the deployed API and closed every gap.
+Each fix was deployed + re-verified in prod (API `fabric-jezz.onrender.com`, dashboard
+`fabric-dashboard-teal`, playground `fabric-playground-red`). Stakeholders sign in with
+`fabricservices8@gmail.com`.
+
+- **#151** — (a) `verify.start` routed the OTP via the tenant/plan delivery mode, so a sandbox key
+  demanded the live carrier (`live_provider_not_ready`); now threads the key's environment → routes
+  virtual like `sms.send`. (b) `live_provider_not_ready` no longer leaks the carrier name ("Arkesel").
+  (c) `messages:read`/`messages:send` added to the membership permission catalog + member baseline —
+  the "Managed deliveries" nav was gated on a permission NO membership (not even owner/admin FULL)
+  could hold. (d) Seed scripts now set `plan:"sandbox"`: the schema default `"free"` made the
+  dashboard treat a workspace as **live** and hide every sandbox key/log/webhook/email, because the
+  dashboard derives the shown environment from `session.plan === "sandbox"`. Live data corrected too.
+- **#152** — (a) playground `email.*` was broken: it pinned published `@fabric-messaging/sdk@beta.3`,
+  which predates the email resource (npm stops at beta.3). Vendored the workspace SDK `beta.5` as a
+  packed tarball (`file:` dep) — **no public npm publish**. (b) `webhooks.create` 500'd for `sk_*`
+  keys — it ignored the key's own application-environment and fell back to the app slugged `default`;
+  a renamed app matched nothing → bare `throw` → 500. Now binds the key's environment; structured
+  errors on the not-found paths.
+- **#153** — Messages → **Insights** tab de-mocked: real `GET /v1/messages/insights` aggregates the
+  tenant's `messages` (total_sent / delivered / failed / avg_segments + error breakdown). Was a
+  hardcoded BFF stub (24,817 sent, Twilio codes 30008/30003…).
+
+**Full SDK sweep green** (deployed API, sandbox key): sms.send/list/retrieve/sendBatch/retrieveBatch ·
+email.send/list/retrieve · verify.start · wallet.retrieve · senderIds.list/create ·
+webhooks.create/list/remove/verify/signAndVerify.
+
+**Deploy mechanics (this stack):** Render API key is in Infisical (`RENDER_API_KEY`) — trigger a
+deploy with `POST api.render.com/v1/services/srv-d9dfr6ernols73cbf0i0/deploys`, poll the deploy id
+for status `live` (~5 min build). Vercel: `vercel deploy --prod` from the **repo root** with the
+project linked (`--project fabric-dashboard|fabric-playground --scope in-hot`); the project's
+root-directory setting drives the monorepo build. The REST token in auth.json goes stale (403
+`invalidToken`) — the CLI auto-refreshes, so use the CLI, not raw REST.
+
+**Follow-ups:** publish `@fabric-messaging/sdk@beta.5` to npm (redline — needs human go) so external
+users get email; add an integration test for the insights aggregation; the playground has no
+`messages.send` action so "Managed deliveries" can't be exercised from it; the shared sandbox test
+key is to be revoked by the owner.
+
+## Earlier (2026-07-18): ADR-0008 — Fabric-owned auth screens (WorkOS behind the scenes)
 
 Branch `feature/ops-adr0008-custom-auth-screens` (off dev `2f457f6`, after ADR-0007 #146 merged).
 ADR-0008 **accepted** — own the credential pixels, WorkOS stays the identity engine. Amends the
