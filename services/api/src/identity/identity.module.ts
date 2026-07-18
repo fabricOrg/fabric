@@ -7,7 +7,6 @@ import { BffTokenGuard } from "./bff-token.guard.js";
 import { IdentityController } from "./identity.controller.js";
 import { IdentityService } from "./identity.service.js";
 import { ProvisioningDbModule } from "./provisioning-db.module.js";
-import { SelfServeProvisioningService } from "./self-serve-provisioning.service.js";
 import { StaffService } from "./staff.service.js";
 import { StaffAdminController } from "./staff-admin.controller.js";
 import { StaffIdentityController } from "./staff-identity.controller.js";
@@ -29,7 +28,6 @@ import { WorkspaceProvisioningService } from "./workspace-provisioning.service.j
     IdentityService,
     UserSessionService,
     WorkspaceProvisioningService,
-    SelfServeProvisioningService,
     StaffService,
     BffTokenGuard,
     WorkosWebhookService,

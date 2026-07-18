@@ -1,8 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-// Shared between the ADR-0002 org-scoped signup path (self-serve-provisioning) and the
-// ADR-0007 local-only onboarding path (workspace-provisioning). The org-scoped path retires
-// with the resolve-v1 fallback; these helpers stay.
+// Signup/onboarding gates shared by workspace provisioning (ADR-0007 local-only path).
 
 /** Sandbox tenants are a PLAN state, not a separate environment (ADR-0002 / F3). */
 export const SANDBOX_PLAN = "sandbox";

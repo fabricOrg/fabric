@@ -135,86 +135,36 @@ async function exchangeAndResolve(
   if (!response.sealedSession) {
     return { session: null, sealedCookie: null };
   }
-  let sealedCookie = response.sealedSession;
-  let session = await authenticateAndResolve(cfg, sealedCookie);
-  // ADR-0002: a fresh sign-up (or unpinned sign-in) authenticates ORG-LESS. Ask the app which
-  // organization this identity belongs to — possibly provisioning a sandbox tenant — then
-  // refresh the WorkOS session into it and resolve again. Callback-only: readSession never
-  // provisions, so a stale org-less cookie can't create tenants on page loads.
-  if (!session && cfg.resolveOrganization) {
-    const adopted = await adoptOrganization(cfg, sealedCookie);
-    if (adopted) {
-      sealedCookie = adopted;
-      session = await authenticateAndResolve(cfg, sealedCookie);
-    }
-  }
   // `session` null with a cookie = OUR authorization denied; the caller keeps `sealedCookie` to
   // end the WorkOS session so a retry isn't stuck on this identity.
-  return { session, sealedCookie };
-}
-
-/** Org-less authenticated session → resolve/provision its organization → org-scoped cookie. */
-async function adoptOrganization(
-  cfg: RealmConfig,
-  sealedCookie: string,
-): Promise<string | null> {
-  const result = await workos(cfg).userManagement.authenticateWithSessionCookie(
-    {
-      sessionData: sealedCookie,
-      cookiePassword: cfg.cookiePassword,
-    },
-  );
-  // Only a genuinely ORG-LESS authenticated session qualifies — an org-scoped session that our
-  // resolver denied must stay denied (that's the invite gate, not a provisioning trigger).
-  if (!result.authenticated || result.organizationId) return null;
-  if (!cfg.resolveOrganization) return null;
-  const organizationId = await cfg
-    .resolveOrganization({
-      externalUserId: result.user.id,
-      email: result.user.email,
-      name: result.user.name,
-      userUpdatedAt: result.user.updatedAt,
-      emailVerified: result.user.emailVerified === true,
-    })
-    .catch(() => null);
-  if (!organizationId) return null;
-  const loaded = workos(cfg).userManagement.loadSealedSession({
-    sessionData: sealedCookie,
-    cookiePassword: cfg.cookiePassword,
-  });
-  const refreshed = await loaded.refresh({
-    cookiePassword: cfg.cookiePassword,
-    organizationId,
-  });
-  if (!refreshed.authenticated || !refreshed.sealedSession) return null;
-  return refreshed.sealedSession;
+  const session = await authenticateAndResolve(cfg, response.sealedSession);
+  return { session, sealedCookie: response.sealedSession };
 }
 
 async function authenticateAndResolve(
   cfg: RealmConfig,
   sealedCookie: string,
 ): Promise<AppSession | null> {
+  const resolver = cfg.resolveSession;
+  if (!resolver) return null;
   const result = await workos(cfg).userManagement.authenticateWithSessionCookie(
     {
       sessionData: sealedCookie,
       cookiePassword: cfg.cookiePassword,
     },
   );
-  if (
-    !result.authenticated ||
-    !result.organizationId ||
-    !result.role ||
-    !result.sessionId
-  ) {
+  // ADR-0007: no organization/role requirement — sessions are user-level; the IdP claims are
+  // passed through as optional echoes and authorization stays with the app's resolver.
+  if (!result.authenticated || !result.sessionId) {
     return null;
   }
-  return cfg.resolveSession({
+  return resolver({
     externalUserId: result.user.id,
-    organizationId: result.organizationId,
+    organizationId: result.organizationId ?? null,
     email: result.user.email,
     name: result.user.name,
     userUpdatedAt: result.user.updatedAt,
-    role: result.role,
+    role: result.role ?? null,
     permissions: result.permissions ?? [],
     sessionId: result.sessionId,
   });

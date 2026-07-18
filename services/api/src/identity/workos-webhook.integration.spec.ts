@@ -10,7 +10,7 @@ import type { ConfigService } from "@nestjs/config";
 import type { Event, WorkOS } from "@workos-inc/node";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { IdentityService } from "./identity.service.js";
+import { UserSessionService } from "./user-session.service.js";
 import { WorkosWebhookService } from "./workos-webhook.service.js";
 
 const superUrl = process.env.DATABASE_URL_SUPER;
@@ -104,18 +104,18 @@ describeDb("WorkOS identity lifecycle", () => {
       .where(eq(memberships.workosMembershipId, membershipId));
     expect(revoked?.status).toBe("disabled");
 
-    await expect(
-      new IdentityService(db).resolve({
-        external_user_id: externalUserId,
-        organization_id: organizationId,
-        email: remoteUser.email,
-        name: remoteUser.name,
-        user_updated_at: remoteUser.updatedAt,
-        role: "admin",
-        permissions: ["sms:send"],
-        session_id: "stale_session",
-      }),
-    ).resolves.toBeNull();
+    // ADR-0007: a disabled membership disappears from resolve-v2 — no workspace access remains.
+    const resolved = await new UserSessionService(db).resolve({
+      external_user_id: externalUserId,
+      email: remoteUser.email,
+      name: remoteUser.name,
+      user_updated_at: remoteUser.updatedAt,
+      email_verified: true,
+      session_id: "stale_session",
+    });
+    expect(
+      resolved?.memberships.find((m) => m.tenant_id === tenantId),
+    ).toBeUndefined();
   });
 
   function userCreatedEvent(): Event {

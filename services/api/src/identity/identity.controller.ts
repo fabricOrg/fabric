@@ -1,8 +1,6 @@
 import {
   createWorkspaceRequestSchema,
   mintTenantTokenRequestSchema,
-  organizationForUserRequestSchema,
-  resolveIdentitySessionRequestSchema,
   resolveUserSessionRequestSchema,
 } from "@app/contracts";
 import { Body, Controller, Inject, Post, UseGuards } from "@nestjs/common";
@@ -10,7 +8,6 @@ import { TenantTokenService } from "../api-keys/tenant-token.service.js";
 import { forbidden, invalidRequest } from "../http/api-error.js";
 import { BffTokenGuard } from "./bff-token.guard.js";
 import { IdentityService } from "./identity.service.js";
-import { SelfServeProvisioningService } from "./self-serve-provisioning.service.js";
 import { UserSessionService } from "./user-session.service.js";
 import { WorkspaceProvisioningService } from "./workspace-provisioning.service.js";
 
@@ -27,8 +24,6 @@ export class IdentityController {
     @Inject(IdentityService) private readonly identity: IdentityService,
     @Inject(TenantTokenService)
     private readonly tenantTokens: TenantTokenService,
-    @Inject(SelfServeProvisioningService)
-    private readonly selfServe: SelfServeProvisioningService,
     @Inject(UserSessionService)
     private readonly userSessions: UserSessionService,
     @Inject(WorkspaceProvisioningService)
@@ -73,44 +68,6 @@ export class IdentityController {
       );
     }
     return created;
-  }
-
-  @Post("session")
-  async resolve(@Body() body: unknown) {
-    const parsed = resolveIdentitySessionRequestSchema.safeParse(body);
-    if (!parsed.success) {
-      throw invalidRequest(
-        "invalid_identity_claims",
-        "The identity session claims are invalid.",
-      );
-    }
-    const resolved = await this.identity.resolve(parsed.data);
-    if (!resolved) {
-      throw forbidden(
-        "identity_not_authorized",
-        "This identity is not authorized for the configured workspace.",
-      );
-    }
-    return resolved;
-  }
-
-  @Post("organization-for-user")
-  async organizationForUser(@Body() body: unknown) {
-    const parsed = organizationForUserRequestSchema.safeParse(body);
-    if (!parsed.success) {
-      throw invalidRequest(
-        "invalid_organization_lookup",
-        "The organization lookup claims are invalid.",
-      );
-    }
-    const resolved = await this.selfServe.organizationForUser(parsed.data);
-    if (!resolved) {
-      throw forbidden(
-        "no_organization",
-        "This identity has no workspace and self-serve sign-up did not apply.",
-      );
-    }
-    return resolved;
   }
 
   @Post("tenant-token")

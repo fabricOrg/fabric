@@ -1,8 +1,9 @@
 import { z } from "zod";
 
 /**
- * Ops-provisioned tenant onboarding. A staff operator provisions a new org:
- * WorkOS organization → `accounts` row (with workos_organization_id) → first-admin invite.
+ * Ops-provisioned tenant onboarding. A staff operator provisions a workspace: `accounts` row +
+ * first-admin invite rows in one local transaction, then an org-less WorkOS invitation email
+ * (ADR-0007 — no IdP organization; workos_organization_id is legacy/SSO-reserved).
  * See docs/PI-3/ORG-PROVISIONING.md.
  */
 export const provisionTenantRequestSchema = z.object({
@@ -23,7 +24,8 @@ export type ProvisionTenantRequest = z.infer<
 
 export const provisionTenantResponseSchema = z.object({
   tenant_id: z.string(),
-  workos_organization_id: z.string(),
+  /** Always null since ADR-0007 (kept for wire compatibility; SSO may repopulate it later). */
+  workos_organization_id: z.string().nullable(),
   slug: z.string(),
   invited_email: z.string(),
 });

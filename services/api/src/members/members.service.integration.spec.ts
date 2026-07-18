@@ -66,11 +66,8 @@ describeDb("member invites", () => {
     });
 
     expect(member).toMatchObject({ email, role: "member", status: "invited" });
-    expect(sendInvitation).toHaveBeenCalledWith({
-      email,
-      organizationId,
-      roleSlug: "member",
-    });
+    // ADR-0007: org-less invitation — role/tenancy are the local rows, never WorkOS state.
+    expect(sendInvitation).toHaveBeenCalledWith({ email });
 
     const [user] = await db.db
       .select({
@@ -147,12 +144,7 @@ describeDb("member invites", () => {
       developer_access: true,
       status: "invited",
     });
-    // `developer` is Fabric-local — WorkOS gets email + org only, no roleSlug.
-    expect(sendInvitation).toHaveBeenCalledWith({
-      email: devEmail,
-      organizationId,
-      roleSlug: "member",
-    });
+    expect(sendInvitation).toHaveBeenCalledWith({ email: devEmail });
 
     const [membership] = await db.db
       .select({

@@ -75,9 +75,7 @@ export function customerRealmConfig(): RealmConfig {
       path: "/",
       maxAge: 7 * 24 * 60 * 60,
     },
-    // ADR-0007: the customer realm is user-level only — the org-scoped resolver is a dead end
-    // (denies everything) and disappears when RealmConfig drops it with the v1 path.
-    resolveSession: async () => null,
+    // ADR-0007: the customer realm is user-level only — no org-scoped resolver at all.
     resolveUserSession: resolveUserSessionV2,
   };
 }
