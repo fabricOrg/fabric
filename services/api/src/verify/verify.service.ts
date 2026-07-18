@@ -38,6 +38,13 @@ export class VerifyService {
   async start(
     tenantId: string,
     request: VerifyStartRequest,
+    // ADR-0004: the presenting key's environment/application. A sandbox key MUST route the OTP send
+    // through the virtual phone (never the carrier) — same routing sms.send does. Absent on the BFF
+    // token path, which falls back to the tenant/plan mode inside sms.send.
+    routing: {
+      environmentId?: string | null;
+      applicationId?: string | null;
+    } = {},
   ): Promise<VerifyStartResponse> {
     const msisdnHash = sha256(request.to);
     await this.assertNotThrottled(tenantId, msisdnHash);
@@ -70,6 +77,8 @@ export class VerifyService {
         senderId: request.sender_id ?? DEFAULT_SENDER,
         body: `Your Fabric verification code is ${code}. It expires in 5 minutes.`,
         currency: CURRENCY,
+        environmentId: routing.environmentId ?? null,
+        applicationId: routing.applicationId ?? null,
       });
       messageId = sent.id;
     } catch (error) {

@@ -73,12 +73,17 @@ async function main(): Promise<void> {
         id: tenantId,
         name: "Fabric Local",
         slug: "fabric-local",
+        // Sandbox until go-live — matches self-serve provisioning (SANDBOX_PLAN). Without this the
+        // schema default "free" makes the dashboard treat the workspace as live and hide every
+        // sandbox key / log / webhook / email.
+        plan: "sandbox",
         ...(workosOrganizationId ? { workosOrganizationId } : {}),
       })
       .onConflictDoUpdate({
         target: accounts.id,
         set: {
           name: "Fabric Local",
+          plan: "sandbox",
           ...(workosOrganizationId ? { workosOrganizationId } : {}),
         },
       });

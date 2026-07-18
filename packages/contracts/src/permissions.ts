@@ -20,6 +20,11 @@ export const membershipPermissions = [
   "api_keys:read",
   "api_keys:write",
   "request_logs:read",
+  // Managed messages (SDK-003 runtime): send released definitions by stable key + read their
+  // deliveries. Without these in the catalog no membership — not even owner/admin FULL — could ever
+  // hold them, so the "Managed deliveries" surface was invisible to everyone.
+  "messages:send",
+  "messages:read",
   // Managed message definitions (SDK-003): author/version drafts vs. release to an environment.
   "definitions:write",
   "definitions:publish",
@@ -45,6 +50,8 @@ export const ROLE_PERMISSION_BASELINE: Record<
     "sms:read",
     "email:send",
     "email:read",
+    "messages:send",
+    "messages:read",
     "wallet:read",
     "applications:read",
     "definitions:write",
