@@ -138,7 +138,8 @@ async function finishAuthentication(
   }
   const session = await resolveUserSessionFromSealed(cfg, sealedCookie);
   // Authenticated with WorkOS but resolve-v2 denied (should be rare on the credential path) — treat
-  // as invalid so the screen doesn't dead-end; the caller ends the WorkOS session.
+  // as invalid so the screen doesn't dead-end. The BFF sets NO cookie for this outcome, so the
+  // sealed session never reaches the browser; the unused WorkOS session simply lapses.
   if (!session) return { status: "invalid_credentials" };
   return { status: "authenticated", session, sealedCookie };
 }

@@ -40,23 +40,15 @@ export function actOnOutcome(json: OutcomeJson): string | null {
   }
 }
 
-export function GoogleButton({
-  screenHint,
-  label,
-}: {
-  screenHint?: "sign-up";
-  label: string;
-}) {
-  const href = screenHint
-    ? "/api/auth/google?screen_hint=sign-up"
-    : "/api/auth/google";
+export function GoogleButton({ label }: { label: string }) {
+  // Google's consent screen is identical for sign-in vs sign-up, so no screen hint is passed.
   return (
     <Button
       asChild
       variant="outline"
       className="h-11 w-full justify-center gap-2 font-normal"
     >
-      <a href={href}>
+      <a href="/api/auth/google">
         <GoogleGlyph />
         {label}
       </a>

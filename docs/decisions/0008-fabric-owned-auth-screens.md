@@ -47,10 +47,14 @@ token issuance + rotation, and the sealed-session crypto.
    WorkOS over TLS, and is **never stored or logged** (the redlines already forbid secrets in
    logs; passwords get the same treatment — not in audit, not in error bodies). This is the line
    this ADR moves: forms are ours, storage stays WorkOS's.
-3. **Login-surface abuse protection is ours.** Hosted AuthKit shipped WorkOS Radar (bot / credential-
-   stuffing defense) for free; the raw APIs don't. We add per-IP + per-email rate limiting on the
-   credential routes (fail closed on the store; a login endpoint that can't rate-limit refuses,
-   unlike the data-plane's fail-open posture — abuse control is a security check, not availability).
+3. **Login-surface abuse protection is layered.** Hosted AuthKit shipped WorkOS Radar (bot /
+   credential-stuffing defense) for free; the raw APIs don't. Our first line is per-IP + per-email
+   rate limiting on the credential routes (fail closed — a login endpoint that can't rate-limit
+   refuses, unlike the data-plane's fail-open posture). This layer is per-instance (in-memory), so
+   on serverless it absorbs same-instance bursts but is not a global limiter; the real backstop is
+   **WorkOS's own server-side rate limiting** on `authenticate*` (429 → surfaced as a transient
+   error). A global limiter (shared Redis) is deferred until the dashboard scales past one task.
+   The routes also reject cross-site POSTs (`Sec-Fetch-Site: cross-site`) to close login-CSRF.
 4. **Unsupported challenges fall back, they don't break.** `mfa_enrollment` / `mfa_challenge` /
    `sso_required` / `radar_*` from `authenticateWithPassword` are NOT reimplemented here — the BFF
    redirects that identity to the hosted AuthKit page (`/auth/login`) to finish. Custom UI is the

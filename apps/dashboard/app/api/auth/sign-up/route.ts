@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { customerRealmConfig, workosAuthConfigured } from "@/lib/server/auth";
 import { allowCredentialAttempt } from "@/lib/server/auth-rate-limit";
+import { isCrossSiteRequest } from "@/lib/server/auth-request";
 import { credentialResponse } from "@/lib/server/credential-landing";
 
 const signUpSchema = z.object({
@@ -15,6 +16,9 @@ const signUpSchema = z.object({
 
 /** ADR-0008: self-serve sign-up — createUser + immediate auth; unverified ⇒ verification_required. */
 export async function POST(request: Request) {
+  if (isCrossSiteRequest(request)) {
+    return NextResponse.json({ outcome: "forbidden" }, { status: 403 });
+  }
   if (!workosAuthConfigured()) {
     return NextResponse.json(
       { outcome: "error", message: "Sign-up is not configured." },

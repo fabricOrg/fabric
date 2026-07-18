@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { customerRealmConfig, workosAuthConfigured } from "@/lib/server/auth";
 import { allowCredentialAttempt } from "@/lib/server/auth-rate-limit";
+import { isCrossSiteRequest } from "@/lib/server/auth-request";
 
 const startSchema = z.object({ email: z.string().trim().email().max(320) });
 
@@ -11,6 +12,9 @@ const startSchema = z.object({ email: z.string().trim().email().max(320) });
  * (enumeration-safe): whether the address exists or the send hiccupped, the screen looks the same.
  */
 export async function POST(request: Request) {
+  if (isCrossSiteRequest(request)) {
+    return NextResponse.json({ outcome: "forbidden" }, { status: 403 });
+  }
   if (!workosAuthConfigured()) {
     return NextResponse.json(
       { outcome: "error", message: "Sign-in is not configured." },

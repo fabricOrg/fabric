@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { customerRealmConfig, workosAuthConfigured } from "@/lib/server/auth";
 import { allowCredentialAttempt } from "@/lib/server/auth-rate-limit";
+import { isCrossSiteRequest } from "@/lib/server/auth-request";
 import { credentialResponse } from "@/lib/server/credential-landing";
 
 const verifySchema = z.object({
@@ -12,6 +13,9 @@ const verifySchema = z.object({
 
 /** ADR-0008: complete passwordless sign-in with the emailed code. */
 export async function POST(request: Request) {
+  if (isCrossSiteRequest(request)) {
+    return NextResponse.json({ outcome: "forbidden" }, { status: 403 });
+  }
   if (!workosAuthConfigured()) {
     return NextResponse.json(
       { outcome: "error", message: "Sign-in is not configured." },

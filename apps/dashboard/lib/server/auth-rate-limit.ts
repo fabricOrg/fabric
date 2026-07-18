@@ -3,13 +3,16 @@ import "server-only";
 import { headers } from "next/headers";
 
 /**
- * ADR-0008: abuse control for the Fabric-owned credential routes. Hosted AuthKit shipped WorkOS
- * Radar for free; the raw APIs don't, so login-surface throttling is ours. Per-IP + per-email
- * sliding windows. FAILS CLOSED — a login endpoint that can't rate-limit refuses (this is a
- * security check, not the data plane's fail-open availability posture).
+ * ADR-0008: FIRST-LINE abuse control for the Fabric-owned credential routes. FAILS CLOSED — a
+ * login endpoint that can't rate-limit refuses (a security check, not the data plane's fail-open
+ * availability posture).
  *
- * In-process, single-instance (same shape as the API's self-serve throttle). Multi-instance
- * hardening = a shared Redis bucket; wire it when the dashboard scales past one task.
+ * Honest scope: this is an in-process, per-instance sliding window. On serverless (Vercel) each
+ * cold instance starts empty, so it only throttles bursts that hit the same warm instance — it is
+ * NOT a global limiter. The real backstop is WorkOS itself, which rate-limits `authenticate*`
+ * server-side (429 RateLimitExceededException → we surface it as a transient error). This layer
+ * cheaply absorbs the common single-instance burst; global limiting needs a shared Redis bucket,
+ * wired when the dashboard scales past one task.
  */
 
 const WINDOW_MS = 15 * 60 * 1000;
