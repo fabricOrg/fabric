@@ -1,13 +1,14 @@
-import { createHash, timingSafeEqual } from "node:crypto";
-import { WorkOS } from "@workos-inc/node";
+import { createHash } from "node:crypto";
 import type {
   AppSession,
   CallbackResult,
   RealmConfig,
   RefreshOutcome,
 } from "./types.js";
+import { secretsEqual, workos } from "./workos-internal.js";
 
 export * from "./types.js";
+export * from "./user-session.js";
 
 export function buildAuthorizationUrl(
   cfg: RealmConfig,
@@ -120,19 +121,6 @@ export function buildLogout(
   sealedCookie: string,
 ): Promise<{ workosLogoutUrl: string; clearCookie: string }> {
   return logoutIntent(cfg, sealedCookie);
-}
-
-function workos(cfg: RealmConfig): WorkOS {
-  if (
-    !cfg.apiKey ||
-    !cfg.clientId ||
-    !cfg.redirectUri ||
-    !cfg.logoutRedirectUri ||
-    cfg.cookiePassword.length < 32
-  ) {
-    throw new Error(`Invalid ${cfg.realm} WorkOS realm configuration.`);
-  }
-  return new WorkOS(cfg.apiKey, { clientId: cfg.clientId });
 }
 
 async function exchangeAndResolve(
@@ -266,15 +254,6 @@ async function logoutIntent(
   } catch {
     return { workosLogoutUrl: cfg.logoutRedirectUri, clearCookie: "" };
   }
-}
-
-function secretsEqual(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-  return (
-    leftBuffer.length === rightBuffer.length &&
-    timingSafeEqual(leftBuffer, rightBuffer)
-  );
 }
 
 export * from "./impersonation.js";

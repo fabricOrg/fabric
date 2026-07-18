@@ -20,6 +20,13 @@ export interface RealmConfig {
    * session into that organization. Realms without this (staff) keep denying org-less sessions.
    */
   readonly resolveOrganization?: OrganizationResolver;
+  /**
+   * ADR-0007: user-level session resolution — WorkOS proves WHO, the app returns the person plus
+   * every workspace membership; no organization context is ever requested from the IdP. Realms on
+   * this path use readUserSession/handleUserCallback/refreshUserSession instead of the org-scoped
+   * functions above.
+   */
+  readonly resolveUserSession?: UserSessionResolver;
 }
 
 export interface SessionCookieOptions {
@@ -96,6 +103,62 @@ export interface CallbackResult {
   readonly session: AppSession | null;
   readonly sealedCookie: string | null;
 }
+
+// ---- ADR-0007 user-level sessions -------------------------------------------------------------
+
+/** One workspace the signed-in person can enter — mirrors the resolve-v2 wire membership. */
+export interface WorkspaceMembershipClaim {
+  readonly tenantId: string;
+  readonly workspaceName: string;
+  readonly workspaceSlug: string;
+  readonly role: string;
+  readonly developerAccess: boolean;
+  readonly permissions: readonly string[];
+  readonly plan: string;
+}
+
+/**
+ * A user-level session: WHO is signed in and WHERE they may go. Carries no active workspace —
+ * that selection is an application concern (workspace cookie), revalidated against `memberships`
+ * on every request before any tenant credential is minted.
+ */
+export interface UserSession {
+  readonly userId: string;
+  readonly email: string;
+  readonly name: string | null;
+  readonly memberships: readonly WorkspaceMembershipClaim[];
+  readonly sessionId: string;
+}
+
+/** Validated WorkOS user claims passed to the application-owned resolve-v2 resolver. */
+export interface UserSessionClaims {
+  readonly externalUserId: string;
+  readonly email: string;
+  readonly name: string | null;
+  readonly userUpdatedAt: string;
+  readonly emailVerified: boolean;
+  readonly sessionId: string;
+}
+
+export type UserSessionResolver = (
+  claims: UserSessionClaims,
+) => Promise<UserSession | null>;
+
+/** Callback outcome for the user-level path — same sealedCookie semantics as CallbackResult. */
+export interface UserCallbackResult {
+  readonly session: UserSession | null;
+  readonly sealedCookie: string | null;
+}
+
+/** Refresh outcome for the user-level path — same semantics as RefreshOutcome. */
+export type UserRefreshOutcome =
+  | {
+      readonly status: "refreshed";
+      readonly session: UserSession;
+      readonly sealedCookie: string;
+    }
+  | { readonly status: "terminal" }
+  | { readonly status: "transient" };
 
 /**
  * Typed refresh outcome — the caller's response depends on WHY a refresh failed:
