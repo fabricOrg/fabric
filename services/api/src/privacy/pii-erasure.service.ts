@@ -59,6 +59,17 @@ export class PiiErasureService {
         UPDATE data_subjects
         SET erased_at = COALESCE(erased_at, now()), updated_at = now()
         WHERE subject_id = ${subjectId}`;
+      // Managed deliveries carry CALLER-supplied reference/metadata (order ids, names — personal
+      // data the vault never saw). Crypto-shredding cannot reach them, so the same transaction
+      // scrubs them on every delivery addressed to this subject. Status, cost, and the ledger
+      // stay — we honour the DSR without editing financial history (SDK-005 deletion handling).
+      const scrubbed = (await tx`
+        UPDATE message_deliveries d
+        SET reference = NULL, metadata = '{}'::jsonb, updated_at = now()
+        FROM message_delivery_attempts a
+        JOIN messages m ON m.id = a.message_id
+        WHERE a.delivery_id = d.id AND m.subject_id = ${subjectId}
+        RETURNING d.id`) as Row[];
       // The erasure record is written in the SAME transaction as the key destruction, and survives
       // it — proof the request was honoured, retained for years after the data itself is gone.
       await tx`
@@ -67,7 +78,7 @@ export class PiiErasureService {
           current_setting('app.tenant_id')::uuid, ${subjectId},
           ${requestedBy}, ${basis}, now()
         )`;
-      return destroyed.length > 0;
+      return { destroyed: destroyed.length > 0, scrubbed: scrubbed.length };
     });
 
     // COMPLIANCE §6: every DSR action is audited. erasure_log is the legal proof that the request
@@ -77,13 +88,18 @@ export class PiiErasureService {
       action: "privacy.subject.erased",
       targetType: "data_subject",
       targetId: subjectId,
-      summary: `Data subject crypto-shredded (${erased ? "key destroyed" : "already erased"}).`,
-      metadata: { tenant_id: tenantId, basis, keys_destroyed: erased },
+      summary: `Data subject crypto-shredded (${erased.destroyed ? "key destroyed" : "already erased"}).`,
+      metadata: {
+        tenant_id: tenantId,
+        basis,
+        keys_destroyed: erased.destroyed,
+        managed_deliveries_scrubbed: erased.scrubbed,
+      },
     });
     this.logger.log(
-      `erasure completed for subject ${subjectId} (tenant ${tenantId}); keys destroyed: ${erased}`,
+      `erasure completed for subject ${subjectId} (tenant ${tenantId}); keys destroyed: ${erased.destroyed}; deliveries scrubbed: ${erased.scrubbed}`,
     );
-    return { erased };
+    return { erased: erased.destroyed };
   }
 
   /**
@@ -125,18 +141,38 @@ export class PiiErasureService {
     subject_id: string;
     msisdn_masked: string;
     kinds: string[];
+    managed_deliveries: number;
     erased: boolean;
   } | null> {
     const index = phoneBlindIndex(indexKeyFrom(this.config), tenantId, e164);
-    const rows = (await this.db.withTenant(
+    const { rows, managedDeliveries } = await this.db.withTenant(
       tenantId,
-      (tx) => tx`
-      SELECT s.subject_id, s.erased_at, v.kind
-      FROM data_subjects s
-      LEFT JOIN pii_vault v ON v.subject_id = s.subject_id
-      WHERE s.phone_hash = ${index}
-      ORDER BY s.created_at DESC`,
-    )) as Row[];
+      async (tx) => {
+        const subjectRows = (await tx`
+          SELECT s.subject_id, s.erased_at, v.kind
+          FROM data_subjects s
+          LEFT JOIN pii_vault v ON v.subject_id = s.subject_id
+          WHERE s.phone_hash = ${index}
+          ORDER BY s.created_at DESC`) as Row[];
+        const newest = subjectRows[0]?.subject_id
+          ? String(subjectRows[0].subject_id)
+          : null;
+        // The DSR answer must cover managed deliveries too — their caller-supplied
+        // reference/metadata is personal data the vault never held.
+        const counted = newest
+          ? ((await tx`
+              SELECT count(DISTINCT d.id)::int AS n
+              FROM message_deliveries d
+              JOIN message_delivery_attempts a ON a.delivery_id = d.id
+              JOIN messages m ON m.id = a.message_id
+              WHERE m.subject_id = ${newest}`) as Row[])
+          : [];
+        return {
+          rows: subjectRows,
+          managedDeliveries: Number(counted[0]?.n ?? 0),
+        };
+      },
+    );
     const first = rows[0];
     if (!first) return null;
     // Newest subject for this number wins — an erased predecessor may sit behind it.
@@ -151,6 +187,7 @@ export class PiiErasureService {
             .map((row) => String(row.kind)),
         ),
       ],
+      managed_deliveries: managedDeliveries,
       erased: first.erased_at !== null,
     };
   }
