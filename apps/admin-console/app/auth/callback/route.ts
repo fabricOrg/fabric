@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
 function loginError(request: NextRequest, reason = "authentication") {
   const response = NextResponse.redirect(
-    redirectUrl(`/login?error=${reason}`, request),
+    redirectUrl(`/signin?error=${reason}`, request),
   );
   response.cookies.delete(OAUTH_STATE_COOKIE);
   return response;

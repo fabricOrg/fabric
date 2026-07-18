@@ -1,4 +1,10 @@
 import type { AuthenticationResponse } from "@workos-inc/node";
+import {
+  errorCode,
+  errorStatus,
+  HOSTED_FALLBACK_CODES,
+  pendingToken,
+} from "./credential-errors.js";
 import type { CredentialOutcome, RealmConfig } from "./types.js";
 import { resolveUserSessionFromSealed } from "./user-session.js";
 import { workos } from "./workos-internal.js";
@@ -12,18 +18,6 @@ import { workos } from "./workos-internal.js";
  * SECURITY: passwords reach these functions in flight only — never stored, never logged, never put
  * in an error message or thrown value. The caller (BFF) reads them from the request and drops them.
  */
-
-// Challenge codes we do NOT render ourselves yet — the caller sends the identity to hosted AuthKit
-// to finish. Custom UI is the happy path; hosted is the fallback for the hard edges (ADR-0008).
-const HOSTED_FALLBACK_CODES = new Set([
-  "mfa_enrollment",
-  "mfa_challenge",
-  "mfa_verification",
-  "sso_required",
-  "organization_selection_required",
-  "radar_email_challenge",
-  "radar_sms_challenge",
-]);
 
 export async function signInWithPassword(
   cfg: RealmConfig,
@@ -178,20 +172,4 @@ function transientOrInvalid(error: unknown): CredentialOutcome {
     status: "error",
     message: "Something went wrong. Please try again.",
   };
-}
-
-function errorCode(error: unknown): string | null {
-  const code = (error as { code?: unknown }).code;
-  return typeof code === "string" ? code : null;
-}
-
-function errorStatus(error: unknown): number | null {
-  const status = (error as { status?: unknown }).status;
-  return typeof status === "number" ? status : null;
-}
-
-function pendingToken(error: unknown): string | null {
-  const token = (error as { pendingAuthenticationToken?: unknown })
-    .pendingAuthenticationToken;
-  return typeof token === "string" ? token : null;
 }

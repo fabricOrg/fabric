@@ -8,6 +8,7 @@ import type {
 import { secretsEqual, workos } from "./workos-internal.js";
 
 export * from "./credentials.js";
+export * from "./staff-credentials.js";
 export * from "./types.js";
 export * from "./user-session.js";
 
@@ -147,6 +148,18 @@ async function exchangeAndResolve(
   // end the WorkOS session so a retry isn't stuck on this identity.
   const session = await authenticateAndResolve(cfg, response.sealedSession);
   return { session, sealedCookie: response.sealedSession };
+}
+
+/**
+ * Resolve a sealed WorkOS session cookie to a staff-realm AppSession (via `resolveSession`). Shared
+ * by the OAuth-callback path and the staff credential flow (staff-credentials.ts) so both funnel
+ * through the same resolver — a staff sign-in and a staff Google login authorize identically.
+ */
+export function resolveAppSessionFromSealed(
+  cfg: RealmConfig,
+  sealedCookie: string,
+): Promise<AppSession | null> {
+  return authenticateAndResolve(cfg, sealedCookie);
 }
 
 async function authenticateAndResolve(

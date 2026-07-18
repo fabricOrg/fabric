@@ -135,7 +135,7 @@ export async function requireAdminSession(): Promise<AppSession> {
     const returnTo = pathname?.startsWith("/") ? pathname : "/";
     redirect(`/auth/refresh?return_to=${encodeURIComponent(returnTo)}`);
   }
-  redirect("/login");
+  redirect("/signin");
 }
 
 export function sessionCookieOptions() {

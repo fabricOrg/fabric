@@ -158,6 +158,21 @@ export type CredentialOutcome =
   | { readonly status: "invalid_credentials" }
   | { readonly status: "error"; readonly message: string };
 
+/**
+ * Outcome of a STAFF credential attempt (ADR-0008, admin console). Like CredentialOutcome but the
+ * session is the staff AppSession (allowlist-resolved), and there is no email-verification step —
+ * staff are invited + verified through WorkOS, so any residual challenge falls back to hosted.
+ */
+export type StaffCredentialOutcome =
+  | {
+      readonly status: "authenticated";
+      readonly session: AppSession;
+      readonly sealedCookie: string;
+    }
+  | { readonly status: "fallback_hosted"; readonly reason: string }
+  | { readonly status: "invalid_credentials" }
+  | { readonly status: "error"; readonly message: string };
+
 /** Refresh outcome for the user-level path — same semantics as RefreshOutcome. */
 export type UserRefreshOutcome =
   | {
