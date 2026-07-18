@@ -11,9 +11,11 @@ import {
 } from "@/lib/server/auth";
 
 /**
- * ADR-0008: staff "Continue with Google" — straight to Google's consent screen (provider
- * GoogleOAuth), skipping the hosted AuthKit page and its org-selection screen. Returns through the
- * existing /auth/callback, where resolveSession enforces the staff allowlist.
+ * ADR-0008: staff "Continue with Google" — routes to the hosted AuthKit page (default `authkit`
+ * provider), where WorkOS's MANAGED Google works. The direct `GoogleOAuth` provider needs a custom
+ * Google OAuth credential (none configured — see WorkOS env), so it can't complete. Staff aren't
+ * org-scoped, so the hosted page shows no organization picker. Returns through the existing
+ * /auth/callback, where resolveSession enforces the staff allowlist.
  */
 export function GET(request: NextRequest) {
   if (!workosAuthConfigured()) {
@@ -22,7 +24,7 @@ export function GET(request: NextRequest) {
   const state = randomBytes(32).toString("base64url");
   const authorizationUrl = buildAuthorizationUrl(staffRealmConfig(), {
     state,
-    provider: "GoogleOAuth",
+    screenHint: "sign-in",
   });
   const response = NextResponse.redirect(authorizationUrl);
   response.cookies.set(OAUTH_STATE_COOKIE, state, {
