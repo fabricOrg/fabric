@@ -9,8 +9,9 @@ import {
   CardHeader,
 } from "@app/ui/components/ui/card";
 import { cn } from "@app/ui/lib/utils";
+import { Plus } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
-import { CreateApiKeyDialog } from "@/components/forms/create-api-key-dialog";
 import { ApiKeysTable } from "@/components/tables/api-keys-table";
 
 /**
@@ -22,13 +23,13 @@ import { ApiKeysTable } from "@/components/tables/api-keys-table";
  */
 export function ApiKeysPanel({
   keys,
-  applicationId,
+  applicationSlug,
   liveActive,
   defaultEnv,
   canManage,
 }: {
   keys: readonly ApiKey[];
-  applicationId: string;
+  applicationSlug: string;
   liveActive: boolean;
   defaultEnv: ApiKeyEnv;
   canManage: boolean;
@@ -72,7 +73,14 @@ export function ApiKeysPanel({
             </div>
           ) : null}
           {canManage ? (
-            <CreateApiKeyDialog applicationId={applicationId} env={activeEnv} />
+            <Button size="sm" variant="outline" asChild>
+              <Link
+                href={`/applications/${applicationSlug}/api-keys/new?env=${activeEnv}`}
+              >
+                <Plus data-icon="inline-start" />
+                Create key
+              </Link>
+            </Button>
           ) : null}
         </CardAction>
       </CardHeader>

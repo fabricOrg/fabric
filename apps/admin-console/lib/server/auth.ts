@@ -50,14 +50,27 @@ export function redirectUrl(path: string, _request?: { url: string }): URL {
   return new URL(path, appBaseUrl());
 }
 
+/**
+ * The admin console has its OWN WorkOS AuthKit application (distinct from the customer dashboard),
+ * so it uses its own client id — the admin app is where THIS app's redirect URIs (…:3300/auth/
+ * callback, the admin Vercel domain) are registered. Falls back to the shared WORKOS_CLIENT_ID when
+ * an admin-specific one isn't set (e.g. the deployed Vercel env already points WORKOS_CLIENT_ID at
+ * the admin client). The WorkOS API key is environment-level, so it stays shared.
+ */
+function staffClientId(): string {
+  return (
+    process.env.WORKOS_ADMIN_CLIENT_ID || process.env.WORKOS_CLIENT_ID || ""
+  );
+}
+
 /** No WORKOS_ORGANIZATION_ID (staff aren't org-scoped); BFF token is needed for the staff-session call. */
 export function workosAuthConfigured(): boolean {
-  return [
-    "WORKOS_API_KEY",
-    "WORKOS_CLIENT_ID",
-    "WORKOS_COOKIE_PASSWORD",
-    "BFF_INTERNAL_TOKEN",
-  ].every((name) => Boolean(process.env[name]));
+  return (
+    Boolean(process.env.WORKOS_API_KEY) &&
+    Boolean(staffClientId()) &&
+    Boolean(process.env.WORKOS_COOKIE_PASSWORD) &&
+    Boolean(process.env.BFF_INTERNAL_TOKEN)
+  );
 }
 
 export function staffRealmConfig(): RealmConfig {
@@ -68,7 +81,7 @@ export function staffRealmConfig(): RealmConfig {
   return {
     realm: "staff",
     apiKey: process.env.WORKOS_API_KEY ?? "",
-    clientId: process.env.WORKOS_CLIENT_ID ?? "",
+    clientId: staffClientId(),
     cookieName: WORKOS_COOKIE,
     cookiePassword: process.env.WORKOS_COOKIE_PASSWORD ?? "",
     redirectUri: `${base}/auth/callback`,

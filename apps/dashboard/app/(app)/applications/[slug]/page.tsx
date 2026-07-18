@@ -43,6 +43,7 @@ import { listWebhooks } from "@/lib/server/webhooks-client";
 function EnvironmentResources({
   env,
   applicationId,
+  applicationSlug,
   keys,
   webhooks,
   logs,
@@ -51,6 +52,7 @@ function EnvironmentResources({
 }: {
   env: ApiKeyEnv;
   applicationId: string;
+  applicationSlug: string;
   keys: ApiKey[];
   webhooks: WebhookEndpointDto[];
   logs: ListRequestLogsResponse;
@@ -70,7 +72,7 @@ function EnvironmentResources({
         <Card>
           <ApiKeysPanel
             keys={keys}
-            applicationId={applicationId}
+            applicationSlug={applicationSlug}
             liveActive={liveActive}
             defaultEnv={env}
             canManage={canManage}
@@ -190,6 +192,7 @@ export default async function ApplicationDetailPage({
         <EnvironmentResources
           env={env}
           applicationId={app.id}
+          applicationSlug={app.slug}
           keys={keys}
           webhooks={webhooks.filter((w) => w.env === envType)}
           logs={logs}
