@@ -6,3 +6,6 @@ next-env.d.ts
 # build / test output
 /coverage/
 *.tsbuildinfo
+
+.vercel
+.env*
