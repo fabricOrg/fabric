@@ -11,7 +11,7 @@ import { DeliveryModeToggle } from "@/components/delivery-mode-toggle";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { VirtualPhoneNotifier } from "@/components/virtual-phone-notifier";
 import { formatMoney } from "@/lib/money";
-import { requireDashboardSession } from "@/lib/server/auth";
+import { requireDashboardWorkspaceContext } from "@/lib/server/auth";
 import { getWalletSnapshot } from "@/lib/server/dashboard-data";
 
 /**
@@ -19,7 +19,7 @@ import { getWalletSnapshot } from "@/lib/server/dashboard-data";
  * one click away everywhere (visibility ≠ wallet management, which lives in its own section).
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  const session = await requireDashboardSession();
+  const { user, session } = await requireDashboardWorkspaceContext();
   const primaryBalance = (await getWalletSnapshot()).balances[0]?.balance;
   const isSandbox = session.plan === "sandbox";
   return (
@@ -29,6 +29,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           role={session.role}
           email={session.email}
           name={session.name}
+          activeTenantId={session.orgId}
+          workspaces={user.memberships.map((membership) => ({
+            tenantId: membership.tenantId,
+            name: membership.workspaceName,
+            role: membership.role,
+          }))}
         />
       }
       banner={

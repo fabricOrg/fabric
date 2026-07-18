@@ -1,6 +1,6 @@
 # ADR-0007 — User-level authentication with in-app workspace selection (Stripe model)
 
-- Status: **proposed** (requires product + security sign-off; supersedes the org-scoped session
+- Status: **accepted** (owner sign-off 2026-07-18; supersedes the org-scoped session
   mechanics of ADR-0001 and the org-per-workspace provisioning of ADR-0002/0004 — their
   authorization doctrine stands)
 - Date: 2026-07-17
@@ -41,9 +41,12 @@ The IdP claims were already ignored — this ADR stops *asking* for them.
    the session's user has an active membership in that tenant before minting a tenant token
    (fail closed). Defaults: exactly one membership → auto-select; several → last-used, else an
    in-app picker page (ours, branded).
-4. **Self-serve sign-up is a local transaction.** Verified stranger → `accounts` row + owner
-   `membership` in ONE Postgres transaction. **No WorkOS org is created.** The IdP is no longer
-   in the workspace-creation path at all.
+4. **Self-serve sign-up is a local transaction, entered through onboarding.** A verified
+   stranger's first resolve creates only the *user* (no workspace); the dashboard routes a
+   member-less user to a branded `/onboarding` wizard where they name their workspace. Submit
+   creates the `accounts` row + owner `membership` in ONE Postgres transaction. **No WorkOS org
+   is created.** The IdP is no longer in the workspace-creation path at all, and workspace
+   naming is a product surface (ours), not a derived default.
 5. **Invites drop org invitations.** Invite = local `invited` user + membership (exactly today's
    rows) + a WorkOS **org-less** invitation email (the staff realm already uses this shape).
    First login binds the subject and activates the invite — the existing invited-email adoption
@@ -62,7 +65,7 @@ The IdP claims were already ignored — this ADR stops *asking* for them.
 | `POST /internal/identity/session` | takes `organization_id`, `role`, `permissions` | takes subject + email; returns `memberships[]` (tenant, role, developer_access, permissions) |
 | `POST /internal/identity/organization-for-user` | picks/creates an org for an org-less session | **deleted** |
 | Tenant token minting (ADR-0003) | tenant from org-scoped session | tenant from the workspace cookie, revalidated against membership per request |
-| Tenant provisioning | creates a WorkOS org, stores `workos_organization_id` | local-only; column becomes nullable legacy (kept for SSO mapping later) |
+| Tenant provisioning | creates a WorkOS org, stores `workos_organization_id` | local-only via `/onboarding` create-workspace; column becomes nullable legacy (kept for SSO mapping later) |
 | `members.invite` | WorkOS org invitation with `roleSlug` | org-less WorkOS invitation (email only) |
 | Dashboard shell | no tenant picker | workspace switcher + `/workspaces` picker page |
 | Staff realm (admin console) | allowlist, org-less | **unchanged** |

@@ -11,10 +11,11 @@ import { invalidRequest, notFound } from "../http/api-error.js";
 import type { WorkosClientProvider } from "../identity/workos-client.provider.js";
 
 /**
- * Invite a teammate into a tenant. External write FIRST (WorkOS org invitation) — if WorkOS rejects,
- * nothing is persisted — then the user + `invited` membership are upserted in one transaction. A
+ * Invite a teammate into a tenant. External write FIRST (an ORG-LESS WorkOS invitation email —
+ * ADR-0007: tenancy lives only in Fabric memberships, same shape the staff realm always used) —
+ * if WorkOS rejects, nothing is persisted — then the user + `invited` membership are upserted in
+ * one transaction. First sign-in binds the subject and resolve-v2 activates the invite. A
  * re-invite re-arms a disabled/invited membership but never silently demotes an active member.
- * Extracted from MembersService to keep that file under the length guard; behavior is unchanged.
  */
 export async function inviteMember(
   db: ProvisioningDb,
@@ -26,21 +27,12 @@ export async function inviteMember(
   const email = request.email.trim().toLowerCase();
 
   const [account] = await db.db
-    .select({
-      status: accounts.status,
-      organizationId: accounts.workosOrganizationId,
-    })
+    .select({ status: accounts.status })
     .from(accounts)
     .where(eq(accounts.id, scoped))
     .limit(1);
   if (!account || account.status !== "active") {
     throw notFound("tenant_not_found", "This organisation is not active.");
-  }
-  if (!account.organizationId) {
-    throw invalidRequest(
-      "org_not_provisioned",
-      "This organisation has no WorkOS mapping; invites can't be sent.",
-    );
   }
 
   // Reject a re-invite of someone already active — the WorkOS call below would also fail.
@@ -68,13 +60,9 @@ export async function inviteMember(
     }
   }
 
-  // `developer` is a Fabric-local role with no matching WorkOS org role slug, so omit roleSlug when
-  // it would be that — our authz reads the LOCAL membership role, not the WorkOS one.
-  await getWorkos().userManagement.sendInvitation({
-    email,
-    organizationId: account.organizationId,
-    roleSlug: request.role,
-  });
+  // Org-less on purpose: the email is just the onboarding invitation — role and tenancy are the
+  // LOCAL membership rows written below, never WorkOS state (ADR-0007).
+  await getWorkos().userManagement.sendInvitation({ email });
 
   return db.db.transaction(async (tx) => {
     await tx

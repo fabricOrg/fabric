@@ -17,6 +17,10 @@ import {
 } from "@app/ui/components/ui/sidebar";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  type SwitcherWorkspace,
+  WorkspaceSwitcher,
+} from "@/components/workspace-switcher";
 import { navGroups } from "@/lib/nav";
 
 /** The Fabric wordmark — the brand "F" mark (mirrors app/icon.svg, tokenised for white-label) +
@@ -25,10 +29,14 @@ export function AppSidebar({
   role,
   email,
   name,
+  activeTenantId,
+  workspaces,
 }: {
   role: string;
   email?: string;
   name?: string;
+  activeTenantId: string;
+  workspaces: readonly SwitcherWorkspace[];
 }) {
   const pathname = usePathname();
 
@@ -36,6 +44,10 @@ export function AppSidebar({
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <ProductMark product="Dashboard" showBadge={false} />
+        <WorkspaceSwitcher
+          activeTenantId={activeTenantId}
+          workspaces={workspaces}
+        />
       </SidebarHeader>
       <SidebarContent>
         {navGroups.map((group, i) => (

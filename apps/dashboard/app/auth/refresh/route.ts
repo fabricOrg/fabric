@@ -1,4 +1,4 @@
-import { refreshSessionDetailed } from "@app/fe-auth";
+import { refreshUserSessionDetailed } from "@app/fe-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import {
   customerRealmConfig,
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     !requested.startsWith("/auth/")
       ? requested
       : "/";
-  const outcome = await refreshSessionDetailed(
+  const outcome = await refreshUserSessionDetailed(
     customerRealmConfig(),
     sealedCookie,
   );

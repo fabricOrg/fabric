@@ -1,14 +1,15 @@
 import {
+  createWorkspaceRequestSchema,
   mintTenantTokenRequestSchema,
-  organizationForUserRequestSchema,
-  resolveIdentitySessionRequestSchema,
+  resolveUserSessionRequestSchema,
 } from "@app/contracts";
 import { Body, Controller, Inject, Post, UseGuards } from "@nestjs/common";
 import { TenantTokenService } from "../api-keys/tenant-token.service.js";
 import { forbidden, invalidRequest } from "../http/api-error.js";
 import { BffTokenGuard } from "./bff-token.guard.js";
 import { IdentityService } from "./identity.service.js";
-import { SelfServeProvisioningService } from "./self-serve-provisioning.service.js";
+import { UserSessionService } from "./user-session.service.js";
+import { WorkspaceProvisioningService } from "./workspace-provisioning.service.js";
 
 /**
  * BFF-internal identity plane (ADR-0003). Both routes trust BFF_INTERNAL_TOKEN as the service
@@ -23,46 +24,50 @@ export class IdentityController {
     @Inject(IdentityService) private readonly identity: IdentityService,
     @Inject(TenantTokenService)
     private readonly tenantTokens: TenantTokenService,
-    @Inject(SelfServeProvisioningService)
-    private readonly selfServe: SelfServeProvisioningService,
+    @Inject(UserSessionService)
+    private readonly userSessions: UserSessionService,
+    @Inject(WorkspaceProvisioningService)
+    private readonly workspaces: WorkspaceProvisioningService,
   ) {}
 
-  @Post("session")
-  async resolve(@Body() body: unknown) {
-    const parsed = resolveIdentitySessionRequestSchema.safeParse(body);
+  /** ADR-0007 resolve-v2: user-level session — memberships come back as a list; no org input. */
+  @Post("session-v2")
+  async resolveUser(@Body() body: unknown) {
+    const parsed = resolveUserSessionRequestSchema.safeParse(body);
     if (!parsed.success) {
       throw invalidRequest(
         "invalid_identity_claims",
         "The identity session claims are invalid.",
       );
     }
-    const resolved = await this.identity.resolve(parsed.data);
+    const resolved = await this.userSessions.resolve(parsed.data);
     if (!resolved) {
       throw forbidden(
         "identity_not_authorized",
-        "This identity is not authorized for the configured workspace.",
+        "This identity is not recognized and could not be signed in.",
       );
     }
     return resolved;
   }
 
-  @Post("organization-for-user")
-  async organizationForUser(@Body() body: unknown) {
-    const parsed = organizationForUserRequestSchema.safeParse(body);
+  /** ADR-0007: onboarding submit — local-only workspace creation (no WorkOS org). */
+  @Post("workspaces")
+  async createWorkspace(@Body() body: unknown) {
+    const parsed = createWorkspaceRequestSchema.safeParse(body);
     if (!parsed.success) {
       throw invalidRequest(
-        "invalid_organization_lookup",
-        "The organization lookup claims are invalid.",
+        "invalid_workspace_request",
+        "The workspace creation request is invalid.",
       );
     }
-    const resolved = await this.selfServe.organizationForUser(parsed.data);
-    if (!resolved) {
+    const created = await this.workspaces.createWorkspace(parsed.data);
+    if (!created) {
       throw forbidden(
-        "no_organization",
-        "This identity has no workspace and self-serve sign-up did not apply.",
+        "workspace_creation_refused",
+        "Workspace creation is not available for this identity right now.",
       );
     }
-    return resolved;
+    return created;
   }
 
   @Post("tenant-token")

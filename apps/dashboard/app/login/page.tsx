@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { ContinueWithWorkOS } from "@/components/login/continue-with-workos";
 import {
   AUTH_NOTICE_COOKIE,
-  readDashboardSession,
+  readDashboardUserSession,
   workosAuthConfigured,
 } from "@/lib/server/auth";
 
@@ -80,8 +80,9 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  // Already signed in? Don't show a login button — send them into the app.
-  if (await readDashboardSession()) redirect("/");
+  // Already signed in (user-level — even without a selected workspace)? Don't show a login
+  // button — send them into the app; the workspace gate routes to onboarding/picker as needed.
+  if (await readDashboardUserSession()) redirect("/");
 
   const { error } = await searchParams;
   const workosEnabled = workosAuthConfigured();
