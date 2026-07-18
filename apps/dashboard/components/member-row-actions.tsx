@@ -159,8 +159,8 @@ export function MemberRowActions({
             onClick={() => setPendingDeveloperAccess(!developerAccess)}
           >
             {developerAccess
-              ? "Remove Developer Portal access"
-              : "Grant Developer Portal access"}
+              ? "Remove Developer access"
+              : "Grant Developer access"}
           </DropdownMenuItem>
           {canChangeRole ? (
             <>
@@ -219,8 +219,8 @@ export function MemberRowActions({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {pendingDeveloperAccess ? "Grant" : "Remove"} Developer Portal
-              access for {label}?
+              {pendingDeveloperAccess ? "Grant" : "Remove"} Developer access for{" "}
+              {label}?
             </DialogTitle>
             <DialogDescription>
               {pendingDeveloperAccess
@@ -248,7 +248,7 @@ export function MemberRowActions({
                       developer_access: pendingDeveloperAccess,
                     }),
                   },
-                  `${pendingDeveloperAccess ? "Granted" : "Removed"} Developer Portal access for ${label}`,
+                  `${pendingDeveloperAccess ? "Granted" : "Removed"} Developer access for ${label}`,
                 );
                 setPendingDeveloperAccess(null);
               }}

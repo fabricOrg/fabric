@@ -61,8 +61,13 @@ export async function inviteMember(
   }
 
   // Org-less on purpose: the email is just the onboarding invitation — role and tenancy are the
-  // LOCAL membership rows written below, never WorkOS state (ADR-0007).
-  await getWorkos().userManagement.sendInvitation({ email });
+  // LOCAL membership rows written below, never WorkOS state (ADR-0007). Best-effort like the staff
+  // invite: WorkOS rejects sendInvitation for an email that already has a user / pending invite
+  // (that person just signs in and binds — no email needed), so a failure must NOT block the local
+  // membership that actually grants access. The invited row is the source of truth.
+  await getWorkos()
+    .userManagement.sendInvitation({ email })
+    .catch(() => undefined);
 
   return db.db.transaction(async (tx) => {
     await tx

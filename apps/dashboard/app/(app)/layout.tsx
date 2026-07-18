@@ -27,6 +27,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       sidebar={
         <AppSidebar
           role={session.role}
+          permissions={session.permissions}
           email={session.email}
           name={session.name}
           activeTenantId={session.orgId}
