@@ -51,11 +51,12 @@ export function redirectUrl(path: string, _request?: { url: string }): URL {
 }
 
 /**
- * The admin console has its OWN WorkOS AuthKit application (distinct from the customer dashboard),
- * so it uses its own client id — the admin app is where THIS app's redirect URIs (…:3300/auth/
- * callback, the admin Vercel domain) are registered. Falls back to the shared WORKOS_CLIENT_ID when
- * an admin-specific one isn't set (e.g. the deployed Vercel env already points WORKOS_CLIENT_ID at
- * the admin client). The WorkOS API key is environment-level, so it stays shared.
+ * The admin console shares ONE WorkOS AuthKit app with the customer dashboard (the shared
+ * WORKOS_CLIENT_ID). `authenticateWithCode` requires the client id and the API key (client secret)
+ * to belong to the SAME app; the separate admin app was never provisioned with its own key, so
+ * using its client id against the shared key broke the OAuth code exchange. The admin's redirect
+ * URIs are registered on the shared app. WORKOS_ADMIN_CLIENT_ID stays as an override hook for the
+ * day the admin app gets its own key — leave it unset to use the shared, working client.
  */
 function staffClientId(): string {
   return (
