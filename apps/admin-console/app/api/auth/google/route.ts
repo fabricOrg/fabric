@@ -12,8 +12,11 @@ import {
 
 /**
  * ADR-0008: staff "Continue with Google" — straight to Google's consent screen (provider
- * GoogleOAuth), skipping the hosted AuthKit page and its org-selection screen. Returns through the
- * existing /auth/callback, where resolveSession enforces the staff allowlist.
+ * GoogleOAuth), skipping the hosted AuthKit page and its org-selection screen. Both consoles share
+ * ONE WorkOS AuthKit app (the admin app was never provisioned with its own API key, and
+ * authenticateWithCode needs the client id + API key to belong to the same app), so this uses the
+ * shared client + key that the customer dashboard proves works. Returns through /auth/callback,
+ * where resolveSession enforces the staff allowlist.
  */
 export function GET(request: NextRequest) {
   if (!workosAuthConfigured()) {
