@@ -22,12 +22,17 @@ identity for Ghana / Nigeria (West Africa). Region `eu-west-1` (af-south-1 unava
   BYPASSRLS) or the owner/super role for migrations/tests only.
 - **Money = `bigint` minor units**, branded `MinorUnits`. Never floats. **Double-entry** wallet —
   every movement is a balanced set of ledger entries; credits are **idempotent on a reference**.
-- **Auth = WorkOS AuthKit (hosted, branded)** — email+password + Google + passkeys, with SSO as an
-  option. The **customer realm is self-serve sign-up** (PI-6); the **staff realm stays
-  invite-only/allowlist**. WorkOS hosts every credential form (register/reset/MFA) — **we still own
-  none**. `@app/fe-auth` holds the realm logic; sessions are sealed cookies. Authorization is the
-  **local membership role**, never WorkOS claims. (No local dev-login bypass — local sign-in goes
-  through the WorkOS Test env like every other environment.)
+- **Auth = WorkOS as the identity engine; sessions are user-level (ADR-0007).** email+password +
+  Google + passkeys, SSO optional. The **customer realm is self-serve sign-up** (PI-6); the **staff
+  realm stays invite-only/allowlist**. **Fabric owns the credential screens** (ADR-0008): the
+  dashboard renders `/signin` + `/signup` (+ verify / reset / magic-code) and the BFF calls WorkOS
+  **User Management APIs** — passwords transit our server in flight, **never stored or logged**;
+  WorkOS keeps the store, hashing, breach detection, auth emails, and session crypto. The **hosted
+  AuthKit page stays wired + themed as the FALLBACK** for MFA / SSO / passkeys / Radar challenges.
+  Every path ends in the same sealed WorkOS session cookie. `@app/fe-auth` holds the realm +
+  credential logic. Authorization is the **local membership role**, never WorkOS claims. Tenancy is
+  Fabric `memberships` only — no per-tenant WorkOS org (ADR-0007). (No local dev-login bypass —
+  local sign-in goes through the WorkOS Test env like every other environment.)
 - **BFF pattern**: a browser never calls the API directly. Next route handler → server-only client →
   NestJS `/internal/*` guarded by `BFF_INTERNAL_TOKEN`; data-plane `/v1/*` calls use a short-lived
   minted tenant token (ADR-0003), customer integrations use `sk_*` keys. The BFF

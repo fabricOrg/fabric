@@ -137,6 +137,27 @@ export interface UserCallbackResult {
   readonly sealedCookie: string | null;
 }
 
+/**
+ * Outcome of a credential attempt (ADR-0008 — Fabric-owned auth screens). Every success ends in a
+ * resolved user-level session + the sealed cookie; the other variants tell the BFF what screen to
+ * show next. `fallback_hosted` is the escape hatch for challenges we don't render ourselves yet
+ * (MFA / SSO / passkey / Radar) — the caller redirects to the hosted AuthKit page to finish.
+ */
+export type CredentialOutcome =
+  | {
+      readonly status: "authenticated";
+      readonly session: UserSession;
+      readonly sealedCookie: string;
+    }
+  | {
+      readonly status: "verification_required";
+      readonly pendingAuthenticationToken: string;
+      readonly email: string;
+    }
+  | { readonly status: "fallback_hosted"; readonly reason: string }
+  | { readonly status: "invalid_credentials" }
+  | { readonly status: "error"; readonly message: string };
+
 /** Refresh outcome for the user-level path — same semantics as RefreshOutcome. */
 export type UserRefreshOutcome =
   | {

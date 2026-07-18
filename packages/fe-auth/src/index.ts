@@ -7,6 +7,7 @@ import type {
 } from "./types.js";
 import { secretsEqual, workos } from "./workos-internal.js";
 
+export * from "./credentials.js";
 export * from "./types.js";
 export * from "./user-session.js";
 
@@ -16,11 +17,18 @@ export function buildAuthorizationUrl(
     readonly state: string;
     readonly screenHint?: "sign-up" | "sign-in";
     readonly organizationId?: string;
+    /**
+     * OAuth provider. Default `authkit` shows the hosted page (our fallback for MFA/SSO/passkeys).
+     * `GoogleOAuth` (ADR-0008) redirects STRAIGHT to Google's consent screen — no AuthKit page —
+     * and returns through the same `/auth/callback`, so the custom sign-in "Continue with Google"
+     * button never surfaces a WorkOS screen.
+     */
+    readonly provider?: "authkit" | "GoogleOAuth";
   },
 ): string {
   return workos(cfg).userManagement.getAuthorizationUrl({
     clientId: cfg.clientId,
-    provider: "authkit",
+    provider: opts.provider ?? "authkit",
     redirectUri: cfg.redirectUri,
     state: opts.state,
     ...(opts.screenHint ? { screenHint: opts.screenHint } : {}),
