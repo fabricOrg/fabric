@@ -12,6 +12,7 @@ import {
   type OutcomeJson,
   SubmitButton,
 } from "./auth-atoms";
+import { EmailField, PasswordField } from "./auth-fields";
 import { CodePanel } from "./code-panel";
 
 type Step =
@@ -109,32 +110,19 @@ function CreateAccountForm({
             disabled={pending}
           />
         </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="email">Work email</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@company.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            disabled={pending}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            placeholder="At least 8 characters"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            disabled={pending}
-          />
-        </div>
+        <EmailField
+          label="Work email"
+          value={email}
+          onChange={setEmail}
+          disabled={pending}
+        />
+        <PasswordField
+          value={password}
+          onChange={setPassword}
+          disabled={pending}
+          autoComplete="new-password"
+          placeholder="At least 8 characters"
+        />
 
         <AuthError>{error}</AuthError>
 

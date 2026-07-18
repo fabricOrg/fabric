@@ -1,7 +1,5 @@
 "use client";
 
-import { Input } from "@app/ui/components/ui/input";
-import { Label } from "@app/ui/components/ui/label";
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import {
@@ -12,6 +10,7 @@ import {
   type OutcomeJson,
   SubmitButton,
 } from "./auth-atoms";
+import { EmailField, PasswordField } from "./auth-fields";
 import { CodePanel } from "./code-panel";
 
 type Step =
@@ -105,42 +104,26 @@ function PasswordForm({
   return (
     <div className="flex flex-col gap-4">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@company.com"
-            autoFocus
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            disabled={pending}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            {/* Reset stays on hosted AuthKit (ADR-0008) — it sends the WorkOS-branded email. */}
+        <EmailField
+          value={email}
+          onChange={setEmail}
+          disabled={pending}
+          autoFocus
+        />
+        <PasswordField
+          value={password}
+          onChange={setPassword}
+          disabled={pending}
+          headerAction={
+            // Reset stays on hosted AuthKit (ADR-0008) — it sends the WorkOS-branded email.
             <a
               href="/auth/login"
               className="text-sm text-primary underline-offset-4 hover:underline"
             >
               Forgot password?
             </a>
-          </div>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            disabled={pending}
-          />
-        </div>
+          }
+        />
 
         <AuthError>{error}</AuthError>
 
@@ -214,20 +197,13 @@ function MagicEmailForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="magic-email">Email</Label>
-        <Input
-          id="magic-email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@company.com"
-          autoFocus
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          disabled={pending}
-        />
-      </div>
+      <EmailField
+        id="magic-email"
+        value={email}
+        onChange={setEmail}
+        disabled={pending}
+        autoFocus
+      />
 
       <AuthError>{error}</AuthError>
 
