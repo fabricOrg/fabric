@@ -165,8 +165,12 @@ provisioner policy, composite containment FKs, retention `expires_at` + `legal_h
   Webhooks section on the detail page; shared `readScope` dual-authority helper. Also: queue-spec
   flake root-caused (dev-stack worker shares Redis, raced the spec's worker) → `REDIS_QUEUE_PREFIX`
   on QueueService + per-run prefix in the spec. Light canvas → near-white `#fcfcfd`.
-- **Remaining for SDK-005:** tenant export/deletion handling, typed terminal-webhook consumption +
-  packed-example sandbox UAT.
+- **Sandbox UAT DONE (2026-07-18):** `managed-sdk-uat.integration` — real SDK over real HTTP:
+  send by key → worker fan-out → SDK-verified TYPED events (accepted + terminal delivered,
+  tampered payload refused) → delivery/attempt/wallet reconcile to one logical message. Full API
+  integration now 39 files / 169 tests.
+- **Remaining for SDK-005:** tenant export/deletion handling (the last open scope item);
+  packed-tarball variant of the UAT is a nicety (release:check already packs + smokes).
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 
