@@ -169,8 +169,12 @@ provisioner policy, composite containment FKs, retention `expires_at` + `legal_h
   send by key → worker fan-out → SDK-verified TYPED events (accepted + terminal delivered,
   tampered payload refused) → delivery/attempt/wallet reconcile to one logical message. Full API
   integration now 39 files / 169 tests.
-- **Remaining for SDK-005:** tenant export/deletion handling (the last open scope item);
-  packed-tarball variant of the UAT is a nicety (release:check already packs + smokes).
+- **DSR/offboarding DONE (2026-07-18):** erasure scrubs managed reference/metadata same-tx with
+  the key destruction (money facts survive), summary counts managed deliveries, offboarding =
+  soft-close + status-blind retention (proven on a closed tenant). 2-test spec.
+- **SDK-005 SCOPE COMPLETE.** Full API integration 40 files / 171 tests. Evidence:
+  `docs/sdk/evidence/sdk-005.md`. Next backlog: SDK-006 (live provider path — behind the live-SMS
+  redline) or SDK-010 (Journeys, unblocked). Packed-tarball UAT variant = nicety.
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 
