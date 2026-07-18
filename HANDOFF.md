@@ -3,7 +3,33 @@
 _Snapshot: 2026-07-18. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-18): ADR-0007 — user-level auth, in-app workspace selection (Stripe model)
+## Latest (2026-07-18): ADR-0008 — Fabric-owned auth screens (WorkOS behind the scenes)
+
+Branch `feature/ops-adr0008-custom-auth-screens` (off dev `2f457f6`, after ADR-0007 #146 merged).
+ADR-0008 **accepted** — own the credential pixels, WorkOS stays the identity engine. Amends the
+locked CLAUDE.md "we own no credential form" line (hosted AuthKit is now the FALLBACK, not the only
+surface).
+
+- **Slice 1 (`c3c03d2`)** — `@app/fe-auth/credentials.ts`: signInWithPassword, signUpWithPassword,
+  verifyEmailCode, sendMagicCode + signInWithMagicCode, all wrapping WorkOS User Management APIs
+  and funnelling through the SAME sealed cookie + resolve-v2 as the OAuth callback.
+  `buildAuthorizationUrl` gains a `GoogleOAuth` provider (skips hosted, straight to Google). Typed
+  `CredentialOutcome` (authenticated / verification_required+pending token / fallback_hosted /
+  invalid_credentials / error). Passwords never stored/logged/thrown. 9 unit tests.
+- **Slice 2 (`77aa001`)** — split-panel `/signin` + `/signup` (brand hero + form, Relay-style) and
+  `/api/auth/*` BFF routes (sign-in, sign-up, verify-email, magic/start, magic/verify, google).
+  `credentialResponse` sets the sealed cookie + workspace selector and routes by membership count.
+  Per-IP + per-email rate limiting, fail-closed. `/login` → thin forwarder to `/signin` (still the
+  registered logout URI; carries flash notices). **Verified live vs WorkOS Test env**: screens 200,
+  bad password → invalid_credentials, SSO-domain email → fallback_hosted, Google → provider=GoogleOAuth.
+
+**Deferred (ADR-0008 non-goals)**: passkeys + full custom MFA UI stay on hosted AuthKit; password
+reset stays hosted (WorkOS v10 dropped sendPasswordResetEmail — custom reset would need our own
+mailer). AuthKit branding already themed (indigo/#fcfcfd) as the fallback surface. **No new WorkOS
+redirect-URI registration needed** — Google returns via the already-registered `/auth/callback`,
+logout via the already-registered `/login`.
+
+## Earlier (2026-07-18): ADR-0007 — user-level auth, in-app workspace selection (Stripe model)
 
 Branch `feature/ops-adr0007-user-level-auth` (off dev `f1427c9`, after #145 merged). ADR-0007
 **accepted** (owner sign-off) and implemented in 4 slices — WorkOS now authenticates the PERSON
