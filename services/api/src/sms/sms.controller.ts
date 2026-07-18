@@ -1,6 +1,7 @@
 import type {
   MessageDetailResponse,
   MessageListResponse,
+  MessagingInsightsResponse,
   SendSmsApiResponse,
 } from "@app/contracts";
 import { sendSmsRequest } from "@app/contracts";
@@ -22,6 +23,7 @@ import {
 } from "../api-keys/api-key.guard.js";
 import { invalidRequest, newRequestId } from "../http/api-error.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
+import { MessagingInsightsService } from "./messaging-insights.service.js";
 import { SmsService } from "./sms.service.js";
 
 interface AuthedRequest {
@@ -40,6 +42,8 @@ export class SmsController {
     @Inject(SmsService) private readonly sms: SmsService,
     @Inject(IdempotencyService)
     private readonly idempotency: IdempotencyService,
+    @Inject(MessagingInsightsService)
+    private readonly insights: MessagingInsightsService,
   ) {}
 
   @Post("sms/messages")
@@ -141,6 +145,18 @@ export class SmsController {
     const tenant = requireScope(req.tenant, "sms:read");
     return {
       messages: await this.sms.list(tenant.id, tenant.environmentId),
+      request_id: newRequestId(),
+    };
+  }
+
+  // Declared before `sms/:id` isn't needed (distinct prefix), but kept beside the log it summarizes.
+  @Get("messages/insights")
+  async messagingInsights(
+    @Req() req: AuthedRequest,
+  ): Promise<MessagingInsightsResponse> {
+    const tenant = requireScope(req.tenant, "sms:read");
+    return {
+      summary: await this.insights.summary(tenant.id, tenant.environmentId),
       request_id: newRequestId(),
     };
   }

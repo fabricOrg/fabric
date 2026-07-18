@@ -94,3 +94,38 @@ export const messageDetailResponse = z.object({
   request_id: z.string(),
 });
 export type MessageDetailResponse = z.infer<typeof messageDetailResponse>;
+
+/** One provider-error bucket in the messaging-insights delivery breakdown (most frequent first). */
+export const insightsErrorBucket = z.object({
+  code: z.string(),
+  description: z.string(),
+  count: z.number().int().nonnegative(),
+});
+export type InsightsErrorBucket = z.infer<typeof insightsErrorBucket>;
+
+/**
+ * Messaging-insights rollup (Messages → Insights tab). Aggregated from the tenant's `messages`.
+ * Invariant: delivered + failed <= total_sent (the remainder is still in-flight).
+ */
+export const messagingInsights = z
+  .object({
+    total_sent: z.number().int().nonnegative(),
+    delivered: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    avg_segments: z.number().nonnegative(),
+    errors: z.array(insightsErrorBucket),
+  })
+  .refine((s) => s.delivered + s.failed <= s.total_sent, {
+    message: "delivered + failed must not exceed total_sent",
+    path: ["total_sent"],
+  });
+export type MessagingInsights = z.infer<typeof messagingInsights>;
+
+/** GET /v1/messages/insights — the rollup + a support-handoff request id. */
+export const messagingInsightsResponse = z.object({
+  summary: messagingInsights,
+  request_id: z.string(),
+});
+export type MessagingInsightsResponse = z.infer<
+  typeof messagingInsightsResponse
+>;

@@ -10,6 +10,7 @@ import { PrivacyModule } from "../privacy/privacy.module.js";
 import { QueueModule } from "../queue/queue.module.js";
 import { SendersModule } from "../senders/senders.module.js";
 import { DlrController } from "./dlr.controller.js";
+import { MessagingInsightsService } from "./messaging-insights.service.js";
 import { SmsController } from "./sms.controller.js";
 import { SmsService } from "./sms.service.js";
 import { SmsBatchController } from "./sms-batch.controller.js";
@@ -56,6 +57,7 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
     WebhookTokenGuard,
     BffTokenGuard,
     VirtualPhoneService,
+    MessagingInsightsService,
   ],
   // Exported for the maintenance module: the scheduled sweeper resolves stuck reservations
   // through SmsService (same EngineDeps + provider billing basis as the live send path).
