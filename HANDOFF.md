@@ -1,7 +1,43 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-07-15. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-07-18. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
+
+## Latest (2026-07-18): ADR-0007 — user-level auth, in-app workspace selection (Stripe model)
+
+Branch `feature/ops-adr0007-user-level-auth` (off dev `f1427c9`, after #145 merged). ADR-0007
+**accepted** (owner sign-off) and implemented in 4 slices — WorkOS now authenticates the PERSON
+only; tenancy lives exclusively in Fabric `memberships`:
+
+- **Slice 1 (`cfc69d2`)** — `POST /internal/identity/session-v2` (subject+email → user + ALL
+  memberships; verified stranger gets a bare user row, invited email binds + activates every
+  pending invite in active accounts) + `POST /internal/identity/workspaces` (onboarding submit:
+  account + owner membership + default app/envs + seeded sandbox credits in ONE local tx — **no
+  WorkOS org**). Gates: signup kill-switch, verified email, throttle. 7 real-Postgres tests.
+- **Slice 2 (`806b4ff`)** — fe-auth user-level path (`readUserSession`/`handleUserCallback`/
+  `refreshUserSession*`); dashboard cut over. Active workspace = HMAC-signed selector cookie
+  (`fabric-workspace`) that grants nothing by itself — every request revalidates the selection
+  against the freshly resolved membership list before an AppSession/tenant token exists (fail
+  closed). BFF routes unchanged (`orgId` = selected tenant).
+- **Slice 3 (`beff11c`)** — branded `/onboarding` (user NAMES their workspace), `/workspaces`
+  picker (replaces the WorkOS hosted org screen), sidebar workspace switcher (Stripe account
+  picker; `POST /api/workspace/switch` validates membership server-side, rewrites only the
+  selector cookie). AuthKit hosted screens themed to Fabric via WorkOS MCP (indigo #383a96,
+  #fcfcfd canvas, System theme, sign-up name fields on).
+- **Slice 4 (`95912e7`)** — org-less invitations everywhere (team invites + ops provisioning;
+  role/tenancy = local rows only), ops provisioning is now one local tx (`workos_organization_id`
+  stays null — reserved for future enterprise SSO), v1 org-scoped path DELETED (session +
+  organization-for-user routes, self-serve adoption provisioner, fe-auth adoptOrganization).
+  fe-auth's org-agnostic `resolveSession` no longer requires IdP org/role claims — required so
+  the staff realm keeps working once users are detached from WorkOS orgs.
+
+**WorkOS (Staging env) wiring done via MCP**: Vercel redirect/logout URIs registered per app
+(dashboard `fabric-dashboard-teal.vercel.app`, admin `fabric-admin-console.vercel.app`; localhost
+kept; dead CloudFront URIs dropped); admin-console Vercel `WORKOS_CLIENT_ID` fixed (was the
+dashboard's) + redeployed. **Pending, deliberately sequenced AFTER deploy of this branch**: remove
+the 5 org memberships in the 2 staging WorkOS orgs (org_01KXB4SH… "fabricservices8's workspace",
+org_01KWP2NBAD… "Test Organization") — detaching before the relaxed fe-auth ships would break
+logins on the deployed v1 code. Existing sealed cookies force one re-login (accepted, pre-launch).
 
 ## Latest (2026-07-15): SDK-002 — endpoint-specific webhook delivery
 
