@@ -107,10 +107,13 @@ export function CreateApiKeyForm({
   applicationId,
   env,
   backHref,
+  playgroundUrl,
 }: {
   applicationId: string;
   env: ApiKeyEnv;
   backHref: string;
+  /** Hosted playground URL — when set, the secret reveal offers a "try it" link. */
+  playgroundUrl?: string;
 }) {
   const router = useRouter();
   const [secret, setSecret] = useState<string | null>(null);
@@ -196,8 +199,15 @@ export function CreateApiKeyForm({
             {copied ? "Copied" : "Copy"}
           </Button>
         </div>
-        <div>
+        <div className="flex flex-wrap gap-2">
           <Button onClick={done}>Done</Button>
+          {playgroundUrl ? (
+            <Button variant="outline" asChild>
+              <a href={playgroundUrl} target="_blank" rel="noreferrer">
+                Try it in the playground
+              </a>
+            </Button>
+          ) : null}
         </div>
       </div>
     );
@@ -210,131 +220,142 @@ export function CreateApiKeyForm({
         void form.handleSubmit();
       }}
       noValidate
-      className="flex max-w-2xl flex-col gap-6"
+      className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_260px]"
     >
-      <form.Field name="name">
-        {(field) => {
-          const invalid = fieldInvalid(field);
-          return (
-            <Field data-invalid={invalid || undefined}>
-              <FieldLabel htmlFor="key-name">Name</FieldLabel>
-              <Input
-                id="key-name"
-                placeholder="e.g. Production API"
-                value={field.state.value}
-                onChange={(e) => field.handleChange(e.target.value)}
-                onBlur={field.handleBlur}
-                aria-invalid={invalid || undefined}
-              />
-              <FieldError field={field} />
-            </Field>
-          );
-        }}
-      </form.Field>
-
-      <form.Field name="scopes">
-        {(field) => {
-          const invalid = fieldInvalid(field);
-          const selected = field.state.value;
-          const toggleScope = (s: ApiKeyScope) =>
-            field.handleChange(
-              selected.includes(s)
-                ? selected.filter((x) => x !== s)
-                : [...selected, s],
+      {/* Main column — name + the permission grid. */}
+      <div className="flex flex-col gap-6">
+        <form.Field name="name">
+          {(field) => {
+            const invalid = fieldInvalid(field);
+            return (
+              <Field data-invalid={invalid || undefined}>
+                <FieldLabel htmlFor="key-name">Name</FieldLabel>
+                <Input
+                  id="key-name"
+                  placeholder="e.g. Production API"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                  aria-invalid={invalid || undefined}
+                />
+                <FieldError field={field} />
+              </Field>
             );
-          return (
-            <Field data-invalid={invalid || undefined}>
-              <FieldLabel>Permissions</FieldLabel>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {apiKeyScopeValues.map((s) => {
-                  const on = selected.includes(s);
-                  const detail = SCOPE_DETAILS[s];
-                  return (
-                    <Button
-                      key={s}
-                      type="button"
-                      size="sm"
-                      variant={on ? "default" : "outline"}
-                      aria-pressed={on}
-                      className="h-auto min-h-16 justify-start whitespace-normal px-3 py-2 text-left"
-                      onClick={() => toggleScope(s)}
-                    >
-                      {on ? <Check data-icon="inline-start" /> : null}
-                      <span className="flex flex-col items-start gap-0.5">
-                        <span>{detail.label}</span>
-                        <span
-                          className={
-                            on
-                              ? "text-xs text-primary-foreground/80"
-                              : "text-xs text-muted-foreground"
-                          }
-                        >
-                          {detail.description}
-                        </span>
-                        <span
-                          className={
-                            on
-                              ? "font-mono text-xs text-primary-foreground/80"
-                              : "font-mono text-xs text-muted-foreground"
-                          }
-                        >
-                          {s}
-                        </span>
-                      </span>
-                    </Button>
-                  );
-                })}
-              </div>
-              <FieldError field={field} />
-            </Field>
-          );
-        }}
-      </form.Field>
+          }}
+        </form.Field>
 
-      <form.Field name="expiresInDays">
-        {(field) => (
-          <Field className="max-w-xs">
-            <FieldLabel htmlFor="key-expiry">Expires</FieldLabel>
-            <Select
-              value={String(field.state.value)}
-              onValueChange={(v) => field.handleChange(Number(v))}
-            >
-              <SelectTrigger id="key-expiry">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {EXPIRY_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        )}
-      </form.Field>
-
-      <div className="flex gap-2">
-        <form.Subscribe
-          selector={(s) => ({
-            canSubmit: s.canSubmit,
-            isSubmitting: s.isSubmitting,
-          })}
-        >
-          {({ canSubmit, isSubmitting }) => (
-            <Button type="submit" disabled={!canSubmit || isSubmitting}>
-              {isSubmitting ? "Creating…" : "Create key"}
-            </Button>
-          )}
-        </form.Subscribe>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => router.push(backHref)}
-        >
-          Cancel
-        </Button>
+        <form.Field name="scopes">
+          {(field) => {
+            const invalid = fieldInvalid(field);
+            const selected = field.state.value;
+            const toggleScope = (s: ApiKeyScope) =>
+              field.handleChange(
+                selected.includes(s)
+                  ? selected.filter((x) => x !== s)
+                  : [...selected, s],
+              );
+            return (
+              <Field data-invalid={invalid || undefined}>
+                <FieldLabel>Permissions</FieldLabel>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {apiKeyScopeValues.map((s) => {
+                    const on = selected.includes(s);
+                    const detail = SCOPE_DETAILS[s];
+                    return (
+                      <Button
+                        key={s}
+                        type="button"
+                        size="sm"
+                        variant={on ? "default" : "outline"}
+                        aria-pressed={on}
+                        className="h-auto min-h-16 justify-start whitespace-normal px-3 py-2 text-left"
+                        onClick={() => toggleScope(s)}
+                      >
+                        {on ? <Check data-icon="inline-start" /> : null}
+                        <span className="flex flex-col items-start gap-0.5">
+                          <span>{detail.label}</span>
+                          <span
+                            className={
+                              on
+                                ? "text-xs text-primary-foreground/80"
+                                : "text-xs text-muted-foreground"
+                            }
+                          >
+                            {detail.description}
+                          </span>
+                          <span
+                            className={
+                              on
+                                ? "font-mono text-xs text-primary-foreground/80"
+                                : "font-mono text-xs text-muted-foreground"
+                            }
+                          >
+                            {s}
+                          </span>
+                        </span>
+                      </Button>
+                    );
+                  })}
+                </div>
+                <FieldError field={field} />
+              </Field>
+            );
+          }}
+        </form.Field>
       </div>
+
+      {/* Side panel — lifespan + the primary actions, sticky beside the grid. */}
+      <aside className="flex flex-col gap-6 rounded-lg border bg-card p-4 lg:sticky lg:top-6">
+        <form.Field name="expiresInDays">
+          {(field) => (
+            <Field>
+              <FieldLabel htmlFor="key-expiry">Expires</FieldLabel>
+              <Select
+                value={String(field.state.value)}
+                onValueChange={(v) => field.handleChange(Number(v))}
+              >
+                <SelectTrigger id="key-expiry">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPIRY_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+        </form.Field>
+
+        <div className="flex flex-col gap-2 border-t pt-4">
+          <form.Subscribe
+            selector={(s) => ({
+              canSubmit: s.canSubmit,
+              isSubmitting: s.isSubmitting,
+            })}
+          >
+            {({ canSubmit, isSubmitting }) => (
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={!canSubmit || isSubmitting}
+              >
+                {isSubmitting ? "Creating…" : "Create key"}
+              </Button>
+            )}
+          </form.Subscribe>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            onClick={() => router.push(backHref)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </aside>
     </form>
   );
 }

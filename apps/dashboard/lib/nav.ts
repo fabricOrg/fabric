@@ -30,6 +30,24 @@ export interface NavItem {
   readonly icon: LucideIcon;
   /** Mock-first surface with no real backend yet — badged "Preview" in deployed builds (honesty). */
   readonly preview?: boolean;
+  /** Permission scope the page needs. Absent → always visible (Overview). A member lacking it never
+   *  sees the item in the sidebar (or command palette). */
+  readonly permission?: string;
+  /** Membership roles allowed to see this item (for role-gated pages like Team, which isn't a
+   *  permission scope). Absent → any role. */
+  readonly roles?: readonly string[];
+}
+
+/** True when a session (its permissions + membership role) may see a nav item. */
+export function canSeeNavItem(
+  item: NavItem,
+  ctx: { readonly permissions: readonly string[]; readonly role: string },
+): boolean {
+  if (item.permission && !ctx.permissions.includes(item.permission)) {
+    return false;
+  }
+  if (item.roles && !item.roles.includes(ctx.role)) return false;
+  return true;
 }
 
 export interface NavGroup {
@@ -41,7 +59,12 @@ export const navGroups: readonly NavGroup[] = [
   {
     items: [
       { title: "Overview", href: "/", icon: LayoutDashboard },
-      { title: "API transactions", href: "/flows", icon: Workflow },
+      {
+        title: "API transactions",
+        href: "/flows",
+        icon: Workflow,
+        permission: "request_logs:read",
+      },
     ],
   },
   {
@@ -50,32 +73,60 @@ export const navGroups: readonly NavGroup[] = [
       // ADR-0004: applications are the workspace's top-level structure; each carries a sandbox and a
       // live environment, and OWNS its API keys (+ webhooks/logs under W-B). Those live on the
       // application-detail page (/applications/[slug]), not a flat top-level list.
-      { title: "Applications", href: "/applications", icon: Boxes },
+      {
+        title: "Applications",
+        href: "/applications",
+        icon: Boxes,
+        permission: "api_keys:read",
+      },
     ],
   },
   {
     label: "Messaging",
     items: [
-      { title: "Send SMS", href: "/send", icon: Send },
-      { title: "SMS Templates", href: "/templates", icon: Library },
-      { title: "Virtual phone", href: "/virtual-phone", icon: Smartphone },
+      { title: "Send SMS", href: "/send", icon: Send, permission: "sms:send" },
+      {
+        title: "SMS Templates",
+        href: "/templates",
+        icon: Library,
+        permission: "sms:send",
+      },
+      {
+        title: "Virtual phone",
+        href: "/virtual-phone",
+        icon: Smartphone,
+        permission: "sms:read",
+      },
       {
         title: "Campaigns",
         href: "/campaigns",
         icon: Megaphone,
         preview: true,
+        permission: "sms:send",
       },
-      { title: "Messages", href: "/messages", icon: List },
+      {
+        title: "Messages",
+        href: "/messages",
+        icon: List,
+        permission: "sms:read",
+      },
       {
         title: "Managed deliveries",
         href: "/message-deliveries",
         icon: PackageCheck,
+        permission: "messages:read",
       },
-      { title: "Emails", href: "/emails", icon: Mail },
+      {
+        title: "Emails",
+        href: "/emails",
+        icon: Mail,
+        permission: "email:read",
+      },
       {
         title: "Number verification",
         href: "/verify",
         icon: ShieldCheck,
+        permission: "sms:send",
       },
     ],
   },
@@ -86,34 +137,59 @@ export const navGroups: readonly NavGroup[] = [
         title: "Sender IDs",
         href: "/senders",
         icon: BadgeCheck,
+        permission: "sms:send",
       },
       {
         title: "Consent & DND",
         href: "/consent",
         icon: BellOff,
+        permission: "sms:send",
       },
     ],
   },
   {
     label: "Account",
     items: [
-      { title: "Billing & Wallet", href: "/wallet", icon: Wallet },
-      { title: "Team", href: "/team", icon: Users },
+      {
+        title: "Billing & Wallet",
+        href: "/wallet",
+        icon: Wallet,
+        permission: "wallet:read",
+      },
+      // Team management is role-gated (owner/admin), not a permission scope.
+      { title: "Team", href: "/team", icon: Users, roles: ["owner", "admin"] },
     ],
   },
 ];
 
-/** Flattened destinations for the ⌘K command palette (single source of truth = navGroups). */
-export const navCommands: readonly {
+/** Flattened destinations for the ⌘K command palette (single source of truth = navGroups). Carries
+ *  each item's permission/roles so the palette can hide what the sidebar hides (canSeeNavCommand). */
+export interface NavCommand {
   title: string;
   href: string;
   group: string;
   icon: LucideIcon;
-}[] = navGroups.flatMap((g) =>
+  permission?: string;
+  roles?: readonly string[];
+}
+
+export const navCommands: readonly NavCommand[] = navGroups.flatMap((g) =>
   g.items.map((item) => ({
     title: item.title,
     href: item.href,
     group: g.label ?? "General",
     icon: item.icon,
+    ...(item.permission ? { permission: item.permission } : {}),
+    ...(item.roles ? { roles: item.roles } : {}),
   })),
 );
+
+/** Palette-side visibility check — mirrors canSeeNavItem for a flattened command. */
+export function canSeeNavCommand(
+  cmd: NavCommand,
+  ctx: { readonly permissions: readonly string[]; readonly role: string },
+): boolean {
+  if (cmd.permission && !ctx.permissions.includes(cmd.permission)) return false;
+  if (cmd.roles && !cmd.roles.includes(ctx.role)) return false;
+  return true;
+}

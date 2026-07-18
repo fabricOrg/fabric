@@ -60,6 +60,7 @@ export default async function NewApiKeyPage({
           applicationId={app.id}
           env={env}
           backHref={backHref}
+          playgroundUrl={process.env.PLAYGROUND_URL}
         />
       ) : (
         <ErrorState

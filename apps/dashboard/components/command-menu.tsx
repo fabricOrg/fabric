@@ -9,7 +9,7 @@ import { Input } from "@app/ui/components/ui/input";
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { navCommands } from "@/lib/nav";
+import { canSeeNavCommand, navCommands } from "@/lib/nav";
 
 /**
  * ⌘K / Ctrl-K command palette (keyboard-first navigation — Linear precedent, DASHBOARD-UX-REFERENCE
@@ -18,21 +18,33 @@ import { navCommands } from "@/lib/nav";
  */
 const OPEN_EVENT = "fabric:command-menu";
 
-export function CommandMenu() {
+export function CommandMenu({
+  permissions,
+  role,
+}: {
+  permissions: readonly string[];
+  role: string;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Only destinations the member can actually reach — mirrors the sidebar gating.
+  const commands = useMemo(
+    () => navCommands.filter((c) => canSeeNavCommand(c, { permissions, role })),
+    [permissions, role],
+  );
+
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return navCommands;
-    return navCommands.filter(
+    if (!q) return commands;
+    return commands.filter(
       (c) =>
         c.title.toLowerCase().includes(q) || c.group.toLowerCase().includes(q),
     );
-  }, [query]);
+  }, [query, commands]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

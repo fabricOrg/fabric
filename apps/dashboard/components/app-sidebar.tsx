@@ -21,24 +21,37 @@ import {
   type SwitcherWorkspace,
   WorkspaceSwitcher,
 } from "@/components/workspace-switcher";
-import { navGroups } from "@/lib/nav";
+import { canSeeNavItem, navGroups } from "@/lib/nav";
 
 /** The Fabric wordmark — the brand "F" mark (mirrors app/icon.svg, tokenised for white-label) +
  *  the display-face name. */
 export function AppSidebar({
   role,
+  permissions,
   email,
   name,
   activeTenantId,
   workspaces,
 }: {
   role: string;
+  permissions: readonly string[];
   email?: string;
   name?: string;
   activeTenantId: string;
   workspaces: readonly SwitcherWorkspace[];
 }) {
   const pathname = usePathname();
+
+  // Hide pages the member can't reach — no dead links in the sidebar (they'd 403/redirect anyway).
+  // Drop items by permission/role, then any group left empty.
+  const visibleGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        canSeeNavItem(item, { permissions, role }),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <Sidebar collapsible="icon">
@@ -50,7 +63,7 @@ export function AppSidebar({
         />
       </SidebarHeader>
       <SidebarContent>
-        {navGroups.map((group, i) => (
+        {visibleGroups.map((group, i) => (
           <SidebarGroup key={group.label ?? `group-${i}`}>
             {group.label ? (
               <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
