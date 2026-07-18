@@ -74,20 +74,25 @@ function liveProviderReadiness(config: ConfigService): {
   if ((config.get<string>("NODE_ENV") ?? process.env.NODE_ENV) === "test") {
     return { ready: true, reason: null };
   }
+  // Reasons are user-facing (surfaced as the `live_provider_not_ready` API error): keep them
+  // provider-neutral — never leak the carrier's name (Arkesel) to a customer.
   if (config.get<string>("SMS_PROVIDER") !== "arkesel") {
     return {
       ready: false,
-      reason: "Arkesel is not configured as the live SMS provider.",
+      reason: "Live SMS delivery is not enabled for this environment.",
     };
   }
   const apiKey = config.get<string>("ARKESEL_API_KEY") ?? "";
   if (!apiKey || apiKey === "REPLACE_ME") {
-    return { ready: false, reason: "Arkesel credentials are not configured." };
+    return {
+      ready: false,
+      reason: "Live SMS delivery is not enabled for this environment.",
+    };
   }
   if ((config.get<string>("ARKESEL_SANDBOX") ?? "true") !== "false") {
     return {
       ready: false,
-      reason: "Arkesel carrier delivery is still in sandbox mode.",
+      reason: "Live SMS carrier delivery is still in sandbox mode.",
     };
   }
   const allowlist = parseLiveRecipientAllowlist(config);
