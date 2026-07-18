@@ -116,7 +116,7 @@
     <section class="hero">
       <p class="eyebrow">Hosted test lab</p>
       <h1>Run every shipped capability.</h1>
-      <p class="lede">Enter a sandbox API key, pick an operation, and run it against Fabric — the deployed API, or point <code>baseUrl</code> at a local server like <code>http://localhost:3000</code>. Your key is sent only with the request and never stored.</p>
+      <p class="lede">Enter a sandbox API key, pick an operation, and run it against the live Fabric API. Your key is sent only with the request and never stored.</p>
     </section>
 
     <div class="info">
@@ -131,10 +131,6 @@
           <div class="field">
             <label for="apiKey">Sandbox API key</label>
             <input id="apiKey" type="password" autocomplete="off" placeholder="sk_test_…" spellcheck="false">
-          </div>
-          <div class="field">
-            <label for="baseUrl">API base URL <span class="opt">optional — point at a local API</span></label>
-            <input id="baseUrl" type="text" autocomplete="off" placeholder="https://…  or  http://localhost:3000" spellcheck="false">
           </div>
           <div class="field">
             <label for="action">Operation</label>
@@ -181,7 +177,7 @@
 
     const GROUPS={sms:"SMS",email:"Email",verify:"Verify (OTP)",wallet:"Wallet",senderIds:"Sender IDs",webhooks:"Webhooks",virtualPhone:"Virtual phone"};
     const $=(s)=>document.querySelector(s);
-    const apiKey=$("#apiKey"),baseUrl=$("#baseUrl"),action=$("#action"),params=$("#params"),output=$("#output"),run=$("#run"),meta=$("#meta"),copy=$("#copy");
+    const apiKey=$("#apiKey"),action=$("#action"),params=$("#params"),output=$("#output"),run=$("#run"),meta=$("#meta"),copy=$("#copy");
 
     // Build grouped <optgroup> select from the example keys.
     const byGroup={};
@@ -220,7 +216,7 @@
       const t0=performance.now();
       try{
         const res=await fetch("/api/run",{method:"POST",headers:{"content-type":"application/json"},
-          body:JSON.stringify({apiKey:apiKey.value,baseUrl:baseUrl.value,action:action.value,params:payload})});
+          body:JSON.stringify({apiKey:apiKey.value,action:action.value,params:payload})});
         const ms=Math.round(performance.now()-t0);
         const data=await res.json();
         const chips=[{t:`HTTP ${res.status}`,k:res.ok?"ok":"err"},{t:`${ms} ms`}];
