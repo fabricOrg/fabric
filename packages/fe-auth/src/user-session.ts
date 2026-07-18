@@ -122,6 +122,18 @@ async function exchangeAndResolveUser(
   return { session, sealedCookie: response.sealedSession };
 }
 
+/**
+ * Resolve a sealed WorkOS session cookie to a user-level Fabric session (resolve-v2). Shared by
+ * the OAuth-callback path here and the credential flows (credentials.ts) — every way of obtaining
+ * a sealed cookie funnels through the same resolver, so downstream authorization is identical.
+ */
+export async function resolveUserSessionFromSealed(
+  cfg: RealmConfig,
+  sealedCookie: string,
+): Promise<UserSession | null> {
+  return authenticateAndResolveUser(cfg, sealedCookie);
+}
+
 async function authenticateAndResolveUser(
   cfg: RealmConfig,
   sealedCookie: string,

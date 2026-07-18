@@ -25,7 +25,7 @@
  * LIGHT — default (customer dashboard + dev-portal)
  * ───────────────────────────────────────────────────────────────────────── */
 :root {
-  --radius: 0.5rem; /* 8px base → inputs/buttons 8, cards 12 (lg), modals 16 (xl) */
+  --radius: 0rem; /* 8px base → inputs/buttons 8, cards 12 (lg), modals 16 (xl) */
 
   --background: #fcfcfd; /* near-white canvas — surfaces read as white, elevation via border/shadow */
   --foreground: #1a1b2e; /* indigo-ink */
@@ -206,10 +206,17 @@
   --color-audit-added: var(--audit-added);
   --color-audit-removed: var(--audit-removed);
 
-  --radius-sm: calc(var(--radius) - 4px); /* 4  — chips inner */
-  --radius-md: var(--radius); /* 8  — inputs / buttons */
-  --radius-lg: calc(var(--radius) + 4px); /* 12 — cards */
-  --radius-xl: calc(var(--radius) + 8px); /* 16 — modals / drawers */
+  /* Squared-corner system: every rectangular radius step maps to --radius (0). Utilities
+   * rounded-sm..rounded-3xl all read these, so a single --radius change re-rounds the whole app.
+   * --radius-full is intentionally NOT overridden — avatars, status dots and pills stay circular. */
+  --radius-xs: var(--radius);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
