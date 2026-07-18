@@ -1,61 +1,40 @@
-import { type NextRequest, NextResponse } from "next/server";
+import type { MessagingInsightsResponse } from "@app/contracts";
+import { NextResponse } from "next/server";
+import { BffError, dashboardApi } from "@/lib/server/api-client";
 
-// Mock BFF stub for Messaging Insights (Twilio Messaging Insights parity). Returns a coherent,
-// static analytics rollup so the Insights tab is fully exercisable before the real analytics
-// service exists. Numbers are internally consistent: delivered + failed <= totalSent, and the
-// per-error counts sum to `failed`.
-//
-// TODO(BFF): replace with dashboardApi("/v1/insights", "insights:read") once the endpoint ships.
-
-interface MockError {
-  code: string;
-  description: string;
-  count: number;
-}
-
-const ERRORS: readonly MockError[] = [
-  { code: "30008", description: "Unknown error", count: 512 },
-  { code: "30003", description: "Unreachable destination handset", count: 337 },
-  { code: "30005", description: "Unknown destination handset", count: 268 },
-  { code: "30006", description: "Landline or unreachable carrier", count: 154 },
-  { code: "30007", description: "Message filtered by carrier", count: 89 },
-  {
-    code: "21610",
-    description: "Recipient has unsubscribed (STOP)",
-    count: 42,
-  },
-];
-
-const FAILED = ERRORS.reduce((sum, e) => sum + e.count, 0); // 1,402
-const DELIVERED = 23_109;
-const TOTAL_SENT = 24_817; // remainder (306) is still in-flight
-
-export async function GET(_request: NextRequest) {
+// Real Messaging Insights BFF → the data-plane /v1/messages/insights rollup (aggregated from the
+// tenant's messages). Maps the API's snake_case summary to the camelCase shape the Insights tab's
+// client DTO already parses. Errors propagate so the tab shows its error state, never fake numbers.
+export async function GET() {
   try {
+    const res = await dashboardApi<MessagingInsightsResponse>(
+      "/v1/messages/insights",
+      "sms:read",
+    );
+    const s = res.summary;
     return NextResponse.json({
       summary: {
-        totalSent: TOTAL_SENT,
-        delivered: DELIVERED,
-        failed: FAILED,
-        avgSegments: 1.4,
-        errors: ERRORS,
+        totalSent: s.total_sent,
+        delivered: s.delivered,
+        failed: s.failed,
+        avgSegments: s.avg_segments,
+        errors: s.errors,
       },
-      request_id: "req_mock_insights",
+      request_id: res.request_id,
     });
   } catch (error) {
-    return errorResponse(error);
-  }
-}
-
-function errorResponse(_error: unknown) {
-  return NextResponse.json(
-    {
-      error: {
-        type: "api_error",
-        code: "bff_error",
-        message: "Request failed.",
+    if (error instanceof BffError) {
+      return NextResponse.json(error.payload, { status: error.status });
+    }
+    return NextResponse.json(
+      {
+        error: {
+          type: "api_error",
+          code: "bff_error",
+          message: "Request failed.",
+        },
       },
-    },
-    { status: 500 },
-  );
+      { status: 500 },
+    );
+  }
 }

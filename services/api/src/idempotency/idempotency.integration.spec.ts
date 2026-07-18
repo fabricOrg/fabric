@@ -17,6 +17,7 @@ import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
+import { MessagingInsightsService } from "../sms/messaging-insights.service.js";
 import { SmsController } from "../sms/sms.controller.js";
 import { SmsService } from "../sms/sms.service.js";
 import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
@@ -81,7 +82,11 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     vault,
   );
   const idempotency = new IdempotencyService(appDb);
-  const controller = new SmsController(sms, idempotency);
+  const controller = new SmsController(
+    sms,
+    idempotency,
+    new MessagingInsightsService(appDb),
+  );
 
   const tenantId = randomUUID() as TenantId;
   const tenant: RequestTenant = {
