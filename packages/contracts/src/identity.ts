@@ -75,6 +75,77 @@ export type OrganizationForUserResponse = z.infer<
   typeof organizationForUserResponseSchema
 >;
 
+// ---- ADR-0007 resolve-v2 — user-level session; tenancy comes back as memberships[] --------------
+// WorkOS proves WHO (no organization context); the response lists every workspace the user can
+// enter. A verified stranger gets a bare user row and an empty list — workspace creation happens
+// later through the onboarding wizard (create-workspace below), never implicitly here.
+export const resolveUserSessionRequestSchema = z.object({
+  external_user_id: identifier,
+  email: z.string().trim().email().max(320),
+  name: z.string().trim().min(1).max(255).nullable(),
+  user_updated_at: z.string().datetime({ offset: true }),
+  email_verified: z.boolean(),
+  session_id: identifier,
+});
+
+export type ResolveUserSessionRequest = z.infer<
+  typeof resolveUserSessionRequestSchema
+>;
+
+export const workspaceMembershipSchema = z
+  .object({
+    tenant_id: postgresUuid,
+    workspace_name: z.string().min(1),
+    workspace_slug: z.string().min(1),
+    role: customerRoleWireSchema,
+    developer_access: z.boolean(),
+    permissions: z.array(identifier),
+    /** Tenant plan — the dashboard renders sandbox state from it (ADR-0002 F3). */
+    plan: identifier,
+  })
+  .transform((value) => ({
+    ...value,
+    role: value.role === "developer" ? ("member" as const) : value.role,
+  }));
+
+export type WorkspaceMembership = z.infer<typeof workspaceMembershipSchema>;
+
+export const resolveUserSessionResponseSchema = z.object({
+  user_id: postgresUuid,
+  email: z.string(),
+  name: z.string().nullable(),
+  memberships: z.array(workspaceMembershipSchema),
+  session_id: identifier,
+});
+
+export type ResolveUserSessionResponse = z.infer<
+  typeof resolveUserSessionResponseSchema
+>;
+
+// ---- ADR-0007 create-workspace — onboarding submit; local-only, no WorkOS org ------------------
+export const createWorkspaceRequestSchema = z.object({
+  external_user_id: identifier,
+  email: z.string().trim().email().max(320),
+  email_verified: z.boolean(),
+  workspace_name: z.string().trim().min(1).max(120),
+});
+
+export type CreateWorkspaceRequest = z.infer<
+  typeof createWorkspaceRequestSchema
+>;
+
+export const createWorkspaceResponseSchema = z.object({
+  tenant_id: postgresUuid,
+  workspace_name: z.string(),
+  workspace_slug: z.string(),
+  /** False when a same-named workspace this user owns already existed (double-submit replay). */
+  provisioned: z.boolean(),
+});
+
+export type CreateWorkspaceResponse = z.infer<
+  typeof createWorkspaceResponseSchema
+>;
+
 // ---- BFF tenant tokens (ADR-0003) — short-lived data-plane credential minted per tenant ---------
 export const mintTenantTokenRequestSchema = z.object({
   tenant_id: postgresUuid,

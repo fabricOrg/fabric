@@ -11,9 +11,11 @@ import { SelfServeProvisioningService } from "./self-serve-provisioning.service.
 import { StaffService } from "./staff.service.js";
 import { StaffAdminController } from "./staff-admin.controller.js";
 import { StaffIdentityController } from "./staff-identity.controller.js";
+import { UserSessionService } from "./user-session.service.js";
 import { createWorkosClient, WORKOS_CLIENT } from "./workos-client.provider.js";
 import { WorkosWebhookController } from "./workos-webhook.controller.js";
 import { WorkosWebhookService } from "./workos-webhook.service.js";
+import { WorkspaceProvisioningService } from "./workspace-provisioning.service.js";
 
 @Module({
   imports: [ApiKeysModule, ProvisioningDbModule, AuditModule, KillSwitchModule],
@@ -25,6 +27,8 @@ import { WorkosWebhookService } from "./workos-webhook.service.js";
   ],
   providers: [
     IdentityService,
+    UserSessionService,
+    WorkspaceProvisioningService,
     SelfServeProvisioningService,
     StaffService,
     BffTokenGuard,
