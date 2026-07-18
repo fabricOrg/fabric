@@ -64,6 +64,9 @@ export class WebhooksController {
         ? { applicationId: b.application_id }
         : {}),
       ...(b.env === "live" || b.env === "sandbox" ? { envType: b.env } : {}),
+      // An sk_* key already resolves to its application-environment — bind the webhook there instead
+      // of guessing the workspace's "default" app (which 500'd for any renamed application).
+      ...(tenant.environmentId ? { environmentId: tenant.environmentId } : {}),
     });
     return { ...created, request_id: newRequestId() };
   }
