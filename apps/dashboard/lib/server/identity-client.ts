@@ -140,6 +140,8 @@ export async function resolveUserSessionV2(
   const parsed = resolveUserSessionResponseSchema.parse(await response.json());
   return {
     userId: parsed.user_id,
+    externalUserId: claims.externalUserId,
+    emailVerified: claims.emailVerified,
     email: parsed.email,
     name: parsed.name,
     sessionId: parsed.session_id,

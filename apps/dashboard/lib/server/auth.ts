@@ -140,27 +140,30 @@ export async function refreshDashboardUserSession(): Promise<UserSession | null>
   return refreshed.session;
 }
 
+/** Both halves of an authenticated request: the person and their ACTIVE workspace session. */
+export interface DashboardWorkspaceContext {
+  readonly user: UserSession;
+  readonly session: AppSession;
+}
+
 /**
  * Page-level gate. Signed-in users without a usable workspace are routed to the surface that fixes
- * it: no memberships → onboarding (create one), several without a selection → the picker.
+ * it: no memberships → onboarding (create one), several without a selection → the picker. Returns
+ * BOTH the user-level session (for the workspace switcher) and the workspace-scoped AppSession so
+ * layouts don't resolve the identity twice.
  */
-export async function requireDashboardSession(): Promise<AppSession> {
+export async function requireDashboardWorkspaceContext(): Promise<DashboardWorkspaceContext> {
   const store = await cookies();
-  const user = await readDashboardUserSession();
-  if (!user) {
-    if (workosAuthConfigured() && store.has(WORKOS_COOKIE)) {
-      // Carry the current path through the refresh hop so a reload returns here, not the home route.
-      const pathname = (await headers()).get("x-pathname");
-      const returnTo = pathname?.startsWith("/") ? pathname : "/";
-      redirect(`/auth/refresh?return_to=${encodeURIComponent(returnTo)}`);
-    }
-    redirect("/login");
-  }
+  const user = await requireDashboardUserSession();
   const membership = selectWorkspace(user, store.get(WORKSPACE_COOKIE)?.value);
   if (!membership) {
     redirect(user.memberships.length === 0 ? "/onboarding" : "/workspaces");
   }
-  return toWorkspaceSession(user, membership);
+  return { user, session: toWorkspaceSession(user, membership) };
+}
+
+export async function requireDashboardSession(): Promise<AppSession> {
+  return (await requireDashboardWorkspaceContext()).session;
 }
 
 /** Page-level gate for surfaces that need a signed-in USER but no workspace (onboarding/picker). */

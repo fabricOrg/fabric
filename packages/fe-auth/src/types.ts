@@ -124,7 +124,10 @@ export interface WorkspaceMembershipClaim {
  */
 export interface UserSession {
   readonly userId: string;
+  /** WorkOS subject id — carried so BFF flows (e.g. workspace creation) can act for this identity. */
+  readonly externalUserId: string;
   readonly email: string;
+  readonly emailVerified: boolean;
   readonly name: string | null;
   readonly memberships: readonly WorkspaceMembershipClaim[];
   readonly sessionId: string;
