@@ -162,17 +162,34 @@ export const navGroups: readonly NavGroup[] = [
   },
 ];
 
-/** Flattened destinations for the ⌘K command palette (single source of truth = navGroups). */
-export const navCommands: readonly {
+/** Flattened destinations for the ⌘K command palette (single source of truth = navGroups). Carries
+ *  each item's permission/roles so the palette can hide what the sidebar hides (canSeeNavCommand). */
+export interface NavCommand {
   title: string;
   href: string;
   group: string;
   icon: LucideIcon;
-}[] = navGroups.flatMap((g) =>
+  permission?: string;
+  roles?: readonly string[];
+}
+
+export const navCommands: readonly NavCommand[] = navGroups.flatMap((g) =>
   g.items.map((item) => ({
     title: item.title,
     href: item.href,
     group: g.label ?? "General",
     icon: item.icon,
+    ...(item.permission ? { permission: item.permission } : {}),
+    ...(item.roles ? { roles: item.roles } : {}),
   })),
 );
+
+/** Palette-side visibility check — mirrors canSeeNavItem for a flattened command. */
+export function canSeeNavCommand(
+  cmd: NavCommand,
+  ctx: { readonly permissions: readonly string[]; readonly role: string },
+): boolean {
+  if (cmd.permission && !ctx.permissions.includes(cmd.permission)) return false;
+  if (cmd.roles && !cmd.roles.includes(ctx.role)) return false;
+  return true;
+}

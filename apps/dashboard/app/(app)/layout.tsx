@@ -88,7 +88,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       }
     >
       {children}
-      <CommandMenu />
+      <CommandMenu permissions={session.permissions} role={session.role} />
     </AppShell>
   );
 }
