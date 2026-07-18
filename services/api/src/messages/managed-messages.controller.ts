@@ -1,5 +1,6 @@
 import type {
   ListMessageDeliveriesResponse,
+  MessageDeliveryWebhooksResponse,
   RetrieveManagedMessageResponse,
   SendManagedMessageResponse,
 } from "@app/contracts";
@@ -109,6 +110,20 @@ export class ManagedMessagesController {
     };
   }
 
+  @Get(":id/webhooks")
+  async webhooks(
+    @Req() request: AuthedRequest,
+    @Param("id") deliveryId: string,
+    @Query("application_id") applicationId?: string,
+    @Query("environment_id") environmentId?: string,
+  ): Promise<MessageDeliveryWebhooksResponse> {
+    const scope = readScope(request, applicationId, environmentId);
+    return {
+      webhooks: await this.messages.webhooks({ ...scope, deliveryId }),
+      request_id: newRequestId(),
+    };
+  }
+
   @Get(":id")
   async retrieve(
     @Req() request: AuthedRequest,
@@ -116,38 +131,40 @@ export class ManagedMessagesController {
     @Query("application_id") applicationId?: string,
     @Query("environment_id") environmentId?: string,
   ): Promise<RetrieveManagedMessageResponse> {
-    // Same dual authority as list: an sk_* key reads its own app/env; the dashboard's tenant
-    // token (no application scope) names both explicitly and carries sms:read.
-    if (request.tenant?.applicationId) {
-      const tenant = scopedTenant(request, "messages:read");
-      return {
-        delivery: await this.messages.retrieve({
-          tenantId: tenant.id,
-          applicationId: tenant.applicationId,
-          environmentId: tenant.environmentId,
-          deliveryId,
-        }),
-        request_id: newRequestId(),
-      };
-    }
-    const tenant = requireScope(request.tenant, "sms:read");
-    if (!applicationId || !environmentId) {
-      throw invalidRequest(
-        "application_scope_required",
-        "Provide application_id and environment_id when retrieving with a tenant token.",
-        applicationId ? "environment_id" : "application_id",
-      );
-    }
+    const scope = readScope(request, applicationId, environmentId);
     return {
-      delivery: await this.messages.retrieve({
-        tenantId: tenant.id,
-        applicationId,
-        environmentId,
-        deliveryId,
-      }),
+      delivery: await this.messages.retrieve({ ...scope, deliveryId }),
       request_id: newRequestId(),
     };
   }
+}
+
+/**
+ * Dual read authority: an sk_* key reads its own app/env (messages:read); the dashboard's tenant
+ * token (no application scope, ADR-0003) names both explicitly and carries sms:read.
+ */
+function readScope(
+  request: AuthedRequest,
+  applicationId?: string,
+  environmentId?: string,
+): { tenantId: string; applicationId: string; environmentId: string } {
+  if (request.tenant?.applicationId) {
+    const tenant = scopedTenant(request, "messages:read");
+    return {
+      tenantId: tenant.id,
+      applicationId: tenant.applicationId,
+      environmentId: tenant.environmentId,
+    };
+  }
+  const tenant = requireScope(request.tenant, "sms:read");
+  if (!applicationId || !environmentId) {
+    throw invalidRequest(
+      "application_scope_required",
+      "Provide application_id and environment_id when reading with a tenant token.",
+      applicationId ? "environment_id" : "application_id",
+    );
+  }
+  return { tenantId: tenant.id, applicationId, environmentId };
 }
 
 function scopedTenant(

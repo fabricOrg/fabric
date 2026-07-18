@@ -538,6 +538,94 @@
         ]
       }
     },
+    "/v1/message-deliveries/{id}/webhooks": {
+      "get": {
+        "operationId": "listManagedMessageWebhooks",
+        "summary": "Webhook fan-out status for a managed delivery's events",
+        "responses": {
+          "200": {
+            "description": "Webhook deliveries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageDeliveryWebhooksResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or missing API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Platform error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
     "/v1/message-deliveries/{id}": {
       "get": {
         "operationId": "retrieveManagedMessage",
@@ -2567,6 +2655,94 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "MessageDeliveryWebhookStatus": {
+        "type": "object",
+        "required": [
+          "event_id",
+          "event_type",
+          "endpoint_id",
+          "endpoint_url",
+          "state",
+          "attempts",
+          "last_http_status",
+          "last_error_category",
+          "delivered_at",
+          "created_at"
+        ],
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "endpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "endpoint_url": {
+            "type": "string"
+          },
+          "state": {
+            "enum": ["pending", "delivering", "delivered", "dead"]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "last_http_status": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_error_category": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delivered_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MessageDeliveryWebhooksResponse": {
+        "type": "object",
+        "required": ["webhooks", "request_id"],
+        "properties": {
+          "webhooks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageDeliveryWebhookStatus"
+            }
+          },
+          "request_id": {
+            "type": "string"
           }
         }
       },

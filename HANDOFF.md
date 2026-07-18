@@ -158,8 +158,23 @@ provisioner policy, composite containment FKs, retention `expires_at` + `legal_h
   no-op. Also fixed the REAL cause of the intermittent statement-spec failures: integration specs
   sharing raw API keys race on the globally-unique key_hash and authenticate as each other's
   tenants — keys de-duplicated/randomized; failure-path diagnostic left in the statement spec.
-- **Remaining for SDK-005:** webhook status on the detail view, tenant export/deletion handling,
-  typed terminal-webhook consumption + packed-example sandbox UAT.
+- **PR #144 MERGED to dev (`dbfd7d1`, 2026-07-17, CI green).** Continuing on
+  `feature/ops-sdk005-closeout`.
+- **Webhook status DONE (`3073099`):** `GET /v1/message-deliveries/:id/webhooks` (fan-out rows per
+  outbox event — endpoint URL/state/attempts/last HTTP, secret never; containment 404) + dashboard
+  Webhooks section on the detail page; shared `readScope` dual-authority helper. Also: queue-spec
+  flake root-caused (dev-stack worker shares Redis, raced the spec's worker) → `REDIS_QUEUE_PREFIX`
+  on QueueService + per-run prefix in the spec. Light canvas → near-white `#fcfcfd`.
+- **Sandbox UAT DONE (2026-07-18):** `managed-sdk-uat.integration` — real SDK over real HTTP:
+  send by key → worker fan-out → SDK-verified TYPED events (accepted + terminal delivered,
+  tampered payload refused) → delivery/attempt/wallet reconcile to one logical message. Full API
+  integration now 39 files / 169 tests.
+- **DSR/offboarding DONE (2026-07-18):** erasure scrubs managed reference/metadata same-tx with
+  the key destruction (money facts survive), summary counts managed deliveries, offboarding =
+  soft-close + status-blind retention (proven on a closed tenant). 2-test spec.
+- **SDK-005 SCOPE COMPLETE.** Full API integration 40 files / 171 tests. Evidence:
+  `docs/sdk/evidence/sdk-005.md`. Next backlog: SDK-006 (live provider path — behind the live-SMS
+  redline) or SDK-010 (Journeys, unblocked). Packed-tarball UAT variant = nicety.
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 

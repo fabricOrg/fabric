@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type {
   MessageDelivery,
   MessageDeliverySummary,
+  MessageDeliveryWebhookStatus,
   SendManagedMessageRequest,
 } from "@app/contracts";
 import type { AppDb } from "@app/db";
@@ -13,7 +14,11 @@ import { Inject, Injectable } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
 import { apiError, invalidRequest } from "../http/api-error.js";
 import { SmsService } from "../sms/sms.service.js";
-import { listDeliveries, retrieveDelivery } from "./managed-messages-reads.js";
+import {
+  listDeliveries,
+  listDeliveryWebhookStatus,
+  retrieveDelivery,
+} from "./managed-messages-reads.js";
 import { MessagePreviewService } from "./message-preview.service.js";
 
 const CONTENT_RETENTION_DAYS = 30;
@@ -143,6 +148,15 @@ export class ManagedMessagesService {
     environmentId: string;
   }): Promise<MessageDeliverySummary[]> {
     return listDeliveries(this.db, input);
+  }
+
+  async webhooks(input: {
+    tenantId: string;
+    applicationId: string;
+    environmentId: string;
+    deliveryId: string;
+  }): Promise<MessageDeliveryWebhookStatus[]> {
+    return listDeliveryWebhookStatus(this.db, input);
   }
 }
 

@@ -65,7 +65,14 @@ describeDb("queued send pipeline (BullMQ)", () => {
   const vault = new PiiVaultService(appDb, configStub({}));
   const owner = postgres(superUrl ?? "", { max: 1 });
 
-  const queueOn = new QueueService(configStub({ REDIS_QUEUE_URL: redisUrl }));
+  // Unique prefix per run: a locally running dev stack shares this Redis and its own sms-send
+  // worker would otherwise race this spec's worker for the same jobs.
+  const queueOn = new QueueService(
+    configStub({
+      REDIS_QUEUE_URL: redisUrl,
+      REDIS_QUEUE_PREFIX: `test-${randomUUID().slice(0, 8)}`,
+    }),
+  );
   const queueOff = new QueueService(configStub({}));
   const smsQueued = new SmsService(
     appDb,

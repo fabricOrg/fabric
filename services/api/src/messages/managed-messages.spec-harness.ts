@@ -74,6 +74,8 @@ export async function cleanManagedTenant(
   owner: postgres.Sql,
   tenantId: string,
 ): Promise<void> {
+  await owner`DELETE FROM webhook_deliveries WHERE tenant_id = ${tenantId}`;
+  await owner`DELETE FROM webhook_endpoints WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM outbox_events WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM message_delivery_attempts WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM message_deliveries WHERE tenant_id = ${tenantId}`;
