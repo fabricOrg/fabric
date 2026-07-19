@@ -70,6 +70,24 @@ export function notFound(code: string, message: string): HttpException {
   return apiError({ type: "not_found_error", code, message, status: 404 });
 }
 
+/**
+ * 402 in the F8.3 envelope (`type: "insufficient_funds_error"`) — the wallet can't cover the
+ * reserve. The money path fails CLOSED, so this is thrown before any provider contact or persisted
+ * effect. Without this the wallet's `InsufficientFundsError` escapes as an opaque 500 and the SDK
+ * can't branch on it, even though the contract has always declared the category.
+ */
+export function insufficientFunds(
+  code: string,
+  message: string,
+): HttpException {
+  return apiError({
+    type: "insufficient_funds_error",
+    code,
+    message,
+    status: 402,
+  });
+}
+
 /** 429 in the F8.3 envelope (`type: "rate_limit_error"`) — back off and retry. */
 export function tooManyRequests(code: string, message: string): HttpException {
   return apiError({ type: "rate_limit_error", code, message, status: 429 });

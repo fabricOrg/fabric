@@ -14,6 +14,8 @@ export async function seedManagedTenant(input: {
   db: AppDb;
   tenantId: string;
   rawKey: string;
+  /** Sandbox wallet funding in minor units. Lower it to exercise the fail-closed balance gate. */
+  fundMinor?: bigint;
 }): Promise<{ applicationId: string; environmentId: string }> {
   const { owner, db, tenantId, rawKey } = input;
   await owner`
@@ -63,7 +65,7 @@ export async function seedManagedTenant(input: {
   await db.withTenant(tenantId, (tx) =>
     credit(tx, {
       currency: "GHS",
-      amountMinor: 10_000n,
+      amountMinor: input.fundMinor ?? 10_000n,
       idempotencyKey: `topup:managed-${tenantId}`,
     }),
   );
