@@ -166,7 +166,11 @@
       "email.send":{to:"recipient@example.com",from:"hello@merchant.example",subject:"Welcome",text:"Your Fabric sandbox Email works.",idempotencyKey:"playground-email-001"},
       "email.retrieve":{id:"replace-with-email-id"},"email.list":{},
       "verify.start":{to:"+233545227189",senderId:"SANDBOX"},"verify.check":{id:"replace-with-verification-id",code:"123456"},
-      "wallet.retrieve":{},"senderIds.create":{senderId:"MYBRAND",country:"GH",type:"alphanumeric",useCase:"Transactional notifications"},"senderIds.list":{},
+      "wallet.retrieve":{},
+      "messages.preview":{key:"order.shipped",data:{name:"Ada",count:2},locale:"en"},
+      "messages.send":{key:"order.shipped",to:"+233545227189",data:{name:"Ada",count:2},reference:"playground-managed-001",idempotencyKey:"playground-managed-001"},
+      "messages.retrieveDelivery":{id:"replace-with-delivery-id"},
+      "senderIds.create":{senderId:"MYBRAND",country:"GH",type:"alphanumeric",useCase:"Transactional notifications"},"senderIds.list":{},
       "webhooks.create":{url:"https://example.com/webhooks/fabric",description:"Playground endpoint",environment:"sandbox"},"webhooks.list":{},"webhooks.remove":{id:"replace-with-webhook-id"},
       "webhooks.verify":{payload:"{\"type\":\"sms.delivered\",\"data\":{}}",signature:"t=...,v1=...",secret:"whsec_..."},
       "webhooks.signAndVerify":{payload:"{\"type\":\"playground.test\",\"data\":{\"ok\":true}}",secret:"local-demo-secret"},
@@ -175,7 +179,7 @@
       "virtualPhone.delayedDlr":{senderId:"SANDBOX",body:"Delayed delivery test",idempotencyKey:"vp-delay-001"},
       "virtualPhone.autoStop":{senderId:"SANDBOX",body:"Automatic STOP test",idempotencyKey:"vp-stop-001"}};
 
-    const GROUPS={sms:"SMS",email:"Email",verify:"Verify (OTP)",wallet:"Wallet",senderIds:"Sender IDs",webhooks:"Webhooks",virtualPhone:"Virtual phone"};
+    const GROUPS={sms:"SMS",email:"Email",verify:"Verify (OTP)",wallet:"Wallet",messages:"Managed messages",senderIds:"Sender IDs",webhooks:"Webhooks",virtualPhone:"Virtual phone"};
     const $=(s)=>document.querySelector(s);
     const apiKey=$("#apiKey"),action=$("#action"),params=$("#params"),output=$("#output"),run=$("#run"),meta=$("#meta"),copy=$("#copy");
 
