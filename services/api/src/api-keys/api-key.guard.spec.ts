@@ -1,4 +1,4 @@
-import type { ApiErrorEnvelope } from "@app/contracts";
+import { type ApiErrorEnvelope, apiKeyScopeValues } from "@app/contracts";
 import type { ExecutionContext } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import { describe, expect, it } from "vitest";
@@ -180,5 +180,26 @@ describe("requireScope", () => {
       expect(exception.getStatus()).toBe(403);
       expect(exception.getResponse().error.code).toBe("insufficient_scope");
     }
+  });
+
+  // SDK-004-AC05 (reverse): the least-privilege catalog key reads contracts and nothing else.
+  // Driven off the closed catalog so a newly added scope fails here until it is deliberately
+  // considered, rather than silently widening what a `definitions:read` key can reach.
+  it("denies a definitions:read key every send, publish, and content scope", () => {
+    const catalogKey = { ...tenant, scopes: ["definitions:read"] };
+    const others = apiKeyScopeValues.filter(
+      (scope) => scope !== "definitions:read",
+    );
+    expect(others.length).toBeGreaterThan(0);
+    for (const scope of others) {
+      try {
+        requireScope(catalogKey, scope);
+        expect.unreachable(`definitions:read must not satisfy ${scope}`);
+      } catch (error) {
+        const exception = error as { getResponse(): ApiErrorEnvelope };
+        expect(exception.getResponse().error.code).toBe("insufficient_scope");
+      }
+    }
+    expect(requireScope(catalogKey, "definitions:read")).toBe(catalogKey);
   });
 });
