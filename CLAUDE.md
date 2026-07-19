@@ -159,3 +159,36 @@ no secret in logs/prose, respect RLS + the redlines below.
   check the DB is up + the tenant/staff rows are seeded (`pnpm dev:seed:infisical`).
 - Windows/git-bash: prefer the dedicated file/search tools; `MSYS_NO_PATHCONV=1` for `aws`/`gh` calls
   with `/`-paths; kill stale `.next` before a push if the dev server is fighting the build.
+
+## 9. Delegating to external CLIs (codex / gemini)
+
+Bulk work is routed to external agent CLIs to conserve Claude quota — see
+`~/.claude/CLAUDE.md` for the routing table and the `delegate-*` skills. What that means
+*here*:
+
+- **What may be delegated.** Migrations, test scaffolding, mechanical refactors, renames,
+  boilerplate, clear-spec feature work (codex); "where is X", subsystem maps, wide file
+  sweeps, log analysis (gemini).
+- **What may not.** Anything with taste: dashboard/portal UI, user-facing copy, API and
+  contract shape, naming, error messages, UX flow. Codex scores 5 on taste and this repo
+  is mostly user-facing surface. Architecture and boundary decisions stay on Opus too.
+- **A delegate cannot see this file.** Paste the constraints the diff could violate into
+  its prompt — the ones that actually bite: no `any` and no unchecked casts; zod DTOs in
+  `@app/contracts` at every boundary; tenant-scoped queries inside `withTenant` /
+  `withTenantDrizzle`; money as `bigint` `MinorUnits` with balanced double-entry;
+  structured errors (`invalidRequest` / `notFound` / `unauthorized` / `forbidden`) with
+  stable codes, never bare `throw new Error` across a boundary; cross-boundary events via
+  the transactional outbox, not `void promise`; no mock or fallback that fakes success.
+- **Gates run on the delegate's quota, not ours.** Tell it to run `pnpm verify:push` (or
+  the narrower typecheck/lint/test commands) and `biome check --write` on changed files,
+  and to loop until green before reporting. Claude does not run builds here.
+- **Green gates are not a review.** Gates catch mechanical defects; read `git diff` for
+  the semantics — does it fit the architecture, does it hold tenancy isolation, did it
+  invent an abstraction nobody asked for.
+- **Delegates inherit §7 redlines, and they cannot ask for a human go.** No
+  `terraform apply`, no deploy-gate flips, no live external writes, no production DB
+  access, no live SMS or payments. State this in the prompt; never hand a delegate a task
+  that requires crossing one.
+- **`dev` is shared** (§5) — a delegate never rebases, resets, or force-pushes it, and
+  never advances it outside a squash-merge.
+
