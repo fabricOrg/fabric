@@ -100,9 +100,21 @@ managed-specific negative tests were never written.
 **Verified:** api integration 41 files / 171 tests (only the local-env `senders` failure) · api unit
 30 files / 156 tests · typecheck 0 · biome clean.
 
-**Still blocking SDK-003/004 release closure:** ADR-0005 remains `proposed` (product + architecture +
-security + wallet sign-off). Per the backlog's residual-decisions table it was due *before* SDK-003
-schema work, which shipped several slices ago — it is overdue, and it gates push/publish.
+**ADR-0005 and ADR-0006 ACCEPTED 2026-07-19** (product owner) — the blocker that was overdue against
+the backlog's own residual-decisions table is cleared. Both were ratified **retrospectively**: the
+model and its acceptance/money/idempotency semantics had already shipped across SDK-003/004/005 under
+explicit per-slice gos, so acceptance confirms the built system matches the decision rather than
+authorising unstarted work. Both status lines record that framing rather than implying a clean
+review-then-build sequence.
+
+**Not cleared by that acceptance, and tracked on ADR-0005's follow-up list:**
+- the **runtime/management scope security review** (decision #6, runtime vs management authority) —
+  three of the ADR's four follow-ups are now satisfied, this is the one that is not. The new
+  closed-catalog denial test is input to that review, not a replacement for it;
+- **npm publication** of `@fabric-messaging/sdk@beta.5` and `@fabric-messaging/cli@beta.1` — a
+  separate redline needing explicit human authorisation, independent of ADR status;
+- **live rollout**, which stays behind the live-SMS redline regardless;
+- SDK-004's **AC02 channel** implement-or-record-non-applicability call.
 
 ## Earlier (2026-07-18): stakeholder-testing hardening — customer journey verified end-to-end (PRs #151–#153)
 
@@ -308,13 +320,13 @@ definitions, plus the 6b dashboard depth (visual schema builder, interactive pre
 template→draft conversion, permission-gated member-draft / developer-read-only). Evidence:
 `docs/sdk/evidence/sdk-003.md`. **SDK-004 also shipped in the same PR** — see
 `docs/sdk/evidence/sdk-004.md` (one open item: the AC02 channel clause needs implement-or-waive).
-Redline: ADR-0005 still `proposed` — product+security sign-off required (slice-0 §5) before
-push/publish.
+ADR-0005 **accepted 2026-07-19** (was `proposed`); publication remains a separate redline.
 - RESOLVED (2026-07-17): the `wallet/statement.integration` local failure was residue from crashed
   test runs (fixed-hash `api_keys` + tenant rows whose `afterAll` never ran, colliding on
   `uniq_api_key_hash`), not ledger drift. Stale tenants deleted; full API integration suite green.
-- **Still open:** ADR-0005 remains `proposed` (product+security review pending — slice-0 §5 lists the
-  asks); the runtime-vs-management authority split lands at the API layer in slice 4, not the DB grants.
+- **Still open:** ADR-0005 is now `accepted` (2026-07-19), but its **scope security review** is not
+  done — slice-0 §5 lists the asks. The runtime-vs-management authority split lands at the API layer
+  in slice 4, not the DB grants, which is exactly what that review should scrutinise.
 - Local-env note: this dev DB has `app_owner`/`app_migrator` table-ownership drift; running the
   migration needed a one-off `GRANT REFERENCES ON applications, environments TO app_migrator` (not in any
   migration — a single-owner DB, i.e. CI, does not need it). Also `drizzle-kit generate` emits composite

@@ -1,6 +1,15 @@
 # ADR 0006: Managed delivery acceptance and execution semantics
 
-Status: proposed 2026-07-15 (requires product, security, wallet, and platform review).
+Status: **accepted 2026-07-19** (product owner), alongside
+[ADR 0005](./0005-managed-messaging-sdk-resource-model.md) — the two were ratified together because
+0005's resource model is unimplementable without the acceptance, money, and idempotency semantics
+defined here. Ratified **retrospectively**: the semantics shipped across SDK-005 under an explicit
+per-slice go. As-built evidence: `docs/sdk/evidence/sdk-005.md`.
+
+Superseded status line: _proposed 2026-07-15 (requires product, security, wallet, and platform
+review)._ Acceptance records the product owner's decision; it does **not** assert that separate
+security, wallet, or platform reviews were performed. The scope security review carried on 0005
+remains open and applies here too.
 
 ## Context
 
