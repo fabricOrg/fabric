@@ -15,7 +15,7 @@ import {
   type RequestTenant,
   requireScope,
 } from "../api-keys/api-key.guard.js";
-import { invalidRequest } from "../http/api-error.js";
+import { asInsufficientFunds, invalidRequest } from "../http/api-error.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
 import { SmsBatchService } from "./sms-batch.service.js";
 
@@ -60,12 +60,16 @@ export class SmsBatchController {
       operation: "batch",
       ...parsed.data,
     });
-    return this.batches.create(
-      context,
-      idempotencyKey,
-      requestHash,
-      parsed.data,
-    );
+    // A batch reserves for the whole set before dispatching, so an underfunded wallet must read as
+    // the declared 402 rather than an opaque 500 — same defect the single-send path carried.
+    return this.batches
+      .create(context, idempotencyKey, requestHash, parsed.data)
+      .catch((error: unknown) =>
+        asInsufficientFunds(
+          error,
+          "The wallet balance can't cover this batch.",
+        ),
+      );
   }
 
   @Get(":id")

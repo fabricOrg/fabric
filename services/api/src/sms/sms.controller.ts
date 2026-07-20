@@ -21,7 +21,11 @@ import {
   type RequestTenant,
   requireScope,
 } from "../api-keys/api-key.guard.js";
-import { invalidRequest, newRequestId } from "../http/api-error.js";
+import {
+  asInsufficientFunds,
+  invalidRequest,
+  newRequestId,
+} from "../http/api-error.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
 import { MessagingInsightsService } from "./messaging-insights.service.js";
 import { SmsService } from "./sms.service.js";
@@ -129,7 +133,18 @@ export class SmsController {
     environmentId?: string | null;
     applicationId?: string | null;
   }): Promise<SendSmsApiResponse> {
-    const result = await this.sms.send(input);
+    // Mapped at the HTTP boundary, not inside SmsService: the service keeps throwing the wallet
+    // DOMAIN error so ManagedMessagesService can still branch on it. Both single-send routes
+    // (`sms/messages` and the `sms/send` alias) funnel through here; batches are a separate
+    // controller and map it there.
+    const result = await this.sms
+      .send(input)
+      .catch((error: unknown) =>
+        asInsufficientFunds(
+          error,
+          "The wallet balance can't cover this message.",
+        ),
+      );
     return {
       id: result.id,
       status: result.status,

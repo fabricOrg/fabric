@@ -99,6 +99,8 @@ describeDb("SDK-005 managed sends — pre-acceptance gates fail closed", () => {
       tenantId: brokeTenant,
       rawKey: brokeKey,
       fundMinor: 1n,
+      // sms:send too, so the same underfunded wallet drives the DIRECT route as well.
+      scopes: ["messages:send", "messages:read", "sms:send"],
     });
     app = await NestFactory.create<NestFastifyApplication>(
       AppModule,
@@ -152,6 +154,31 @@ describeDb("SDK-005 managed sends — pre-acceptance gates fail closed", () => {
     expect(body.error.code).toBe("insufficient_funds");
     // Fails closed: the balance gate rejects inside the acceptance transaction, so no partial row
     // survives — not a message, not an attempt, and no acceptance event a consumer could observe.
+    expect(await counts(brokeTenant)).toEqual(before);
+  });
+
+  it("returns the same 402 on the direct sms route, not a 500", async () => {
+    // The direct path carried the identical unmapped wallet error. Mapped at the controller
+    // boundary so `SmsService` keeps throwing the domain error for ManagedMessagesService.
+    const before = await counts(brokeTenant);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/sms/messages",
+      headers: {
+        authorization: `Bearer ${brokeKey}`,
+        "content-type": "application/json",
+      },
+      payload: {
+        to: SOLVENT_RECIPIENT,
+        sender_id: "FABRIC",
+        body: "Direct send against an underfunded wallet.",
+      },
+    });
+
+    expect(response.statusCode).toBe(402);
+    const body = response.json() as { error: { type: string; code: string } };
+    expect(body.error.type).toBe("insufficient_funds_error");
+    expect(body.error.code).toBe("insufficient_funds");
     expect(await counts(brokeTenant)).toEqual(before);
   });
 

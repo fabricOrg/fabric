@@ -16,6 +16,8 @@ export async function seedManagedTenant(input: {
   rawKey: string;
   /** Sandbox wallet funding in minor units. Lower it to exercise the fail-closed balance gate. */
   fundMinor?: bigint;
+  /** API-key scopes. Widen it to drive the direct `sms.*` routes with the same seeded tenant. */
+  scopes?: readonly string[];
 }): Promise<{ applicationId: string; environmentId: string }> {
   const { owner, db, tenantId, rawKey } = input;
   await owner`
@@ -60,7 +62,8 @@ export async function seedManagedTenant(input: {
       tenant_id, application_id, environment_id, prefix, key_hash, env, scopes, status
     ) VALUES (
       ${tenantId}, ${created.id}, ${environmentId}, 'sk_test_manag',
-      ${hashApiKey(rawKey)}, 'test', '["messages:send","messages:read"]'::jsonb, 'active'
+      ${hashApiKey(rawKey)}, 'test',
+      ${owner.json([...(input.scopes ?? ["messages:send", "messages:read"])])}, 'active'
     )`;
   await db.withTenant(tenantId, (tx) =>
     credit(tx, {
