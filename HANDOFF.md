@@ -91,12 +91,24 @@ retained but its "PR #158 OPEN" framing is superseded.
     rechecks, negatives, crash-recovery) all green. Independently reviewed: APPROVE, no findings (SMS
     identical, 0084 safe on existing data).
   - **4a-ii NEXT** — Email prepare/persist path: new email managed-send that (in one tenant tx) inserts
-    an `email_messages` row (id = deliveryId, rendered subject/text/html + PII), reserves wallet by the
-    slice-2 tier price (referenceId = email message id), then calls the shared `persistManagedAcceptance`
-    with `channel:"email"` + `emailMessageId`; add the mirror unique index on `email_message_id`; wire
-    `ManagedMessagesService.send` to dispatch by `preview.channel` (sms→sms.send, email→email path).
+    an `email_messages` row (id = deliveryId, so the attempt's `email_message_id` = deliveryId, symmetric
+    with SMS where messageId = deliveryId; content = rendered subject/text/html via
+    `vault.subjectForEmail` + `vault.put`), reserves wallet by the slice-2 tier price (`referenceId` =
+    email message id), then calls the shared `persistManagedAcceptance` with `channel:"email"` +
+    `emailMessageId`; add the mirror unique index on `email_message_id`; wire
+    `ManagedMessagesService.send` to dispatch by `preview.channel` (sms→`sms.send`, email→email path).
+    Mirror the direct-email persistence in `email.service.ts:60-83` (email_messages + email_dispatches +
+    `message.created` outbox, `FakeEmailProvider.slug`, `STATUS_RANK.queued`).
     Real-Postgres: email accept persists one delivery+attempt+email_message+outbox, idempotent replay,
     conflict 409, insufficient-funds 402, no side effects on blockers.
+    - **OPEN DESIGN POINT (decide at 4a-ii start):** `SendManagedMessageRequest.to` is `e164` only
+      (`packages/contracts/src/managed-messages.ts:27`) — SMS-shaped. Email needs an email recipient, and
+      the channel is resolved from the DEFINITION (not the request). Decision needed: widen `to` to accept
+      e164-OR-email (e.g. `z.union([e164, emailAddress])`) and validate it matches the resolved channel at
+      send time (mismatch → structured 400 pre-acceptance). The preview path also takes `to` (e164 today,
+      SMS compliance only) — email preview currently ignores `to`; keep that or thread the email recipient
+      through for future email recipient-compliance (4b/4c). Recommend: widen `to`, validate-against-channel
+      in the managed send, no email recipient compliance yet (matches the slice-3 "not_evaluated" posture).
   - **4b** email dispatch worker + crash-recovery + refund + attempt-time rechecks · **4c** Email
     authoring through the API · **4d** negatives + preview↔send parity · **4e** SDK + dashboard.
 - **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
