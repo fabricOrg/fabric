@@ -3,7 +3,67 @@
 _Snapshot: 2026-07-18. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-18 → 07-21): SDK-003/004/005 closeout — PR #158 OPEN
+## Latest (2026-07-21): sandbox program kickoff (SDK-007→008→010) — design only, no code
+
+`dev` clean at `21c9c8c` (= origin/dev). **PR #158 MERGED, CI green** — the closeout section below is
+retained but its "PR #158 OPEN" framing is superseded.
+
+- **Independent completion audit of SDK-001→005 done** (user asked for hard assurance). Ran a read-only
+  adversarial sweep on gemini (free bucket) against real code + tests, then verified its one adverse
+  finding on Opus. Result: **SDK-001→005 genuinely COMPLETE** — real tables/RLS, registered endpoints,
+  BullMQ workers + cron with production callers, real-Postgres idempotency/crash-recovery/ledger tests,
+  real dashboard surfaces (no mock backing). Gemini's lone "GAP" (`definitions:write` unenforced api-key
+  scope) was a **false positive** — it conflated `apiKeyScopeValues` (has only `definitions:read`) with
+  the *membership* catalog (`permissions.ts:29`, where `definitions:write` correctly lives). Audit
+  report: `scratchpad/audit-report.md`.
+- **SDK-006 confirmed NOT done** (verified in code, not docs): no managed live-promotion path, no
+  `sdk-006.md` evidence, managed send dispatches only through the sandbox Virtual Phone. Live SMS +
+  npm publish stay redlined (human go).
+- **Direction chosen (user): option 2 — the sandbox program SDK-007 → 008 → 010.** Build the full
+  managed Email + cross-channel routing + SMS Journeys surface against **fakes**, with every live path
+  (SDK-006/009/011) deferred to admin-console config behind the live redline. Hard guardrail restated:
+  **no visible-but-dead live control ships** (backlog §Delivery policy 40–55) — live surfaces stay
+  absent until their real execution path exists and is tested.
+- **SDK-007 readiness + slice-0 written (NON-CODE, awaiting sign-off):**
+  `docs/sdk/sdk-007-readiness.md` + `docs/sdk/sdk-007-slice0-design.md`. Built on an independent reuse
+  map (`scratchpad/reuse-map-report.md`, gemini) with every file:line re-verified on Opus. Key findings:
+  the managed engine was built **channel-aware** — `message_deliveries`/`_attempts` already carry a
+  `channel` column with channel-neutral containment FKs; only two CHECK constraints pin `channel='sms'`
+  (`managed-messages.ts:78,:173`). Direct Email exists + is sandbox-gated (`FakeEmailProvider`,
+  `email.service.ts:175`). So Email is an **extension, not a rebuild**.
+- **Locked design (Opus calls):** extend-don't-fork channel dispatch (SMS→SMS engine, Email→the existing
+  FakeEmailProvider path); additive schema (`channel` col on versions, relax CHECK to `IN('sms','email')`,
+  polymorphic `emailVariantContent`); SDK-004-**AC02 channel narrowing closes here** (completion
+  condition); **light ADR-0005 amendment** (channels were already reserved in the model — not a new ADR);
+  7-slice decomposition, feature invisible until the release gate.
+- **User decisions captured:** Email sandbox pricing = **size-tiered** (rendered-byte bands 50/150/256
+  KiB, hard-ceiling blocker over 256 KiB, pure `rateEmailBySize` beside `rateSegments`); next step =
+  **slice-0 design note then STOP** (done — this is that stop point).
+- **ADR-0005 Amendment A1 RATIFIED** (product owner, 2026-07-21) — recorded in the ADR; the two locked
+  decisions (size-tier boundaries + channel model) are signed off.
+- **Slice 1 DONE + committed** (contracts + schema + compat + migration `0083` + tests). Additive,
+  feature invisible: `messageChannel`/`emailVariantContent`/`messageVariantContent` exported for later
+  slices but the version RESPONSE DTO stays SMS-shaped (zero ripple to dashboard/preview/SDK); `channel`
+  column on versions (default `'sms'`, backfills) + CHECK; delivery/attempt CHECKs relaxed to
+  `IN('sms','email')`; `analyzeDefinitionCompatibility` gains `channel_removed`. Gates: typecheck +
+  unit (contracts 61 / domain 74 / api 157) + biome + **real-Postgres integration 14/14** (incl. 3 new
+  channel/CHECK tests). Independently reviewed (gemini): APPROVE-WITH-NITS, all nits dismissed
+  (already-addressed / deliberate slice-boundary / against repo CHECK convention).
+  - **Local DB gotcha found + fixed:** the docker `postgres` container was running with **no published
+    host port** (`docker ps` showed `5432/tcp`, not `0.0.0.0:5432->`), so `127.0.0.1:5432` refused all
+    connections. `docker compose down && up` (volume preserved) republished it. Creds:
+    `app_owner:localdev` (SUPER) + `app_runtime:localdev_app` (APP), db on `127.0.0.1:5432`. The full
+    `test:integration` tier also has pre-existing local-data pollution (leftover `email_*` fixtures block
+    account-delete teardown in unrelated suites) — run the target spec in isolation to see it green.
+- **Next: slice 2** — `previewEmail` + channel-dispatching `previewMessage` + `rateEmailBySize`
+  (size-tiered) as pure, unit-tested functions in `@app/domain`. HTML escaping/injection/size tests,
+  no-value-echo, preview↔send parity fixture. No endpoint/dashboard yet (slice 3+).
+- **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
+  machine) each need their OWN ADR — flagged, not written yet. SDK-010 also has NO backend today (zero
+  `journey` rows/controllers/services); its frontend React Flow canvas + palette are reusable, but it
+  persists only to localStorage (`fabric.journeys.draft.v1`) — the mock debt SDK-010 retires.
+
+## Earlier (2026-07-18 → 07-21): SDK-003/004/005 closeout — PR #158 MERGED (21c9c8c)
 
 Branch `fix/ops-sdk004-closeout` (off `dev`), **pushed 2026-07-21, PR #158 → dev, MERGEABLE, CI
 running** (`verify:push` passed on push). 12 commits. fifi ff-merges `dev` — do not self-merge.

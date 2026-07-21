@@ -157,6 +157,9 @@ export class MessageDefinitionsService {
         request.variable_schema,
         [latest.defaultLocale, ...Object.keys(releasedContent.locales ?? {})],
         [request.default_locale, ...Object.keys(request.content.locales)],
+        // Add-version authoring is SMS-only in this slice; the candidate content is always SMS.
+        latest.channel,
+        "sms",
       );
       if (compat.verdict === "breaking") {
         throw invalidRequest(

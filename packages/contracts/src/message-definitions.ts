@@ -1,6 +1,10 @@
 import { z } from "zod";
+import { localeTag, smsVariantContent } from "./message-definition-content.js";
 import { withoutDuplicateDefaultLocale } from "./message-definition-locale.js";
-import { messageClass } from "./sms.js";
+
+// Re-export the per-channel variant content so `./message-definitions.js` (and the package index)
+// keep exporting these names after the split for the file-length guard.
+export * from "./message-definition-content.js";
 
 /**
  * MANAGED MESSAGE DEFINITIONS contracts (SDK-003). Shapes + validation only — no logic (the
@@ -183,20 +187,6 @@ function walkBounds(
 export const messageDefinitionStatus = z.enum(["draft", "active", "archived"]);
 export type MessageDefinitionStatus = z.infer<typeof messageDefinitionStatus>;
 
-export const localeTag = z
-  .string()
-  .regex(/^[a-z]{2,3}(?:-[A-Z]{2})?$/, "invalid_locale");
-
-// SMS variant content of a version. One channel today; the shape leaves room for more.
-export const smsVariantContent = z.object({
-  body: z.string().min(1).max(1600),
-  class: messageClass.default("transactional"),
-  locales: z
-    .record(localeTag, z.object({ body: z.string().min(1).max(1600) }).strict())
-    .default({}),
-});
-export type SmsVariantContent = z.infer<typeof smsVariantContent>;
-
 export const messageDefinition = z.object({
   id: z.string().uuid(),
   application_id: z.string().uuid(),
@@ -207,6 +197,10 @@ export const messageDefinition = z.object({
 });
 export type MessageDefinition = z.infer<typeof messageDefinition>;
 
+// NOTE: `content` stays SMS-shaped here in SDK-007 slice 1 — Email authoring/rendering is not wired yet,
+// so no email version is served through the API. The channel-polymorphic response (channel + union
+// content) lands with email authoring (slice 3/4) alongside its dashboard/preview consumers. The
+// email/union types above are exported now for those slices; the DB already carries the `channel` column.
 export const messageDefinitionVersion = z.object({
   id: z.string().uuid(),
   definition_id: z.string().uuid(),

@@ -75,7 +75,10 @@ export const messageDeliveries = pgTable(
     index("idx_message_deliveries_retention")
       .on(table.expiresAt)
       .where(sql`legal_hold = false`),
-    check("message_delivery_channel_check", sql`${table.channel} = 'sms'`),
+    check(
+      "message_delivery_channel_check",
+      sql`${table.channel} in ('sms', 'email')`,
+    ),
     check(
       "message_delivery_status_check",
       sql`${table.status} IN ('accepted', 'processing', 'sent', 'delivered', 'undelivered', 'failed', 'expired')`,
@@ -172,7 +175,7 @@ export const messageDeliveryAttempts = pgTable(
     check("message_delivery_attempt_ordinal_check", sql`${table.ordinal} > 0`),
     check(
       "message_delivery_attempt_channel_check",
-      sql`${table.channel} = 'sms'`,
+      sql`${table.channel} in ('sms', 'email')`,
     ),
     check(
       "message_delivery_attempt_status_check",
