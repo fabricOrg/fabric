@@ -10,6 +10,7 @@
 // Needs a migrated DB (0075 DDL + 0076 RLS) + DATABASE_URL_SUPER + DATABASE_URL_APP.
 // ============================================================================================
 
+import { randomUUID } from "node:crypto";
 import { createAppDb } from "@app/db";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -51,6 +52,17 @@ async function seedTenant(id: string, slug: string) {
 }
 
 async function cleanup() {
+  // Managed deliveries/attempts reference tenant_id with ON DELETE RESTRICT, so the channel-CHECK
+  // fixtures below must be cleared before the account delete (attempts before deliveries — the
+  // attempt->delivery containment FK is also RESTRICT).
+  await owner.unsafe(
+    "DELETE FROM message_delivery_attempts WHERE tenant_id IN ($1, $2)",
+    [TENANT_A, TENANT_B],
+  );
+  await owner.unsafe(
+    "DELETE FROM message_deliveries WHERE tenant_id IN ($1, $2)",
+    [TENANT_A, TENANT_B],
+  );
   // Delete ONLY our two tenants; accounts -> applications -> environments -> definitions ->
   // versions/releases all cascade on tenant delete. Never blanket-delete shared tables — other local
   // fixtures (e.g. email messages) hold FKs to environments/accounts and would block teardown.
@@ -265,5 +277,86 @@ describe("SDK-003 — message definition isolation + invariants", () => {
       "SELECT count(*)::int AS n FROM message_definitions WHERE key = 'evil.key'",
     );
     expect(first(leaked).n).toBe(0);
+  });
+
+  // ------------------------------------------------------------------------------------------
+  // SDK-007 slice 1 — channel CHECK relax (ADR-0005 Amendment A1). The version channel column and the
+  // delivery/attempt channel CHECKs must now accept 'email' and still reject any other value.
+  // ------------------------------------------------------------------------------------------
+
+  it("accepts an email-channel version through the runtime role (version channel CHECK allows email)", async () => {
+    await db.withTenant(TENANT_A, async (tx) => {
+      await tx`
+        INSERT INTO message_definition_versions
+          (tenant_id, definition_id, application_id, version, channel, variable_schema, content, default_locale)
+        VALUES (${TENANT_A}, ${defA}, ${appA}, 2, 'email',
+          ${JSON.stringify({ type: "object", properties: {} })}::jsonb,
+          ${JSON.stringify({ subject: "Order shipped", html: "<p>on its way</p>" })}::jsonb, 'en')`;
+    });
+    const seen = await owner.unsafe<{ n: number }[]>(
+      "SELECT count(*)::int AS n FROM message_definition_versions WHERE definition_id = $1 AND channel = 'email'",
+      [defA],
+    );
+    expect(first(seen).n).toBe(1);
+  });
+
+  it("rejects a version whose channel is neither sms nor email (channel CHECK)", async () => {
+    await expect(
+      db.withTenant(TENANT_A, async (tx) => {
+        await tx`
+          INSERT INTO message_definition_versions
+            (tenant_id, definition_id, application_id, version, channel, variable_schema, content, default_locale)
+          VALUES (${TENANT_A}, ${defA}, ${appA}, 3, 'whatsapp',
+            ${JSON.stringify({ type: "object", properties: {} })}::jsonb,
+            ${JSON.stringify({ body: "x" })}::jsonb, 'en')`;
+      }),
+      "an unsupported channel must violate message_definition_version_channel_check",
+    ).rejects.toThrow();
+  });
+
+  it("message_deliveries + attempts accept channel 'email' and reject a third value", async () => {
+    const deliveryId = randomUUID();
+    // A fully valid email delivery + attempt (superuser bypasses RLS/grants; the CHECK still applies).
+    await owner.unsafe(
+      `INSERT INTO message_deliveries
+         (id, tenant_id, application_id, environment_id, definition_id, version_id, key, locale, channel,
+          currency, idempotency_key, request_fingerprint, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'order.shipped', 'en', 'email',
+          'GHS', 'idem-email-1', $7, now() + interval '1 day')`,
+      [deliveryId, TENANT_A, appA, envA, defA, verA1, "a".repeat(64)],
+    );
+    await owner.unsafe(
+      `INSERT INTO message_delivery_attempts
+         (tenant_id, application_id, environment_id, delivery_id, ordinal, channel, currency)
+       VALUES ($1, $2, $3, $4, 1, 'email', 'GHS')`,
+      [TENANT_A, appA, envA, deliveryId],
+    );
+    const seen = await owner.unsafe<{ n: number }[]>(
+      "SELECT count(*)::int AS n FROM message_delivery_attempts WHERE delivery_id = $1 AND channel = 'email'",
+      [deliveryId],
+    );
+    expect(first(seen).n).toBe(1);
+
+    // A third channel value is rejected on both tables by the relaxed CHECK.
+    await expect(
+      owner.unsafe(
+        `INSERT INTO message_deliveries
+           (id, tenant_id, application_id, environment_id, definition_id, version_id, key, locale, channel,
+            currency, idempotency_key, request_fingerprint, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'order.shipped', 'en', 'whatsapp',
+            'GHS', 'idem-wa-1', $7, now() + interval '1 day')`,
+        [randomUUID(), TENANT_A, appA, envA, defA, verA1, "b".repeat(64)],
+      ),
+      "message_delivery_channel_check must reject 'whatsapp'",
+    ).rejects.toThrow();
+    await expect(
+      owner.unsafe(
+        `INSERT INTO message_delivery_attempts
+           (tenant_id, application_id, environment_id, delivery_id, ordinal, channel, currency)
+         VALUES ($1, $2, $3, $4, 2, 'whatsapp', 'GHS')`,
+        [TENANT_A, appA, envA, deliveryId],
+      ),
+      "message_delivery_attempt_channel_check must reject 'whatsapp'",
+    ).rejects.toThrow();
   });
 });
