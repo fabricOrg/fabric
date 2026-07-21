@@ -3,10 +3,11 @@
 _Snapshot: 2026-07-18. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-18): SDK-004 completion audit + SDK-003 evidence reconciliation
+## Latest (2026-07-18 → 07-21): SDK-003/004/005 closeout — PR #158 OPEN
 
-Branch `feature/sdk004-closeout-evidence` (off `dev`). **Closing out already-shipped work rather than
-starting new scope.** This HANDOFF was stale: it recorded slice 6b as deferred and SDK-004 as the
+Branch `fix/ops-sdk004-closeout` (off `dev`), **pushed 2026-07-21, PR #158 → dev, MERGEABLE, CI
+running** (`verify:push` passed on push). 12 commits. fifi ff-merges `dev` — do not self-merge.
+**Closing out already-shipped work rather than starting new scope.** This HANDOFF was stale: it recorded slice 6b as deferred and SDK-004 as the
 next item, but **both landed in `dbfd7d1` (PR #144)** — `packages/cli` (binary `fabric`) is built,
 tested, and gated by `release:check`.
 
