@@ -21,6 +21,7 @@ import {
   timestamps,
 } from "./_shared.js";
 import { applications, environments } from "./applications.js";
+import { emailMessages } from "./email.js";
 import { accounts } from "./identity.js";
 import {
   messageDefinitions,
@@ -150,9 +151,15 @@ export const messageDeliveryAttempts = pgTable(
     deliveryId: uuid("delivery_id").notNull(),
     ordinal: integer("ordinal").notNull(),
     channel: text("channel").notNull(),
+    // Per-channel message reference (ADR-0005 Amendment A1): an SMS attempt points at `messages`, an
+    // Email attempt at `email_messages`. Exactly one is set, matching `channel` (CHECK below).
     messageId: uuid("message_id").references(() => messages.id, {
       onDelete: "restrict",
     }),
+    emailMessageId: uuid("email_message_id").references(
+      () => emailMessages.id,
+      { onDelete: "restrict" },
+    ),
     status: text("status").notNull().default("accepted"),
     costMinor: moneyMinor("cost_minor").notNull().default(sql`0`),
     currency: char("currency", { length: 3 }).notNull(),
@@ -176,6 +183,12 @@ export const messageDeliveryAttempts = pgTable(
     check(
       "message_delivery_attempt_channel_check",
       sql`${table.channel} in ('sms', 'email')`,
+    ),
+    // Exactly the channel-matching message reference is set: sms ⇒ message_id, email ⇒ email_message_id.
+    check(
+      "message_delivery_attempt_channel_message_check",
+      sql`(${table.channel} = 'sms' AND ${table.messageId} IS NOT NULL AND ${table.emailMessageId} IS NULL)
+        OR (${table.channel} = 'email' AND ${table.emailMessageId} IS NOT NULL AND ${table.messageId} IS NULL)`,
     ),
     check(
       "message_delivery_attempt_status_check",

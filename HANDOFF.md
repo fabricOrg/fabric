@@ -79,13 +79,26 @@ retained but its "PR #158 OPEN" framing is superseded.
   generator doesn't derive this response's fields); `as EmailVariantContent` nit = matches existing
   `as SmsVariantContent` pattern. Reviewer confirmed LEFT-join tenancy safe + skip-email-compliance is a
   valid incremental disposition.
-- **Next: slice 4** — managed Email SEND + dispatch: refactor the managed send to channel-dispatch
-  (SMS→SMS engine unchanged, Email→the existing FakeEmailProvider runtime), wallet reserve/settle by the
-  slice-2 tier price, delivery/attempt rows `channel:"email"`, acceptance+terminal outbox, attempt-time
-  Email recheck. Real-Postgres: send↔preview parity, idempotency, crash recovery+refund, negative gates
-  (unsafe HTML / bad recipient / oversized / insufficient funds→402 / unbound domain). This is where
-  Email authoring through the API (create/addVersion accepting email content) likely also lands so a
-  send has a real released email definition.
+- **Slice 4 (managed Email send) — decomposed into reviewed sub-slices** (money vertical; user ratified
+  the approach: extract a shared channel-neutral acceptance core + per-channel nullable FK, NOT a fork of
+  the shipped SMS engine):
+  - **4a-i DONE + committed** — channel-neutral acceptance core + per-channel attempt FK. Schema:
+    `message_delivery_attempts.email_message_id` FK→`email_messages` + a CHECK that exactly the
+    channel-matching ref is set (migration `0084`, additive). `persistManagedAcceptance` generalized with
+    a `channel` param (delivery/attempt channel + per-channel message ref + outbox message_id derived
+    from it); `prepare-send.ts` passes `channel:"sms"`. **SMS money path provably unchanged** — sms-engine
+    typecheck + 4 unit + **18 managed-SMS integration tests** (idempotent replay, concurrent-collapse,
+    rechecks, negatives, crash-recovery) all green. Independently reviewed: APPROVE, no findings (SMS
+    identical, 0084 safe on existing data).
+  - **4a-ii NEXT** — Email prepare/persist path: new email managed-send that (in one tenant tx) inserts
+    an `email_messages` row (id = deliveryId, rendered subject/text/html + PII), reserves wallet by the
+    slice-2 tier price (referenceId = email message id), then calls the shared `persistManagedAcceptance`
+    with `channel:"email"` + `emailMessageId`; add the mirror unique index on `email_message_id`; wire
+    `ManagedMessagesService.send` to dispatch by `preview.channel` (sms→sms.send, email→email path).
+    Real-Postgres: email accept persists one delivery+attempt+email_message+outbox, idempotent replay,
+    conflict 409, insufficient-funds 402, no side effects on blockers.
+  - **4b** email dispatch worker + crash-recovery + refund + attempt-time rechecks · **4c** Email
+    authoring through the API · **4d** negatives + preview↔send parity · **4e** SDK + dashboard.
 - **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
   machine) each need their OWN ADR — flagged, not written yet. SDK-010 also has NO backend today (zero
   `journey` rows/controllers/services); its frontend React Flow canvas + palette are reusable, but it

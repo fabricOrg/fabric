@@ -1,0 +1,4 @@
+ALTER TABLE "message_delivery_attempts" ADD COLUMN "email_message_id" uuid;--> statement-breakpoint
+ALTER TABLE "message_delivery_attempts" ADD CONSTRAINT "message_delivery_attempts_email_message_id_email_messages_id_fk" FOREIGN KEY ("email_message_id") REFERENCES "public"."email_messages"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "message_delivery_attempts" ADD CONSTRAINT "message_delivery_attempt_channel_message_check" CHECK (("message_delivery_attempts"."channel" = 'sms' AND "message_delivery_attempts"."message_id" IS NOT NULL AND "message_delivery_attempts"."email_message_id" IS NULL)
+        OR ("message_delivery_attempts"."channel" = 'email' AND "message_delivery_attempts"."email_message_id" IS NOT NULL AND "message_delivery_attempts"."message_id" IS NULL));

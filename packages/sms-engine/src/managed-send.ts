@@ -48,10 +48,21 @@ export async function persistManagedAcceptance(
     environmentId?: string | null;
     currency: string;
     managed: ManagedSendContext;
-    messageId: string;
+    // The channel and its message reference. `messageId` is the SMS `messages.id`; `emailMessageId` is
+    // the `email_messages.id`. Exactly the channel-matching one is set (enforced by the attempt CHECK).
+    channel: "sms" | "email";
+    messageId?: string;
+    emailMessageId?: string;
     costMinor: string;
   },
 ): Promise<{ messageId: string; replayed: boolean }> {
+  const channelMessageId =
+    input.channel === "email" ? input.emailMessageId : input.messageId;
+  if (!channelMessageId) {
+    throw new Error(
+      `persistManagedAcceptance: missing ${input.channel} message id`,
+    );
+  }
   const inserted = (await tx`
     INSERT INTO message_deliveries (
       id, tenant_id, application_id, environment_id, definition_id, version_id,
@@ -61,7 +72,7 @@ export async function persistManagedAcceptance(
       ${input.managed.deliveryId}, current_setting('app.tenant_id')::uuid,
       ${input.applicationId ?? null}, ${input.environmentId ?? null},
       ${input.managed.definitionId}, ${input.managed.versionId}, ${input.managed.key},
-      ${input.managed.locale}, 'sms', 'accepted', ${input.managed.reference ?? null},
+      ${input.managed.locale}, ${input.channel}, 'accepted', ${input.managed.reference ?? null},
       ${JSON.stringify(input.managed.metadata)}::jsonb, ${input.managed.idempotencyKey},
       ${input.managed.requestFingerprint}, ${input.currency},
       ${input.managed.maxCostMinor ?? null}::bigint, ${input.costMinor}::bigint,
@@ -77,11 +88,13 @@ export async function persistManagedAcceptance(
   await tx`
     INSERT INTO message_delivery_attempts (
       tenant_id, application_id, environment_id, delivery_id, ordinal, channel,
-      message_id, status, cost_minor, currency
+      message_id, email_message_id, status, cost_minor, currency
     ) VALUES (
       current_setting('app.tenant_id')::uuid, ${input.applicationId ?? null},
-      ${input.environmentId ?? null}, ${input.managed.deliveryId}, 1, 'sms',
-      ${input.messageId}, 'accepted', ${input.costMinor}::bigint, ${input.currency}
+      ${input.environmentId ?? null}, ${input.managed.deliveryId}, 1, ${input.channel},
+      ${input.channel === "sms" ? channelMessageId : null},
+      ${input.channel === "email" ? channelMessageId : null},
+      'accepted', ${input.costMinor}::bigint, ${input.currency}
     )`;
   await tx`
     INSERT INTO outbox_events (
@@ -91,12 +104,12 @@ export async function persistManagedAcceptance(
       ${input.environmentId ?? null}, 'message.accepted',
       ${JSON.stringify({
         delivery_id: input.managed.deliveryId,
-        message_id: input.messageId,
+        message_id: channelMessageId,
         key: input.managed.key,
         version_id: input.managed.versionId,
         status: "accepted",
         resource_version: 1,
       })}::jsonb
     )`;
-  return { messageId: input.messageId, replayed: false };
+  return { messageId: channelMessageId, replayed: false };
 }

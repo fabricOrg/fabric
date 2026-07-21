@@ -589,6 +589,13 @@
       "when": 1784637241714,
       "tag": "0083_flimsy_hercules",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1784675210576,
+      "tag": "0084_rich_angel",
+      "breakpoints": true
     }
   ]
 }
