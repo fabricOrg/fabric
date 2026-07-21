@@ -26,7 +26,7 @@ function controllerWith() {
   };
 }
 
-/** BFF dashboard session: tenant token leaves applicationId/environmentId null. */
+/** BFF dashboard session: tenant token, isSessionToken true, app/env null. */
 function sessionReq(tenantId: string): { tenant: RequestTenant } {
   return {
     tenant: {
@@ -35,11 +35,12 @@ function sessionReq(tenantId: string): { tenant: RequestTenant } {
       keyId: `bfft_${tenantId.slice(0, 8)}`,
       applicationId: null,
       environmentId: null,
+      isSessionToken: true,
     },
   };
 }
 
-/** A data-plane sk_* key: applicationId/environmentId are populated. */
+/** A data-plane sk_* key: isSessionToken false, applicationId/environmentId populated. */
 function apiKeyReq(tenantId: string): { tenant: RequestTenant } {
   return {
     tenant: {
@@ -48,6 +49,25 @@ function apiKeyReq(tenantId: string): { tenant: RequestTenant } {
       keyId: "key_live_x",
       applicationId: "app-1",
       environmentId: "env-1",
+      isSessionToken: false,
+    },
+  };
+}
+
+/**
+ * The escalation vector: a runtime sk_* key whose row has a NULL application_id (legacy/un-backfilled
+ * — the column is nullable and the NOT-NULL follow-up never shipped). It looks exactly like a session
+ * to the old `applicationId === null` proxy, so the gate must reject it on `isSessionToken` instead.
+ */
+function nullAppKeyReq(tenantId: string): { tenant: RequestTenant } {
+  return {
+    tenant: {
+      id: tenantId,
+      scopes: ["sms:send"],
+      keyId: "key_legacy_nullapp",
+      applicationId: null,
+      environmentId: null,
+      isSessionToken: false,
     },
   };
 }
@@ -82,6 +102,18 @@ describe("MessageDefinitionsController authority (ADR-0005 #6)", () => {
       {
         code: "management_requires_session",
       },
+    );
+    expect(svc.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a runtime key with a NULL application_id (the escalation vector)", () => {
+    // Regression for the ADR-0005 #6 review finding: pre-fix, this key passed because the gate keyed
+    // on applicationId === null. It must now be rejected as a non-session credential.
+    const { ctl, svc } = controllerWith();
+    expectHttpError(
+      () => ctl.create(nullAppKeyReq(TID), { key: "order.shipped" }),
+      403,
+      { code: "management_requires_session" },
     );
     expect(svc.create).not.toHaveBeenCalled();
   });

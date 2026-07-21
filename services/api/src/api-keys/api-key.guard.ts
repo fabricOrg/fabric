@@ -24,6 +24,14 @@ export interface RequestTenant {
    *  for BFF calls is a later concern (the dashboard picks an application/environment). */
   readonly applicationId: string | null;
   readonly environmentId: string | null;
+  /**
+   * True ONLY for the BFF short-lived tenant token (a dashboard session, ADR-0003); false for an
+   * `sk_*` data-plane key. This is the AUTHORITATIVE session-vs-key signal — the guard knows which
+   * branch it took, so management gates must read this flag, not infer session-ness from
+   * `applicationId === null` (a legacy/un-backfilled key can also have a null application_id, which
+   * would otherwise let it pass a session-only gate — ADR-0005 #6 escalation).
+   */
+  readonly isSessionToken: boolean;
 }
 
 /** Minimal shape we read/attach — avoids coupling to a specific HTTP adapter's request type. */
@@ -77,6 +85,7 @@ export class ApiKeyGuard implements CanActivate {
         keyId: token.keyId,
         applicationId: null,
         environmentId: null,
+        isSessionToken: true,
       };
       return true;
     }
@@ -93,6 +102,7 @@ export class ApiKeyGuard implements CanActivate {
       keyId: resolved.keyId,
       applicationId: resolved.applicationId,
       environmentId: resolved.environmentId,
+      isSessionToken: false,
     };
     return true;
   }

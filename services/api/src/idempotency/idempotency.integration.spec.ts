@@ -95,6 +95,7 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     keyId: "abcdef0123456789",
     applicationId: null,
     environmentId: null,
+    isSessionToken: false,
   };
   const req = { tenant };
   const CREDIT = 100_000n;

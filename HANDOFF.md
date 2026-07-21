@@ -107,10 +107,20 @@ explicit per-slice gos, so acceptance confirms the built system matches the deci
 authorising unstarted work. Both status lines record that framing rather than implying a clean
 review-then-build sequence.
 
-**Not cleared by that acceptance, and tracked on ADR-0005's follow-up list:**
-- the **runtime/management scope security review** (decision #6, runtime vs management authority) —
-  three of the ADR's four follow-ups are now satisfied, this is the one that is not. The new
-  closed-catalog denial test is input to that review, not a replacement for it;
+**Scope security review DONE 2026-07-21** (`docs/sdk/scope-security-review.md`) — the last open
+ADR-0005 follow-up. It found and fixed a **MEDIUM privilege-escalation**: the management gate
+(decision #6) separated dashboard-session authority from runtime-key authority using the proxy
+`applicationId === null`. But `api_keys.application_id` is nullable (migration 0047; the planned
+NOT-NULL follow-up never shipped), and `resolve()` returns `applicationId: null` for such a key — so
+a legacy/un-backfilled runtime key, **regardless of scopes**, could author/publish/archive message
+definitions for its tenant (within-tenant; RLS holds). Fixed by carrying an explicit `isSessionToken`
+flag on `RequestTenant` (true only on the BFF tenant-token branch) and testing that at the gate
+instead of the proxy. Regression: `message-definitions.controller.spec` "rejects a runtime key with a
+NULL application_id"; guard specs assert the flag on both paths. One **LOW** noted (managed-delivery
+reads use the same proxy but are scope-backstopped — read-only, same-tenant) and a defence-in-depth
+recommendation to finally land the NOT-NULL on `api_keys.application_id`.
+
+**Still open on ADR-0005's list:**
 - **npm publication** of `@fabric-messaging/sdk@beta.5` and `@fabric-messaging/cli@beta.1` — a
   separate redline needing explicit human authorisation, independent of ADR status;
 - **live rollout**, which stays behind the live-SMS redline regardless;

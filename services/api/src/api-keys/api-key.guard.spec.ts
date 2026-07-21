@@ -75,12 +75,15 @@ describe("ApiKeyGuard (F2.3)", () => {
     }));
     const { ctx, req } = ctxFor({ authorization: "Bearer sk_test_valid" });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    // A resolved sk_* key is NEVER a session — even with a null application_id (the legacy/
+    // un-backfilled shape). isSessionToken: false is what stops such a key passing a session gate.
     expect(req.tenant).toEqual({
       id: "00000000-0000-0000-0000-0000000000a1",
       scopes: ["sms:send"],
       keyId: "abcdef0123456789",
       applicationId: null,
       environmentId: null,
+      isSessionToken: false,
     });
   });
 
@@ -119,12 +122,15 @@ describe("ApiKeyGuard (F2.3)", () => {
     const { token } = tenantTokens().mint(tenantId);
     const { ctx, req } = ctxFor({ authorization: `Bearer ${token}` });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    // The tenant-token path is the ONLY one that sets isSessionToken: true — this is the flag the
+    // management gate trusts to admit a dashboard session.
     expect(req.tenant).toEqual({
       id: tenantId,
       scopes: ["*"],
       keyId: `bfft_${tenantId.slice(0, 12)}`,
       applicationId: null,
       environmentId: null,
+      isSessionToken: true,
     });
     expect(keyResolveCalled).toBe(false); // token path never hits the key lookup
   });
@@ -158,6 +164,7 @@ describe("requireScope", () => {
     keyId: "abcdef0123456789",
     applicationId: null,
     environmentId: null,
+    isSessionToken: false,
   };
 
   it("returns a tenant with the required or wildcard scope", () => {

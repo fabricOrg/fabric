@@ -81,11 +81,13 @@ Status at acceptance (2026-07-19): three of four satisfied.
 - ~~Specify the portable variable-schema subset and compatibility algorithm.~~ Done —
   `docs/sdk/sdk-003-slice0-design.md` locks the closed JSON-Schema subset; `@app/domain`
   `analyzeCompatibility` implements the verdict table.
-- **Complete a security review of proposed runtime and management scopes — STILL OPEN.** This is the
-  one outstanding obligation and it is not discharged by accepting the model. Decision 6
-  (runtime/management separation) is the property at risk. A closed-catalog denial test now backs it
-  (`api-key.guard.spec.ts` asserts a `definitions:read` key satisfies no send/publish/content scope,
-  and fails when a new scope is added), which is input to the review, not a substitute for it.
+- ~~Complete a security review of proposed runtime and management scopes.~~ **Done 2026-07-21** —
+  `docs/sdk/scope-security-review.md`. It found and fixed a MEDIUM: the management gate (decision 6)
+  separated authority by the proxy `applicationId === null`, which a legacy runtime key with a null
+  application_id could satisfy — a within-tenant escalation to author/publish definitions. The guard
+  now carries an explicit `isSessionToken` signal and the gate tests that. One LOW (the managed-read
+  paths use the same proxy but are scope-backstopped) is recorded for a follow-up, plus a
+  defence-in-depth recommendation to land the never-shipped NOT-NULL on `api_keys.application_id`.
 - ~~Define managed-delivery and attempt webhook schemas with compatibility guarantees.~~ Done —
   typed canonical events in SDK-002/005, `webhook-event-contract.spec`.
 - ~~Implement the authoritative vertical increments and gates.~~ Done — SDK-003/004/005; SDK-004's
