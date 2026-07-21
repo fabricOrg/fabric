@@ -98,6 +98,25 @@ describe("previewEmail (SDK-007 slice 2)", () => {
     ]);
   });
 
+  it("also rejects unicode line/paragraph separators in the subject", () => {
+    for (const sep of [
+      String.fromCharCode(0x2028),
+      String.fromCharCode(0x2029),
+    ]) {
+      const out = previewEmail({
+        subject: "Re: {{name}}",
+        html: "<p>x</p>",
+        schema,
+        data: { name: `ok${sep}Bcc: victim@example.com` },
+        currency: "GHS",
+      });
+      expect(out.preview).toBeNull();
+      expect(out.blockers).toEqual([
+        { path: "subject", code: "subject_newline" },
+      ]);
+    }
+  });
+
   it("blocks an undeclared token at <part>.<token> without rendering", () => {
     const out = previewEmail({
       subject: "hi",

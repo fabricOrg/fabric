@@ -100,9 +100,10 @@ export function previewEmail(input: {
   if (blockers.length > 0) return { blockers, preview: null };
 
   const subject = renderPlain(input.subject, input.data);
-  // The subject is an email header — a CR/LF expanded from a variable would inject headers. Reject it
-  // (path-coded, value never echoed) rather than silently stripping.
-  if (/[\r\n]/.test(subject)) {
+  // The subject is an email header — any line terminator expanded from a variable could inject headers.
+  // Reject CR/LF and the unicode line/paragraph separators (U+2028/U+2029), path-coded, value never
+  // echoed, rather than silently stripping.
+  if (/[\r\n\u2028\u2029]/.test(subject)) {
     return {
       blockers: [{ path: "subject", code: "subject_newline" }],
       preview: null,
