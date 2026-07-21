@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   definitionEnvironment,
   localeTag,
+  messageChannel,
   stableKey,
 } from "./message-definitions.js";
 
@@ -39,13 +40,31 @@ export const smsPreviewResult = z.object({
 });
 export type SmsPreviewResult = z.infer<typeof smsPreviewResult>;
 
+// Email preview result (SDK-007 slice 3). Rendered subject/text/html, the rendered UTF-8 byte size, its
+// size tier, and the exact tier price. Parallel to smsPreviewResult; the two are carried in separate
+// nullable fields (`preview` / `email_preview`) discriminated by `channel` so an SMS consumer that only
+// reads `preview` is unaffected.
+export const emailPreviewResult = z.object({
+  subject: z.string(),
+  text: z.string().nullable(),
+  html: z.string().nullable(),
+  size_bytes: z.number().int(),
+  tier: z.enum(["standard", "large", "xlarge"]),
+  cost_minor: z.string(),
+  currency: z.string(),
+});
+export type EmailPreviewResult = z.infer<typeof emailPreviewResult>;
+
 export const previewMessageResponse = z.object({
+  channel: messageChannel,
   version_id: z.string().uuid(),
   environment: definitionEnvironment,
   resolved_locale: z.string(),
   blockers: z.array(previewBlocker),
   warnings: z.array(previewBlocker),
   eligible: z.boolean(),
+  // SMS sender/compliance. For an Email release these are not applicable — sender_id is empty and status
+  // is `not_evaluated` (email sending-domain binding is a later slice); message_class defaults transactional.
   sender: z.object({
     sender_id: z.string(),
     status: z.enum([
@@ -59,6 +78,7 @@ export const previewMessageResponse = z.object({
   }),
   message_class: z.enum(["transactional", "promotional"]),
   preview: smsPreviewResult.nullable(),
+  email_preview: emailPreviewResult.nullable(),
   request_id: z.string(),
 });
 export type PreviewMessageResponse = z.infer<typeof previewMessageResponse>;

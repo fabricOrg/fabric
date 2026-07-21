@@ -66,10 +66,26 @@ retained but its "PR #158 OPEN" framing is superseded.
   tier pricing, no-PII-echo, determinism, dispatch). Gates: domain typecheck + 89 tests + biome, files
   under length guard. Pure functions — no integration tier. **Not yet independently reviewed** (slice 1
   was).
-- **Next: slice 3** — `POST /v1/messages/preview` Email branch (resolve an Email release, render via the
-  slice-2 core, report blockers/binding-status/price, no side effects). Reuses the SDK-003 preview
-  endpoint; adds the channel branch + locale resolution (the caller resolves the localized subject/text/
-  html before calling `previewMessage`).
+- **Slice 3 DONE + committed** — Email branch of `POST /v1/messages/preview`. `previewMessageResponse`
+  gains `channel` + nullable `email_preview` (SMS `preview` unchanged → dashboard SMS parse unaffected);
+  service selects `channel`, **LEFT-joins** the SMS sender binding (Email has none), branches: email →
+  `resolveEmailParts` (locale) → `previewEmail`, `sender.status="not_evaluated"` + no SMS compliance
+  (email sending-domain binding deferred — honest readiness gap). READ-ONLY. Gates: contracts/domain/api/
+  dashboard typecheck + api unit 157 + biome + **real-Postgres preview 7/7** (2 email + 1 regression).
+  Independently reviewed (gemini, per the always-review directive): verdict CHANGES-NEEDED →
+  **Blocker fixed** (LEFT join let an SMS release with no binding preview an empty sender instead of 404;
+  restored the 404 + regression test). Dispositioned: required `channel` = additive at runtime (old SDKs
+  strip unknowns; internal typecheck clean) — kept; OpenAPI "drift" = non-issue (`openapi:check` current,
+  generator doesn't derive this response's fields); `as EmailVariantContent` nit = matches existing
+  `as SmsVariantContent` pattern. Reviewer confirmed LEFT-join tenancy safe + skip-email-compliance is a
+  valid incremental disposition.
+- **Next: slice 4** — managed Email SEND + dispatch: refactor the managed send to channel-dispatch
+  (SMS→SMS engine unchanged, Email→the existing FakeEmailProvider runtime), wallet reserve/settle by the
+  slice-2 tier price, delivery/attempt rows `channel:"email"`, acceptance+terminal outbox, attempt-time
+  Email recheck. Real-Postgres: send↔preview parity, idempotency, crash recovery+refund, negative gates
+  (unsafe HTML / bad recipient / oversized / insufficient funds→402 / unbound domain). This is where
+  Email authoring through the API (create/addVersion accepting email content) likely also lands so a
+  send has a real released email definition.
 - **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
   machine) each need their OWN ADR — flagged, not written yet. SDK-010 also has NO backend today (zero
   `journey` rows/controllers/services); its frontend React Flow canvas + palette are reusable, but it

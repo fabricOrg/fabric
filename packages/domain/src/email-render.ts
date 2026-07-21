@@ -69,8 +69,8 @@ function renderHtmlBody(template: string, data: unknown): string {
 
 export function previewEmail(input: {
   subject: string;
-  text?: string;
-  html?: string;
+  text?: string | undefined;
+  html?: string | undefined;
   schema: VariableSchema;
   data: unknown;
   currency: string;

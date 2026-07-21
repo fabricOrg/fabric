@@ -8,6 +8,7 @@ const TID = "00000000-0000-0000-0000-0000000000a1";
 function controllerWith() {
   const svc = {
     preview: vi.fn(async () => ({
+      channel: "sms" as const,
       version_id: "00000000-0000-0000-0000-0000000000ff",
       environment: "sandbox" as const,
       resolved_locale: "en",
@@ -17,6 +18,7 @@ function controllerWith() {
       sender: { sender_id: "FABRIC", status: "sandbox" as const },
       message_class: "transactional" as const,
       preview: null,
+      email_preview: null,
     })),
   };
   return {
