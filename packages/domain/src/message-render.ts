@@ -15,7 +15,9 @@ import { type Encoding, encodeAndSegment } from "./segmentation.js";
 // A rendered body can legitimately exceed the 1600-char content cap once variables expand; cap it so a
 // pathological payload can't blow up segmentation/cost. Exceeding it is a blocker, not a silent clamp.
 const MAX_RENDERED_CHARS = 6000;
-const TOKEN = /\{\{\s*([\w.]+)\s*\}\}/g;
+// The token grammar is the single source both SMS and Email rendering share (parity). Exported so
+// email-render.ts consumes the exact same regex rather than a divergent copy.
+export const TOKEN = /\{\{\s*([\w.]+)\s*\}\}/g;
 
 const FORMAT_RE: Record<string, RegExp> = {
   email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/,
@@ -156,7 +158,10 @@ export function extractTokens(body: string): string[] {
 }
 
 /** True if a dotted path resolves to a scalar (string/integer/number/boolean) declared in the schema. */
-function pathIsDeclaredScalar(schema: VariableSchema, dotted: string): boolean {
+export function pathIsDeclaredScalar(
+  schema: VariableSchema,
+  dotted: string,
+): boolean {
   let node: VariableSchemaNode = schema;
   for (const seg of dotted.split(".")) {
     if (node.type !== "object") return false;
@@ -167,7 +172,7 @@ function pathIsDeclaredScalar(schema: VariableSchema, dotted: string): boolean {
   return node.type !== "object" && node.type !== "array";
 }
 
-function resolve(data: unknown, dotted: string): unknown {
+export function resolve(data: unknown, dotted: string): unknown {
   let cur: unknown = data;
   for (const seg of dotted.split(".")) {
     if (typeof cur !== "object" || cur === null) return undefined;

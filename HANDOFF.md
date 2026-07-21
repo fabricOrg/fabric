@@ -55,9 +55,21 @@ retained but its "PR #158 OPEN" framing is superseded.
     `app_owner:localdev` (SUPER) + `app_runtime:localdev_app` (APP), db on `127.0.0.1:5432`. The full
     `test:integration` tier also has pre-existing local-data pollution (leftover `email_*` fixtures block
     account-delete teardown in unrelated suites) — run the target spec in isolation to see it green.
-- **Next: slice 2** — `previewEmail` + channel-dispatching `previewMessage` + `rateEmailBySize`
-  (size-tiered) as pure, unit-tested functions in `@app/domain`. HTML escaping/injection/size tests,
-  no-value-echo, preview↔send parity fixture. No endpoint/dashboard yet (slice 3+).
+- **Slice 2 DONE + committed** — pure `@app/domain` Email render + preview core. `rateEmailBySize`
+  (size-tiered: base×{1,3,6} at 50/150/256 KiB bands, `EMAIL_MAX_BYTES` ceiling, `EmailPayloadTooLargeError`,
+  GHS/NGN/USD base table) in `rating.ts`; new `email-render.ts` (`previewEmail`: subject/text/html render,
+  **HTML-escapes variable values in the html context, rejects CR/LF in the subject = header-injection
+  guard**, byte-size measure via `TextEncoder`, tier pricing, path-coded blockers that never echo the
+  value); new `message-preview.ts` (`previewMessage` channel dispatcher). Shared token/validation helpers
+  (`TOKEN`, `resolve`, `pathIsDeclaredScalar`) exported from `message-render.ts` so both channels use one
+  grammar (parity). 15 new unit tests (escaping vs plain-text context, header-injection, size ceiling,
+  tier pricing, no-PII-echo, determinism, dispatch). Gates: domain typecheck + 89 tests + biome, files
+  under length guard. Pure functions — no integration tier. **Not yet independently reviewed** (slice 1
+  was).
+- **Next: slice 3** — `POST /v1/messages/preview` Email branch (resolve an Email release, render via the
+  slice-2 core, report blockers/binding-status/price, no side effects). Reuses the SDK-003 preview
+  endpoint; adds the channel branch + locale resolution (the caller resolves the localized subject/text/
+  html before calling `previewMessage`).
 - **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
   machine) each need their OWN ADR — flagged, not written yet. SDK-010 also has NO backend today (zero
   `journey` rows/controllers/services); its frontend React Flow canvas + palette are reusable, but it
