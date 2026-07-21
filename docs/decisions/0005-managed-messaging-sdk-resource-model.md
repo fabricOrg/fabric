@@ -1,6 +1,13 @@
 # ADR 0005: Managed messaging SDK resource model
 
-Status: proposed 2026-07-15 (requires product and security review before implementation).
+Status: **accepted 2026-07-19** (product owner). Ratified **retrospectively**: the resource model was
+implemented across SDK-003/004/005 under an explicit per-slice go while this ADR still read
+`proposed`, so acceptance confirms the built system matches the decision rather than authorising work
+not yet started. The as-built evidence is `docs/sdk/evidence/sdk-003.md`, `sdk-004.md`, `sdk-005.md`.
+
+Superseded status line: _proposed 2026-07-15 (requires product and security review before
+implementation)._ The security review of runtime and management scopes is **still open** — see
+Follow-up; acceptance of the model does not stand in for it.
 
 The delivery acceptance, wallet, durable-idempotency, correlation, webhook, and privacy semantics
 are refined in [ADR 0006](./0006-managed-delivery-acceptance-and-execution.md).
@@ -69,8 +76,19 @@ copies, which weakens promotion, auditability, and generated contracts.
 
 ## Follow-up
 
-- Specify the portable variable-schema subset and compatibility algorithm.
-- Complete a security review of proposed runtime and management scopes.
-- Define managed-delivery and attempt webhook schemas with compatibility guarantees.
-- Implement the authoritative vertical increments and gates in
-  [SDK DX design iteration 3](../sdk/sdk-dx-iteration-3.md#prioritized-implementation-plan).
+Status at acceptance (2026-07-19): three of four satisfied.
+
+- ~~Specify the portable variable-schema subset and compatibility algorithm.~~ Done —
+  `docs/sdk/sdk-003-slice0-design.md` locks the closed JSON-Schema subset; `@app/domain`
+  `analyzeCompatibility` implements the verdict table.
+- ~~Complete a security review of proposed runtime and management scopes.~~ **Done 2026-07-21** —
+  `docs/sdk/scope-security-review.md`. It found and fixed a MEDIUM: the management gate (decision 6)
+  separated authority by the proxy `applicationId === null`, which a legacy runtime key with a null
+  application_id could satisfy — a within-tenant escalation to author/publish definitions. The guard
+  now carries an explicit `isSessionToken` signal and the gate tests that. One LOW (the managed-read
+  paths use the same proxy but are scope-backstopped) is recorded for a follow-up, plus a
+  defence-in-depth recommendation to land the never-shipped NOT-NULL on `api_keys.application_id`.
+- ~~Define managed-delivery and attempt webhook schemas with compatibility guarantees.~~ Done —
+  typed canonical events in SDK-002/005, `webhook-event-contract.spec`.
+- ~~Implement the authoritative vertical increments and gates.~~ Done — SDK-003/004/005; SDK-004's
+  AC02 channel clause remains an open implement-or-record-non-applicability call.

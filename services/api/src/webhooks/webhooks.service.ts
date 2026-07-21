@@ -9,7 +9,6 @@ import {
   type AppDb,
   type ApplicationId,
   applications,
-  type EnvironmentId,
   environments,
   outboxEvents,
   type TenantId,
@@ -23,6 +22,7 @@ import { AuditService } from "../audit/audit.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import { emptyHealth, toDeliveryDto, toEndpointDto } from "./webhook-dto.js";
+import { webhookEnvScope } from "./webhook-env-scope.js";
 import { resolveWebhookTarget } from "./webhook-url-policy.js";
 
 @Injectable()
@@ -46,6 +46,11 @@ export class WebhooksService {
     const secret = `whsec_${randomBytes(32).toString("base64url")}`;
     const requestedEnvType = opts.envType ?? "sandbox";
     const resolved = await this.db.withTenantDrizzle(tenantId, async (tx) => {
+      const envScopeFilter = webhookEnvScope({
+        ...(opts.applicationId ? { applicationId: opts.applicationId } : {}),
+        ...(opts.environmentId ? { environmentId: opts.environmentId } : {}),
+        envType: requestedEnvType,
+      });
       const [env] = await tx
         .select({
           appId: environments.applicationId,
@@ -58,21 +63,7 @@ export class WebhooksService {
           eq(applications.id, environments.applicationId),
         )
         .where(
-          and(
-            eq(applications.tenantId, tenantId as TenantId),
-            // sk_* key → its exact env (ADR-0004); BFF token → named app, else legacy default app.
-            opts.environmentId
-              ? eq(environments.id, opts.environmentId as EnvironmentId)
-              : opts.applicationId
-                ? and(
-                    eq(applications.id, opts.applicationId as ApplicationId),
-                    eq(environments.type, requestedEnvType),
-                  )
-                : and(
-                    eq(applications.slug, "default"),
-                    eq(environments.type, requestedEnvType),
-                  ),
-          ),
+          and(eq(applications.tenantId, tenantId as TenantId), envScopeFilter),
         )
         .limit(1);
       if (!env) {

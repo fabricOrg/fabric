@@ -60,6 +60,10 @@ export class SmsBatchController {
       operation: "batch",
       ...parsed.data,
     });
+    // Funds failures are handled PER ITEM inside the batch service (an underfunded item is marked
+    // failed and the batch still returns 200 with partial success) — a batch must not 402 as a
+    // whole and fail its funded items too. So there is deliberately no insufficient-funds mapping
+    // here, unlike the single-send path.
     return this.batches.create(
       context,
       idempotencyKey,

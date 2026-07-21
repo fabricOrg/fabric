@@ -34,6 +34,22 @@ function actionsFor(fabric) {
       }),
     "verify.check": (p) => fabric.verify.check({ id: p.id, code: p.code }),
     "wallet.retrieve": () => fabric.wallet.retrieve(),
+    // Managed messaging (SDK-003 preview / SDK-005 send) — send by stable definition key, not raw body.
+    "messages.preview": (p) =>
+      fabric.messages.preview(p.key, {
+        ...(p.data ? { data: p.data } : {}),
+        ...(p.locale ? { locale: p.locale } : {}),
+        ...(p.to ? { to: p.to } : {}),
+      }),
+    "messages.send": (p) =>
+      fabric.messages.send(p.key, {
+        to: p.to,
+        ...(p.data ? { data: p.data } : {}),
+        ...(p.locale ? { locale: p.locale } : {}),
+        ...(p.reference ? { reference: p.reference } : {}),
+        idempotencyKey: p.idempotencyKey,
+      }),
+    "messages.retrieveDelivery": (p) => fabric.messages.retrieveDelivery(p.id),
     "senderIds.create": (p) =>
       fabric.senderIds.create({
         senderId: p.senderId,
@@ -96,6 +112,7 @@ const mutating = new Set([
   "sms.send",
   "sms.sendBatch",
   "email.send",
+  "messages.send",
   "verify.start",
   "verify.check",
   "senderIds.create",
@@ -123,8 +140,11 @@ export async function runAction(body) {
     const handler = actions[action];
     if (!handler)
       return { status: 400, payload: { error: "Unknown SDK action." } };
+    // `environmentForKey` only ever returns "sandbox" | "live" (SDK-001 removed "production" from
+    // the public vocabulary) — comparing against "production" here silently disabled this guard and
+    // let a live key mutate. Keep this in step with FabricEnvironment.
     if (
-      fabric.environment === "production" &&
+      fabric.environment === "live" &&
       mutating.has(action) &&
       process.env.FABRIC_ALLOW_LIVE_WRITES !== "true"
     ) {

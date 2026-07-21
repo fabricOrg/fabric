@@ -34,8 +34,8 @@ interface AuthedRequest {
  * Managed message definition MANAGEMENT surface (SDK-003 slice 4). Authoring/publishing requires a
  * dashboard SESSION or an operator — NOT a data-plane `sk_*` key (ADR-0005 #6, least privilege).
  * OperatorOrTenantGuard admits the operator path (no `req.tenant`) and the ApiKeyGuard path; we then
- * reject the ApiKeyGuard path when it came from a scoped `sk_*` key (its `applicationId` is set — the
- * BFF tenant token leaves it null). The tenant id is always taken from the token, never the client.
+ * reject the ApiKeyGuard path unless it came from a BFF session token (`isSessionToken`). The tenant
+ * id is always taken from the token, never the client.
  */
 @Controller("v1/message-definitions")
 @UseGuards(OperatorOrTenantGuard)
@@ -110,16 +110,21 @@ export class MessageDefinitionsController {
 }
 
 /**
- * Management authority: operator (no `req.tenant`) supplies the tenantId; a dashboard session (BFF
- * tenant token → `applicationId === null`) uses its own tenant. A scoped `sk_*` runtime key
- * (`applicationId` set) is rejected — runtime keys must not author/publish definitions.
+ * Management authority (ADR-0005 #6): operator (no `req.tenant`) supplies the tenantId; a dashboard
+ * session (BFF tenant token) uses its own tenant. ANY `sk_*` runtime key is rejected — runtime keys
+ * must not author/publish definitions.
+ *
+ * The reject test is `isSessionToken`, the guard's authoritative session-vs-key flag — NOT
+ * `applicationId === null`. A legacy/un-backfilled key can also carry a null application_id (the
+ * column is nullable and the planned NOT-NULL follow-up never shipped), so the old proxy would have
+ * let such a key pass this gate regardless of its scopes.
  */
 function resolveManagementTenant(
   req: AuthedRequest,
   supplied: unknown,
 ): string {
   if (!req.tenant) return requireUuid(supplied, "tenantId");
-  if (req.tenant.applicationId !== null) {
+  if (!req.tenant.isSessionToken) {
     throw forbidden(
       "management_requires_session",
       "Message definitions can only be managed from a dashboard session, not an API key.",

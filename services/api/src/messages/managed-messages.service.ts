@@ -12,7 +12,11 @@ import {
 } from "@app/sms-engine";
 import { Inject, Injectable } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
-import { apiError, invalidRequest } from "../http/api-error.js";
+import {
+  apiError,
+  asInsufficientFunds,
+  invalidRequest,
+} from "../http/api-error.js";
 import { SmsService } from "../sms/sms.service.js";
 import {
   listDeliveries,
@@ -124,7 +128,14 @@ export class ManagedMessagesService {
           "limits.max_cost",
         );
       }
-      throw error;
+      // The reserve rides the acceptance transaction, so a balance rejection means nothing was
+      // written. Surface it as the declared 402 category instead of letting it escape as a 500 —
+      // callers must be able to branch on "top up" without string-matching a server fault.
+      // (asInsufficientFunds rethrows anything that isn't the wallet error, preserving `throw error`.)
+      asInsufficientFunds(
+        error,
+        "The sandbox wallet balance can't cover this message.",
+      );
     }
     return this.retrieve({
       tenantId: input.tenantId,

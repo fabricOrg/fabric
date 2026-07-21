@@ -1,4 +1,4 @@
-import type { ApiErrorEnvelope } from "@app/contracts";
+import { type ApiErrorEnvelope, apiKeyScopeValues } from "@app/contracts";
 import type { ExecutionContext } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import { describe, expect, it } from "vitest";
@@ -75,12 +75,15 @@ describe("ApiKeyGuard (F2.3)", () => {
     }));
     const { ctx, req } = ctxFor({ authorization: "Bearer sk_test_valid" });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    // A resolved sk_* key is NEVER a session — even with a null application_id (the legacy/
+    // un-backfilled shape). isSessionToken: false is what stops such a key passing a session gate.
     expect(req.tenant).toEqual({
       id: "00000000-0000-0000-0000-0000000000a1",
       scopes: ["sms:send"],
       keyId: "abcdef0123456789",
       applicationId: null,
       environmentId: null,
+      isSessionToken: false,
     });
   });
 
@@ -119,12 +122,15 @@ describe("ApiKeyGuard (F2.3)", () => {
     const { token } = tenantTokens().mint(tenantId);
     const { ctx, req } = ctxFor({ authorization: `Bearer ${token}` });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    // The tenant-token path is the ONLY one that sets isSessionToken: true — this is the flag the
+    // management gate trusts to admit a dashboard session.
     expect(req.tenant).toEqual({
       id: tenantId,
       scopes: ["*"],
       keyId: `bfft_${tenantId.slice(0, 12)}`,
       applicationId: null,
       environmentId: null,
+      isSessionToken: true,
     });
     expect(keyResolveCalled).toBe(false); // token path never hits the key lookup
   });
@@ -158,6 +164,7 @@ describe("requireScope", () => {
     keyId: "abcdef0123456789",
     applicationId: null,
     environmentId: null,
+    isSessionToken: false,
   };
 
   it("returns a tenant with the required or wildcard scope", () => {
@@ -180,5 +187,26 @@ describe("requireScope", () => {
       expect(exception.getStatus()).toBe(403);
       expect(exception.getResponse().error.code).toBe("insufficient_scope");
     }
+  });
+
+  // SDK-004-AC05 (reverse): the least-privilege catalog key reads contracts and nothing else.
+  // Driven off the closed catalog so a newly added scope fails here until it is deliberately
+  // considered, rather than silently widening what a `definitions:read` key can reach.
+  it("denies a definitions:read key every send, publish, and content scope", () => {
+    const catalogKey = { ...tenant, scopes: ["definitions:read"] };
+    const others = apiKeyScopeValues.filter(
+      (scope) => scope !== "definitions:read",
+    );
+    expect(others.length).toBeGreaterThan(0);
+    for (const scope of others) {
+      try {
+        requireScope(catalogKey, scope);
+        expect.unreachable(`definitions:read must not satisfy ${scope}`);
+      } catch (error) {
+        const exception = error as { getResponse(): ApiErrorEnvelope };
+        expect(exception.getResponse().error.code).toBe("insufficient_scope");
+      }
+    }
+    expect(requireScope(catalogKey, "definitions:read")).toBe(catalogKey);
   });
 });

@@ -32,6 +32,7 @@ function tenant(scopes: string[], environmentId: string | null): RequestTenant {
     keyId: "key_x",
     applicationId: null,
     environmentId,
+    isSessionToken: false,
   };
 }
 

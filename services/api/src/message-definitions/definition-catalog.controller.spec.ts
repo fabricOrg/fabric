@@ -10,6 +10,7 @@ const TENANT: RequestTenant = {
   keyId: "key_catalog",
   applicationId: "273e8b6a-82e8-46e1-86ab-274e458888de",
   environmentId: "a4265774-d8cf-46b3-be93-41538e06964b",
+  isSessionToken: false,
 };
 
 function setup() {
@@ -65,6 +66,7 @@ describe("DefinitionCatalogController", () => {
             scopes: ["*"],
             applicationId: null,
             environmentId: null,
+            isSessionToken: true,
           },
         }),
       ),

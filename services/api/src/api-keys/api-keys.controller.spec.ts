@@ -44,6 +44,7 @@ function sessionReq(tenantId: string): { tenant: RequestTenant } {
       keyId: `bfft_${tenantId.slice(0, 12)}`,
       applicationId: null,
       environmentId: null,
+      isSessionToken: true,
     },
   };
 }

@@ -3,7 +3,131 @@
 _Snapshot: 2026-07-18. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-18): stakeholder-testing hardening — customer journey verified end-to-end (PRs #151–#153)
+## Latest (2026-07-18 → 07-21): SDK-003/004/005 closeout — PR #158 OPEN
+
+Branch `fix/ops-sdk004-closeout` (off `dev`), **pushed 2026-07-21, PR #158 → dev, MERGEABLE, CI
+running** (`verify:push` passed on push). 12 commits. fifi ff-merges `dev` — do not self-merge.
+**Closing out already-shipped work rather than starting new scope.** This HANDOFF was stale: it recorded slice 6b as deferred and SDK-004 as the
+next item, but **both landed in `dbfd7d1` (PR #144)** — `packages/cli` (binary `fabric`) is built,
+tested, and gated by `release:check`.
+
+- **`docs/sdk/evidence/sdk-004.md` written** (was missing entirely — under the backlog's completion
+  audit an item without traceability evidence is not closed). AC01/AC04/AC06 traced to
+  `packages/cli` specs; AC03 to the shared `@app/domain` validator via SDK-003 evidence.
+- **AC05 was only half-proven.** The forward direction (send-only key denied the catalog) existed;
+  the reverse (a `definitions:read` key cannot send/publish/retrieve content) did not. Added a
+  closed-catalog denial test in `api-key.guard.spec.ts` that iterates `apiKeyScopeValues`, so a
+  newly added scope fails the test until deliberately considered.
+- **Defect found + fixed:** `definition-developer-setup.spec.ts` was a tautology — it compared
+  `DEFINITION_COMMANDS` to literals copied from the same module and would have survived renaming the
+  binary, the package, or either subcommand. Rewritten to assert against `packages/cli/package.json`
+  (`name`, `bin`) and the subcommands `bin.ts` actually accepts.
+- **AC02 channel clause is OPEN and needs a release-owner decision.**
+  `DefinitionContract.channels` is declared but consumed by no type — `CatalogPreviewOptions` narrows
+  only `data`/`locale`, and no send/preview option exposes `channel`. Not a missing test: the
+  constraint does not exist. SMS is currently the only managed channel, so nothing can select a wrong
+  one, but the no-waiver rule requires either implementing it or recording a reviewed
+  non-applicability with a named reviewer (defensible disposition: defer to SDK-007/008).
+- **`docs/sdk/evidence/sdk-003.md` reconciled** — AC02 (permission-gated member-draft /
+  developer-read-only) and AC07 (`templateToDefinitionDraft`, pure, original untouched) now trace to
+  6b evidence instead of reading "deferred".
+- Also carries a small `webhooks.service.ts` refactor found uncommitted on `dev`: the nested ternary
+  env-scope filter extracted to guard clauses per CLAUDE.md §3. Behaviour identical; typecheck green.
+
+**Verified:** `@fabric-messaging/cli release:check` exit 0 (typecheck + 6 tests + build + packed
+smoke + pack dry-run) · api 30 files/156 tests · dashboard 13 files/60 tests · api + dashboard
+typecheck exit 0. **Nothing pushed, nothing published.**
+
+### Follow-up sweep (same branch)
+
+Worked the outstanding follow-ups rather than opening new scope. Two were already done; two were
+real.
+
+- **Insights aggregation test — DONE.** `sms/messaging-insights.integration.spec.ts`, 4 real-Postgres
+  tests: workspace-wide rollup excludes another tenant's rows (RLS), the environment predicate
+  narrows, counts/avg_segments are exact, and error codes group heaviest-first with an **unmapped
+  code falling back to the raw code** — the standing guard against reintroducing the fabricated
+  Twilio-shaped descriptions #153 removed. Full integration tier now 40 files / 168 passing.
+- **Member-mutation audit — ALREADY DONE, note was stale.** `invite` / `updateRole` /
+  `setPermissions` / `remove` all emit distinct audit actions, and the actor is wired end-to-end:
+  BFF route (`session.email`) → `members-client` `x-actor-email` header → controller `@Headers` →
+  service → audit. `members.service.integration.spec` asserts the acting admin's email on a
+  permission grant. Nothing to build.
+- **Playground `messages.*` — DONE.** `messages.preview` / `send` / `retrieveDelivery` added to
+  `playground-core.mjs` and the UI (new "Managed messages" group), so SDK-005's managed surface is
+  finally exercisable from the playground. Verified the vendored SDK (`beta.5`) exports all three.
+- **⚠️ Playground live-write guard was DEAD — FIXED.** The guard read
+  `fabric.environment === "production"`, but SDK-001 removed `production` from the public vocabulary
+  and `environmentForKey` only ever returns `sandbox | live`. The comparison could never be true, so
+  **a live key could mutate through the deployed playground regardless of
+  `FABRIC_ALLOW_LIVE_WRITES`.** Now compares against `"live"`. This one is worth a redeploy of
+  `fabric-playground-red` on its own merits — it protects the live-SMS/payments redline.
+
+**Env gap (local only, pre-existing):** `senders.integration.spec` fails on this machine because the
+local `.env` carries only `DATABASE_URL_APP` + `DATABASE_URL_OWNER`. `.env.example` already
+documents all four — copy its `DATABASE_URL_SUPER` and `DATABASE_URL_PROVISIONER` lines across and
+the tier runs clean. Nothing to change in the repo. (Until then, run the tier with
+`DATABASE_URL_SUPER="$DATABASE_URL_OWNER"`.)
+
+### SDK-005 AC05/AC07 closeout — and a live 500 found (2026-07-19)
+
+Same stale-evidence pattern as SDK-003/004: `sdk-005.md` still recorded **AC05** and **AC07** as
+partial even though the work closing AC07 (dashboard delivery surfaces, typed webhook UAT) was
+already struck through as DONE further down the same document. AC05 was genuinely open — the
+managed-specific negative tests were never written.
+
+- **`messages/managed-negative.integration.spec.ts` — NEW, 3 tests.** Suppressed recipient → 400
+  `recipient_opted_out`; underfunded wallet → 402 `insufficient_funds`; solvent control send → 202.
+  Each negative asserts message/delivery/attempt/outbox counts are unchanged, and the control send
+  stops the negatives passing for the wrong reason.
+- **⚠️ Defect found by that test: insufficient funds returned an opaque 500.** The wallet's
+  `InsufficientFundsError` was mapped nowhere in `services/api` — grep confirms zero references —
+  so an empty wallet produced a server fault the SDK could not branch on, even though
+  `insufficient_funds_error` (402) has been a declared `ErrorType` in `@app/contracts` since F8.3,
+  and `packages/wallet/errors.ts` claims "the API boundary maps these" (a lying comment). Added
+  `insufficientFunds()` to `http/api-error.ts` and mapped it in `ManagedMessagesService.send`.
+- **The direct `sms.send` path has the SAME bug and is NOT fixed.** It also lets the wallet error
+  escape unmapped. I scoped the fix to the managed path because AC05 mandates it there, whereas
+  changing the status code of a shipped, deployed endpoint (500 → 402) is a public behaviour change
+  that deserves an explicit call. The helper is in place, so the direct fix is a small catch block.
+- **Scope calls recorded rather than silently skipped:** quiet hours stays proven at the pure-function
+  tier (`promoWindowOpen` reads the wall clock and preview takes no injected `now`, so an HTTP test
+  would pass/fail by time of day); sandbox sender status cannot block by design (`virtual: true`);
+  **kill-switch is post-acceptance only** — `assessSendCompliance` never consults it, so a
+  pre-acceptance gate would be a behaviour change to specify, not a missing test.
+- `managed-messages.spec-harness.ts` gained an optional `fundMinor` so an underfunded tenant can be
+  seeded; default unchanged.
+
+**Verified:** api integration 41 files / 171 tests (only the local-env `senders` failure) · api unit
+30 files / 156 tests · typecheck 0 · biome clean.
+
+**ADR-0005 and ADR-0006 ACCEPTED 2026-07-19** (product owner) — the blocker that was overdue against
+the backlog's own residual-decisions table is cleared. Both were ratified **retrospectively**: the
+model and its acceptance/money/idempotency semantics had already shipped across SDK-003/004/005 under
+explicit per-slice gos, so acceptance confirms the built system matches the decision rather than
+authorising unstarted work. Both status lines record that framing rather than implying a clean
+review-then-build sequence.
+
+**Scope security review DONE 2026-07-21** (`docs/sdk/scope-security-review.md`) — the last open
+ADR-0005 follow-up. It found and fixed a **MEDIUM privilege-escalation**: the management gate
+(decision #6) separated dashboard-session authority from runtime-key authority using the proxy
+`applicationId === null`. But `api_keys.application_id` is nullable (migration 0047; the planned
+NOT-NULL follow-up never shipped), and `resolve()` returns `applicationId: null` for such a key — so
+a legacy/un-backfilled runtime key, **regardless of scopes**, could author/publish/archive message
+definitions for its tenant (within-tenant; RLS holds). Fixed by carrying an explicit `isSessionToken`
+flag on `RequestTenant` (true only on the BFF tenant-token branch) and testing that at the gate
+instead of the proxy. Regression: `message-definitions.controller.spec` "rejects a runtime key with a
+NULL application_id"; guard specs assert the flag on both paths. One **LOW** noted (managed-delivery
+reads use the same proxy but are scope-backstopped — read-only, same-tenant) and a defence-in-depth
+recommendation to finally land the NOT-NULL on `api_keys.application_id`.
+
+**Still open on ADR-0005's list:**
+- **npm publication** of `@fabric-messaging/sdk@beta.5` and `@fabric-messaging/cli@beta.1` — a
+  separate redline needing explicit human authorisation, independent of ADR status;
+- **live rollout**, which stays behind the live-SMS redline regardless;
+- SDK-004's **AC02 channel** implement-or-record-non-applicability call.
+
+## Earlier (2026-07-18): stakeholder-testing hardening — customer journey verified end-to-end (PRs #151–#153)
 
 All four apps live on the free testing stack (Neon + Render + Vercel). Swept the whole customer
 journey with a real all-permissions **sandbox** key against the deployed API and closed every gap.
@@ -168,9 +292,10 @@ no package publication** (external gate intentionally closed).
   (list/create/publish/archive/preview with owner/admin write gating + trusted-origin), a page with
   status/version/release state + per-definition Use-in-code snippet + publish/archive actions, and a
   create dialog (key + body + JSON variable schema validated against the subset). 6 route-handler
-  tests (role matrix). **Slice 6b deferred** (visual schema builder, interactive preview panel,
-  template→draft conversion, member-draft/developer-read-only gating — a developer's session role
-  collapses to member, so that split needs a `definitions:write` permission).
+  tests (role matrix). **Slice 6b SHIPPED** in `dbfd7d1` — visual schema builder, interactive preview
+  panel, template→draft conversion, and member-draft/developer-read-only gating, resolved via the new
+  `definitions:write` / `definitions:publish` permissions (a developer's session role collapses to
+  member, so the split had to be permission-based rather than role-based).
 - Slice 7 DONE (`a126861`) — `@fabric-messaging/sdk` `MessagesResource.preview` (typed
   `MessagePreview`) wired + exported; `/v1/messages/preview` + schemas in the OpenAPI generator,
   both artifacts regenerated + `openapi:check` current; SDK contract-parity test; evidence doc
@@ -200,17 +325,19 @@ grants anything** (escalation trade-off — commented at the seam), **existing c
   module (matches existing updateRole/remove — worth adding); a bounded-by-granter escalation rule if
   the "any admin grants anything" trade-off is revisited; slice-6b definitions UI still open.
 
-**SDK-003 STATUS: core slices 0–7 COMPLETE + verified (local, unpushed).** Full engine + API + SDK +
-OpenAPI + dashboard surface for author/version/release/preview managed SMS definitions. Remaining:
-**slice 6b** (visual schema builder, interactive preview panel, template→draft conversion,
-member-draft/developer-read-only gating). Redline: ADR-0005 still `proposed` — product+security
-sign-off required (slice-0 §5) before push/publish. Next backlog item after 6b: SDK-004 (typed
-definition catalog CLI).
+**SDK-003 STATUS: slices 0–7 AND slice 6b COMPLETE — all seven ACs closed** (`dbfd7d1`, PR #144).
+Full engine + API + SDK + OpenAPI + dashboard surface for author/version/release/preview managed SMS
+definitions, plus the 6b dashboard depth (visual schema builder, interactive preview panel,
+template→draft conversion, permission-gated member-draft / developer-read-only). Evidence:
+`docs/sdk/evidence/sdk-003.md`. **SDK-004 also shipped in the same PR** — see
+`docs/sdk/evidence/sdk-004.md` (one open item: the AC02 channel clause needs implement-or-waive).
+ADR-0005 **accepted 2026-07-19** (was `proposed`); publication remains a separate redline.
 - RESOLVED (2026-07-17): the `wallet/statement.integration` local failure was residue from crashed
   test runs (fixed-hash `api_keys` + tenant rows whose `afterAll` never ran, colliding on
   `uniq_api_key_hash`), not ledger drift. Stale tenants deleted; full API integration suite green.
-- **Still open:** ADR-0005 remains `proposed` (product+security review pending — slice-0 §5 lists the
-  asks); the runtime-vs-management authority split lands at the API layer in slice 4, not the DB grants.
+- **Still open:** ADR-0005 is now `accepted` (2026-07-19), but its **scope security review** is not
+  done — slice-0 §5 lists the asks. The runtime-vs-management authority split lands at the API layer
+  in slice 4, not the DB grants, which is exactly what that review should scrutinise.
 - Local-env note: this dev DB has `app_owner`/`app_migrator` table-ownership drift; running the
   migration needed a one-off `GRANT REFERENCES ON applications, environments TO app_migrator` (not in any
   migration — a single-owner DB, i.e. CI, does not need it). Also `drizzle-kit generate` emits composite
@@ -276,9 +403,11 @@ provisioner policy, composite containment FKs, retention `expires_at` + `legal_h
 - **DSR/offboarding DONE (2026-07-18):** erasure scrubs managed reference/metadata same-tx with
   the key destruction (money facts survive), summary counts managed deliveries, offboarding =
   soft-close + status-blind retention (proven on a closed tenant). 2-test spec.
-- **SDK-005 SCOPE COMPLETE.** Full API integration 40 files / 171 tests. Evidence:
-  `docs/sdk/evidence/sdk-005.md`. Next backlog: SDK-006 (live provider path — behind the live-SMS
-  redline) or SDK-010 (Journeys, unblocked). Packed-tarball UAT variant = nicety.
+- **SDK-005 SCOPE COMPLETE — all 8 ACs closed** (AC05 finished 2026-07-19; see the closeout section
+  at the top of this file, which also records the 402 defect that closure uncovered). Full API
+  integration 41 files / 171 tests. Evidence: `docs/sdk/evidence/sdk-005.md`. Next backlog: SDK-006
+  (live provider path — behind the live-SMS redline) or SDK-010 (Journeys, unblocked). Packed-tarball
+  UAT variant = nicety.
 
 ## Current direction (2026-07-12): PI-6 — self-service developer platform pivot
 

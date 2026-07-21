@@ -589,6 +589,12 @@ inbox, wallet, dashboard, retrieval response, and webhook agree on the result.
 
 **Dependencies:** SDK-005; existing direct sandbox Email path operational.
 
+**Inherited criterion (from SDK-004-AC02, deferred 2026-07-21):** SDK-004's compile-time *channel*
+constraint was recorded as non-applicable while SMS was the only selectable managed channel (see
+`docs/sdk/evidence/sdk-004.md`). Email is the first second channel, so this item **cannot close**
+unless it lands the `channel` narrowing in the generated catalog types plus a `@ts-expect-error`
+fixture proving a channel-unsupported call fails to compile.
+
 ### Functional scope
 
 - Add Email definition variants, subject/text/HTML rendering, locale preview, sending-domain binding
