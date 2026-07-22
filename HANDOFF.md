@@ -118,7 +118,30 @@ retained but its "PR #158 OPEN" framing is superseded.
       `db:assert:drift`, biome, file-length guard. **Independent review (gemini):** all 9 money/idempotency/
       tenancy/PII/CHECK/migration points OK, NOTHING BLOCKING — findings cross-checked against the diff.
       **Committed on `feature/ops-sdk007-email-sandbox`; nothing pushed, no redline crossed.**
-  - **4b** email dispatch worker + crash-recovery + refund + attempt-time rechecks · **4c** Email
+  - **4b-i DONE + committed** (`73cbf30`) — managed Email dispatch **money resolution**. New
+    `email-managed-resolve.ts` `reconcileManagedEmailTerminal`: looks up the attempt by
+    `email_message_id` (no row ⇒ direct email, no-op), then **delivered ⇒ commit / undelivered|failed|
+    expired ⇒ refund** (idempotent, `referenceId` = deliveryId = email message id — works because 4a-ii
+    reused `reserve()`'s `sms_reserve` ledger reason). Updates attempt + delivery status +
+    `resource_version`; cost columns untouched (email price fixed at accept). No extra outbox —
+    `resolve()` already emits `message.updated` keyed by `message_id` (= deliveryId). Wired into
+    `EmailService.resolve` inside its existing tx, after the terminal-freeze guard (no double-settle;
+    commit/refund independently idempotent). Mirrors SMS `engine.ts:resolveMessage`. FakeEmailProvider
+    test hooks: `reject@`⇒undelivered, `fail@`⇒failed, else delivered. **Verified by me:** dispatch 6 +
+    acceptance 7 + managed SMS 10 + direct email 5 = **28/28 real-Postgres**, api typecheck, biome,
+    file-length. **Independent review (gemini):** money-direction/double-settle/direct-email/tenancy/
+    outbox OK; the reserve-reason SUSPECT was a false positive (the passing commit test proves the
+    reservation is found); a pre-existing **unlogged `enqueue().catch(()=>undefined)` in the direct
+    `send()`** (SMS logs the equivalent deferral) is out of 4b-i scope — **FOLLOW-UP: add the deferral
+    log to email `send()`** for Redis-outage observability. Committed, nothing pushed.
+  - **4b-ii NEXT** — attempt-time recheck (kill-switch `platform.email_sending`; email consent/opt-out
+    if it exists — SMS rechecks `consent.isSuppressed`; sending-domain still deferred) on the managed
+    email dispatch path (block ⇒ refund + terminal, fail-open on store errors, mirror
+    `sms-dispatch-recheck.ts`), plus the **TTL crash-recovery sweep** (managed email stuck non-terminal
+    past the TTL ⇒ resolve `expired` ⇒ refund exactly once, zero provider contact; mirror
+    `sweepExpired` + wire into `maintenance.service.ts runSweep`). Real-Postgres: kill-switch-flip block
+    refunds, crash→sweep→expired+refund, replay no-op.
+  - **4c** Email
     authoring through the API · **4d** negatives + preview↔send parity · **4e** SDK + dashboard.
 - **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
   machine) each need their OWN ADR — flagged, not written yet. SDK-010 also has NO backend today (zero
