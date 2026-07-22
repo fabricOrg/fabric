@@ -152,8 +152,24 @@ retained but its "PR #158 OPEN" framing is superseded.
     (`email.module` has no maintenance import); the pre-existing `enqueue().catch` is cleanup-debt #3.
     Committed, nothing pushed. **Slice 4b (money vertical for dispatch) COMPLETE — accept (4a-ii) +
     settle/refund (4b-i) + recheck/crash-recovery (4b-ii) all shipped.**
-  - **4c** Email
-    authoring through the API · **4d** negatives + preview↔send parity · **4e** SDK + dashboard.
+  - **4c DONE + committed** (`3d3927c`) — Email authoring through the message-definitions API
+    (channel-polymorphic). Contracts (Opus): create/add-version requests → `z.discriminatedUnion(
+    "channel")` (SMS arm keeps `sender_id`, Email arm has none — email sender identity is `from` on the
+    content); `messageDefinitionVersion` response gains `channel` + `content` = SMS|Email union
+    (consumers narrow on `channel`); variable-schema subset extracted to
+    `message-definition-variable-schema.ts` (re-exported, length guard). Service (codex): create/
+    addVersion persist `channel`, sender-binding SMS-only, **channel immutable across versions**
+    (`channel_immutable` before the compat check, real channels to `analyzeDefinitionCompatibility`),
+    publish requires a sender binding only for SMS (email publishes without one). Dashboard **SMS-
+    narrowed** (Opus, taste): channel-guarded content reads, SMS unchanged, email version → read-only
+    stub, Edit hidden for email, create dialog sends `channel:"sms"` — **rich email authoring UI is
+    4e**. **Verified by me:** api email/definitions/preview 17/17 + dashboard route specs 12/12 real-
+    Postgres, contracts/domain/api/dashboard typecheck, file-length + browser-safe, OpenAPI regen +
+    `openapi:check`, biome. **Independent review (gemini, full diff after 4 tooling-flake retries): 15
+    files all OK, NOTHING BLOCKING**; lone nit = a test-only `as unknown as AuditService` mock cast.
+    Committed, nothing pushed.
+  - **4d NEXT** negatives + preview↔send parity (+ the tracked coverage gaps: email concurrent-race,
+    recheck fail-open) · **4e** SDK + dashboard email authoring UI.
   - **SDK-007 CLEANUP DEBT — clear before slice-5 / AC02 close** (tracked 2026-07-22; none are
     correctness/security defects — the money paths are proven; this is semantic + organizational debt
     surfaced in the running code-quality review):
