@@ -201,6 +201,7 @@ describe("canonical contract parity", () => {
 
   it("maps a canonical message preview response", async () => {
     const payload = previewMessageResponse.parse({
+      channel: "sms",
       version_id: "2ccb4b9f-384e-4f4e-8983-ff12555223d0",
       environment: "sandbox",
       resolved_locale: "en",
@@ -217,6 +218,7 @@ describe("canonical contract parity", () => {
         cost_minor: "3",
         currency: "GHS",
       },
+      email_preview: null,
       request_id: "req_1",
     });
     await expect(

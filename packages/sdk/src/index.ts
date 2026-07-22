@@ -30,6 +30,7 @@ export type { CreateSenderIdParams } from "./sender-ids.js";
 export type { FabricLogger } from "./transport.js";
 export type {
   EmailMessage,
+  EmailPreview,
   FabricEnvironment,
   FabricResponse,
   IdempotentWriteOptions,

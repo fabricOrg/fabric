@@ -7,6 +7,7 @@ import type {
 import { parseMessageDelivery } from "./message-delivery.js";
 import type { Transport } from "./transport.js";
 import type {
+  EmailPreview,
   FabricResponse,
   IdempotentWriteOptions,
   MessageDelivery,
@@ -19,8 +20,8 @@ import {
   enumField,
   numberField,
   record,
-  requireE164,
   requireNonEmpty,
+  requireRecipient,
   stringField,
 } from "./validation.js";
 
@@ -36,7 +37,7 @@ export interface PreviewMessageOptions extends RequestOptions {
 }
 
 export interface SendMessageOptions extends IdempotentWriteOptions {
-  /** E.164 recipient. */
+  /** Recipient: an E.164 number for an SMS definition, or an email address for an Email one. */
   readonly to: string;
   /** Variables for the definition's schema; a validation failure fails the send before any charge. */
   readonly data?: Record<string, unknown>;
@@ -105,7 +106,7 @@ export class MessagesResource<
   ): Promise<FabricResponse<MessageDelivery>> {
     const options = args[0];
     requireNonEmpty(key, "key");
-    requireE164(options.to);
+    requireRecipient(options.to);
     requireNonEmpty(options.idempotencyKey, "idempotencyKey");
     const response = await this.transport.request<Record<string, unknown>>({
       method: "POST",
@@ -155,8 +156,10 @@ function parsePreview(data: Record<string, unknown>): MessagePreview {
   const rawWarnings = Array.isArray(data.warnings) ? data.warnings : [];
   const sender = record(data.sender);
   const previewValue = data.preview;
+  const emailPreviewValue = data.email_preview;
   return {
     versionId: stringField(data.version_id, "version_id"),
+    channel: enumField(data.channel, ["sms", "email"], "channel"),
     environment: enumField(
       data.environment,
       ["sandbox", "live"],
@@ -200,6 +203,10 @@ function parsePreview(data: Record<string, unknown>): MessagePreview {
     ),
     preview:
       previewValue == null ? null : parseSmsPreview(record(previewValue)),
+    emailPreview:
+      emailPreviewValue == null
+        ? null
+        : parseEmailPreview(record(emailPreviewValue)),
   };
 }
 
@@ -211,5 +218,21 @@ function parseSmsPreview(data: Record<string, unknown>): SmsPreview {
     segments: numberField(data.segments, "segments"),
     costMinor: stringField(data.cost_minor, "cost_minor"),
     currency: stringField(data.currency, "currency"),
+  };
+}
+
+function parseEmailPreview(data: Record<string, unknown>): EmailPreview {
+  return {
+    subject: stringField(data.subject, "email_preview.subject"),
+    text: typeof data.text === "string" ? data.text : null,
+    html: typeof data.html === "string" ? data.html : null,
+    sizeBytes: numberField(data.size_bytes, "email_preview.size_bytes"),
+    tier: enumField(
+      data.tier,
+      ["standard", "large", "xlarge"],
+      "email_preview.tier",
+    ),
+    costMinor: stringField(data.cost_minor, "email_preview.cost_minor"),
+    currency: stringField(data.currency, "email_preview.currency"),
   };
 }

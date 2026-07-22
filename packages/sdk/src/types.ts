@@ -168,7 +168,7 @@ export type MessageDeliveryStatus =
 export interface MessageDeliveryAttempt {
   readonly id: string;
   readonly ordinal: number;
-  readonly channel: "sms";
+  readonly channel: "sms" | "email";
   readonly messageId: string | null;
   readonly status: MessageDeliveryStatus;
   readonly cost: Money;
@@ -187,7 +187,7 @@ export interface MessageDelivery {
   readonly versionId: string;
   readonly environment: FabricEnvironment;
   readonly locale: string;
-  readonly channel: "sms";
+  readonly channel: "sms" | "email";
   readonly status: MessageDeliveryStatus;
   readonly resourceVersion: number;
   readonly recipient: string;
@@ -205,7 +205,7 @@ export interface PreviewBlocker {
   readonly code: string;
 }
 
-/** The rendered SMS a preview produced (present only when there are no blockers). */
+/** The rendered SMS a preview produced (present only for an SMS channel with no blockers). */
 export interface SmsPreview {
   readonly body: string;
   readonly encoding: "gsm7" | "ucs2";
@@ -215,9 +215,26 @@ export interface SmsPreview {
   readonly currency: string;
 }
 
-/** Result of previewing a released definition — equals what a subsequent send would render. */
+/** The rendered email a preview produced (present only for an Email channel with no blockers). */
+export interface EmailPreview {
+  readonly subject: string;
+  readonly text: string | null;
+  readonly html: string | null;
+  /** Rendered UTF-8 byte size — the billable size the tier price is derived from. */
+  readonly sizeBytes: number;
+  readonly tier: "standard" | "large" | "xlarge";
+  readonly costMinor: string;
+  readonly currency: string;
+}
+
+/**
+ * Result of previewing a released definition — equals what a subsequent send would render. `channel`
+ * discriminates the rendered result: `preview` is set for SMS, `emailPreview` for Email; the other is
+ * null. An SMS consumer written before Email shipped reads `preview` and is unaffected.
+ */
 export interface MessagePreview {
   readonly versionId: string;
+  readonly channel: "sms" | "email";
   readonly environment: "sandbox" | "live";
   readonly resolvedLocale: string;
   readonly blockers: readonly PreviewBlocker[];
@@ -235,4 +252,5 @@ export interface MessagePreview {
   };
   readonly messageClass: "transactional" | "promotional";
   readonly preview: SmsPreview | null;
+  readonly emailPreview: EmailPreview | null;
 }

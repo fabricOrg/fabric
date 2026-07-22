@@ -21,6 +21,24 @@ export function requireE164(value: string): void {
   }
 }
 
+// A managed recipient is an E.164 number (SMS) or an email address (Email); the definition's channel
+// decides which is valid, and the server rejects a mismatch. The SDK only rejects a value that is
+// neither shape, so a client-side typo fails before any request. The email check is intentionally
+// permissive (has an `@` with text either side) — full RFC validation is the server's job.
+export function requireRecipient(value: string): void {
+  const isE164 = /^\+[1-9]\d{7,14}$/.test(value);
+  const isEmail = /^[^@\s]+@[^@\s]+$/.test(value);
+  if (!isE164 && !isEmail) {
+    throw new ValidationError(
+      "`to` must be an E.164 phone number (e.g. +233545227189) or an email address.",
+      {
+        code: "invalid_recipient",
+        details: { param: "to" },
+      },
+    );
+  }
+}
+
 export function record(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new ApiShapeError();
