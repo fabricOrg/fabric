@@ -35,6 +35,7 @@ vi.mock("@/lib/server/api-client", () => ({
 import { GET, POST } from "./route.js";
 
 const validBody = {
+  channel: "sms",
   application_id: "5f61e20c-b096-44f8-95d8-3ca31b94643e",
   key: "order.shipped",
   content: { body: "Hi {{name}}", class: "transactional", locales: {} },

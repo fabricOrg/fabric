@@ -2,6 +2,7 @@ import type {
   MessageClass,
   MessageDefinitionState,
   SmsTemplate,
+  SmsVariantContent,
 } from "@app/contracts";
 import {
   type AuthoringVariable,
@@ -27,29 +28,28 @@ export function initialDefinitionDraft(
   template?: SmsTemplate,
   definition?: MessageDefinitionState,
 ): DefinitionDraft {
-  if (definition?.latest_version) {
+  // SMS-only for now: the visual/edit draft is SMS-shaped. Email editing (its own content fields) is
+  // SDK-007 slice 4e — an email version is authored via the API and shown read-only on the page, so the
+  // Edit dialog (the only caller of this branch) is hidden for email.
+  const version = definition?.latest_version;
+  if (version && version.channel === "sms") {
+    const content = version.content as SmsVariantContent;
     return {
       key: definition.definition.key,
-      body: definition.latest_version.content.body,
-      variables: variablesFromSchema(definition.latest_version.variable_schema),
-      locale: definition.latest_version.default_locale,
-      schemaText: JSON.stringify(
-        definition.latest_version.variable_schema,
-        null,
-        2,
-      ),
-      advancedSchema: !supportsVisualSchema(
-        definition.latest_version.variable_schema,
-      ),
-      messageClass: definition.latest_version.content.class,
+      body: content.body,
+      variables: variablesFromSchema(version.variable_schema),
+      locale: version.default_locale,
+      schemaText: JSON.stringify(version.variable_schema, null, 2),
+      advancedSchema: !supportsVisualSchema(version.variable_schema),
+      messageClass: content.class,
       senderId: definition.sender_bindings[0]?.sender_id ?? "",
-      localizedVariants: Object.entries(
-        definition.latest_version.content.locales,
-      ).map(([locale, content]) => ({
-        id: crypto.randomUUID(),
-        locale,
-        body: content.body,
-      })),
+      localizedVariants: Object.entries(content.locales).map(
+        ([locale, localeContent]) => ({
+          id: crypto.randomUUID(),
+          locale,
+          body: localeContent.body,
+        }),
+      ),
     };
   }
   if (template) {

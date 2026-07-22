@@ -34,6 +34,7 @@ export async function seedManagedTenant(input: {
   const audit = { record: async () => undefined } as unknown as AuditService;
   const defs = new MessageDefinitionsService(db, audit);
   const definition = await defs.create(tenantId, {
+    channel: "sms",
     key: "order.shipped",
     application_id: created.id,
     variable_schema: {

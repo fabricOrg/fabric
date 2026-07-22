@@ -1,4 +1,8 @@
-import type { MessageDefinitionState } from "@app/contracts";
+import type {
+  EmailVariantContent,
+  MessageDefinitionState,
+  SmsVariantContent,
+} from "@app/contracts";
 import { PageContainer } from "@app/ui/components/ui/app-shell";
 import { Badge } from "@app/ui/components/ui/badge";
 import {
@@ -33,7 +37,9 @@ function useInCodeSnippet(state: MessageDefinitionState): string {
     .map((k) => `    ${k}: "…"`)
     .join(",\n");
   const locale = state.latest_version?.default_locale ?? "en";
-  return `await fabric.messages.send("${state.definition.key}", {\n  to: "+233…",\n  data: {\n${data}\n  },\n  locale: "${locale}",\n  idempotencyKey: "order-1042",\n});`;
+  const to =
+    state.latest_version?.channel === "email" ? "user@example.com" : "+233…";
+  return `await fabric.messages.send("${state.definition.key}", {\n  to: "${to}",\n  data: {\n${data}\n  },\n  locale: "${locale}",\n  idempotencyKey: "order-1042",\n});`;
 }
 
 function DefinitionCard({
@@ -68,10 +74,17 @@ function DefinitionCard({
       {latest_version ? (
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary">{latest_version.default_locale}</Badge>
-          <Badge variant="secondary">{latest_version.content.class}</Badge>
-          <Badge variant="secondary">
-            Sender: {sandboxSender ?? "Not bound"}
-          </Badge>
+          <Badge variant="secondary">{latest_version.channel}</Badge>
+          {latest_version.channel === "sms" ? (
+            <>
+              <Badge variant="secondary">
+                {(latest_version.content as SmsVariantContent).class}
+              </Badge>
+              <Badge variant="secondary">
+                Sender: {sandboxSender ?? "Not bound"}
+              </Badge>
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -85,13 +98,24 @@ function DefinitionCard({
         </pre>
       </div>
 
-      {latest_version ? (
+      {latest_version?.channel === "sms" ? (
         <DefinitionPreviewPanel
-          body={latest_version.content.body}
+          body={(latest_version.content as SmsVariantContent).body}
           schema={latest_version.variable_schema}
           fields={variablesFromSchema(latest_version.variable_schema)}
           definitionKey={definition.key}
         />
+      ) : latest_version ? (
+        // Email content is authored + previewed via the API/SDK for now; the dashboard email preview
+        // panel is SDK-007 slice 4e. Show the subject read-only so the card isn't empty.
+        <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+          Email version · subject:{" "}
+          <span className="font-medium text-foreground">
+            {(latest_version.content as EmailVariantContent).subject}
+          </span>
+          . Author and preview email content via the API; dashboard editing
+          arrives in a later release.
+        </div>
       ) : null}
 
       {canWrite ? (

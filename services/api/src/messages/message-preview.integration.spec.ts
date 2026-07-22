@@ -75,6 +75,7 @@ describeDb("SDK-003 MessagePreviewService (no side effects)", () => {
     sandboxEnvId = app.environments.find((e) => e.type === "sandbox")?.id ?? "";
     // Create + publish a definition to sandbox so preview has a released version to resolve.
     const created = await defs.create(TENANT, {
+      channel: "sms",
       key: "order.shipped",
       variable_schema: schema,
       content: {

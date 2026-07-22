@@ -3,8 +3,8 @@ import type {
   CreateMessageDefinitionRequest,
   ListMessageDefinitionsResponse,
   MessageDefinitionState,
+  MessageVariantContent,
   PublishMessageDefinitionRequest,
-  SmsVariantContent,
   VariableSchema,
 } from "@app/contracts";
 import {
@@ -33,6 +33,8 @@ import {
   readState,
   resolveApplicationId,
 } from "./message-definitions.reads.js";
+
+type ContentWithLocales = Pick<MessageVariantContent, "locales">;
 
 /** Managed definition mutations; RLS scopes every transaction and the controller gates authority. */
 @Injectable()
@@ -77,6 +79,7 @@ export class MessageDefinitionsService {
           definitionId: definition.id,
           applicationId: appId as ApplicationId,
           version: 1,
+          channel: request.channel,
           variableSchema: request.variable_schema,
           content: request.content,
           defaultLocale: request.default_locale,
@@ -87,12 +90,14 @@ export class MessageDefinitionsService {
           "definition_version_create_failed",
           "The definition version could not be created.",
         );
-      await bindSandboxSender(tx, {
-        tenantId,
-        applicationId: appId,
-        definitionId: definition.id,
-        senderId: request.sender_id,
-      });
+      if (request.channel === "sms") {
+        await bindSandboxSender(tx, {
+          tenantId,
+          applicationId: appId,
+          definitionId: definition.id,
+          senderId: request.sender_id,
+        });
+      }
       return readState(tx, definition);
     });
     await auditDefinitionCreate(
@@ -148,18 +153,24 @@ export class MessageDefinitionsService {
           "The definition has no version to edit.",
         );
       }
+      if (request.channel !== latest.channel) {
+        throw invalidRequest(
+          "channel_immutable",
+          "A definition's channel cannot change across versions; author a new key instead.",
+          "channel",
+        );
+      }
 
       // A breaking schema change must use a NEW stable key (slice-0 §3), so stale-catalog callers
       // aren't silently broken.
-      const releasedContent = latest.content as SmsVariantContent;
+      const releasedContent = latest.content as ContentWithLocales;
       const compat = analyzeDefinitionCompatibility(
         latest.variableSchema as VariableSchema,
         request.variable_schema,
         [latest.defaultLocale, ...Object.keys(releasedContent.locales ?? {})],
         [request.default_locale, ...Object.keys(request.content.locales)],
-        // Add-version authoring is SMS-only in this slice; the candidate content is always SMS.
         latest.channel,
-        "sms",
+        request.channel,
       );
       if (compat.verdict === "breaking") {
         throw invalidRequest(
@@ -177,6 +188,7 @@ export class MessageDefinitionsService {
           definitionId,
           applicationId: definition.applicationId as ApplicationId,
           version: latest.version + 1,
+          channel: request.channel,
           variableSchema: request.variable_schema,
           content: request.content,
           defaultLocale: request.default_locale,
@@ -187,12 +199,14 @@ export class MessageDefinitionsService {
           "definition_version_create_failed",
           "The definition version could not be created.",
         );
-      await bindSandboxSender(tx, {
-        tenantId,
-        applicationId: definition.applicationId,
-        definitionId,
-        senderId: request.sender_id,
-      });
+      if (request.channel === "sms") {
+        await bindSandboxSender(tx, {
+          tenantId,
+          applicationId: definition.applicationId,
+          definitionId,
+          senderId: request.sender_id,
+        });
+      }
       return readState(tx, definition);
     });
     await auditDefinitionVersion(

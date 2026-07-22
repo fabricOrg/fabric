@@ -54,6 +54,7 @@ describeDb("definition catalog (real RLS)", () => {
     for (const key of ["order.shipped", "account.created"].reverse()) {
       const state = await definitions.create(TENANT_A, {
         application_id: app.id,
+        channel: "sms",
         key,
         variable_schema: {
           type: "object",

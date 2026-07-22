@@ -143,6 +143,9 @@ export function CreateDefinitionDialog({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          // This dialog authors SMS only — the channel discriminant is fixed. Email authoring (its own
+          // content fields) is SDK-007 slice 4e.
+          channel: "sms",
           ...(editing ? {} : { key: key.trim() }),
           ...(editing ? {} : { application_id: applicationId }),
           content: {

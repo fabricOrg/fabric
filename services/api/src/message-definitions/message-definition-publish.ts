@@ -54,7 +54,10 @@ export async function publishDefinition(
       );
     }
     const [version] = await tx
-      .select({ id: messageDefinitionVersions.id })
+      .select({
+        id: messageDefinitionVersions.id,
+        channel: messageDefinitionVersions.channel,
+      })
       .from(messageDefinitionVersions)
       .where(
         and(
@@ -86,7 +89,9 @@ export async function publishDefinition(
         "The application has no sandbox environment.",
       );
     }
-    await requireSenderBinding(tx, definitionId, environment.id);
+    if (version.channel === "sms") {
+      await requireSenderBinding(tx, definitionId, environment.id);
+    }
     await tx
       .insert(messageDefinitionReleases)
       .values({
