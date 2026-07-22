@@ -11,6 +11,7 @@ import type { ConfigService } from "@nestjs/config";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
+import type { EmailService } from "../email/email.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
@@ -82,6 +83,7 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
   const maintenance = new MaintenanceService(
     provisioning,
     sms,
+    { sweepStuck: async () => 0 } as unknown as EmailService,
     liveMode,
     config,
   );

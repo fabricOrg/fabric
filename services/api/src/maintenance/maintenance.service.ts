@@ -8,9 +8,11 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { sql } from "drizzle-orm";
+import { EmailService } from "../email/email.service.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { SmsService } from "../sms/sms.service.js";
 import { VirtualPhoneService } from "../sms/virtual-phone.service.js";
+import { runEmailSweep } from "./maintenance-email-sweep.js";
 import {
   runDeliveryRetention,
   runLogRetention,
@@ -48,6 +50,7 @@ export class MaintenanceService {
   constructor(
     @Inject(PROVISIONING_DB) private readonly provisioning: ProvisioningDb,
     @Inject(SmsService) private readonly sms: SmsService,
+    @Inject(EmailService) private readonly email: EmailService,
     @Inject(VirtualPhoneService)
     private readonly virtualPhone: VirtualPhoneService,
     @Inject(ConfigService) private readonly config: ConfigService,
@@ -210,6 +213,13 @@ export class MaintenanceService {
           );
         }
       }
+      await runEmailSweep({
+        tx,
+        email: this.email,
+        cutoffIso,
+        sweptTenants,
+        logger: this.logger,
+      });
 
       // Purge expired client idempotency keys (replay window, not an archive). Cross-tenant DELETE
       // on the provisioner via the scoped provisioner_purge policy (0030); served by the

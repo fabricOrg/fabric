@@ -18,6 +18,11 @@ import {
   parseEmailContent,
 } from "./email-content.js";
 import {
+  emailDispatchBlockReason,
+  sweepManagedEmailExpired,
+} from "./email-dispatch-recovery.js";
+import { assertEmailSandboxEnvironment } from "./email-environment.js";
+import {
   acceptManagedEmail,
   type ManagedEmailAcceptInput,
 } from "./email-managed-accept.js";
@@ -51,7 +56,7 @@ export class EmailService {
         "Email sending is temporarily paused.",
       );
     }
-    await this.assertSandboxEnvironment(context);
+    await assertEmailSandboxEnvironment(this.db, context);
     const subjectId = await this.vault.subjectForEmail(
       context.tenantId,
       input.to,
@@ -108,7 +113,8 @@ export class EmailService {
         db: this.db,
         vault: this.vault,
         providerSlug: this.provider.slug,
-        assertSandbox: (context) => this.assertSandboxEnvironment(context),
+        assertSandbox: (context) =>
+          assertEmailSandboxEnvironment(this.db, context),
       },
       input,
     );
@@ -120,6 +126,12 @@ export class EmailService {
     if (stored.kind === "unreadable") {
       return this.resolve(job.tenantId, job.messageId, "failed", {
         errorCode: "dispatch_material_unreadable",
+      });
+    }
+    const blocked = await emailDispatchBlockReason(this.killSwitch);
+    if (blocked) {
+      return this.resolve(job.tenantId, job.messageId, "failed", {
+        errorCode: blocked,
       });
     }
     const result = await this.provider.send(
@@ -190,6 +202,17 @@ export class EmailService {
       await this.enqueue(tenantId, String(row.message_id));
     return rows.length;
   }
+
+  async sweepStuck(tenantId: string, olderThanIso: string): Promise<number> {
+    return sweepManagedEmailExpired(
+      this.db,
+      tenantId,
+      olderThanIso,
+      (scopedTenantId, messageId, status, detail) =>
+        this.resolve(scopedTenantId, messageId, status, detail),
+    );
+  }
+
   private async enqueue(tenantId: string, messageId: string): Promise<void> {
     await this.queue
       .queue(EMAIL_SEND_QUEUE)
@@ -202,33 +225,6 @@ export class EmailService {
       });
   }
 
-  private async assertSandboxEnvironment(context: {
-    tenantId: string;
-    applicationId: string;
-    environmentId: string;
-  }): Promise<void> {
-    const rows = (await this.db.withTenant(
-      context.tenantId,
-      (tx) => tx`
-        SELECT type::text, status::text FROM environments
-        WHERE id = ${context.environmentId}
-          AND application_id = ${context.applicationId}
-        LIMIT 1`,
-    )) as Row[];
-    const environment = rows[0];
-    if (!environment || environment.status !== "active") {
-      throw invalidRequest(
-        "environment_unavailable",
-        "The API key environment is unavailable.",
-      );
-    }
-    if (environment.type !== "sandbox") {
-      throw invalidRequest(
-        "live_email_not_configured",
-        "Live Email requires an approved sending domain and configured provider.",
-      );
-    }
-  }
   private async load(
     tenantId: string,
     messageId: string,

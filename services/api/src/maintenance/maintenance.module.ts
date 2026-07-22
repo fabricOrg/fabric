@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { EmailModule } from "../email/email.module.js";
 import { ProvisioningDbModule } from "../identity/provisioning-db.module.js";
 import { SmsModule } from "../sms/sms.module.js";
 import { MaintenanceService } from "./maintenance.service.js";
@@ -10,7 +11,7 @@ import { MaintenanceService } from "./maintenance.service.js";
  * AppModule.
  */
 @Module({
-  imports: [ProvisioningDbModule, SmsModule],
+  imports: [ProvisioningDbModule, SmsModule, EmailModule],
   providers: [MaintenanceService],
 })
 export class MaintenanceModule {}
