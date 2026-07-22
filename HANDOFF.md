@@ -143,6 +143,31 @@ retained but its "PR #158 OPEN" framing is superseded.
     refunds, crash→sweep→expired+refund, replay no-op.
   - **4c** Email
     authoring through the API · **4d** negatives + preview↔send parity · **4e** SDK + dashboard.
+  - **SDK-007 CLEANUP DEBT — clear before slice-5 / AC02 close** (tracked 2026-07-22; none are
+    correctness/security defects — the money paths are proven; this is semantic + organizational debt
+    surfaced in the running code-quality review):
+    1. **`sms_reserve` ledger reason is channel-inaccurate.** Email managed spend reuses `reserve()`,
+       which writes ledger reason `sms_reserve` (that's WHY `commit`/`refund` resolve — `reservedFor`
+       filters on it). Functionally correct, but the ledger now tags email money as `sms_reserve` — a
+       lying label an auditor would trip on. **Fix:** rename to a channel-neutral `message_reserve`
+       (ledger-reason enum value + `reservedFor` filter + a raw-SQL migration to add the enum value and
+       backfill/accept both during transition). Touches `packages/wallet`. Money-migration — do
+       deliberately, own slice, real-Postgres proof that existing SMS reserves still settle.
+    2. **`email.service.ts` at 299/300 lines — one edit from the guard.** The three extracted modules
+       (`managed-send-plan`, `email-managed-accept`, `email-managed-resolve`) were split REACTIVELY
+       under guard pressure. **Fix:** a deliberate `services/api/src/email/` re-org (group direct vs
+       managed; the service becomes a thin orchestrator) instead of more incremental extraction.
+    3. **Pre-existing unlogged `enqueue().catch(() => undefined)` in direct email `send()`** — a Redis
+       outage is silently swallowed (SMS logs the equivalent deferral). Add the deferral log for
+       observability. (Also carried above under 4b-i.)
+    4. **Evidence docs inconsistent** — 4a-ii wrote `docs/sdk/evidence/sdk-007-slice-4a-ii.md`; 4b-i/4b-ii
+       fold into this HANDOFF. **Fix:** consolidate into one `docs/sdk/evidence/sdk-007.md` (AC01–AC05 +
+       inherited AC02) at slice close, per the backlog's no-item-without-traceability rule.
+    5. **Coverage gaps to close in 4d:** concurrent same-key race is proven at the shared-core/SMS layer
+       but NOT re-exercised at the EMAIL layer; the recheck fail-open path (kill-switch store error →
+       proceed) is likely untested. Add both in the 4d negatives/parity slice.
+    6. **Lost `acceptManaged` doc-comment** (dropped by the delegate to fit the length guard; the why
+       survives in `email-managed-accept.ts`'s header) — restore if the §2 re-org frees the lines.
 - **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
   machine) each need their OWN ADR — flagged, not written yet. SDK-010 also has NO backend today (zero
   `journey` rows/controllers/services); its frontend React Flow canvas + palette are reusable, but it
