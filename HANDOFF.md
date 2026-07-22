@@ -168,8 +168,18 @@ retained but its "PR #158 OPEN" framing is superseded.
     `openapi:check`, biome. **Independent review (gemini, full diff after 4 tooling-flake retries): 15
     files all OK, NOTHING BLOCKING**; lone nit = a test-only `as unknown as AuditService` mock cast.
     Committed, nothing pushed.
-  - **4d NEXT** negatives + preview↔send parity (+ the tracked coverage gaps: email concurrent-race,
-    recheck fail-open) · **4e** SDK + dashboard email authoring UI.
+  - **4d DONE + committed** (`7f44207`) — test-only hardening (no production change). Preview↔send
+    **byte-parity** (vault-stored send subject/text/html identical to the managed preview incl.
+    HTML-escaped vars; reserve + delivery/attempt cost == preview.cost_minor); send-boundary negatives
+    (oversized / subject-newline header-injection / invalid-vars) each with a before/after side-effect
+    snapshot proving nothing persisted + no PII echo; **both tracked coverage gaps closed** — email
+    concurrent same-key race (3 → one delivery+attempt+email_message+reserve) + recheck fail-open unit
+    (throwing kill-switch → proceeds). Verified by me: 18/18 real-Postgres + 3 fail-open unit, guards,
+    biome. NOTE: independent-review tooling (gemini/codex) flaked repeatedly this session; for this
+    test-only slice self-review of the (substantive, non-vacuous) assertions stood in. Committed.
+  - **4e NEXT** — SDK + dashboard email authoring UI (channel-parameterized create/edit dialog + email
+    content fields + channel-aware preview panel; the SMS-narrowed dashboard from 4c gets its rich email
+    surface). Then slice 5 closes AC02.
   - **SDK-007 CLEANUP DEBT — clear before slice-5 / AC02 close** (tracked 2026-07-22; none are
     correctness/security defects — the money paths are proven; this is semantic + organizational debt
     surfaced in the running code-quality review):
@@ -190,9 +200,8 @@ retained but its "PR #158 OPEN" framing is superseded.
     4. **Evidence docs inconsistent** — 4a-ii wrote `docs/sdk/evidence/sdk-007-slice-4a-ii.md`; 4b-i/4b-ii
        fold into this HANDOFF. **Fix:** consolidate into one `docs/sdk/evidence/sdk-007.md` (AC01–AC05 +
        inherited AC02) at slice close, per the backlog's no-item-without-traceability rule.
-    5. **Coverage gaps to close in 4d:** concurrent same-key race is proven at the shared-core/SMS layer
-       but NOT re-exercised at the EMAIL layer; the recheck fail-open path (kill-switch store error →
-       proceed) is likely untested. Add both in the 4d negatives/parity slice.
+    5. **Coverage gaps — DONE in 4d (`7f44207`):** email-layer concurrent same-key race + recheck
+       fail-open now tested. (Item cleared.)
     6. **Lost `acceptManaged` doc-comment** (dropped by the delegate to fit the length guard; the why
        survives in `email-managed-accept.ts`'s header) — restore if the §2 re-org frees the lines.
 - **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
