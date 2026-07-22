@@ -177,33 +177,39 @@ retained but its "PR #158 OPEN" framing is superseded.
     (throwing kill-switch → proceeds). Verified by me: 18/18 real-Postgres + 3 fail-open unit, guards,
     biome. NOTE: independent-review tooling (gemini/codex) flaked repeatedly this session; for this
     test-only slice self-review of the (substantive, non-vacuous) assertions stood in. Committed.
-  - **4e NEXT** — SDK + dashboard email authoring UI (channel-parameterized create/edit dialog + email
-    content fields + channel-aware preview panel; the SMS-narrowed dashboard from 4c gets its rich email
-    surface). Then slice 5 closes AC02.
-  - **SDK-007 CLEANUP DEBT — clear before slice-5 / AC02 close** (tracked 2026-07-22; none are
-    correctness/security defects — the money paths are proven; this is semantic + organizational debt
-    surfaced in the running code-quality review):
-    1. **`sms_reserve` ledger reason is channel-inaccurate.** Email managed spend reuses `reserve()`,
-       which writes ledger reason `sms_reserve` (that's WHY `commit`/`refund` resolve — `reservedFor`
-       filters on it). Functionally correct, but the ledger now tags email money as `sms_reserve` — a
-       lying label an auditor would trip on. **Fix:** rename to a channel-neutral `message_reserve`
-       (ledger-reason enum value + `reservedFor` filter + a raw-SQL migration to add the enum value and
-       backfill/accept both during transition). Touches `packages/wallet`. Money-migration — do
-       deliberately, own slice, real-Postgres proof that existing SMS reserves still settle.
-    2. **`email.service.ts` at 299/300 lines — one edit from the guard.** The three extracted modules
-       (`managed-send-plan`, `email-managed-accept`, `email-managed-resolve`) were split REACTIVELY
-       under guard pressure. **Fix:** a deliberate `services/api/src/email/` re-org (group direct vs
-       managed; the service becomes a thin orchestrator) instead of more incremental extraction.
-    3. **Pre-existing unlogged `enqueue().catch(() => undefined)` in direct email `send()`** — a Redis
-       outage is silently swallowed (SMS logs the equivalent deferral). Add the deferral log for
-       observability. (Also carried above under 4b-i.)
-    4. **Evidence docs inconsistent** — 4a-ii wrote `docs/sdk/evidence/sdk-007-slice-4a-ii.md`; 4b-i/4b-ii
-       fold into this HANDOFF. **Fix:** consolidate into one `docs/sdk/evidence/sdk-007.md` (AC01–AC05 +
-       inherited AC02) at slice close, per the backlog's no-item-without-traceability rule.
-    5. **Coverage gaps — DONE in 4d (`7f44207`):** email-layer concurrent same-key race + recheck
-       fail-open now tested. (Item cleared.)
-    6. **Lost `acceptManaged` doc-comment** (dropped by the delegate to fit the length guard; the why
-       survives in `email-managed-accept.ts`'s header) — restore if the §2 re-org frees the lines.
+  - **4e DONE + committed (2026-07-22)** — email authoring end-to-end, decomposed + independently
+    reviewed like the 4a/4b pattern:
+    - **4e-i (`f285786`)** — SDK managed Email support. `MessagePreview` gains `channel` + `emailPreview`
+      (new `EmailPreview` type + `parseEmailPreview`); `MessageDelivery`/`Attempt` channel `sms`→`sms|email`;
+      `send()` accepts email OR E.164 via `requireRecipient`. `release:check` green. Codex review: nothing
+      blocking.
+    - **4e-ii (`a8a4eb5`)** — dashboard Email authoring UI. Channel selector (create-only, immutable on
+      edit/version); `EmailContentFields` (from/subject/text/html) + `EmailLocalizedVariantsEditor`
+      (per-locale partial overrides); `EmailPreviewPanel` renders via the pure `previewEmail` (preview↔send
+      parity) + server "check released"; Edit enabled for email; `email-authoring.ts` (token spread across
+      subject+text+html, `buildEmailContent` with a code-point subject-header-injection guard). 71 dashboard
+      tests (9 new email-authoring unit + 2 route). **Codex review found + fixed one Medium**: the email
+      preview recipient field would 422 against the E.164-only `previewMessageRequest.to`; removed the field
+      (email eligibility is not recipient-keyed — no consent/opt-out, sender `not_evaluated`).
+  - **SDK-007 CLEANUP DEBT — ALL CLEARED (2026-07-22), before slice 5:**
+    1. **`sms_reserve` → channel-neutral `message_reserve`** — DONE (`dfb5682`). Additive enum migration
+       `0086` (`ADD VALUE IF NOT EXISTS`, sms_* retained); `reserve/commit/refund` write `message_*`;
+       `reservedFor` matches `IN('message_reserve','sms_reserve')`. **Backward-compat proven** on real
+       Postgres (`legacy-reserve-compat.integration.spec.ts`: a forged legacy `sms_reserve` reservation
+       still commits + refunds). Codex money review: nothing blocking. NOTE: `drizzle-kit migrate` fails on
+       this machine (local `__drizzle_migrations` desync, 82/86) — the `0086` SQL was verified via psql
+       (bare + in-tx); CI applies on a clean DB (mirrors shipped `0061`).
+    2. **`email.service.ts` re-org** — DONE (`6048cbe`). Extracted `/v1/email` reads to `email-reads.ts`;
+       service now a 284-line orchestrator.
+    3. **Unlogged `enqueue().catch` in direct email `send()`** — DONE (`6048cbe`). Logs the deferral now.
+    4. **Evidence consolidation** — DONE (`4df0e5e`). One `docs/sdk/evidence/sdk-007.md` (slice ledger +
+       AC01–AC05 traceability); the three slice fragments removed.
+    5. **Coverage gaps** — DONE in 4d (`7f44207`).
+    6. **Lost `acceptManaged` doc-comment** — DONE (`6048cbe`), restored during the §2 re-org.
+  - **SLICE 5 NEXT** — closes **AC04** (the inherited SDK-004-AC02 channel narrowing): catalog generator
+    emits `channel` per definition; `Fabric<Catalog>` narrows `messages.send`; a `@ts-expect-error` compile
+    fixture proves a channel-unsupported call fails; update `sdk-004.md` AC02 row to "implemented". Then
+    SDK-007 is fully closed (AC01/02/03/05 already done). npm publish + live Email stay redlined.
 - **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
   machine) each need their OWN ADR — flagged, not written yet. SDK-010 also has NO backend today (zero
   `journey` rows/controllers/services); its frontend React Flow canvas + palette are reusable, but it
