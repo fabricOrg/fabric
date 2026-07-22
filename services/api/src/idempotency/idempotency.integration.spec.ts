@@ -142,7 +142,7 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
   async function reserveCount(): Promise<number> {
     const rows = await owner`
       SELECT count(DISTINCT txn_id)::int AS n FROM ledger_entries
-      WHERE tenant_id = ${tenantId} AND reason = 'sms_reserve'`;
+      WHERE tenant_id = ${tenantId} AND reason = 'message_reserve'`;
     return Number(rows[0]?.n);
   }
 

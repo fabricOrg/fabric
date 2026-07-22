@@ -138,7 +138,7 @@ describeDb("queued send pipeline (BullMQ)", () => {
   async function commitCount(messageId: string): Promise<number> {
     const rows = await owner`
       SELECT count(DISTINCT txn_id)::int AS n FROM ledger_entries
-      WHERE tenant_id = ${tenantId} AND reason = 'sms_commit' AND reference_id = ${messageId}`;
+      WHERE tenant_id = ${tenantId} AND reason = 'message_commit' AND reference_id = ${messageId}`;
     return Number(rows[0]?.n);
   }
 

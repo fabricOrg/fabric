@@ -88,7 +88,7 @@ describeDb("SDK-007 managed email preview/send parity", () => {
         FROM ledger_entries e
         JOIN ledger_accounts a ON a.id = e.account_id
         WHERE e.reference_id = ${deliveryId}
-          AND e.reason = 'sms_reserve'
+          AND e.reason = 'message_reserve'
           AND e.direction = 'credit'
           AND a.kind = 'reserved_clearing'`,
     );

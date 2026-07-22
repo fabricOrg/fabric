@@ -136,7 +136,7 @@ describeDb(
       expect(await customerBalance()).toBe(CREDIT);
       const refunds = await owner`
       SELECT count(*)::int AS n FROM ledger_entries
-      WHERE tenant_id = ${tenantId} AND reason = 'sms_refund' AND reference_id = ${deliveryId}`;
+      WHERE tenant_id = ${tenantId} AND reason = 'message_refund' AND reference_id = ${deliveryId}`;
       expect(Number(refunds[0]?.n)).toBe(2);
     }
 

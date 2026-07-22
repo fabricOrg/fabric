@@ -168,7 +168,7 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     // Exactly ONE refund movement exists for this message (one balanced movement = 2 legs).
     const refunds = await owner`
       SELECT count(*)::int AS n FROM ledger_entries
-      WHERE tenant_id = ${tenantId} AND reason = 'sms_refund' AND reference_id = ${messageId}`;
+      WHERE tenant_id = ${tenantId} AND reason = 'message_refund' AND reference_id = ${messageId}`;
     expect(Number(refunds[0]?.n)).toBe(2);
   });
 
@@ -181,7 +181,7 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     expect(await customerBalance()).toBe(before + COST);
     const refunds = await owner`
       SELECT count(*)::int AS n FROM ledger_entries
-      WHERE tenant_id = ${tenantId} AND reason = 'sms_refund' AND reference_id = ${messageId}`;
+      WHERE tenant_id = ${tenantId} AND reason = 'message_refund' AND reference_id = ${messageId}`;
     expect(Number(refunds[0]?.n)).toBe(2);
   });
 

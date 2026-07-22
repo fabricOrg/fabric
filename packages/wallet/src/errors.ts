@@ -40,7 +40,7 @@ export class IdempotencyConflictError extends WalletError {
 /** commit/refund referenced a message that has no open reservation to resolve. */
 export class NoReservationError extends WalletError {
   constructor(readonly referenceId: string) {
-    super(`no open sms_reserve reservation for reference ${referenceId}`);
+    super(`no open reserve reservation for reference ${referenceId}`);
   }
 }
 

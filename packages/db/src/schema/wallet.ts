@@ -72,9 +72,15 @@ export const ledgerDirection = pgEnum("ledger_direction", ["credit", "debit"]);
 // is a bug we want the compiler + DB to reject. Mirrors the spend lifecycle in ARCHITECTURE §5.
 export const ledgerReason = pgEnum("ledger_reason", [
   "topup",
+  // The sms_* reasons predate multi-channel managed messaging (SDK-007). Managed spend is now
+  // channel-neutral, so reserve/commit/refund write the message_* reasons; the sms_* values are
+  // retained (never dropped from an enum) so in-flight and historical SMS ledger rows still resolve.
   "sms_reserve",
   "sms_commit",
   "sms_refund",
+  "message_reserve",
+  "message_commit",
+  "message_refund",
   "adjustment",
 ]);
 

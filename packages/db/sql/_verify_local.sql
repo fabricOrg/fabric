@@ -25,7 +25,7 @@ CREATE TYPE dek_status            AS ENUM ('active','destroyed');
 CREATE TYPE ledger_txn_type       AS ENUM ('topup','sms_charge','adjustment','refund');
 CREATE TYPE ledger_txn_status     AS ENUM ('pending','committed','refunded','reconciled');
 CREATE TYPE ledger_direction      AS ENUM ('credit','debit');
-CREATE TYPE ledger_reason         AS ENUM ('topup','sms_reserve','sms_commit','sms_refund','adjustment');
+CREATE TYPE ledger_reason         AS ENUM ('topup','sms_reserve','sms_commit','sms_refund','message_reserve','message_commit','message_refund','adjustment');
 CREATE TYPE ledger_account_status AS ENUM ('active','frozen','closed');
 CREATE TYPE ledger_account_kind   AS ENUM ('customer','reserved_clearing','revenue','gateway_clearing','writeoff');
 
