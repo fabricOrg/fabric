@@ -19,6 +19,7 @@ import { DefinitionApplicationSelector } from "@/components/message-definitions/
 import { variablesFromSchema } from "@/components/message-definitions/definition-authoring";
 import { DefinitionDeveloperSetup } from "@/components/message-definitions/definition-developer-setup";
 import { DefinitionPreviewPanel } from "@/components/message-definitions/definition-preview-panel";
+import { EmailPreviewPanel } from "@/components/message-definitions/email-preview-panel";
 import { BffError } from "@/lib/server/api-client";
 import { listApplications } from "@/lib/server/applications-client";
 import { requireDashboardSession } from "@/lib/server/auth";
@@ -84,7 +85,13 @@ function DefinitionCard({
                 Sender: {sandboxSender ?? "Not bound"}
               </Badge>
             </>
-          ) : null}
+          ) : (
+            <Badge variant="secondary">
+              From:{" "}
+              {(latest_version.content as EmailVariantContent).from ??
+                "sandbox default"}
+            </Badge>
+          )}
         </div>
       ) : null}
 
@@ -106,16 +113,14 @@ function DefinitionCard({
           definitionKey={definition.key}
         />
       ) : latest_version ? (
-        // Email content is authored + previewed via the API/SDK for now; the dashboard email preview
-        // panel is SDK-007 slice 4e. Show the subject read-only so the card isn't empty.
-        <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-          Email version · subject:{" "}
-          <span className="font-medium text-foreground">
-            {(latest_version.content as EmailVariantContent).subject}
-          </span>
-          . Author and preview email content via the API; dashboard editing
-          arrives in a later release.
-        </div>
+        <EmailPreviewPanel
+          subject={(latest_version.content as EmailVariantContent).subject}
+          text={(latest_version.content as EmailVariantContent).text ?? ""}
+          html={(latest_version.content as EmailVariantContent).html ?? ""}
+          schema={latest_version.variable_schema}
+          fields={variablesFromSchema(latest_version.variable_schema)}
+          definitionKey={definition.key}
+        />
       ) : null}
 
       {canWrite ? (

@@ -48,6 +48,31 @@ const validBody = {
   sender_id: "FABRIC",
 };
 
+const validEmailBody = {
+  channel: "email",
+  application_id: "5f61e20c-b096-44f8-95d8-3ca31b94643e",
+  key: "order.shipped",
+  // Email content has no sender_id — the sender identity is the (optional) `from` on the content.
+  content: {
+    subject: "Order {{order.id}} shipped",
+    text: "Hi {{name}}, it shipped.",
+    locales: {},
+  },
+  variable_schema: {
+    type: "object",
+    properties: {
+      name: { type: "string" },
+      order: {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"],
+      },
+    },
+    required: ["name", "order"],
+  },
+  default_locale: "en",
+};
+
 function req(body?: unknown) {
   return new Request("http://localhost/api/dashboard/message-definitions", {
     method: "POST",
@@ -103,6 +128,32 @@ describe("message-definitions BFF route", () => {
     const res = await POST(req(validBody));
     expect(res.status).toBe(201);
     expect(createDef).toHaveBeenCalledOnce();
+  });
+
+  it("POST create accepts an email definition (no sender_id) through the channel union", async () => {
+    readSession.mockResolvedValue({
+      role: "member",
+      permissions: ["definitions:write"],
+    });
+    const res = await POST(req(validEmailBody));
+    expect(res.status).toBe(201);
+    expect(createDef).toHaveBeenCalledOnce();
+    expect(createDef.mock.calls[0]?.[0]).toMatchObject({
+      channel: "email",
+      content: { subject: "Order {{order.id}} shipped" },
+    });
+  });
+
+  it("POST create 422s on an email definition with no body", async () => {
+    readSession.mockResolvedValue({
+      role: "member",
+      permissions: ["definitions:write"],
+    });
+    const res = await POST(
+      req({ ...validEmailBody, content: { subject: "S", locales: {} } }),
+    );
+    expect(res.status).toBe(422);
+    expect(createDef).not.toHaveBeenCalled();
   });
 
   it("POST create denies a user without definitions:write", async () => {

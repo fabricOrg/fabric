@@ -55,9 +55,7 @@ export function DefinitionActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Editing is SMS-only for now — the email authoring dialog is SDK-007 slice 4e. An email
-          definition is authored via the API and shown read-only until then. */}
-      {latestVersion && latestVersion.channel === "sms" ? (
+      {latestVersion ? (
         <CreateDefinitionDialog
           initialDefinition={state}
           triggerLabel="Edit"
