@@ -90,25 +90,34 @@ retained but its "PR #158 OPEN" framing is superseded.
     typecheck + 4 unit + **18 managed-SMS integration tests** (idempotent replay, concurrent-collapse,
     rechecks, negatives, crash-recovery) all green. Independently reviewed: APPROVE, no findings (SMS
     identical, 0084 safe on existing data).
-  - **4a-ii NEXT** — Email prepare/persist path: new email managed-send that (in one tenant tx) inserts
-    an `email_messages` row (id = deliveryId, so the attempt's `email_message_id` = deliveryId, symmetric
-    with SMS where messageId = deliveryId; content = rendered subject/text/html via
-    `vault.subjectForEmail` + `vault.put`), reserves wallet by the slice-2 tier price (`referenceId` =
-    email message id), then calls the shared `persistManagedAcceptance` with `channel:"email"` +
-    `emailMessageId`; add the mirror unique index on `email_message_id`; wire
-    `ManagedMessagesService.send` to dispatch by `preview.channel` (sms→`sms.send`, email→email path).
-    Mirror the direct-email persistence in `email.service.ts:60-83` (email_messages + email_dispatches +
-    `message.created` outbox, `FakeEmailProvider.slug`, `STATUS_RANK.queued`).
-    Real-Postgres: email accept persists one delivery+attempt+email_message+outbox, idempotent replay,
-    conflict 409, insufficient-funds 402, no side effects on blockers.
-    - **OPEN DESIGN POINT (decide at 4a-ii start):** `SendManagedMessageRequest.to` is `e164` only
-      (`packages/contracts/src/managed-messages.ts:27`) — SMS-shaped. Email needs an email recipient, and
-      the channel is resolved from the DEFINITION (not the request). Decision needed: widen `to` to accept
-      e164-OR-email (e.g. `z.union([e164, emailAddress])`) and validate it matches the resolved channel at
-      send time (mismatch → structured 400 pre-acceptance). The preview path also takes `to` (e164 today,
-      SMS compliance only) — email preview currently ignores `to`; keep that or thread the email recipient
-      through for future email recipient-compliance (4b/4c). Recommend: widen `to`, validate-against-channel
-      in the managed send, no email recipient compliance yet (matches the slice-3 "not_evaluated" posture).
+  - **4a-ii DONE + committed** (`739b61e`) — Email accept/persist path. One tenant tx inserts an
+    `email_messages` row (id = deliveryId, symmetric with SMS), stores rendered subject/text/html in the
+    `SendEmailRequest` vault shape the dispatch worker already reads, reserves the wallet by the slice-2
+    tier price (`referenceId` = deliveryId), records the `email_dispatches` intent, then calls the shared
+    `persistManagedAcceptance(channel:"email", emailMessageId)`. **Replay-check-first ⇒ no double-reserve;
+    every insert `ON CONFLICT DO NOTHING`; `message.accepted` outbox only** (NOT the direct path's
+    `message.created` — managed uses accepted, like SMS). `ManagedMessagesService.send` now dispatches on
+    `preview.channel`. Migration `0085` + mirror unique index on
+    `message_delivery_attempts(email_message_id)` (NULL-distinct, SMS rows don't collide). ACCEPT ONLY —
+    dispatch worker is 4b. Two files split to hold the length guard: `managed-send-plan.ts` (pure
+    send-planning helpers) + `email-managed-accept.ts` (the accept core).
+    - **OPEN DESIGN POINT RESOLVED (both decisions user-signed-off):**
+      1. **`to` = `z.union([e164, emailAddress])`** — one field, no fork; unchanged `messages.send`. The
+         DEFINITION's channel is authoritative; `to` is validated against it pre-acceptance (mismatch →
+         400 `recipient_channel_mismatch`, **no PII echo**). No email-recipient compliance yet (matches
+         slice-3 `not_evaluated`).
+      2. **`from` authored on the definition** (`emailVariantContent.from`, optional) with a **synthetic
+         sandbox fallback** `no-reply@sandbox.fabric.dev` when absent. Grounded in a real-world email study
+         (SPF/DKIM/DMARC + verified sending domain = the authority layer; template carries a default
+         sender): the authored `from` is the template-default pattern; the **domain-binding + DNS
+         verification gate is the honest deferred readiness gap (4b/4c)** — sandbox never hits a real MTA
+         (`FakeEmailProvider`), so no dead live control ships.
+    - **Verified:** managed email spec 7/7 + managed SMS spec 10/10 real-Postgres (17/17 after the file
+      split), full api integration 180 pass (only the 2 documented pre-existing local-env failures:
+      retention fixture pollution + `senders` missing `DATABASE_URL_PROVISIONER`), api typecheck,
+      `db:assert:drift`, biome, file-length guard. **Independent review (gemini):** all 9 money/idempotency/
+      tenancy/PII/CHECK/migration points OK, NOTHING BLOCKING — findings cross-checked against the diff.
+      **Committed on `feature/ops-sdk007-email-sandbox`; nothing pushed, no redline crossed.**
   - **4b** email dispatch worker + crash-recovery + refund + attempt-time rechecks · **4c** Email
     authoring through the API · **4d** negatives + preview↔send parity · **4e** SDK + dashboard.
 - **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
