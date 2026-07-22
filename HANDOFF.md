@@ -134,13 +134,24 @@ retained but its "PR #158 OPEN" framing is superseded.
     reservation is found); a pre-existing **unlogged `enqueue().catch(()=>undefined)` in the direct
     `send()`** (SMS logs the equivalent deferral) is out of 4b-i scope — **FOLLOW-UP: add the deferral
     log to email `send()`** for Redis-outage observability. Committed, nothing pushed.
-  - **4b-ii NEXT** — attempt-time recheck (kill-switch `platform.email_sending`; email consent/opt-out
-    if it exists — SMS rechecks `consent.isSuppressed`; sending-domain still deferred) on the managed
-    email dispatch path (block ⇒ refund + terminal, fail-open on store errors, mirror
-    `sms-dispatch-recheck.ts`), plus the **TTL crash-recovery sweep** (managed email stuck non-terminal
-    past the TTL ⇒ resolve `expired` ⇒ refund exactly once, zero provider contact; mirror
-    `sweepExpired` + wire into `maintenance.service.ts runSweep`). Real-Postgres: kill-switch-flip block
-    refunds, crash→sweep→expired+refund, replay no-op.
+  - **4b-ii DONE + committed** (`ce12fbb`) — managed Email attempt-time recheck + TTL crash-recovery
+    sweep; both refund through the 4b-i reconcile (no second refund path). Recheck
+    (`email-dispatch-recovery.ts emailDispatchBlockReason`): re-checks `platform.email_sending` before
+    provider contact, block ⇒ `resolve('failed')` (refund for managed / plain fail for direct), NO
+    provider contact; **email has no consent/opt-out** (that catalog is phone-keyed via `hashMsisdn`), so
+    kill-switch is the only recheck; **fail-open** on store error. Sweep (`sweepManagedEmailExpired` +
+    `EmailService.sweepStuck`): managed-only (`EXISTS message_delivery_attempts`) stuck-past-TTL ⇒
+    `expired` ⇒ refund once, zero provider contact; wired into `maintenance.service runSweep` via
+    `maintenance-email-sweep.ts` (provisioner read-only discovery — `0063`/`0082` grant `app_provisioner`
+    SELECT on email_messages/attempts — then per-tenant `withTenant` mutation, try/catch-continue).
+    `assertSandboxEnvironment` extracted to `email-environment.ts` (email.service now 295 lines).
+    **Verified by me:** recovery 6 + dispatch + `maintenance.integration` (real provisioner sweep path) +
+    managed SMS = **26/26 real-Postgres**, api typecheck, biome, file-length guard. **Independent review
+    (gemini):** recheck/refund/double-refund/scoping/tenancy OK; the provisioner-RLS SUSPECT dispositioned
+    **two ways** (0063/0082 policies + the passing `maintenance.integration`); no module cycle
+    (`email.module` has no maintenance import); the pre-existing `enqueue().catch` is cleanup-debt #3.
+    Committed, nothing pushed. **Slice 4b (money vertical for dispatch) COMPLETE — accept (4a-ii) +
+    settle/refund (4b-i) + recheck/crash-recovery (4b-ii) all shipped.**
   - **4c** Email
     authoring through the API · **4d** negatives + preview↔send parity · **4e** SDK + dashboard.
   - **SDK-007 CLEANUP DEBT — clear before slice-5 / AC02 close** (tracked 2026-07-22; none are
