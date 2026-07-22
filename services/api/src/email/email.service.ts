@@ -21,6 +21,7 @@ import {
   acceptManagedEmail,
   type ManagedEmailAcceptInput,
 } from "./email-managed-accept.js";
+import { reconcileManagedEmailTerminal } from "./email-managed-resolve.js";
 import { EMAIL_SEND_QUEUE, type EmailSendJob } from "./email-send.job.js";
 
 type Row = Record<string, unknown>;
@@ -95,10 +96,6 @@ export class EmailService {
     return { id: messageId, status, request_id: newRequestId() };
   }
 
-  /**
-   * Managed Email accept/persist (SDK-007 slice 4a-ii). Kill-switch here (a service concern), the
-   * sandbox gate + persistence in the extracted core. Accept only — dispatch is slice 4b.
-   */
   async acceptManaged(input: ManagedEmailAcceptInput): Promise<void> {
     if (await this.killSwitch.isPaused("platform.email_sending")) {
       throw invalidRequest(
@@ -193,7 +190,6 @@ export class EmailService {
       await this.enqueue(tenantId, String(row.message_id));
     return rows.length;
   }
-
   private async enqueue(tenantId: string, messageId: string): Promise<void> {
     await this.queue
       .queue(EMAIL_SEND_QUEUE)
@@ -233,7 +229,6 @@ export class EmailService {
       );
     }
   }
-
   private async load(
     tenantId: string,
     messageId: string,
@@ -293,6 +288,11 @@ export class EmailService {
           ${String(current.environment_id)}, 'message.updated',
           ${JSON.stringify({ message_id: messageId, channel: "email", status, previous_status: prior })}::jsonb
         )`;
+      await reconcileManagedEmailTerminal(tx, {
+        messageId,
+        newStatus: status,
+        ...(detail.errorCode ? { errorCode: detail.errorCode } : {}),
+      });
       return status;
     });
   }
