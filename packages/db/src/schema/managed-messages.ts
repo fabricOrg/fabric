@@ -175,6 +175,9 @@ export const messageDeliveryAttempts = pgTable(
       table.ordinal,
     ),
     uniqueIndex("uniq_message_delivery_attempt_message").on(table.messageId),
+    uniqueIndex("uniq_message_delivery_attempt_email_message").on(
+      table.emailMessageId,
+    ),
     index("idx_message_delivery_attempts_delivery").on(
       table.tenantId,
       table.deliveryId,

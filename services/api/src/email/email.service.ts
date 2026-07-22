@@ -17,6 +17,10 @@ import {
   isTerminalEmailStatus,
   parseEmailContent,
 } from "./email-content.js";
+import {
+  acceptManagedEmail,
+  type ManagedEmailAcceptInput,
+} from "./email-managed-accept.js";
 import { EMAIL_SEND_QUEUE, type EmailSendJob } from "./email-send.job.js";
 
 type Row = Record<string, unknown>;
@@ -89,6 +93,28 @@ export class EmailService {
       status = await this.process({ tenantId: context.tenantId, messageId });
     }
     return { id: messageId, status, request_id: newRequestId() };
+  }
+
+  /**
+   * Managed Email accept/persist (SDK-007 slice 4a-ii). Kill-switch here (a service concern), the
+   * sandbox gate + persistence in the extracted core. Accept only — dispatch is slice 4b.
+   */
+  async acceptManaged(input: ManagedEmailAcceptInput): Promise<void> {
+    if (await this.killSwitch.isPaused("platform.email_sending")) {
+      throw invalidRequest(
+        "email_sending_paused",
+        "Email sending is temporarily paused.",
+      );
+    }
+    await acceptManagedEmail(
+      {
+        db: this.db,
+        vault: this.vault,
+        providerSlug: this.provider.slug,
+        assertSandbox: (context) => this.assertSandboxEnvironment(context),
+      },
+      input,
+    );
   }
 
   async process(job: EmailSendJob): Promise<SendEmailApiResponse["status"]> {

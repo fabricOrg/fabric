@@ -19,6 +19,7 @@ function controllerWith() {
       message_class: "transactional" as const,
       preview: null,
       email_preview: null,
+      email_from: null,
     })),
   };
   return {

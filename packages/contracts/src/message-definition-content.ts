@@ -32,6 +32,7 @@ export type MessageChannel = z.infer<typeof messageChannel>;
 // renderer preview and managed send share (SDK-007 slice 2).
 export const emailVariantContent = z
   .object({
+    from: z.string().trim().email().max(320).optional(),
     subject: z.string().min(1).max(998),
     text: z.string().min(1).max(200_000).optional(),
     html: z.string().min(1).max(400_000).optional(),

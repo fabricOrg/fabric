@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { apiKeyEnv } from "./dev-portal.js";
+import { emailAddress } from "./email.js";
+import { messageChannel } from "./message-definition-content.js";
 import { stableKey } from "./message-definitions.js";
 
 const e164 = z.string().regex(/^\+[1-9]\d{7,14}$/, "Must be one E.164 number.");
@@ -24,10 +26,10 @@ export const messageMetadata = z
 
 export const sendManagedMessageRequest = z.object({
   key: stableKey,
-  to: e164,
+  to: z.union([e164, emailAddress]),
   data: z.record(z.string(), z.unknown()).default({}),
   locale: z.string().optional(),
-  channel: z.literal("sms").optional(),
+  channel: messageChannel.optional(),
   currency: z.string().length(3).default("GHS"),
   reference: z.string().trim().min(1).max(100).optional(),
   metadata: messageMetadata.default({}),
@@ -47,7 +49,7 @@ export type SendManagedMessageRequest = z.infer<
 export const messageDeliveryAttempt = z.object({
   id: z.string().uuid(),
   ordinal: z.number().int().positive(),
-  channel: z.literal("sms"),
+  channel: messageChannel,
   message_id: z.string().uuid().nullable(),
   status: messageDeliveryStatus,
   cost: z.object({ minor: z.string(), currency: z.string().length(3) }),
@@ -63,7 +65,7 @@ export const messageDelivery = z.object({
   version_id: z.string().uuid(),
   environment: apiKeyEnv,
   locale: z.string(),
-  channel: z.literal("sms"),
+  channel: messageChannel,
   status: messageDeliveryStatus,
   resource_version: z.number().int().positive(),
   recipient: z.string(),

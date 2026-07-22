@@ -31,6 +31,11 @@ interface MessageReader {
   ): Promise<{ to: string }>;
 }
 
+interface DeliveryReaders {
+  sms: MessageReader;
+  email: MessageReader;
+}
+
 const summaryColumns = {
   id: messageDeliveries.id,
   key: messageDeliveries.key,
@@ -109,7 +114,7 @@ export async function listDeliveries(
 /** Full delivery + attempt history; resolves the recipient through the message read (PII-gated). */
 export async function retrieveDelivery(
   db: AppDb,
-  messages: MessageReader,
+  readers: DeliveryReaders,
   input: {
     tenantId: string;
     applicationId: string;
@@ -147,9 +152,16 @@ export async function retrieveDelivery(
       .orderBy(asc(messageDeliveryAttempts.ordinal));
     return { delivery, attempts };
   });
-  const messageId = state.attempts[0]?.messageId;
-  const message = messageId
-    ? await messages.get(input.tenantId, messageId, input.environmentId)
+  const firstAttempt = state.attempts[0];
+  const channelMessageId =
+    state.delivery.channel === "email"
+      ? firstAttempt?.emailMessageId
+      : firstAttempt?.messageId;
+  const message = channelMessageId
+    ? await (state.delivery.channel === "email"
+        ? readers.email
+        : readers.sms
+      ).get(input.tenantId, channelMessageId, input.environmentId)
     : null;
   return messageDeliverySchema.parse({
     ...toSummary(state.delivery),
@@ -158,7 +170,7 @@ export async function retrieveDelivery(
       id: attempt.id,
       ordinal: attempt.ordinal,
       channel: attempt.channel,
-      message_id: attempt.messageId,
+      message_id: attempt.channel === "sms" ? attempt.messageId : null,
       status: attempt.status,
       cost: {
         minor: attempt.costMinor.toString(),

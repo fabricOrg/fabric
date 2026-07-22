@@ -52,6 +52,7 @@ export interface PreviewOutput {
   readonly message_class: "transactional" | "promotional";
   readonly preview: SmsPreview | null;
   readonly email_preview: EmailPreview | null;
+  readonly email_from: string | null;
 }
 
 /**
@@ -165,6 +166,7 @@ export class MessagePreviewService {
           message_class: "transactional",
           preview: null,
           email_preview: outcome.blockers.length === 0 ? outcome.preview : null,
+          email_from: email.from ?? null,
         };
       }
 
@@ -227,6 +229,7 @@ export class MessagePreviewService {
         message_class: messageClass,
         preview: blockers.length === 0 ? outcome.preview : null,
         email_preview: null,
+        email_from: null,
       };
     });
   }
