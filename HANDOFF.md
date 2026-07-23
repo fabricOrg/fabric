@@ -207,10 +207,20 @@ retained but its "PR #158 OPEN" framing is superseded.
        AC01–AC05 traceability); the three slice fragments removed.
     5. **Coverage gaps** — DONE in 4d (`7f44207`).
     6. **Lost `acceptManaged` doc-comment** — DONE (`6048cbe`), restored during the §2 re-org.
-  - **SLICE 5 NEXT** — closes **AC04** (the inherited SDK-004-AC02 channel narrowing): catalog generator
-    emits `channel` per definition; `Fabric<Catalog>` narrows `messages.send`; a `@ts-expect-error` compile
-    fixture proves a channel-unsupported call fails; update `sdk-004.md` AC02 row to "implemented". Then
-    SDK-007 is fully closed (AC01/02/03/05 already done). npm publish + live Email stay redlined.
+  - **SLICE 5 DONE + committed (`436c400`, 2026-07-23) — SDK-007 FULLY CLOSED (all ACs AC01–AC05).**
+    Channel narrowing closes AC04 + the inherited SDK-004-AC02. Contracts: catalog `channels` widened to
+    `array(messageChannel)`, `previewMessageRequest` gains optional `channel`. API: catalog emits the real
+    per-definition channel; the preview service (single choke point for preview + managed send) rejects a
+    mismatched asserted channel with 400 `channel_mismatch` — also fixed the latent
+    `sendManagedMessageRequest.channel` accepted-but-dropped smell. CLI manifest accepts sms|email. SDK:
+    `CatalogPreviewOptions.channel` narrows to the key's channel; `catalog.type-test.ts` `@ts-expect-error`
+    fixtures prove a wrong-channel literal fails to compile. Verified: SDK 41 + release:check, CLI 6, api
+    typecheck + unit 161 + real-Postgres preview(channel-mismatch)/managed/catalog, biome, OpenAPI current.
+    Codex review: nothing blocking. Evidence: `sdk-007.md` (all ACs closed), `sdk-004.md` AC02 → implemented.
+    **Remaining for SDK-007 are redlines only: npm publish + live Email (SDK-009).**
+  - **Local DB fully healthy (2026-07-23):** the pre-existing `__drizzle_migrations` desync was reconciled
+    and `0086` proven CI-applicable on a fresh DB; `drizzle-kit migrate` now `exit 0` locally. The stale
+    `delivery-retention` fixture was fixed (`98c8930`).
 - **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
   machine) each need their OWN ADR — flagged, not written yet. SDK-010 also has NO backend today (zero
   `journey` rows/controllers/services); its frontend React Flow canvas + palette are reusable, but it
