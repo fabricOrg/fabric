@@ -54,13 +54,22 @@ describeDb("managed-delivery retention purge", () => {
         'order.shipped', 'en', 'sms', 'delivered', ${`retention-${id}`},
         ${"a".repeat(64)}, 'GHS', ${legalHold}, ${expiresAt}::timestamptz
       )`;
+    // An SMS attempt must reference a real messages row (the 0084 channel-message CHECK + the unique
+    // message_id index): channel='sms' ⇒ message_id NOT NULL, email_message_id NULL.
+    const messageId = randomUUID();
+    await owner`
+      INSERT INTO messages (
+        id, tenant_id, sender_id, encoding, segments, cost_minor, currency
+      ) VALUES (
+        ${messageId}, ${tenantId}, 'FABRIC', 'gsm7', 1, 0, 'GHS'
+      )`;
     await owner`
       INSERT INTO message_delivery_attempts (
         tenant_id, application_id, environment_id, delivery_id, ordinal,
-        channel, status, currency
+        channel, message_id, status, currency
       ) VALUES (
         ${tenantId}, ${applicationId}, ${environmentId}, ${id}, 1,
-        'sms', 'delivered', 'GHS'
+        'sms', ${messageId}, 'delivered', 'GHS'
       )`;
   }
 
