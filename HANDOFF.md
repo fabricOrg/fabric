@@ -196,9 +196,10 @@ retained but its "PR #158 OPEN" framing is superseded.
        `0086` (`ADD VALUE IF NOT EXISTS`, sms_* retained); `reserve/commit/refund` write `message_*`;
        `reservedFor` matches `IN('message_reserve','sms_reserve')`. **Backward-compat proven** on real
        Postgres (`legacy-reserve-compat.integration.spec.ts`: a forged legacy `sms_reserve` reservation
-       still commits + refunds). Codex money review: nothing blocking. NOTE: `drizzle-kit migrate` fails on
-       this machine (local `__drizzle_migrations` desync, 82/86) — the `0086` SQL was verified via psql
-       (bare + in-tx); CI applies on a clean DB (mirrors shipped `0061`).
+       still commits + refunds). Codex money review: nothing blocking. **`0086` proven CI-applicable**:
+       the full 86-migration journal applies `exit 0` on a fresh throwaway DB (enum lands the 8 correct
+       values). The local dev DB's pre-existing `__drizzle_migrations` desync (records ended at `0082`)
+       was reconciled — `drizzle-kit migrate` now completes `exit 0` locally too.
     2. **`email.service.ts` re-org** — DONE (`6048cbe`). Extracted `/v1/email` reads to `email-reads.ts`;
        service now a 284-line orchestrator.
     3. **Unlogged `enqueue().catch` in direct email `send()`** — DONE (`6048cbe`). Logs the deferral now.
