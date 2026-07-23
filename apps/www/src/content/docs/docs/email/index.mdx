@@ -1,6 +1,37 @@
 ---
 title: Email
-description: Placeholder email docs.
+description: Send transactional text or HTML email from the Fabric SDK.
 ---
 
-Email docs will cover sending, domains, DNS, templates, and deliverability.
+Use managed definitions when non-developers need to change message content. Use direct email when
+your server already owns the rendered subject and body.
+
+```ts
+const response = await fabric.email.send({
+  to: "ama@example.com",
+  from: "receipts@your-domain.example",
+  replyTo: "support@your-domain.example",
+  subject: "Receipt for order GH-4821",
+  text: "Thanks Ama. Your payment was received.",
+  html: "<p>Thanks Ama. Your payment was received.</p>",
+}, {
+  idempotencyKey: "receipt:GH-4821",
+});
+
+console.log(response.data.id, response.data.status);
+```
+
+At least one of `text` or `html` is required. Supplying both gives email clients a safe plain-text
+fallback.
+
+## Retrieve a message
+
+```ts
+const message = await fabric.email.retrieve(response.data.id);
+console.log(message.data.status, message.data.errorCode);
+```
+
+:::caution[Authenticate your domain]
+Do not use a live `from` address until its domain is configured and verified. Domain authentication
+and recipient consent directly affect deliverability.
+:::

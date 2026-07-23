@@ -1,35 +1,30 @@
 ---
+import InteractiveDemo from "../components/InteractiveDemo.astro";
 import "../styles/global.css";
 
-// w-2 landing v4 — colourful + illustrated + animated. Editor-grade code panels (vibrant multi-token
-// syntax on a dark editor surface), an animated channel-flow SVG (packets travel key → Fabric →
-// SMS/Email → delivered), channel/status colour, staggered reveals + live pulse. Flat (no gradients).
-// Product-artifact panels kept (deliveries log, definition, wallet). DX-first, region-agnostic.
+// w-2 landing v5 — disciplined colour + plain language + the real Fabric mark.
+// COLOUR SYSTEM (deliberate, not decorative):
+//   • Channel identity — SMS = brand indigo, Email = teal — ONLY in the deliveries log,
+//     the flow diagram, the SMS/Email product tiles and the template badge.
+//   • Status — green = delivered, amber = sending — ONLY inside product artifacts.
+//   • Accent — brand indigo, ONE emphasised word per heading + interactive states.
+//   • Gold — kicker labels only. Editor syntax keeps its own code theme.
+//   Everything else is neutral. Flat (no gradients).
 const APP_URL = "https://fabric-dashboard-teal.vercel.app";
-const trust = ["Free sandbox", "Typed Node & CLI SDKs", "Signed webhooks"];
+const trust = ["Free sandbox", "Node SDK & CLI", "Delivery webhooks"];
 const grid = [
-  { k: "sms", c: "sms", t: "SMS", d: "Alphanumeric sender IDs, delivery reports, quiet-hours and consent handled." },
-  { k: "email", c: "email", t: "Email", d: "Managed templates, contextual escaping, SPF/DKIM/DMARC, size-tiered pricing." },
-  { k: "def", c: "violet", t: "Message definitions", d: "Author once, version, publish. Send by a stable key from your code." },
-  { k: "hook", c: "blue", t: "Webhooks", d: "Signed, retried, replayable delivery events — one signature scheme." },
-  { k: "wallet", c: "green", t: "Wallet", d: "Every send reserves then settles on a real double-entry ledger you can read." },
-  { k: "cli", c: "amber", t: "CLI + SDKs", d: "Typed Node SDK, a fabric CLI, and generated catalog types per workspace." },
+  { k: "sms", c: "sms", t: "SMS", href: "/docs/messaging", d: "Text messages sent under your own name, with delivery updates and quiet hours built in." },
+  { k: "email", c: "email", t: "Email", href: "/docs/email", d: "Send email from ready-made templates — the setup that keeps it out of spam is handled for you." },
+  { k: "def", c: "brand", t: "Message templates", href: "/docs/messaging", d: "Write a message once, give it a name, and send it from your code. Reword it without a deploy." },
+  { k: "hook", c: "brand", t: "Webhooks", href: "/docs/webhooks", d: "Get told the moment a message is delivered — checked for you and retried if it fails." },
+  { k: "wallet", c: "brand", t: "Wallet", href: "/docs/account", d: "See what every message costs and what you've spent. Every charge is on the record." },
+  { k: "cli", c: "brand", t: "SDK + CLI", href: "/docs/sdks-tools", d: "A typed Node library and a command-line tool, ready to drop into your project." },
 ];
 // Editor syntax: k=keyword s=string f=function n=number p=property c=comment
-const heroCode = `<span class="k">import</span> <span class="p">{ Fabric }</span> <span class="k">from</span> <span class="s">"@fabric-messaging/sdk"</span>;
-
-<span class="k">const</span> fabric = <span class="k">new</span> <span class="f">Fabric</span>({ <span class="p">apiKey</span>: process.<span class="p">env</span>.<span class="n">FABRIC_API_KEY</span> });
-
-<span class="c">// one call — the definition's channel decides</span>
-<span class="k">await</span> fabric.messages.<span class="f">send</span>(<span class="s">"order.shipped"</span>, {
-  <span class="p">to</span>: <span class="s">"+233201234567"</span>,
-  <span class="p">data</span>: { <span class="p">name</span>: <span class="s">"Ama"</span>, <span class="p">ref</span>: <span class="s">"GH-4821"</span> },
-  <span class="p">idempotencyKey</span>: <span class="s">"order-4821"</span>,
-});`;
 const qsCode = `<span class="c"># install</span>
 npm i <span class="s">@fabric-messaging/sdk</span>
 
-<span class="c"># send in the sandbox — no funding, no sender-ID wait</span>
+<span class="c"># send in the sandbox — no money, no waiting</span>
 <span class="k">await</span> fabric.messages.<span class="f">send</span>(<span class="s">"welcome.otp"</span>, {
   <span class="p">to</span>: <span class="s">"+2348012345678"</span>, <span class="p">data</span>: { <span class="p">code</span>: <span class="s">"401 922"</span> },
 });
@@ -49,19 +44,22 @@ const icon = (k: string): string => ({
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Fabric — one API for SMS and email</title>
-    <meta name="description" content="A typed SDK, a sandbox that works before you fund it, and signed webhooks. Send SMS or email by a stable key — the channel is just config." />
-    <link rel="icon" href={`data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" fill="%23fcfcfd"/><g stroke="%23383a96" stroke-width="1.7" fill="none"><path d="M7 4v16M12 4v16M17 4v16"/><path d="M4 8h16M4 18h16"/><path d="M4 13h16" stroke="%23c98a2e"/></g></svg>')}`} />
+    <meta name="description" content="A typed SDK, a sandbox that works before you fund it, and delivery webhooks. Write your message once and send it by name — SMS or email is just a setting." />
+    <meta name="theme-color" content="#383a96" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Fabric — one API for SMS and email" />
+    <meta property="og:description" content="Send SMS and email from one typed API. Test in the sandbox before you fund or go live." />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" href={`data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%233f3aa8"/><path d="M18 14h31v9H28v9h18v9H28v15H18z" fill="%23fff"/></svg>')}`} />
   </head>
   <body>
-    <main class="shell">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <main class="shell" id="main-content">
       <header class="hdr">
         <a class="brand" href="/" aria-label="Fabric home">
-          <svg class="mark" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-            <g fill="none" stroke-width="1.9" stroke-linecap="square">
-              <path d="M6 3v18M12 3v18M18 3v18" stroke="var(--primary)"/>
-              <path d="M3 8h18M3 16h18" stroke="var(--primary)"/>
-              <path d="M3 12h18" stroke="var(--gold)"/>
-            </g>
+          <svg class="mark" viewBox="0 0 64 64" width="26" height="26" aria-hidden="true">
+            <rect width="64" height="64" rx="12" fill="var(--primary)"/>
+            <path d="M18 14h31v9H28v9h18v9H28v15H18z" fill="var(--primary-foreground)"/>
           </svg>
           <span>Fabric</span>
         </a>
@@ -70,12 +68,22 @@ const icon = (k: string): string => ({
           <a href={`${APP_URL}/signin`}>Sign in</a>
           <a class="btn btn-primary btn-sm" href={`${APP_URL}/signup`}>Start free</a>
         </nav>
+        <details class="mobile-nav">
+          <summary>Menu</summary>
+          <nav aria-label="Mobile primary">
+            <a href="/docs">Docs</a>
+            <a href="#products">Product</a>
+            <a href="#coverage">Coverage</a>
+            <a href={`${APP_URL}/signin`}>Sign in</a>
+            <a class="btn btn-primary btn-sm" href={`${APP_URL}/signup`}>Start free</a>
+          </nav>
+        </details>
       </header>
 
       <section class="hero">
         <div class="hero-copy">
-          <h1 class="reveal" style="--d:0s">One API for<br/><span class="a-sms">SMS</span> and <span class="a-email">email</span>.</h1>
-          <p class="lede reveal" style="--d:.12s">A typed SDK, a sandbox that works before you fund it, and signed webhooks. Send by a stable key — the channel is just config.</p>
+          <h1 class="reveal" style="--d:0s">One API for<br/>SMS and Email.</h1>
+          <p class="lede reveal" style="--d:.12s">Write your message once and send it by name. Try everything free in the sandbox before you add money or go live.</p>
           <div class="actions reveal" style="--d:.18s">
             <a class="btn btn-primary" href={`${APP_URL}/signup`}>Start free</a>
             <a class="btn btn-line" href="/docs">Read the docs →</a>
@@ -84,109 +92,68 @@ const icon = (k: string): string => ({
             {trust.map((t) => (<li><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="var(--ok)" stroke-width="2"/></svg>{t}</li>))}
           </ul>
         </div>
-        <div class="hero-visual reveal" style="--d:.3s">
-          <div class="editor">
-            <div class="ed-bar"><span class="d r"></span><span class="d y"></span><span class="d g"></span><em>send.ts</em></div>
-            <pre><code set:html={heroCode} /></pre>
-          </div>
-          <div class="logcard">
-            <div class="log-head"><span>Deliveries</span><em class="live"><span></span>live</em></div>
-            <div class="log-row"><span class="badge b-sms">SMS</span><span class="log-key">order.shipped</span><span class="chip ok">delivered</span><span class="cost">GHS 0.03</span></div>
-            <div class="log-row"><span class="badge b-email">EMAIL</span><span class="log-key">receipt.paid</span><span class="chip ok">delivered</span><span class="cost">GHS 0.01</span></div>
-            <div class="log-row new"><span class="badge b-sms">SMS</span><span class="log-key">welcome.otp</span><span class="chip send">sending</span><span class="cost">GHS 0.03</span></div>
-          </div>
-        </div>
+        <InteractiveDemo />
       </section>
 
       <!-- Animated channel-flow illustration -->
       <section class="flow">
-        <p class="num center">How it routes</p>
-        <h2 class="center">One key. <span class="a-sms">SMS</span> or <span class="a-email">email</span>. Delivered.</h2>
-        <div class="flow-wrap">
-          <svg class="flowsvg" viewBox="0 0 900 300" role="img" aria-label="A message routed from one key through Fabric to SMS or email, then delivered">
-            <defs>
-              <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0l10 5-10 5z" fill="var(--border-strong)"/></marker>
-            </defs>
-            <!-- connectors -->
-            <path id="p1" class="wire" d="M215 150 H360" />
-            <path id="p2" class="wire" d="M540 150 C610 150 610 78 690 78" />
-            <path id="p3" class="wire" d="M540 150 C610 150 610 222 690 222" marker-end="url(#ah)" />
-            <path class="wire" d="M360 150 H540" marker-end="url(#ah)" opacity="0"/>
-            <!-- traveling packets -->
-            <circle class="pkt pkt-sms" r="5"><animateMotion dur="2.4s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1" calcMode="linear"><mpath href="#p1"/></animateMotion></circle>
-            <circle class="pkt pkt-sms" r="5"><animateMotion dur="2.4s" begin="0.6s" repeatCount="indefinite"><mpath href="#p2"/></animateMotion></circle>
-            <circle class="pkt pkt-email" r="5"><animateMotion dur="2.4s" begin="1.4s" repeatCount="indefinite"><mpath href="#p3"/></animateMotion></circle>
-            <!-- key node -->
-            <g class="node">
-              <rect x="40" y="120" width="175" height="60" rx="0" class="n-card"/>
-              <text x="60" y="146" class="n-mono">messages.send(</text>
-              <text x="60" y="166" class="n-str">"order.shipped"</text>
-            </g>
-            <!-- fabric hub -->
-            <g class="node hub">
-              <rect x="360" y="112" width="180" height="76" class="n-hub"/>
-              <g transform="translate(384,132)" stroke-width="2.4" fill="none" stroke-linecap="square">
-                <path d="M4 2v28M14 2v28M24 2v28" stroke="#fff"/><path d="M0 8h28M0 24h28" stroke="#fff"/><path d="M0 16h28" stroke="var(--gold)"/>
-              </g>
-              <text x="430" y="156" class="n-hubtext">Fabric</text>
-            </g>
-            <!-- SMS endpoint -->
-            <g class="node ep">
-              <rect x="690" y="48" width="170" height="60" class="n-card ep-sms"/>
-              <circle cx="716" cy="78" r="12" class="ep-ic-sms"/>
-              <text x="738" y="74" class="n-label">SMS</text>
-              <text x="738" y="92" class="n-ok">✓ delivered</text>
-            </g>
-            <!-- Email endpoint -->
-            <g class="node ep">
-              <rect x="690" y="192" width="170" height="60" class="n-card ep-email"/>
-              <circle cx="716" cy="222" r="12" class="ep-ic-email"/>
-              <text x="738" y="218" class="n-label">Email</text>
-              <text x="738" y="236" class="n-ok">✓ delivered</text>
-            </g>
-          </svg>
-        </div>
+        <p class="num center">How it works</p>
+        <h2 class="center">One name in. SMS or email out.</h2>
+        <figure class="dispatch-illustration">
+          <img
+            src="/images/fabric-message-dispatch.webp"
+            width="1600"
+            height="640"
+            loading="lazy"
+            decoding="async"
+            alt="A developer sends one request through Fabric, which dispatches an SMS to a phone and an email to a laptop."
+          />
+          <span class="dispatch-packet packet-sms" aria-hidden="true"></span>
+          <span class="dispatch-packet packet-email" aria-hidden="true"></span>
+          <span class="arrival-pulse arrival-sms" aria-hidden="true"></span>
+          <span class="arrival-pulse arrival-email" aria-hidden="true"></span>
+        </figure>
       </section>
 
       <section class="feat">
         <div class="feat-copy">
-          <p class="num">01 · Managed messaging</p>
-          <h2>Author once. Send by <span class="a-violet">key</span>.</h2>
-          <p>Define a message with variables, version it, publish. Your code sends by a stable key — SMS or email is a property of the definition, not a rewrite. Preview the exact render and price first.</p>
-          <ul class="pills"><li class="pv">Versioned</li><li class="pb">Deterministic preview</li><li class="pg">Locale variants</li></ul>
+          <p class="num">01 · Templates</p>
+          <h2>Write once. Send by <span class="hl">name</span>.</h2>
+          <p>Create a message with a few blanks to fill in, then send it from your code by its name. Changing the wording — or switching from SMS to email — never touches your code. You see the exact message and price before it goes out.</p>
+          <ul class="pills"><li>Version history</li><li>Preview before send</li><li>Multiple languages</li></ul>
         </div>
         <div class="def-card">
-          <div class="def-head"><span class="badge b-sms">SMS</span><span class="log-key">order.shipped</span><span class="chip ok">v3 · released</span></div>
+          <div class="def-head"><span class="badge b-sms">SMS</span><span class="log-key">order.shipped</span><span class="chip ok">v3 · live</span></div>
           <div class="def-body">Hi <span class="tok">{'{{'}name{'}}'}</span>, order <span class="tok">{'{{'}ref{'}}'}</span> shipped.</div>
-          <div class="def-meta"><span>GSM-7</span><span>1 segment</span><span class="cost">GHS 0.03</span></div>
+          <div class="def-meta"><span>1 text</span><span class="cost">GHS 0.03</span></div>
         </div>
       </section>
 
       <section class="feat rev">
         <div class="feat-copy">
-          <p class="num">02 · Sandbox-first</p>
-          <h2>Ship before you <span class="a-green">fund</span>.</h2>
-          <p>A test key sends against fakes — no wallet balance, no sender-ID approval to start. Watch deliveries, costs, and webhooks stream into the dashboard, then flip to live with the same code.</p>
-          <ul class="pills"><li class="pg">No funding to test</li><li class="pb">Virtual inbox</li><li class="pv">Same code live</li></ul>
+          <p class="num">02 · Sandbox</p>
+          <h2>Try it before you <span class="hl">pay</span>.</h2>
+          <p>A test key sends to a safe fake — no balance to top up, no approvals to wait for. Watch messages, costs, and delivery updates show up in your dashboard, then switch to live with the exact same code.</p>
+          <ul class="pills"><li>No money to test</li><li>Test inbox</li><li>Same code live</li></ul>
         </div>
-        <div class="editor">
+        <div class="editor demo">
           <div class="ed-bar"><span class="d r"></span><span class="d y"></span><span class="d g"></span><em>quickstart.sh</em></div>
-          <pre><code set:html={qsCode} /></pre>
+          <pre><code class="demo-type" set:html={qsCode} /><span class="cursor" aria-hidden="true"></span></pre>
         </div>
       </section>
 
       <section class="feat">
         <div class="feat-copy">
-          <p class="num">03 · Money you can read</p>
-          <h2>Every send, on a real <span class="a-green">ledger</span>.</h2>
-          <p>Managed sends reserve then settle on a double-entry wallet — balance, reservation, and exact per-message cost, in the dashboard and the API. No black-box credits.</p>
-          <ul class="pills"><li class="pg">Reserve → settle</li><li class="pb">Idempotent refunds</li><li class="pv">Per-message cost</li></ul>
+          <p class="num">03 · Costs</p>
+          <h2>See what every message <span class="hl">costs</span>.</h2>
+          <p>Each send shows what it set aside and what it finally cost — your balance and every charge, in the dashboard and the API. Nothing hidden, nothing rounded away.</p>
+          <ul class="pills"><li>Held, then charged</li><li>Refunds handled</li><li>Cost per message</li></ul>
         </div>
         <div class="wallet-card">
           <div class="wallet-top"><span>Wallet · GHS</span><strong>2,418.50</strong></div>
-          <div class="ledger"><span>reserve · order.shipped</span><span class="deb">−0.03</span></div>
-          <div class="ledger"><span>settle · order.shipped</span><span class="deb">−0.03</span></div>
-          <div class="ledger"><span>topup · paystack</span><span class="cred">+500.00</span></div>
+          <div class="ledger"><span>hold · order.shipped</span><span class="deb">−0.03</span></div>
+          <div class="ledger"><span>charge · order.shipped</span><span class="deb">−0.03</span></div>
+          <div class="ledger"><span>top-up · card</span><span class="cred">+500.00</span></div>
         </div>
       </section>
 
@@ -195,11 +162,11 @@ const icon = (k: string): string => ({
         <h2 class="center">Everything, one contract.</h2>
         <div class="pgrid">
           {grid.map((g) => (
-            <article class={`pcard c-${g.c}`}>
+            <a class={`pcard c-${g.c}`} href={g.href}>
               <span class="pic-wrap"><svg class="pic" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" set:html={icon(g.k)} /></span>
-              <h3>{g.t}</h3>
+              <h3>{g.t}<span class="parr" aria-hidden="true">→</span></h3>
               <p>{g.d}</p>
-            </article>
+            </a>
           ))}
         </div>
       </section>
@@ -207,21 +174,33 @@ const icon = (k: string): string => ({
       <section class="coverage" id="coverage">
         <div class="cov-copy">
           <p class="num">Coverage</p>
-          <h2>Deep where it's <span class="a-email">hard</span>.</h2>
-          <p>Developer-first for everywhere, with real depth where messaging is genuinely hard — Ghana and Nigeria first. Sender-ID guidance with per-country timelines, transparent per-network pricing in local currency, and honest delivery-report semantics.</p>
-          <div class="actions"><a class="btn btn-line" href="/docs/messaging">Coverage &amp; sender IDs →</a></div>
+          <h2>Strongest where it's <span class="hl">hardest</span>.</h2>
+          <p>Built for developers everywhere, with real depth where messaging is genuinely hard — Ghana and Nigeria first. Clear help getting your sender name approved, honest pricing in local currency, and straight answers on what "delivered" really means.</p>
+          <div class="actions"><a class="btn btn-line" href="/docs/messaging">Coverage &amp; sender names →</a></div>
         </div>
+        <figure class="coverage-visual">
+          <img
+            src="/images/fabric-connected-people.webp"
+            width="900"
+            height="648"
+            loading="lazy"
+            decoding="async"
+            alt="Three people coordinate through a phone, laptop, and delivered message."
+          />
+          <span class="coverage-signal signal-message" aria-hidden="true"></span>
+          <span class="coverage-signal signal-delivered" aria-hidden="true"></span>
+        </figure>
         <div class="cov-stats">
-          <div class="stat s1"><strong>GHS · NGN</strong><span>local-currency pricing</span></div>
-          <div class="stat s2"><strong>&lt; 3 steps</strong><span>sandbox to first send</span></div>
-          <div class="stat s3"><strong>GH · NG</strong><span>sender-ID guidance</span></div>
-          <div class="stat s4"><strong>1 API</strong><span>SMS + email + defs</span></div>
+          <div class="stat"><strong>GHS · NGN</strong><span>prices in your currency</span></div>
+          <div class="stat"><strong>&lt; 3 steps</strong><span>from sign-up to first send</span></div>
+          <div class="stat"><strong>GH · NG</strong><span>sender-name help</span></div>
+          <div class="stat"><strong>1 API</strong><span>SMS, email & templates</span></div>
         </div>
       </section>
 
       <section class="cta">
         <h2>Send your first message today.</h2>
-        <p>Create a workspace, grab a test key, and send in the sandbox in minutes.</p>
+        <p>Create an account, grab a test key, and send in the sandbox in minutes.</p>
         <div class="actions"><a class="btn btn-primary" href={`${APP_URL}/signup`}>Start free</a><a class="btn btn-line" href="/docs">Read the docs →</a></div>
       </section>
 
@@ -232,124 +211,129 @@ const icon = (k: string): string => ({
     </main>
 
     <style>
-      /* colour palette (accents beyond brand indigo/gold) */
-      :root { --sms: #383a96; --email: #0d9488; --violet: #7c3aed; --blue: #2563eb; --green: #16a34a; --amber: #d97706; --ok: #16a34a; --border-strong: #c3c8d4; }
+      /* colour system — two channel hues + status + neutrals. No decorative rainbow. */
+      :root { --sms: var(--primary); --email: #0d9488; --ok: #16a34a; --warn: #d97706; }
       body { background: var(--background); }
       .shell { color: var(--foreground); background-image: radial-gradient(color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px); background-size: 26px 26px; background-position: -13px -13px; }
       .hdr, .hero, .flow, .feat, .products, .coverage, .cta, .ftr { margin-inline: auto; width: min(100% - 2rem, 74rem); }
+      .skip-link { position: fixed; z-index: 100; inset: 0 auto auto 1rem; transform: translateY(-120%); padding: 0.7rem 1rem; background: var(--primary); color: var(--primary-foreground); font-weight: 600; text-decoration: none; }
+      .skip-link:focus { transform: translateY(0.75rem); }
 
-      .hdr { display: flex; align-items: center; justify-content: space-between; padding-block: 1.3rem; }
-      .brand { display: inline-flex; align-items: center; gap: 0.55rem; color: var(--foreground); font-family: var(--font-display); font-weight: 700; font-size: 1.25rem; letter-spacing: -0.01em; text-decoration: none; }
+      .hdr { position: relative; display: flex; align-items: center; justify-content: space-between; padding-block: 1.3rem; }
+      .brand { display: inline-flex; align-items: center; gap: 0.55rem; color: var(--foreground); font-family: var(--font-display); font-weight: 700; font-size: 1.25rem; letter-spacing: 0; text-decoration: none; }
       .nav { display: flex; align-items: center; gap: 1.4rem; }
       .nav a { color: var(--muted-foreground); font-size: 0.9375rem; text-decoration: none; }
       .nav a:hover { color: var(--foreground); }
+      .mobile-nav { display: none; }
+      .mobile-nav summary { cursor: pointer; color: var(--foreground); font-weight: 600; font-size: 0.9rem; list-style: none; }
+      .mobile-nav summary::-webkit-details-marker { display: none; }
+      .mobile-nav nav { position: absolute; z-index: 20; inset: calc(100% - 0.6rem) 0 auto; display: grid; padding: 0.6rem; border: 1px solid var(--border); background: var(--card); box-shadow: 0 18px 35px -25px rgba(20,20,32,.5); }
+      .mobile-nav nav a:not(.btn) { padding: 0.8rem; color: var(--foreground); text-decoration: none; }
+      .mobile-nav .btn { margin-top: 0.4rem; }
       .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 2.85rem; padding-inline: 1.35rem; font-weight: 600; font-size: 0.95rem; text-decoration: none; border: 1px solid transparent; transition: transform .05s, filter .15s, border-color .15s, color .15s; }
       .btn:active { transform: translateY(1px); }
       .btn-sm { min-height: 2.3rem; padding-inline: 1rem; font-size: 0.875rem; }
-      .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+      .btn-primary { background: var(--primary); color: #fff; }
       .btn-primary:hover { filter: brightness(1.1); }
       .btn-line { background: var(--card); color: var(--foreground); border-color: var(--border); }
       .btn-line:hover { border-color: var(--primary); color: var(--primary); }
 
       .hero { display: grid; gap: 3rem; align-items: center; padding-block: clamp(3rem,7vh,5.5rem) 3.5rem; }
       @media (min-width: 64rem) { .hero { grid-template-columns: 1.02fr 0.98fr; } }
-      .eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0; color: var(--gold-ink); font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500; letter-spacing: 0.14em; }
-      .eyebrow .dot { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--gold); }
-      h1 { margin: 1rem 0 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(2.7rem,6vw,4.8rem); line-height: 0.98; letter-spacing: -0.03em; }
-      .a-sms { color: var(--sms); } .a-email { color: var(--email); } .a-violet { color: var(--violet); } .a-green { color: var(--green); } .a-blue { color: var(--blue); }
+      h1 { margin: 1rem 0 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(2.7rem,6vw,4.8rem); line-height: 0.98; letter-spacing: 0; }
+      .hl { color: var(--primary); }
       .lede { margin: 1.3rem 0 0; max-width: 32rem; color: var(--muted-foreground); font-size: 1.12rem; line-height: 1.6; }
       .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2rem; }
       .trust { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1.5rem 0 0; padding: 0; list-style: none; }
       .trust li { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted-foreground); font-size: 0.85rem; }
 
-      /* editor code panels — dark, vibrant syntax */
-      .hero-visual { display: grid; gap: 1rem; }
+      /* editor code panels — dark, vibrant syntax (the one place code colour lives) */
       .editor { background: #15151f; border: 1px solid #2a2b3d; box-shadow: 0 26px 60px -38px rgba(20,20,32,.6); overflow: hidden; }
       .ed-bar { display: flex; align-items: center; gap: 0.45rem; padding: 0.6rem 0.9rem; background: #1c1d29; border-bottom: 1px solid #2a2b3d; }
       .ed-bar .d { width: 0.62rem; height: 0.62rem; border-radius: 50%; } .ed-bar .r { background: #ff5f57; } .ed-bar .y { background: #febc2e; } .ed-bar .g { background: #28c840; }
       .ed-bar em { margin-left: auto; font-family: var(--font-mono); font-style: normal; font-size: 0.72rem; color: #6b6f8c; }
       .editor pre { margin: 0; padding: 1.05rem 1.2rem; overflow-x: auto; }
       .editor code { font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.75; color: #cdd0e5; white-space: pre; }
+      /* Looping demo editor: fixed height = the finished 8-line snippet, so typing/clearing never shifts the page. */
+      .editor.demo pre { height: 13.6rem; }
+      .cursor { display: inline-block; width: 0.5rem; height: 1.05rem; margin-left: 0.1rem; background: #a9abec; vertical-align: -0.18rem; opacity: 0; }
+      .cursor.on { opacity: 1; animation: blink 0.8s steps(1) infinite; }
+      @keyframes blink { 50% { opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) { .cursor { display: none; } }
       /* set:html spans are unscoped — target them globally within the scoped .editor */
       .editor :global(.k) { color: #c792ea; } .editor :global(.s) { color: #7ee787; } .editor :global(.f) { color: #61afef; } .editor :global(.n) { color: #f0a45d; } .editor :global(.p) { color: #e5c07b; } .editor :global(.c) { color: #6b7089; font-style: italic; }
 
-      /* deliveries log artifact */
-      .logcard { background: var(--card); border: 1px solid var(--border); padding: 0.9rem; display: grid; gap: 0.55rem; box-shadow: 0 20px 50px -40px rgba(26,27,46,.5); }
-      .log-head { display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; color: var(--muted-foreground); }
-      .live { display: inline-flex; align-items: center; gap: 0.35rem; font-style: normal; color: var(--green); }
-      .live span { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; animation: pulse 1.6s ease-in-out infinite; }
-      .log-row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 0.6rem; padding: 0.55rem 0.6rem; background: var(--background); border: 1px solid var(--border); font-size: 0.82rem; }
-      .log-row.new { animation: slidein .6s ease .3s both; }
       .badge { font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.18rem 0.42rem; }
-      .b-sms { color: #fff; background: var(--sms); } .b-email { color: #fff; background: var(--email); }
+      .b-sms { color: #fff; background: var(--sms); }
       .log-key { font-family: var(--font-mono); color: var(--foreground); }
       .chip { font-size: 0.72rem; padding: 0.15rem 0.45rem; font-weight: 500; }
-      .chip.ok { color: #fff; background: var(--green); } .chip.send { color: #fff; background: var(--amber); }
+      .chip.ok { color: #fff; background: var(--ok); }
       .cost { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted-foreground); }
 
       /* animated flow illustration */
-      .flow { padding-block: 4rem; }
+      .flow { padding-block: 5rem; }
       .num { margin: 0; color: var(--gold-ink); font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; }
       .num.center, h2.center { text-align: center; }
-      .flow h2, .feat-copy h2, .products h2, .coverage h2, .cta h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.02em; }
+      .flow h2, .feat-copy h2, .products h2, .coverage h2, .cta h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: 0; }
       .flow h2 { margin: 0.6rem 0 2rem; font-size: clamp(1.8rem,3.4vw,2.6rem); }
-      .flow-wrap { border: 1px solid var(--border); background: var(--card); padding: 1.5rem; }
-      .flowsvg { width: 100%; height: auto; }
-      .wire { fill: none; stroke: var(--border-strong); stroke-width: 2; stroke-dasharray: 5 6; }
-      .pkt-sms { fill: var(--sms); } .pkt-email { fill: var(--email); }
-      .n-card { fill: var(--background); stroke: var(--border-strong); stroke-width: 1.5; }
-      .n-hub { fill: var(--primary); }
-      .n-mono, .n-str, .n-label, .n-ok, .n-hubtext { font-family: var(--font-mono); font-size: 12px; }
-      .n-mono { fill: var(--muted-foreground); } .n-str { fill: var(--gold-ink); }
-      .n-hubtext { font-family: var(--font-display); font-weight: 700; font-size: 15px; fill: #fff; }
-      .n-label { fill: var(--foreground); font-weight: 600; } .n-ok { fill: var(--green); font-size: 11px; }
-      .ep-sms { stroke: var(--sms); } .ep-email { stroke: var(--email); }
-      .ep-ic-sms { fill: color-mix(in oklab, var(--sms) 16%, transparent); stroke: var(--sms); } .ep-ic-email { fill: color-mix(in oklab, var(--email) 16%, transparent); stroke: var(--email); }
-      .hub rect { animation: glow 2.4s ease-in-out infinite; }
+      .dispatch-illustration { position: relative; margin: 1.5rem 0 0; overflow: hidden; aspect-ratio: 5 / 2; }
+      .dispatch-illustration img { display: block; width: 100%; height: 100%; object-fit: cover; }
+      .dispatch-packet { position: absolute; z-index: 2; left: 51%; width: 0.62rem; height: 0.62rem; border-radius: 50%; opacity: 0; box-shadow: 0 0 0 4px color-mix(in oklab, currentColor 16%, transparent); }
+      .packet-sms { top: 27%; color: var(--sms); background: currentColor; animation: dispatchSms 3.4s ease-in-out infinite; }
+      .packet-email { top: 69%; color: var(--email); background: currentColor; animation: dispatchEmail 3.4s ease-in-out 1.15s infinite; }
+      .arrival-pulse { position: absolute; z-index: 2; left: 76.3%; width: 1.8rem; height: 1.8rem; border: 2px solid var(--ok); border-radius: 50%; opacity: 0; transform: translate(-50%,-50%); }
+      .arrival-sms { top: 27%; animation: arrivalPulse 3.4s ease-out .8s infinite; }
+      .arrival-email { top: 69%; animation: arrivalPulse 3.4s ease-out 1.95s infinite; }
 
       /* feature rows */
-      .feat { display: grid; gap: 2.5rem; align-items: center; padding-block: 3.5rem; }
+      .feat { display: grid; gap: 2.5rem; align-items: center; padding-block: 4.75rem; }
       @media (min-width: 62rem) { .feat { grid-template-columns: 1fr 1fr; } .feat.rev .feat-copy { order: 2; } }
       .feat-copy h2 { margin: 0.6rem 0 0; font-size: clamp(1.9rem,3.6vw,2.8rem); line-height: 1.05; }
       .feat-copy > p { margin: 1rem 0 0; color: var(--muted-foreground); line-height: 1.6; }
       .pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1.4rem 0 0; padding: 0; list-style: none; }
-      .pills li { font-size: 0.82rem; padding: 0.3rem 0.6rem; border: 1px solid; }
-      .pv { color: var(--violet); border-color: color-mix(in oklab, var(--violet) 40%, transparent); background: color-mix(in oklab, var(--violet) 8%, transparent); }
-      .pb { color: var(--blue); border-color: color-mix(in oklab, var(--blue) 40%, transparent); background: color-mix(in oklab, var(--blue) 8%, transparent); }
-      .pg { color: var(--green); border-color: color-mix(in oklab, var(--green) 40%, transparent); background: color-mix(in oklab, var(--green) 8%, transparent); }
+      .pills li { font-size: 0.82rem; padding: 0.3rem 0.6rem; border: 1px solid var(--border); background: var(--card); color: var(--muted-foreground); }
       .def-card, .wallet-card { background: var(--card); border: 1px solid var(--border); padding: 0.9rem; display: grid; gap: 0.55rem; box-shadow: 0 20px 50px -40px rgba(26,27,46,.5); }
       .def-head { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; }
       .def-body { padding: 0.8rem 0.7rem; background: var(--background); border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; }
-      .def-body .tok { color: var(--violet); background: color-mix(in oklab, var(--violet) 10%, transparent); padding: 0 0.15rem; }
+      .def-body .tok { color: var(--primary); background: color-mix(in oklab, var(--primary) 10%, transparent); padding: 0 0.15rem; }
       .def-meta { display: flex; gap: 0.8rem; font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted-foreground); }
       .wallet-top { display: flex; align-items: baseline; justify-content: space-between; }
       .wallet-top strong { font-family: var(--font-mono); font-size: 1.4rem; }
       .ledger { display: flex; justify-content: space-between; padding: 0.5rem 0.6rem; background: var(--background); border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted-foreground); }
-      .deb { color: var(--foreground); } .cred { color: var(--green); }
+      .deb { color: var(--foreground); } .cred { color: var(--ok); }
 
-      /* product grid — colourful icon tiles */
-      .products { padding-block: 4rem; }
+
+      /* product grid — neutral tiles; SMS/Email carry channel colour, the rest brand indigo */
+      .products { padding-block: 5.25rem; }
       .products h2 { margin: 0.6rem 0 0; font-size: clamp(1.9rem,3.6vw,2.8rem); }
       .pgrid { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); margin-top: 2.5rem; }
       @media (min-width: 40rem) { .pgrid { grid-template-columns: repeat(2,1fr); } }
       @media (min-width: 60rem) { .pgrid { grid-template-columns: repeat(3,1fr); } }
-      .pcard { background: var(--card); padding: 1.7rem 1.5rem; transition: background .15s; }
+      .pcard { display: block; background: var(--card); padding: 1.7rem 1.5rem; color: inherit; text-decoration: none; transition: background .15s; }
       .pcard:hover { background: color-mix(in oklab, var(--c) 6%, var(--card)); }
+      .pcard:focus-visible { outline: 2px solid var(--c); outline-offset: -2px; }
       .pic-wrap { display: inline-grid; place-items: center; width: 2.6rem; height: 2.6rem; margin-bottom: 0.9rem; background: color-mix(in oklab, var(--c) 12%, transparent); }
       .pic { stroke: var(--c); }
-      .c-sms { --c: var(--sms); } .c-email { --c: var(--email); } .c-violet { --c: var(--violet); } .c-blue { --c: var(--blue); } .c-green { --c: var(--green); } .c-amber { --c: var(--amber); }
-      .pcard h3 { margin: 0 0 0.4rem; font-family: var(--font-display); font-size: 1.1rem; } .pcard p { margin: 0; color: var(--muted-foreground); font-size: 0.92rem; line-height: 1.55; }
+      .c-sms { --c: var(--sms); } .c-email { --c: var(--email); } .c-brand { --c: var(--primary); }
+      .pcard h3 { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.4rem; font-family: var(--font-display); font-size: 1.1rem; } .pcard p { margin: 0; color: var(--muted-foreground); font-size: 0.92rem; line-height: 1.55; }
+      /* arrow appears + slides on hover/focus — the clickable affordance */
+      .parr { color: var(--c); opacity: 0; transform: translateX(-0.25rem); transition: opacity .15s, transform .15s; }
+      .pcard:hover .parr, .pcard:focus-visible .parr { opacity: 1; transform: none; }
 
-      /* coverage — colourful stat tiles */
-      .coverage { display: grid; gap: 2.5rem; align-items: center; padding-block: 4rem; }
-      @media (min-width: 62rem) { .coverage { grid-template-columns: 1fr 1fr; } }
+      /* coverage — neutral stat tiles, one brand accent rule */
+      .coverage { display: grid; gap: 2.5rem; align-items: center; padding-block: 5.25rem; }
       .cov-copy h2 { margin: 0.6rem 0 0; font-size: clamp(1.9rem,3.6vw,2.8rem); } .cov-copy > p { margin: 1rem 0 1.5rem; color: var(--muted-foreground); line-height: 1.6; }
+      .coverage-visual { position: relative; width: min(100%,34rem); margin: 0 auto; }
+      .coverage-visual img { display: block; width: 100%; height: auto; }
+      .coverage-signal { position: absolute; width: 2rem; height: 2rem; border: 2px solid var(--email); border-radius: 50%; opacity: 0; transform: translate(-50%,-50%); animation: arrivalPulse 3.2s ease-out infinite; }
+      .signal-message { left: 31%; top: 18%; }
+      .signal-delivered { left: 63%; top: 18%; border-color: var(--ok); animation-delay: 1.4s; }
       .cov-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); }
-      .stat { background: var(--card); padding: 1.4rem; border-top: 3px solid; }
-      .stat.s1 { border-color: var(--sms); } .stat.s2 { border-color: var(--green); } .stat.s3 { border-color: var(--amber); } .stat.s4 { border-color: var(--blue); }
-      .stat strong { display: block; font-family: var(--font-display); font-size: 1.5rem; letter-spacing: -0.01em; } .stat span { color: var(--muted-foreground); font-size: 0.85rem; }
+      .stat { background: var(--card); padding: 1.4rem; border-top: 3px solid var(--primary); }
+      .stat strong { display: block; font-family: var(--font-display); font-size: 1.5rem; letter-spacing: 0; } .stat span { color: var(--muted-foreground); font-size: 0.85rem; }
+      @media (min-width: 62rem) { .coverage { grid-template-columns: .9fr 1.1fr; } .cov-stats { grid-column: 1 / -1; grid-template-columns: repeat(4,1fr); } }
 
-      .cta { text-align: center; padding-block: 5rem; } .cta h2 { margin: 0; font-size: clamp(2.1rem,4.4vw,3.2rem); } .cta p { margin: 0.8rem 0 0; color: var(--muted-foreground); } .cta .actions { justify-content: center; }
+      .cta { text-align: center; padding-block: 6.5rem; } .cta h2 { margin: 0; font-size: clamp(2.1rem,4.4vw,3.2rem); } .cta p { margin: 0.8rem 0 0; color: var(--muted-foreground); } .cta .actions { justify-content: center; }
       .ftr { display: flex; align-items: center; justify-content: space-between; padding-block: 2.2rem; border-top: 1px solid var(--border); color: var(--muted-foreground); }
       .brand-sm { font-family: var(--font-display); font-weight: 700; color: var(--foreground); } .ftr nav { display: flex; gap: 1.3rem; } .ftr a { color: inherit; text-decoration: none; font-size: 0.9rem; } .ftr a:hover { color: var(--foreground); }
 
@@ -357,10 +341,51 @@ const icon = (k: string): string => ({
       .reveal { opacity: 0; transform: translateY(14px); animation: fadeUp .7s cubic-bezier(.2,.7,.2,1) forwards; animation-delay: var(--d,0s); }
       @keyframes fadeUp { to { opacity: 1; transform: none; } }
       @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
-      @keyframes slidein { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
-      @keyframes glow { 0%,100% { filter: none; } 50% { filter: brightness(1.15); } }
-      @media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } .live span, .hub rect, .log-row.new { animation: none; } .pkt { display: none; } }
-      @media (max-width: 42rem) { .hdr { flex-wrap: wrap; gap: 0.7rem; } .nav { gap: 1rem; } .cov-stats { grid-template-columns: 1fr; } }
+      @keyframes dispatchSms { 0%,8% { left: 51%; opacity: 0; } 16% { opacity: 1; } 68% { left: 76%; opacity: 1; } 78%,100% { left: 78%; opacity: 0; } }
+      @keyframes dispatchEmail { 0%,8% { left: 51%; opacity: 0; } 16% { opacity: 1; } 68% { left: 75%; opacity: 1; } 78%,100% { left: 77%; opacity: 0; } }
+      @keyframes arrivalPulse { 0%,60% { opacity: 0; transform: translate(-50%,-50%) scale(.4); } 68% { opacity: .8; } 90%,100% { opacity: 0; transform: translate(-50%,-50%) scale(1.55); } }
+      @keyframes storyPan { 0%,15% { object-position: left center; } 45%,60% { object-position: center; } 85%,100% { object-position: right center; } }
+      @media (max-width: 48rem) { .nav { display: none; } .mobile-nav { display: block; } }
+      @media (max-width: 42rem) { .dispatch-illustration { aspect-ratio: 4 / 3; } .dispatch-illustration img { object-position: left center; animation: storyPan 9s ease-in-out infinite alternate; } .dispatch-packet, .arrival-pulse { display: none; } .cov-stats { grid-template-columns: 1fr; } .ftr { align-items: flex-start; gap: 1rem; } .ftr nav { flex-wrap: wrap; justify-content: flex-end; } }
+      @media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } .dispatch-packet, .arrival-pulse, .coverage-signal, .dispatch-illustration img { animation: none; } .dispatch-packet, .arrival-pulse, .coverage-signal { display: none; } }
+      :is(a, summary):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
     </style>
+
+    <script>
+      // Looping typewriter for the quickstart editor — types the snippet, snaps to the highlighted
+      // markup, holds, then retypes forever. The pre has a fixed height, so nothing reflows.
+      const demoCode = document.querySelector(".editor.demo pre code.demo-type");
+      if (demoCode && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        const rich = demoCode.innerHTML;
+        const raw = demoCode.textContent ?? "";
+        const cursor = demoCode.parentElement?.querySelector(".cursor");
+        const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+        let running = false;
+        const loop = async () => {
+          if (running) return;
+          running = true;
+          // Loop forever; background tabs are throttled by the browser so this stays cheap.
+          for (;;) {
+            demoCode.textContent = "";
+            cursor?.classList.add("on");
+            for (let i = 1; i <= raw.length; i += 1) {
+              demoCode.textContent = raw.slice(0, i);
+              await sleep(raw[i - 1] === "\n" ? 24 : 8);
+            }
+            demoCode.innerHTML = rich;
+            cursor?.classList.remove("on");
+            await sleep(2600);
+          }
+        };
+        const io = new IntersectionObserver(
+          (entries) => {
+            if (entries.some((e) => e.isIntersecting)) void loop();
+          },
+          { threshold: 0.3 },
+        );
+        // Observe the sized editor, not the zero-width <code>.
+        io.observe(demoCode.closest(".editor") ?? demoCode);
+      }
+    </script>
   </body>
 </html>

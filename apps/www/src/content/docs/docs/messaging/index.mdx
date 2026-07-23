@@ -1,6 +1,55 @@
 ---
 title: Messaging
-description: Placeholder messaging docs.
+description: Send versioned message definitions or direct SMS with safe retries.
 ---
 
-Messaging docs will cover SMS, sender IDs, delivery reports, and message definitions.
+Fabric supports two server-side send paths:
+
+- **Managed messages** render a published definition by key. Use these when copy, channel, or locale
+  should change without redeploying application code.
+- **Direct SMS** sends a body and sender name in the request. Use this when the content is already
+  managed by your application.
+
+## Managed message
+
+```ts
+const response = await fabric.messages.send("order.shipped", {
+  to: "+233201234567",
+  data: { name: "Ama", ref: "GH-4821" },
+  reference: "order:GH-4821",
+  idempotencyKey: "order-shipped:GH-4821",
+});
+```
+
+The published definition controls whether the delivery uses SMS or email. Fabric validates required
+variables before reserving wallet funds.
+
+## Direct SMS
+
+```ts
+const response = await fabric.sms.send({
+  to: "+233201234567",
+  senderId: "FABRIC",
+  body: "Your order GH-4821 has shipped.",
+  currency: "GHS",
+  class: "transactional",
+}, {
+  idempotencyKey: "order-shipped:GH-4821",
+});
+```
+
+Phone numbers must use E.164 format. Live sends also require an active sender name for the recipient's
+country. Sandbox sends use the virtual delivery path and do not require carrier approval.
+
+## Delivery states
+
+`queued` → `sending` → `accepted` → `sent` → `delivered`
+
+A delivery can instead become `undelivered`, `failed`, or `expired`. Provider acceptance is not the
+same as handset delivery; consume terminal webhook events and design your workflow for delayed or
+out-of-order updates.
+
+:::tip[Use stable references]
+Set `reference` to your business identifier and `idempotencyKey` to the logical operation. This makes
+support, retries, and reconciliation much easier.
+:::

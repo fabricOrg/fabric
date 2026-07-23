@@ -1,6 +1,70 @@
 ---
-title: Working quickstart
-description: Placeholder quickstart page.
+title: Send a message with Node.js
+description: Install the Fabric SDK and complete a safe sandbox send.
 ---
 
-This working stub confirms that nested quickstart docs build under `/docs/quickstarts/`.
+import { Steps } from "@astrojs/starlight/components";
+
+This quickstart sends a published message definition through the sandbox. It runs only on a trusted
+server because the SDK contains your secret API key.
+
+<Steps>
+1. **Install the SDK**
+
+   ```bash
+   npm install @fabric-messaging/sdk
+   ```
+
+2. **Store your sandbox key**
+
+   ```bash title=".env"
+   FABRIC_API_KEY=sk_test_replace_with_your_key
+   ```
+
+   Load this value with your framework's server-side environment configuration. Do not prefix it
+   with `PUBLIC_` or expose it to client bundles.
+
+3. **Send by definition key**
+
+   ```ts title="send.ts"
+   import { Fabric } from "@fabric-messaging/sdk";
+
+   const apiKey = process.env.FABRIC_API_KEY;
+   if (!apiKey) {
+     throw new Error("FABRIC_API_KEY is required");
+   }
+
+   const fabric = new Fabric({ apiKey });
+
+   const response = await fabric.messages.send("welcome.otp", {
+     to: "+233201234567",
+     data: {
+       name: "Ama",
+       code: "401922",
+     },
+     reference: "signin:customer-4821",
+     idempotencyKey: "otp:customer-4821:attempt-1",
+   });
+
+   console.log(response.data.id, response.data.status, response.data.cost);
+   ```
+
+4. **Run it**
+
+   ```bash
+   node --env-file=.env send.ts
+   ```
+</Steps>
+
+In sandbox, the recipient is virtual and the delivery resolves without contacting a carrier. Open
+the dashboard and confirm that the delivery, rendered content, and cost match the response.
+
+## Retry safely
+
+Keep the same `idempotencyKey` when retrying the same logical send. Fabric returns the original
+result instead of creating a second delivery. Use a new key only when you intend to send again.
+
+:::caution[Do not guess delivery from the request]
+An accepted API response means Fabric owns the work. Use a signed webhook event to determine the
+terminal delivery state in production.
+:::

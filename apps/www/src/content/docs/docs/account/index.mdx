@@ -1,6 +1,42 @@
 ---
-title: Account
-description: Placeholder account docs.
+title: Account & wallet
+description: Manage applications, environments, keys, wallet funds, and live access.
 ---
 
-Account docs will cover wallet and billing, rate limits, going live, and compliance.
+## Applications and environments
+
+Create a separate Fabric application for each independently deployed integration. Sandbox and live
+are isolated inside the application, including API keys, activity, and webhook endpoints.
+
+## API keys
+
+- Give each deployment its own key so it can be revoked without affecting another service.
+- Grant only the scopes the service needs.
+- Store keys in a secret manager and show only their prefix in logs or support messages.
+- Rotate immediately after suspected exposure.
+
+## Wallet
+
+Fabric represents money as integer minor units. The SDK returns string values so JavaScript never
+rounds a balance or message cost.
+
+```ts
+const wallet = await fabric.wallet.retrieve();
+const ghs = wallet.data.balances.find(
+  ({ balance }) => balance.currency === "GHS",
+);
+console.log(ghs?.balance.minor, ghs?.balance.currency);
+```
+
+Live message sends fail closed when funds cannot be reserved. Sandbox sends do not consume real
+wallet funds.
+
+## Going live
+
+Before using an `sk_live_` key:
+
+1. Complete the required workspace and sender-name review.
+2. Configure and verify live email domains or SMS sender names.
+3. Fund the correct currency wallet.
+4. Create a live webhook endpoint and store its signing secret.
+5. Run a controlled send to a consenting recipient and reconcile the delivery with its wallet entry.

@@ -1,6 +1,36 @@
 ---
 title: Guides
-description: Placeholder guides docs.
+description: Production patterns for verification, retries, delivery, and reconciliation.
 ---
 
-Guides will cover OTP, transactional messaging, broadcasts, and two-way workflows.
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+<CardGrid>
+  <Card title="One-time verification" icon="lock">
+    Start a verification with `fabric.verify.start()`, then check the submitted code with
+    `fabric.verify.check()`. Limit attempts and avoid revealing whether an account exists.
+  </Card>
+  <Card title="Transactional delivery" icon="send">
+    Use a definition key, a business reference, and a stable idempotency key. Advance your workflow
+    from verified webhook events.
+  </Card>
+  <Card title="Batch SMS" icon="list-format">
+    Submit 1–100 items with unique client references and an idempotency key, then retrieve the batch
+    result for per-item outcomes.
+  </Card>
+  <Card title="Reconciliation" icon="chart">
+    Compare your business reference, Fabric delivery id, terminal event, and wallet entry rather than
+    relying on one system in isolation.
+  </Card>
+</CardGrid>
+
+## Production checklist
+
+- Keep `sk_test_` and `sk_live_` keys in separate secret-manager entries.
+- Set a unique idempotency key for every logical write.
+- Verify webhook signatures against the raw request body.
+- Persist event ids and make consumers idempotent.
+- Treat money values as minor-unit strings, never floating-point numbers.
+- Log Fabric request ids and your own business reference, but never message secrets or API keys.
+- Handle rate limits and transient failures with bounded retries and jitter.
+- Test terminal failures, duplicate events, and timeouts before going live.

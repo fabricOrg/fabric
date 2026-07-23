@@ -1,6 +1,52 @@
 ---
-title: Fabric docs
-description: Placeholder docs home for Fabric.
+title: Build with Fabric
+description: Send SMS and email, test safely in the sandbox, and react to delivery events.
 ---
 
-This is a placeholder documentation home for the public Fabric site.
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Fabric gives your server one typed interface for transactional SMS and email. Start with a
+`sk_test_` key, inspect the result in the dashboard, then move the same integration to live when
+your sender and funding are ready.
+
+<CardGrid>
+  <Card title="Sandbox first" icon="rocket">
+    Test sends, costs, and delivery events without using wallet funds or contacting a real recipient.
+  </Card>
+  <Card title="Predictable writes" icon="approve-check">
+    Idempotency keys make retries safe when your application or the network fails halfway through.
+  </Card>
+  <Card title="Delivery you can follow" icon="rss">
+    Signed webhooks report acceptance and terminal delivery states outside the request cycle.
+  </Card>
+</CardGrid>
+
+## Make your first request
+
+<LinkCard
+  title="Node.js quickstart"
+  description="Install the TypeScript SDK and send a sandbox message."
+  href="/docs/quickstarts/working-quickstart/"
+/>
+
+## Choose what to build
+
+<CardGrid>
+  <Card title="Managed messages" icon="document">
+    Publish a versioned message definition, then send it by a stable key such as
+    `order.shipped`. [Learn about messaging](/docs/messaging/).
+  </Card>
+  <Card title="Direct email" icon="email">
+    Send text or HTML email from your server and retrieve the resulting delivery.
+    [Read the email guide](/docs/email/).
+  </Card>
+  <Card title="Webhooks" icon="rss">
+    Verify signatures against the raw request body before processing an event.
+    [Secure your handler](/docs/webhooks/).
+  </Card>
+</CardGrid>
+
+:::caution[Server-side only]
+Fabric secret keys must never be exposed in browser code, mobile apps, public repositories, logs,
+or client-visible environment variables. Call Fabric from a trusted server.
+:::

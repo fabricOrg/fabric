@@ -1,6 +1,54 @@
 ---
 title: Get started
-description: Introductory placeholder for Fabric docs.
+description: Understand keys, environments, message definitions, and delivery before you integrate.
 ---
 
-Start here for Fabric concepts, sandbox keys, and account setup. Real content lands in w-3.
+import { Card, CardGrid, Steps } from "@astrojs/starlight/components";
+
+Fabric is a server-side communications API for SMS and email. The fastest path is to create an
+application, use its sandbox key, and send a published message definition by key.
+
+## Core concepts
+
+<CardGrid>
+  <Card title="Application" icon="puzzle">
+    The boundary that owns API keys, environments, messages, and webhook endpoints.
+  </Card>
+  <Card title="Environment" icon="branch">
+    Every application has isolated sandbox and live activity. A key's prefix selects the environment.
+  </Card>
+  <Card title="Message definition" icon="document">
+    A versioned SMS or email template addressed by a stable key such as `welcome.otp`.
+  </Card>
+  <Card title="Delivery" icon="send">
+    One send attempt, its state, rendered preview, cost, and webhook history.
+  </Card>
+</CardGrid>
+
+## Key prefixes
+
+| Prefix | Environment | Recipients | Wallet |
+| --- | --- | --- | --- |
+| `sk_test_` | Sandbox | Virtual only | No real charge |
+| `sk_live_` | Live | Real provider delivery | Funds required |
+
+The SDK infers the environment from the key prefix. It rejects any other secret-key format before
+making a network request.
+
+## Setup
+
+<Steps>
+1. **Create an application.** In the Fabric dashboard, create the application that will own this
+   integration.
+2. **Create a sandbox key.** Copy it once and store it in your server-side secret manager as
+   `FABRIC_API_KEY`.
+3. **Publish a message definition.** Give it a stable key and add the variables your application
+   will supply.
+4. **Send from your server.** Follow the [Node.js quickstart](/docs/quickstarts/working-quickstart/).
+5. **Add a webhook.** Treat the signed terminal event as the source of truth for delivery.
+</Steps>
+
+:::note[Sandbox and live are isolated]
+Definitions, keys, webhook endpoints, and activity belong to an environment. Test with `sk_test_`
+and deliberately configure the corresponding live resources before switching keys.
+:::

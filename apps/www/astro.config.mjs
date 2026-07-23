@@ -10,6 +10,8 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "Fabric Docs",
+      description:
+        "Build reliable SMS and email workflows with Fabric's API, TypeScript SDK, sandbox, and webhooks.",
       customCss: ["./src/styles/global.css"],
       head: [
         {
@@ -19,43 +21,37 @@ export default defineConfig({
       ],
       sidebar: [
         {
-          label: "Get started",
-          items: [{ slug: "docs/get-started" }],
-        },
-        {
-          label: "Quickstarts",
+          label: "Start",
+          collapsed: false,
           items: [
-            { slug: "docs/quickstarts" },
-            { slug: "docs/quickstarts/working-quickstart" },
+            { label: "Get started", slug: "docs/get-started" },
+            { label: "Quickstarts", slug: "docs/quickstarts" },
+            {
+              label: "Node.js quickstart",
+              slug: "docs/quickstarts/working-quickstart",
+            },
           ],
         },
         {
-          label: "Messaging",
-          items: [{ slug: "docs/messaging" }],
+          label: "Build",
+          collapsed: false,
+          items: [
+            { label: "Messaging", slug: "docs/messaging" },
+            { label: "Email", slug: "docs/email" },
+            { label: "Webhooks", slug: "docs/webhooks" },
+          ],
         },
         {
-          label: "Email",
-          items: [{ slug: "docs/email" }],
+          label: "Resources",
+          items: [
+            { label: "SDKs & tools", slug: "docs/sdks-tools" },
+            { label: "Guides", slug: "docs/guides" },
+            { label: "API reference", slug: "docs/api-reference" },
+          ],
         },
         {
-          label: "Webhooks",
-          items: [{ slug: "docs/webhooks" }],
-        },
-        {
-          label: "SDKs & tools",
-          items: [{ slug: "docs/sdks-tools" }],
-        },
-        {
-          label: "Guides",
-          items: [{ slug: "docs/guides" }],
-        },
-        {
-          label: "API reference",
-          items: [{ slug: "docs/api-reference" }],
-        },
-        {
-          label: "Account",
-          items: [{ slug: "docs/account" }],
+          label: "Platform",
+          items: [{ label: "Account & wallet", slug: "docs/account" }],
         },
       ],
     }),

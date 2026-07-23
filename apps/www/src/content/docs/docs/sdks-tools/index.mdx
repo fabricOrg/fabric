@@ -1,6 +1,49 @@
 ---
 title: SDKs & tools
-description: Placeholder SDKs and tools docs.
+description: Use Fabric's TypeScript SDK and CLI from trusted development environments.
 ---
 
-SDK and tools docs will cover Node, CLI, MCP, OpenAPI, and Postman.
+## TypeScript SDK
+
+The official `@fabric-messaging/sdk` package supports Node.js 22 and later. It is server-only and
+provides resources for managed messages, SMS, email, sender names, verification, wallet reads, and
+webhooks.
+
+```bash
+npm install @fabric-messaging/sdk
+```
+
+```ts
+import {
+  AuthenticationError,
+  Fabric,
+  RateLimitError,
+} from "@fabric-messaging/sdk";
+
+const fabric = new Fabric({
+  apiKey: process.env.FABRIC_API_KEY!,
+  timeout: 10_000,
+  maxRetries: 2,
+});
+```
+
+Catch exported typed errors when your application needs different recovery behavior. Do not branch
+on error-message text.
+
+## CLI
+
+The `@fabric-messaging/cli` validates a local message catalog against the application configured by
+`FABRIC_API_KEY`. It understands `sk_test_` and `sk_live_` environments and can generate the typed
+catalog consumed by the SDK.
+
+```bash
+npx @fabric-messaging/cli check
+```
+
+Run the CLI in a trusted shell or CI job with a scoped key. Never commit the key or generated files
+that contain secret values.
+
+## OpenAPI
+
+The SDK package exports its committed OpenAPI document as
+`@fabric-messaging/sdk/openapi.json` for code generation and inspection.

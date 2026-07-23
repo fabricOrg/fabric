@@ -1,6 +1,22 @@
 ---
 title: Quickstarts
-description: Placeholder quickstarts index.
+description: Pick the shortest supported path to a verified sandbox send.
 ---
 
-Choose a quickstart for Node, Next.js, curl, or the CLI. Real content lands in w-3.
+import { LinkCard } from "@astrojs/starlight/components";
+
+<LinkCard
+  title="Node.js and TypeScript"
+  description="Use the official server-side SDK to send a published definition with a safe retry key."
+  href="/docs/quickstarts/working-quickstart/"
+/>
+
+## Before you begin
+
+You need Node.js 22 or later, a Fabric application, a `sk_test_` secret key, and one published
+message definition. The examples use the definition key `welcome.otp` with `name` and `code`
+variables.
+
+For direct HTTP integrations, use the [API reference](/docs/api-reference/). The SDK remains the
+recommended path because it validates inputs, selects the environment from the key, parses response
+shapes, retries eligible failures, and exposes typed errors.

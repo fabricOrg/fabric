@@ -1,6 +1,47 @@
 ---
 title: Webhooks
-description: Placeholder webhook docs.
+description: Receive delivery events and verify every Fabric signature.
 ---
 
-Webhook docs will cover events, signature verification, retries, and idempotency.
+Fabric delivers webhook events at least once. Your endpoint must verify the signature against the raw
+request body, return a successful response quickly, and process each event idempotently.
+
+## Verify with the SDK
+
+```ts
+import { Fabric } from "@fabric-messaging/sdk";
+
+const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY! });
+
+export async function POST(request: Request) {
+  const payload = await request.text();
+  const event = fabric.webhooks.verify({
+    payload,
+    signature: request.headers.get("fabric-signature") ?? undefined,
+    secret: process.env.FABRIC_WEBHOOK_SECRET!,
+  });
+
+  await processOnce(event.id, event);
+  return new Response("ok", { status: 200 });
+}
+```
+
+Do not parse and re-serialize JSON before verification. Any byte change invalidates the HMAC. The SDK
+also rejects malformed signatures and timestamps outside the default five-minute tolerance.
+
+## Event handling
+
+Known message events include `message.accepted`, `message.delivered`, and terminal failure events.
+Branch on `event.type`, persist the event id before performing side effects, and make repeated
+delivery of the same event a no-op.
+
+## Retries
+
+Return a `2xx` response only after the event is durably accepted. Fabric retries failed deliveries.
+Use the dashboard or SDK delivery list to inspect attempts and replay a dead delivery after fixing
+your endpoint.
+
+:::danger[Secret handling]
+The signing secret is shown when the endpoint is created. Store it in a secret manager, never log it,
+and rotate it if it may have been exposed.
+:::
