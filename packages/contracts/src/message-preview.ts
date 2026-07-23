@@ -20,6 +20,10 @@ export const previewMessageRequest = z.object({
     .regex(/^\+[1-9]\d{7,14}$/, "invalid_e164")
     .optional(),
   locale: localeTag.optional(),
+  // Optional caller assertion of the released definition's channel. When present it must match the
+  // resolved channel (else 400 channel_mismatch); the generated catalog types constrain it per key so
+  // a channel-unsupported call fails to compile (SDK-007 AC04 / inherited SDK-004-AC02).
+  channel: messageChannel.optional(),
 });
 export type PreviewMessageRequest = z.infer<typeof previewMessageRequest>;
 

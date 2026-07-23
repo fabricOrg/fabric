@@ -62,6 +62,7 @@ export class ManagedMessagesService {
         currency: input.request.currency,
         to: input.request.to,
         ...(input.request.locale ? { locale: input.request.locale } : {}),
+        ...(input.request.channel ? { channel: input.request.channel } : {}),
       },
       input.environmentId,
     );

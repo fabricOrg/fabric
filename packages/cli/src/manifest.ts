@@ -57,7 +57,7 @@ const manifestSchema = z
         .object({
           key: z.string().regex(/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/),
           version: z.number().int().positive(),
-          channels: z.tuple([z.literal("sms")]),
+          channels: z.array(z.enum(["sms", "email"])).min(1),
           default_locale: z.string(),
           locales: z.array(z.string()).min(1),
           data_schema: fieldSchema,

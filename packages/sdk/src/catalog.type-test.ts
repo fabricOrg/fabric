@@ -10,6 +10,11 @@ interface CheckoutCatalog extends DefinitionCatalog {
       readonly channels: "sms";
       readonly locales: "en" | "fr";
     };
+    readonly "receipt.emailed": {
+      readonly data: { readonly name: string };
+      readonly channels: "email";
+      readonly locales: "en";
+    };
   };
 }
 
@@ -35,5 +40,29 @@ export function compileCatalogTypes() {
     data: { name: "Ada" },
     // @ts-expect-error Locales are constrained by the released definition.
     locale: "es",
+  });
+
+  // Channel narrowing (SDK-004-AC02 / SDK-007 AC04): each key permits only its released channel.
+  void fabric.messages.preview("order.shipped", {
+    data: { name: "Ada" },
+    channel: "sms",
+  });
+  void fabric.messages.preview("order.shipped", {
+    data: { name: "Ada" },
+    // @ts-expect-error order.shipped is an SMS key — email is not a supported channel.
+    channel: "email",
+  });
+  void fabric.messages.send("receipt.emailed", {
+    to: "ada@example.com",
+    data: { name: "Ada" },
+    idempotencyKey: "r-1",
+    channel: "email",
+  });
+  void fabric.messages.send("receipt.emailed", {
+    to: "ada@example.com",
+    data: { name: "Ada" },
+    idempotencyKey: "r-2",
+    // @ts-expect-error receipt.emailed is an Email key — sms is not a supported channel.
+    channel: "sms",
   });
 }

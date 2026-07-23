@@ -34,6 +34,11 @@ export interface PreviewMessageOptions extends RequestOptions {
   readonly to?: string;
   /** Optional released locale; the definition's default is used when omitted. */
   readonly locale?: string;
+  /**
+   * Optional assertion of the definition's channel. With a generated catalog this is narrowed to the
+   * key's released channel, so a mismatched literal fails to compile; the server rejects a mismatch.
+   */
+  readonly channel?: "sms" | "email";
 }
 
 export interface SendMessageOptions extends IdempotentWriteOptions {
@@ -43,6 +48,11 @@ export interface SendMessageOptions extends IdempotentWriteOptions {
   readonly data?: Record<string, unknown>;
   /** Optional released locale; the definition's default is used when omitted. */
   readonly locale?: string;
+  /**
+   * Optional assertion of the definition's channel. With a generated catalog this is narrowed to the
+   * key's released channel, so a mismatched literal fails to compile; the server rejects a mismatch.
+   */
+  readonly channel?: "sms" | "email";
   /** Pricing currency (ISO-4217). Defaults to GHS server-side. */
   readonly currency?: string;
   /** Caller correlation id surfaced on the delivery. */
@@ -76,6 +86,7 @@ export class MessagesResource<
     const currency = options?.currency;
     const to = options?.to;
     const locale = options?.locale;
+    const channel = options?.channel;
     const requestOptions: RequestOptions = {
       ...(options?.signal ? { signal: options.signal } : {}),
       ...(options?.timeout !== undefined ? { timeout: options.timeout } : {}),
@@ -90,6 +101,7 @@ export class MessagesResource<
         ...(currency ? { currency } : {}),
         ...(to ? { to } : {}),
         ...(locale ? { locale } : {}),
+        ...(channel ? { channel } : {}),
       },
       ...(Object.keys(requestOptions).length > 0
         ? { options: requestOptions }
@@ -116,6 +128,7 @@ export class MessagesResource<
         to: options.to,
         ...(options.data ? { data: options.data } : {}),
         ...(options.locale ? { locale: options.locale } : {}),
+        ...(options.channel ? { channel: options.channel } : {}),
         ...(options.currency ? { currency: options.currency } : {}),
         ...(options.reference ? { reference: options.reference } : {}),
         ...(options.metadata ? { metadata: options.metadata } : {}),

@@ -26,7 +26,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { and, eq, sql } from "drizzle-orm";
 import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
-import { notFound } from "../http/api-error.js";
+import { invalidRequest, notFound } from "../http/api-error.js";
 import { SendersService } from "../senders/senders.service.js";
 import { assessSendCompliance } from "../sms/sms-compliance.js";
 
@@ -128,6 +128,16 @@ export class MessagePreviewService {
         throw notFound(
           "definition_not_released",
           "No released definition with that key in this environment.",
+        );
+      }
+      // An optional caller-asserted channel must match the released definition's channel. The generated
+      // catalog types constrain it per key (SDK-004-AC02 / SDK-007 AC04); this is the runtime backstop
+      // for an untyped caller. Neither side is PII.
+      if (request.channel && request.channel !== released.channel) {
+        throw invalidRequest(
+          "channel_mismatch",
+          "The requested channel does not match the released definition.",
+          "channel",
         );
       }
       const resolvedLocale = request.locale ?? released.locale;

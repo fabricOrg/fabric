@@ -161,6 +161,44 @@ describeDb("SDK-003 MessagePreviewService (no side effects)", () => {
     expect(await sideEffectCounts()).toEqual(before);
   });
 
+  it("400s when the asserted channel mismatches the released definition; matching channel renders — no writes", async () => {
+    const before = await sideEffectCounts();
+    // order.shipped is SMS — asserting email must be rejected.
+    await expect(
+      preview.preview(
+        TENANT,
+        {
+          key: "order.shipped",
+          data: { name: "Ada", count: 2 },
+          channel: "email",
+        },
+        sandboxEnvId,
+      ),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: { code: "channel_mismatch" } },
+    });
+    // order.email is Email — asserting sms must be rejected.
+    await expect(
+      preview.preview(
+        TENANT,
+        { key: "order.email", data: { name: "Ada", count: 2 }, channel: "sms" },
+        sandboxEnvId,
+      ),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { error: { code: "channel_mismatch" } },
+    });
+    // A matching assertion still renders.
+    const ok = await preview.preview(
+      TENANT,
+      { key: "order.email", data: { name: "Ada", count: 2 }, channel: "email" },
+      sandboxEnvId,
+    );
+    expect(ok.channel).toBe("email");
+    expect(await sideEffectCounts()).toEqual(before);
+  });
+
   it("returns path-coded blockers and no preview for an invalid payload — still no writes", async () => {
     const before = await sideEffectCounts();
     const out = await preview.preview(
