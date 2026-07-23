@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { messageStatus } from "./message-status.js";
 
-const emailAddress = z.string().trim().email().max(320);
+export const emailAddress = z.string().trim().email().max(320);
 
 export const sendEmailRequest = z
   .object({

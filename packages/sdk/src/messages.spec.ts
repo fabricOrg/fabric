@@ -1,4 +1,7 @@
-import { sendManagedMessageResponse } from "@app/contracts";
+import {
+  previewMessageResponse,
+  sendManagedMessageResponse,
+} from "@app/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { ValidationError } from "./errors.js";
 import { MessagesResource } from "./messages.js";
@@ -57,6 +60,7 @@ describe("MessagesResource", () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
       new Response(
         JSON.stringify({
+          channel: "sms",
           version_id: "2ccb4b9f-384e-4f4e-8983-ff12555223d0",
           environment: "sandbox",
           resolved_locale: "fr",
@@ -66,6 +70,7 @@ describe("MessagesResource", () => {
           sender: { sender_id: "FABRIC", status: "sandbox" },
           message_class: "transactional",
           preview: null,
+          email_preview: null,
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),
@@ -95,6 +100,75 @@ describe("MessagesResource", () => {
         locale: "fr",
       }),
     );
+  });
+
+  it("maps an email preview through the channel discriminant", async () => {
+    // Round-trip through the canonical contract so the parser stays honest against the wire shape.
+    const payload = previewMessageResponse.parse({
+      channel: "email",
+      version_id: "2ccb4b9f-384e-4f4e-8983-ff12555223d0",
+      environment: "sandbox",
+      resolved_locale: "en",
+      blockers: [],
+      warnings: [],
+      eligible: true,
+      // Email has no sender id; the sandbox status is not_evaluated (sending-domain binding is deferred).
+      sender: { sender_id: "", status: "not_evaluated" },
+      message_class: "transactional",
+      preview: null,
+      email_preview: {
+        subject: "Your order shipped",
+        text: "Hi Ada, it shipped.",
+        html: null,
+        size_bytes: 34,
+        tier: "standard",
+        cost_minor: "5",
+        currency: "GHS",
+      },
+      request_id: "req_preview_email",
+    });
+    const { resource } = resourceReturning(payload);
+
+    const result = await resource.preview("order.shipped", {
+      data: { name: "Ada" },
+    });
+
+    expect(result.data.channel).toBe("email");
+    expect(result.data.preview).toBeNull();
+    expect(result.data.emailPreview).toEqual({
+      subject: "Your order shipped",
+      text: "Hi Ada, it shipped.",
+      html: null,
+      sizeBytes: 34,
+      tier: "standard",
+      costMinor: "5",
+      currency: "GHS",
+    });
+  });
+
+  it("accepts an email recipient and maps an email delivery", async () => {
+    const emailDelivery = {
+      ...canonicalDelivery,
+      channel: "email",
+      recipient: "ada@example.com",
+      attempts: [{ ...canonicalDelivery.attempts[0], channel: "email" }],
+    };
+    const payload = sendManagedMessageResponse.parse({
+      delivery: emailDelivery,
+      request_id: "req_send_email",
+    });
+    const { resource, fetch } = resourceReturning(payload, 202);
+
+    const result = await resource.send("order.shipped", {
+      to: "ada@example.com",
+      data: { name: "Ada" },
+      idempotencyKey: "send-email-001",
+    });
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(result.data.channel).toBe("email");
+    expect(result.data.recipient).toBe("ada@example.com");
+    expect(result.data.attempts[0]?.channel).toBe("email");
   });
 
   it("sends by key with the idempotency header and maps the canonical delivery", async () => {

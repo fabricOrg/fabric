@@ -74,6 +74,7 @@ export async function prepareSend(
       return persistManagedAcceptance(tx, {
         managed: input.managed,
         currency: input.currency,
+        channel: "sms",
         messageId,
         costMinor: cost.toString(),
         ...(input.applicationId !== undefined

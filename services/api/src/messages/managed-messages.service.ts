@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type {
   MessageDelivery,
   MessageDeliverySummary,
@@ -9,9 +8,11 @@ import type { AppDb } from "@app/db";
 import {
   ManagedCostLimitError,
   ManagedIdempotencyConflictError,
+  type ManagedSendContext,
 } from "@app/sms-engine";
 import { Inject, Injectable } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
+import { EmailService } from "../email/email.service.js";
 import {
   apiError,
   asInsufficientFunds,
@@ -23,9 +24,18 @@ import {
   listDeliveryWebhookStatus,
   retrieveDelivery,
 } from "./managed-messages-reads.js";
+import {
+  acceptedPreview,
+  assertRecipientMatchesChannel,
+  deterministicDeliveryId,
+  requestFingerprint,
+} from "./managed-send-plan.js";
 import { MessagePreviewService } from "./message-preview.service.js";
 
 const CONTENT_RETENTION_DAYS = 30;
+// Placeholder sandbox sender. Real from-domain binding + DNS verification (SPF/DKIM/DMARC) is
+// deferred to SDK-007 slice 4b/4c; sandbox never delivers to a real MTA (FakeEmailProvider).
+const SANDBOX_EMAIL_FROM = "no-reply@sandbox.fabric.dev";
 
 @Injectable()
 export class ManagedMessagesService {
@@ -34,6 +44,7 @@ export class ManagedMessagesService {
     @Inject(MessagePreviewService)
     private readonly previews: MessagePreviewService,
     @Inject(SmsService) private readonly sms: SmsService,
+    @Inject(EmailService) private readonly email: EmailService,
   ) {}
 
   async send(input: {
@@ -51,17 +62,13 @@ export class ManagedMessagesService {
         currency: input.request.currency,
         to: input.request.to,
         ...(input.request.locale ? { locale: input.request.locale } : {}),
+        ...(input.request.channel ? { channel: input.request.channel } : {}),
       },
       input.environmentId,
     );
+    assertRecipientMatchesChannel(preview.channel, input.request.to);
     const blocker = preview.blockers[0];
-    if (blocker || !preview.preview || !preview.eligible) {
-      throw invalidRequest(
-        blocker?.code ?? "message_not_eligible",
-        "The managed message is not eligible to send.",
-        blocker?.path || undefined,
-      );
-    }
+    const rendered = acceptedPreview(preview, blocker);
     const maxCost = input.request.limits?.max_cost;
     if (maxCost && maxCost.currency !== input.request.currency) {
       throw invalidRequest(
@@ -70,7 +77,7 @@ export class ManagedMessagesService {
         "limits.max_cost.currency",
       );
     }
-    if (maxCost && BigInt(preview.preview.cost_minor) > BigInt(maxCost.minor)) {
+    if (maxCost && BigInt(rendered.costMinor) > BigInt(maxCost.minor)) {
       throw invalidRequest(
         "max_cost_exceeded",
         "The planned message exceeds limits.max_cost.",
@@ -84,33 +91,51 @@ export class ManagedMessagesService {
       environmentId: input.environmentId,
       idempotencyKey: input.idempotencyKey,
     });
+    const managed: ManagedSendContext = {
+      deliveryId,
+      definitionId: preview.definition_id,
+      versionId: preview.version_id,
+      key: input.request.key,
+      locale: preview.resolved_locale,
+      ...(input.request.reference
+        ? { reference: input.request.reference }
+        : {}),
+      metadata: input.request.metadata,
+      idempotencyKey: input.idempotencyKey,
+      requestFingerprint: fingerprint,
+      ...(maxCost ? { maxCostMinor: maxCost.minor } : {}),
+      expiresAt: new Date(Date.now() + CONTENT_RETENTION_DAYS * 86_400_000),
+    };
     try {
-      await this.sms.send({
-        tenantId: input.tenantId,
-        messageId: deliveryId,
-        applicationId: input.applicationId,
-        environmentId: input.environmentId,
-        to: input.request.to,
-        senderId: preview.sender.sender_id,
-        body: preview.preview.body,
-        currency: input.request.currency,
-        messageClass: preview.message_class,
-        managed: {
+      if (rendered.channel === "email") {
+        await this.email.acceptManaged({
+          tenantId: input.tenantId,
           deliveryId,
-          definitionId: preview.definition_id,
-          versionId: preview.version_id,
-          key: input.request.key,
-          locale: preview.resolved_locale,
-          ...(input.request.reference
-            ? { reference: input.request.reference }
-            : {}),
-          metadata: input.request.metadata,
-          idempotencyKey: input.idempotencyKey,
-          requestFingerprint: fingerprint,
-          ...(maxCost ? { maxCostMinor: maxCost.minor } : {}),
-          expiresAt: new Date(Date.now() + CONTENT_RETENTION_DAYS * 86_400_000),
-        },
-      });
+          applicationId: input.applicationId,
+          environmentId: input.environmentId,
+          to: input.request.to,
+          from: preview.email_from ?? SANDBOX_EMAIL_FROM,
+          subject: rendered.subject,
+          text: rendered.text ?? null,
+          html: rendered.html ?? null,
+          currency: input.request.currency,
+          costMinor: rendered.costMinor,
+          managed,
+        });
+      } else {
+        await this.sms.send({
+          tenantId: input.tenantId,
+          messageId: deliveryId,
+          applicationId: input.applicationId,
+          environmentId: input.environmentId,
+          to: input.request.to,
+          senderId: preview.sender.sender_id,
+          body: rendered.body,
+          currency: input.request.currency,
+          messageClass: preview.message_class,
+          managed,
+        });
+      }
     } catch (error) {
       if (error instanceof ManagedIdempotencyConflictError) {
         throw apiError({
@@ -151,7 +176,17 @@ export class ManagedMessagesService {
     environmentId: string;
     deliveryId: string;
   }): Promise<MessageDelivery> {
-    return retrieveDelivery(this.db, this.sms, input);
+    return retrieveDelivery(
+      this.db,
+      {
+        sms: this.sms,
+        email: {
+          get: (tenantId, id, environmentId) =>
+            this.email.get(tenantId, environmentId ?? "", id),
+        },
+      },
+      input,
+    );
   }
 
   async list(input: {
@@ -169,38 +204,4 @@ export class ManagedMessagesService {
   }): Promise<MessageDeliveryWebhookStatus[]> {
     return listDeliveryWebhookStatus(this.db, input);
   }
-}
-
-function requestFingerprint(request: SendManagedMessageRequest): string {
-  return createHash("sha256")
-    .update(JSON.stringify(canonical(request)))
-    .digest("hex");
-}
-
-function deterministicDeliveryId(input: {
-  tenantId: string;
-  applicationId: string;
-  environmentId: string;
-  idempotencyKey: string;
-}): string {
-  const bytes = createHash("sha256")
-    .update(
-      `${input.tenantId}:${input.applicationId}:${input.environmentId}:${input.idempotencyKey}`,
-    )
-    .digest()
-    .subarray(0, 16);
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-  const hex = bytes.toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (typeof value !== "object" || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, item]) => [key, canonical(item)]),
-  );
 }

@@ -1,6 +1,18 @@
 import { z } from "zod";
+import {
+  emailVariantContent,
+  localeTag,
+  messageChannel,
+  messageVariantContent,
+  smsVariantContent,
+} from "./message-definition-content.js";
 import { withoutDuplicateDefaultLocale } from "./message-definition-locale.js";
-import { messageClass } from "./sms.js";
+import { variableSchema } from "./message-definition-variable-schema.js";
+
+// Re-export the per-channel variant content + the variable-schema subset so `./message-definitions.js`
+// (and the package index) keep exporting these names after the split for the file-length guard.
+export * from "./message-definition-content.js";
+export * from "./message-definition-variable-schema.js";
 
 /**
  * MANAGED MESSAGE DEFINITIONS contracts (SDK-003). Shapes + validation only — no logic (the
@@ -25,177 +37,9 @@ export const stableKey = z
   .refine((k) => !k.toLowerCase().startsWith("fabric."), "stable_key_reserved");
 export type StableKey = z.infer<typeof stableKey>;
 
-// ---- Portable variable-schema subset (slice-0 §2) -----------------------------------------------
-export const variableFormats = [
-  "email",
-  "e164",
-  "url",
-  "date",
-  "datetime",
-  "uuid",
-] as const;
-export const variableFormat = z.enum(variableFormats);
-
-// Bounds (hard caps from slice-0 §2). Exceeding any is an authoring error, never silently clamped.
-export const VARIABLE_SCHEMA_LIMITS = {
-  maxStringLength: 4096,
-  maxEnumMembers: 64,
-  maxArrayItems: 1000,
-  maxObjectProperties: 64,
-  maxDepth: 5,
-  maxSerializedBytes: 32_768,
-} as const;
-
-const stringNode = z
-  .object({
-    type: z.literal("string"),
-    minLength: z
-      .int()
-      .min(0)
-      .max(VARIABLE_SCHEMA_LIMITS.maxStringLength)
-      .optional(),
-    maxLength: z
-      .int()
-      .min(1)
-      .max(VARIABLE_SCHEMA_LIMITS.maxStringLength)
-      .optional(),
-    enum: z
-      .array(z.string())
-      .min(1)
-      .max(VARIABLE_SCHEMA_LIMITS.maxEnumMembers)
-      .optional(),
-    format: variableFormat.optional(),
-  })
-  .strict();
-const integerNode = z
-  .object({
-    type: z.literal("integer"),
-    minimum: z.int().optional(),
-    maximum: z.int().optional(),
-  })
-  .strict();
-const numberNode = z
-  .object({
-    type: z.literal("number"),
-    minimum: z.number().optional(),
-    maximum: z.number().optional(),
-  })
-  .strict();
-const booleanNode = z.object({ type: z.literal("boolean") }).strict();
-
-// Object/array nodes are recursive; z.lazy breaks the cycle. `additionalProperties`, when present,
-// must be literal false — the subset only admits closed objects.
-export type VariableSchemaNode =
-  | z.infer<typeof stringNode>
-  | z.infer<typeof integerNode>
-  | z.infer<typeof numberNode>
-  | z.infer<typeof booleanNode>
-  | {
-      type: "array";
-      items: VariableSchemaNode;
-      maxItems: number;
-      minItems?: number | undefined;
-    }
-  | {
-      type: "object";
-      properties: Record<string, VariableSchemaNode>;
-      required?: string[] | undefined;
-      additionalProperties?: false | undefined;
-    };
-
-const variableSchemaNode: z.ZodType<VariableSchemaNode> = z.lazy(() =>
-  z.discriminatedUnion("type", [
-    stringNode,
-    integerNode,
-    numberNode,
-    booleanNode,
-    z
-      .object({
-        type: z.literal("array"),
-        items: variableSchemaNode,
-        maxItems: z.int().min(1).max(VARIABLE_SCHEMA_LIMITS.maxArrayItems),
-        minItems: z.int().min(0).optional(),
-      })
-      .strict(),
-    objectNode,
-  ]),
-);
-
-const objectNode = z
-  .object({
-    type: z.literal("object"),
-    properties: z.record(z.string(), variableSchemaNode),
-    required: z.array(z.string()).optional(),
-    additionalProperties: z.literal(false).optional(),
-  })
-  .strict();
-
-// The document root MUST be an object. Bounded checks (depth, total properties, serialized size) are
-// applied here as path-coded issues so the whole subset validates in one place.
-export const variableSchema = objectNode.superRefine((doc, ctx) => {
-  const serialized = JSON.stringify(doc);
-  if (serialized.length > VARIABLE_SCHEMA_LIMITS.maxSerializedBytes) {
-    ctx.addIssue({
-      code: "custom",
-      message: "variable_schema_too_large",
-      path: [],
-    });
-  }
-  walkBounds(doc, [], 1, ctx);
-});
-export type VariableSchema = z.infer<typeof objectNode>;
-
-function walkBounds(
-  node: VariableSchemaNode,
-  path: (string | number)[],
-  depth: number,
-  ctx: z.RefinementCtx,
-): void {
-  if (depth > VARIABLE_SCHEMA_LIMITS.maxDepth) {
-    ctx.addIssue({ code: "custom", message: "variable_schema_too_deep", path });
-    return;
-  }
-  if (node.type === "object") {
-    const names = Object.keys(node.properties);
-    if (names.length > VARIABLE_SCHEMA_LIMITS.maxObjectProperties) {
-      ctx.addIssue({ code: "custom", message: "too_many_properties", path });
-    }
-    for (const name of node.required ?? []) {
-      if (!(name in node.properties)) {
-        ctx.addIssue({
-          code: "custom",
-          message: "required_unknown_property",
-          path: [...path, name],
-        });
-      }
-    }
-    for (const [name, child] of Object.entries(node.properties)) {
-      walkBounds(child, [...path, name], depth + 1, ctx);
-    }
-    return;
-  }
-  if (node.type === "array") {
-    walkBounds(node.items, [...path, "items"], depth + 1, ctx);
-  }
-}
-
 // ---- Resource DTOs ------------------------------------------------------------------------------
 export const messageDefinitionStatus = z.enum(["draft", "active", "archived"]);
 export type MessageDefinitionStatus = z.infer<typeof messageDefinitionStatus>;
-
-export const localeTag = z
-  .string()
-  .regex(/^[a-z]{2,3}(?:-[A-Z]{2})?$/, "invalid_locale");
-
-// SMS variant content of a version. One channel today; the shape leaves room for more.
-export const smsVariantContent = z.object({
-  body: z.string().min(1).max(1600),
-  class: messageClass.default("transactional"),
-  locales: z
-    .record(localeTag, z.object({ body: z.string().min(1).max(1600) }).strict())
-    .default({}),
-});
-export type SmsVariantContent = z.infer<typeof smsVariantContent>;
 
 export const messageDefinition = z.object({
   id: z.string().uuid(),
@@ -207,12 +51,17 @@ export const messageDefinition = z.object({
 });
 export type MessageDefinition = z.infer<typeof messageDefinition>;
 
+// Channel-polymorphic version (SDK-007 slice 4c). `channel` is the authoritative discriminant (the
+// version row's column); `content` is the matching variant (SMS or Email). Consumers narrow on
+// `channel` — the content union can't self-discriminate, so read `channel` then treat `content` as the
+// corresponding variant (the same channel-guarded pattern the render/preview path uses).
 export const messageDefinitionVersion = z.object({
   id: z.string().uuid(),
   definition_id: z.string().uuid(),
   version: z.int().min(1),
+  channel: messageChannel,
   variable_schema: variableSchema,
-  content: smsVariantContent,
+  content: messageVariantContent,
   default_locale: localeTag,
   created_at: z.string(),
 });
@@ -243,31 +92,58 @@ export type MessageDefinitionSenderBinding = z.infer<
 export const definitionEnvironment = z.enum(["sandbox", "live"]);
 export type DefinitionEnvironment = z.infer<typeof definitionEnvironment>;
 
-// Author a draft (management path, SDK-003 slice 4). Content + schema authored together. Targets the
-// workspace default application unless application_id is given.
+// An SMS sender id (sender-ID string). Required for the SMS channel; the Email channel has no sender
+// id — its sender identity is the `from` on the content, and its sending-domain binding is deferred
+// (SDK-007 slice 4b/4c).
+const smsSenderId = z.string().trim().min(1).max(11);
+
+// Author a draft (management path, SDK-003 slice 4; SDK-007 slice 4c makes it channel-discriminated).
+// Content + schema authored together. Targets the workspace default application unless application_id
+// is given. `channel` selects the variant + whether a `sender_id` is required.
 export const createMessageDefinitionRequest = z
-  .object({
-    application_id: z.string().uuid().optional(),
-    key: stableKey,
-    variable_schema: variableSchema,
-    content: smsVariantContent,
-    default_locale: localeTag,
-    sender_id: z.string().trim().min(1).max(11),
-  })
+  .discriminatedUnion("channel", [
+    z.object({
+      channel: z.literal("sms"),
+      application_id: z.string().uuid().optional(),
+      key: stableKey,
+      variable_schema: variableSchema,
+      content: smsVariantContent,
+      default_locale: localeTag,
+      sender_id: smsSenderId,
+    }),
+    z.object({
+      channel: z.literal("email"),
+      application_id: z.string().uuid().optional(),
+      key: stableKey,
+      variable_schema: variableSchema,
+      content: emailVariantContent,
+      default_locale: localeTag,
+    }),
+  ])
   .superRefine(withoutDuplicateDefaultLocale);
 export type CreateMessageDefinitionRequest = z.infer<
   typeof createMessageDefinitionRequest
 >;
 
 // Add a new immutable version to an existing definition. Rejected server-side if the schema change is
-// breaking versus the latest version (a breaking change must use a new stable key — slice-0 §3).
+// breaking versus the latest version (a breaking change must use a new stable key — slice-0 §3), or if
+// the channel differs from the definition's existing channel (channel is immutable across versions).
 export const addMessageDefinitionVersionRequest = z
-  .object({
-    variable_schema: variableSchema,
-    content: smsVariantContent,
-    default_locale: localeTag,
-    sender_id: z.string().trim().min(1).max(11),
-  })
+  .discriminatedUnion("channel", [
+    z.object({
+      channel: z.literal("sms"),
+      variable_schema: variableSchema,
+      content: smsVariantContent,
+      default_locale: localeTag,
+      sender_id: smsSenderId,
+    }),
+    z.object({
+      channel: z.literal("email"),
+      variable_schema: variableSchema,
+      content: emailVariantContent,
+      default_locale: localeTag,
+    }),
+  ])
   .superRefine(withoutDuplicateDefaultLocale);
 export type AddMessageDefinitionVersionRequest = z.infer<
   typeof addMessageDefinitionVersionRequest

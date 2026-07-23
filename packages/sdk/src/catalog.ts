@@ -18,7 +18,7 @@ export interface UngeneratedCatalog extends DefinitionCatalog {
       string,
       {
         readonly data: Record<string, unknown>;
-        readonly channels: "sms";
+        readonly channels: "sms" | "email";
         readonly locales: string;
       }
     >
@@ -35,8 +35,11 @@ export type CatalogPreviewOptions<
   Key extends CatalogMessageKey<Catalog>,
   BaseOptions,
 > = Catalog["generated"] extends true
-  ? Omit<BaseOptions, "data" | "locale"> & {
+  ? Omit<BaseOptions, "data" | "locale" | "channel"> & {
       readonly data: Catalog["messages"][Key]["data"];
       readonly locale?: Catalog["messages"][Key]["locales"];
+      // Narrowed to the key's released channel — asserting a channel the definition doesn't target
+      // (e.g. `channel: "email"` on an SMS key) fails to compile (SDK-004-AC02 / SDK-007 AC04).
+      readonly channel?: Catalog["messages"][Key]["channels"];
     }
   : BaseOptions;

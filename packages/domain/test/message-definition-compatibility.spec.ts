@@ -145,16 +145,55 @@ describe("analyzeCompatibility (SDK-003 slice-0 §3)", () => {
 describe("definition locale compatibility", () => {
   it("allows a locale to be added", () => {
     expect(
-      analyzeDefinitionCompatibility(base, base, ["en"], ["en", "fr"]).verdict,
+      analyzeDefinitionCompatibility(
+        base,
+        base,
+        ["en"],
+        ["en", "fr"],
+        "sms",
+        "sms",
+      ).verdict,
     ).toBe("compatible");
   });
 
   it("requires a new key when a locale is removed", () => {
     expect(
-      analyzeDefinitionCompatibility(base, base, ["en", "fr"], ["en"]).breaking,
+      analyzeDefinitionCompatibility(
+        base,
+        base,
+        ["en", "fr"],
+        ["en"],
+        "sms",
+        "sms",
+      ).breaking,
     ).toContainEqual({
       path: "content.locales.fr",
       code: "locale_removed",
+    });
+  });
+});
+
+describe("definition channel compatibility (ADR-0005 Amendment A1)", () => {
+  it("same channel is compatible", () => {
+    expect(
+      analyzeDefinitionCompatibility(base, base, ["en"], ["en"], "sms", "sms")
+        .verdict,
+    ).toBe("compatible");
+  });
+
+  it("changing the channel requires a new key", () => {
+    const result = analyzeDefinitionCompatibility(
+      base,
+      base,
+      ["en"],
+      ["en"],
+      "sms",
+      "email",
+    );
+    expect(result.verdict).toBe("breaking");
+    expect(result.breaking).toContainEqual({
+      path: "channel",
+      code: "channel_removed",
     });
   });
 });

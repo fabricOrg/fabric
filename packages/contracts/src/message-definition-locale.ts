@@ -1,8 +1,12 @@
 import type { z } from "zod";
-import type { SmsVariantContent } from "./message-definitions.js";
 
+// Structural over both variant contents (SMS + Email) — each carries a `locales` record — so the same
+// guard applies to a channel-discriminated create/add-version request.
 export function withoutDuplicateDefaultLocale(
-  value: { content: SmsVariantContent; default_locale: string },
+  value: {
+    content: { locales: Record<string, unknown> };
+    default_locale: string;
+  },
   ctx: z.RefinementCtx,
 ): void {
   if (value.content.locales[value.default_locale]) {

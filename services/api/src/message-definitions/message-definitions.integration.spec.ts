@@ -65,6 +65,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
 
   async function createDefinition(tenant: string, key: string) {
     return svc.create(tenant, {
+      channel: "sms",
       key,
       variable_schema: schemaV1,
       content: {
@@ -83,6 +84,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
     expect(state.definition.status).toBe("draft");
     expect(state.definition.key).toBe("order.shipped");
     expect(state.latest_version?.version).toBe(1);
+    expect(state.latest_version?.channel).toBe("sms");
     expect(state.releases).toEqual([]);
     expect(state.sender_bindings).toMatchObject([{ sender_id: "FABRIC" }]);
     expect(auditRecords.map((record) => record.action)).toContain(
@@ -95,6 +97,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
     const id = created.definition.id;
 
     const compatible = await svc.addVersion(TENANT_A, id, {
+      channel: "sms",
       variable_schema: {
         type: "object",
         properties: { name: { type: "string" }, note: { type: "string" } },
@@ -116,6 +119,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
 
     await expect(
       svc.addVersion(TENANT_A, id, {
+        channel: "sms",
         // name string -> integer is a breaking type change.
         variable_schema: {
           type: "object",
@@ -137,6 +141,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
 
     await expect(
       svc.addVersion(TENANT_A, id, {
+        channel: "sms",
         variable_schema: compatible.latest_version?.variable_schema ?? schemaV1,
         content: {
           body: "Hi {{name}}",
@@ -174,6 +179,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
     // Re-publishing a new version upserts the single (env, definition) release.
     const v2 = (
       await svc.addVersion(TENANT_A, id, {
+        channel: "sms",
         variable_schema: {
           type: "object",
           properties: { name: { type: "string" }, extra: { type: "string" } },
@@ -246,6 +252,7 @@ describeDb("SDK-003 MessageDefinitionsService (real RLS)", () => {
     await expect(
       svc.create(TENANT_A, {
         application_id: bAppId,
+        channel: "sms",
         key: "cross.tenant",
         variable_schema: schemaV1,
         content: { body: "x", class: "transactional", locales: {} },

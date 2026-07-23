@@ -6,17 +6,24 @@ import type {
 import type { AppDb } from "@app/db";
 import { STATUS_RANK } from "@app/integrations";
 import { FakeEmailProvider } from "@app/integrations/testing/email";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
-import { invalidRequest, newRequestId, notFound } from "../http/api-error.js";
+import { invalidRequest, newRequestId } from "../http/api-error.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
+import { isTerminalEmailStatus, parseEmailContent } from "./email-content.js";
 import {
-  hydrateEmailRows,
-  isTerminalEmailStatus,
-  parseEmailContent,
-} from "./email-content.js";
+  emailDispatchBlockReason,
+  sweepManagedEmailExpired,
+} from "./email-dispatch-recovery.js";
+import { assertEmailSandboxEnvironment } from "./email-environment.js";
+import {
+  acceptManagedEmail,
+  type ManagedEmailAcceptInput,
+} from "./email-managed-accept.js";
+import { reconcileManagedEmailTerminal } from "./email-managed-resolve.js";
+import { getEmail, listEmails } from "./email-reads.js";
 import { EMAIL_SEND_QUEUE, type EmailSendJob } from "./email-send.job.js";
 
 type Row = Record<string, unknown>;
@@ -24,6 +31,7 @@ type Row = Record<string, unknown>;
 @Injectable()
 export class EmailService {
   private readonly provider = new FakeEmailProvider();
+  private readonly logger = new Logger(EmailService.name);
 
   constructor(
     @Inject(APP_DB) private readonly db: AppDb,
@@ -46,7 +54,7 @@ export class EmailService {
         "Email sending is temporarily paused.",
       );
     }
-    await this.assertSandboxEnvironment(context);
+    await assertEmailSandboxEnvironment(this.db, context);
     const subjectId = await this.vault.subjectForEmail(
       context.tenantId,
       input.to,
@@ -84,11 +92,46 @@ export class EmailService {
 
     let status: SendEmailApiResponse["status"] = "queued";
     if (this.queue.enabled) {
-      await this.enqueue(context.tenantId, messageId).catch(() => undefined);
+      // A queue outage must not fail the accepted send — the row is persisted and the maintenance
+      // sweep recovers it. Log the deferral (SMS logs the equivalent) so a Redis outage is observable
+      // rather than silently swallowed.
+      await this.enqueue(context.tenantId, messageId).catch(
+        (error: unknown) => {
+          this.logger.warn(
+            `email-send enqueue deferred for ${messageId}: ${error instanceof Error ? error.message : "unknown"}`,
+          );
+        },
+      );
     } else {
       status = await this.process({ tenantId: context.tenantId, messageId });
     }
     return { id: messageId, status, request_id: newRequestId() };
+  }
+
+  /**
+   * Accept a managed Email delivery: reserve the wallet by the size-tier price and persist the
+   * delivery/attempt/email_message/outbox rows in one tenant tx, keyed on the delivery id so a replay
+   * is a no-op (no double-reserve). ACCEPT ONLY — dispatch/settle happens on the queued worker via
+   * process()/resolve(). The kill-switch check here fails closed before any reserve. Core lives in
+   * email-managed-accept.ts.
+   */
+  async acceptManaged(input: ManagedEmailAcceptInput): Promise<void> {
+    if (await this.killSwitch.isPaused("platform.email_sending")) {
+      throw invalidRequest(
+        "email_sending_paused",
+        "Email sending is temporarily paused.",
+      );
+    }
+    await acceptManagedEmail(
+      {
+        db: this.db,
+        vault: this.vault,
+        providerSlug: this.provider.slug,
+        assertSandbox: (context) =>
+          assertEmailSandboxEnvironment(this.db, context),
+      },
+      input,
+    );
   }
 
   async process(job: EmailSendJob): Promise<SendEmailApiResponse["status"]> {
@@ -97,6 +140,12 @@ export class EmailService {
     if (stored.kind === "unreadable") {
       return this.resolve(job.tenantId, job.messageId, "failed", {
         errorCode: "dispatch_material_unreadable",
+      });
+    }
+    const blocked = await emailDispatchBlockReason(this.killSwitch);
+    if (blocked) {
+      return this.resolve(job.tenantId, job.messageId, "failed", {
+        errorCode: blocked,
       });
     }
     const result = await this.provider.send(
@@ -120,17 +169,7 @@ export class EmailService {
   }
 
   async list(tenantId: string, environmentId: string): Promise<EmailMessage[]> {
-    const rows = (await this.db.withTenant(
-      tenantId,
-      (tx) => tx`
-        SELECT id, subject_id, content_pii_id, status::text, provider_slug,
-               error_code, created_at
-        FROM email_messages
-        WHERE environment_id = ${environmentId}
-        ORDER BY created_at DESC, id DESC
-        LIMIT 100`,
-    )) as Row[];
-    return hydrateEmailRows(this.vault, tenantId, rows);
+    return listEmails(this.db, this.vault, tenantId, environmentId);
   }
 
   async get(
@@ -138,20 +177,7 @@ export class EmailService {
     environmentId: string,
     messageId: string,
   ): Promise<EmailMessage> {
-    const rows = (await this.db.withTenant(
-      tenantId,
-      (tx) => tx`
-        SELECT id, subject_id, content_pii_id, status::text, provider_slug,
-               error_code, created_at
-        FROM email_messages
-        WHERE id = ${messageId} AND environment_id = ${environmentId}
-        LIMIT 1`,
-    )) as Row[];
-    if (!rows[0]) throw notFound("email_not_found", "Email message not found.");
-    const hydrated = await hydrateEmailRows(this.vault, tenantId, rows);
-    const message = hydrated[0];
-    if (!message) throw notFound("email_not_found", "Email message not found.");
-    return message;
+    return getEmail(this.db, this.vault, tenantId, environmentId, messageId);
   }
 
   async enqueuePending(tenantId: string): Promise<number> {
@@ -168,6 +194,16 @@ export class EmailService {
     return rows.length;
   }
 
+  async sweepStuck(tenantId: string, olderThanIso: string): Promise<number> {
+    return sweepManagedEmailExpired(
+      this.db,
+      tenantId,
+      olderThanIso,
+      (scopedTenantId, messageId, status, detail) =>
+        this.resolve(scopedTenantId, messageId, status, detail),
+    );
+  }
+
   private async enqueue(tenantId: string, messageId: string): Promise<void> {
     await this.queue
       .queue(EMAIL_SEND_QUEUE)
@@ -178,34 +214,6 @@ export class EmailService {
         removeOnComplete: { count: 1_000 },
         removeOnFail: true,
       });
-  }
-
-  private async assertSandboxEnvironment(context: {
-    tenantId: string;
-    applicationId: string;
-    environmentId: string;
-  }): Promise<void> {
-    const rows = (await this.db.withTenant(
-      context.tenantId,
-      (tx) => tx`
-        SELECT type::text, status::text FROM environments
-        WHERE id = ${context.environmentId}
-          AND application_id = ${context.applicationId}
-        LIMIT 1`,
-    )) as Row[];
-    const environment = rows[0];
-    if (!environment || environment.status !== "active") {
-      throw invalidRequest(
-        "environment_unavailable",
-        "The API key environment is unavailable.",
-      );
-    }
-    if (environment.type !== "sandbox") {
-      throw invalidRequest(
-        "live_email_not_configured",
-        "Live Email requires an approved sending domain and configured provider.",
-      );
-    }
   }
 
   private async load(
@@ -267,6 +275,11 @@ export class EmailService {
           ${String(current.environment_id)}, 'message.updated',
           ${JSON.stringify({ message_id: messageId, channel: "email", status, previous_status: prior })}::jsonb
         )`;
+      await reconcileManagedEmailTerminal(tx, {
+        messageId,
+        newStatus: status,
+        ...(detail.errorCode ? { errorCode: detail.errorCode } : {}),
+      });
       return status;
     });
   }

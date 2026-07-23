@@ -1,4 +1,5 @@
 import type {
+  EmailVariantContent,
   PreviewMessageRequest,
   SmsVariantContent,
   VariableSchema,
@@ -14,16 +15,23 @@ import {
   messageDefinitionVersions,
   type TenantId,
 } from "@app/db";
-import { previewSms, type RenderError, type SmsPreview } from "@app/domain";
+import {
+  type EmailPreview,
+  previewEmail,
+  previewSms,
+  type RenderError,
+  type SmsPreview,
+} from "@app/domain";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, eq, sql } from "drizzle-orm";
 import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
-import { notFound } from "../http/api-error.js";
+import { invalidRequest, notFound } from "../http/api-error.js";
 import { SendersService } from "../senders/senders.service.js";
 import { assessSendCompliance } from "../sms/sms-compliance.js";
 
 export interface PreviewOutput {
+  readonly channel: "sms" | "email";
   readonly definition_id: string;
   readonly version_id: string;
   readonly environment: "sandbox" | "live";
@@ -43,6 +51,8 @@ export interface PreviewOutput {
   };
   readonly message_class: "transactional" | "promotional";
   readonly preview: SmsPreview | null;
+  readonly email_preview: EmailPreview | null;
+  readonly email_from: string | null;
 }
 
 /**
@@ -71,6 +81,7 @@ export class MessagePreviewService {
         .select({
           definitionId: messageDefinitions.id,
           versionId: messageDefinitionVersions.id,
+          channel: messageDefinitionVersions.channel,
           content: messageDefinitionVersions.content,
           schema: messageDefinitionVersions.variableSchema,
           locale: messageDefinitionVersions.defaultLocale,
@@ -86,7 +97,9 @@ export class MessagePreviewService {
           messageDefinitionVersions,
           eq(messageDefinitionVersions.id, messageDefinitionReleases.versionId),
         )
-        .innerJoin(
+        // LEFT join: an SMS release always has a sender binding (SDK-003 publish invariant), but an
+        // Email release has none — its sending-domain binding is a later slice.
+        .leftJoin(
           messageDefinitionSenderBindings,
           and(
             eq(
@@ -117,9 +130,69 @@ export class MessagePreviewService {
           "No released definition with that key in this environment.",
         );
       }
+      // An optional caller-asserted channel must match the released definition's channel. The generated
+      // catalog types constrain it per key (SDK-004-AC02 / SDK-007 AC04); this is the runtime backstop
+      // for an untyped caller. Neither side is PII.
+      if (request.channel && request.channel !== released.channel) {
+        throw invalidRequest(
+          "channel_mismatch",
+          "The requested channel does not match the released definition.",
+          "channel",
+        );
+      }
+      const resolvedLocale = request.locale ?? released.locale;
+
+      // ---- Email channel (SDK-007 slice 3): render + price via the pure core. No SMS sender or
+      // recipient compliance — email sending-domain binding is a later slice (readiness gap), reported
+      // here as sender.status = "not_evaluated". READ-ONLY like the SMS path. ----
+      if (released.channel === "email") {
+        const email = released.content as EmailVariantContent;
+        const parts = resolveEmailParts(email, resolvedLocale, released.locale);
+        const outcome = parts
+          ? previewEmail({
+              subject: parts.subject,
+              text: parts.text,
+              html: parts.html,
+              schema: released.schema as VariableSchema,
+              data: request.data ?? {},
+              currency: request.currency ?? "GHS",
+            })
+          : {
+              blockers: [
+                { path: "locale", code: "locale_not_supported" },
+              ] satisfies RenderError[],
+              preview: null,
+            };
+        return {
+          channel: "email",
+          definition_id: released.definitionId,
+          version_id: released.versionId,
+          environment: released.envType,
+          resolved_locale: resolvedLocale,
+          blockers: outcome.blockers,
+          warnings: [],
+          eligible: outcome.blockers.length === 0,
+          sender: { sender_id: "", status: "not_evaluated" },
+          message_class: "transactional",
+          preview: null,
+          email_preview: outcome.blockers.length === 0 ? outcome.preview : null,
+          email_from: email.from ?? null,
+        };
+      }
+
+      // ---- SMS channel (unchanged from SDK-003 slice 5). ----
+      // The sender binding is now LEFT-joined (for the email path). Preserve the pre-LEFT-join
+      // behavior for SMS: a released SMS definition MUST have a sender binding (SDK-003 publish
+      // invariant); a missing one is a misconfiguration, not a previewable state — 404 as before,
+      // never a preview with an empty sender.
+      if (released.senderId === null) {
+        throw notFound(
+          "definition_not_released",
+          "No released definition with that key in this environment.",
+        );
+      }
       const content = released.content as SmsVariantContent;
       const messageClass = content.class ?? "transactional";
-      const resolvedLocale = request.locale ?? released.locale;
       const localizedBody =
         resolvedLocale === released.locale
           ? content.body
@@ -151,6 +224,7 @@ export class MessagePreviewService {
         ...compliance.blockers.map(({ path, code }) => ({ path, code })),
       ];
       return {
+        channel: "sms",
         definition_id: released.definitionId,
         version_id: released.versionId,
         environment: released.envType,
@@ -164,9 +238,37 @@ export class MessagePreviewService {
         },
         message_class: messageClass,
         preview: blockers.length === 0 ? outcome.preview : null,
+        email_preview: null,
+        email_from: null,
       };
     });
   }
+}
+
+/**
+ * The subject/text/html for a locale: the base variant for the default locale, or the locale override
+ * merged onto the base (per-field). Returns null when a non-default locale has no override — reported as
+ * `locale_not_supported`, mirroring the SMS path.
+ */
+function resolveEmailParts(
+  email: EmailVariantContent,
+  loc: string,
+  defaultLoc: string,
+): {
+  subject: string;
+  text?: string | undefined;
+  html?: string | undefined;
+} | null {
+  if (loc === defaultLoc) {
+    return { subject: email.subject, text: email.text, html: email.html };
+  }
+  const override = email.locales?.[loc];
+  if (!override) return null;
+  return {
+    subject: override.subject ?? email.subject,
+    text: override.text ?? email.text,
+    html: override.html ?? email.html,
+  };
 }
 
 /** The default application's sandbox environment for a tenant (BFF-token fallback). */

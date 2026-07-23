@@ -1,6 +1,7 @@
 // Shared seeding for managed-delivery integration specs: a tenant with one application, a released
 // sandbox definition, a scoped messages:send/read API key, and a funded wallet.
 
+import { randomUUID } from "node:crypto";
 import type { AppDb } from "@app/db";
 import { credit } from "@app/wallet";
 import type postgres from "postgres";
@@ -33,6 +34,7 @@ export async function seedManagedTenant(input: {
   const audit = { record: async () => undefined } as unknown as AuditService;
   const defs = new MessageDefinitionsService(db, audit);
   const definition = await defs.create(tenantId, {
+    channel: "sms",
     key: "order.shipped",
     application_id: created.id,
     variable_schema: {
@@ -75,6 +77,54 @@ export async function seedManagedTenant(input: {
   return { applicationId: created.id, environmentId };
 }
 
+export async function seedManagedEmailDefinition(input: {
+  owner: postgres.Sql;
+  tenantId: string;
+  applicationId: string;
+  environmentId: string;
+  key: string;
+  from?: string;
+}): Promise<{ definitionId: string; versionId: string }> {
+  const definitionId = randomUUID();
+  const versionId = randomUUID();
+  const content = {
+    ...(input.from ? { from: input.from } : {}),
+    subject: "Order {{name}}",
+    text: "Hi {{name}}, {{count}} orders",
+    html: "<p>Hi {{name}}</p>",
+    locales: {},
+  };
+  await input.owner`
+    INSERT INTO message_definitions (id, tenant_id, application_id, key, status)
+    VALUES (${definitionId}, ${input.tenantId}, ${input.applicationId}, ${input.key}, 'active')`;
+  await input.owner`
+    INSERT INTO message_definition_versions (
+      id, tenant_id, definition_id, application_id, version, channel,
+      variable_schema, content, default_locale
+    ) VALUES (
+      ${versionId}, ${input.tenantId}, ${definitionId}, ${input.applicationId},
+      1, 'email',
+      ${input.owner.json({
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          count: { type: "integer", minimum: 0 },
+        },
+        required: ["name"],
+      })}::jsonb,
+      ${input.owner.json(content)}::jsonb,
+      'en'
+    )`;
+  await input.owner`
+    INSERT INTO message_definition_releases (
+      tenant_id, application_id, environment_id, definition_id, version_id
+    ) VALUES (
+      ${input.tenantId}, ${input.applicationId}, ${input.environmentId},
+      ${definitionId}, ${versionId}
+    )`;
+  return { definitionId, versionId };
+}
+
 export async function cleanManagedTenant(
   owner: postgres.Sql,
   tenantId: string,
@@ -84,6 +134,8 @@ export async function cleanManagedTenant(
   await owner`DELETE FROM outbox_events WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM message_delivery_attempts WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM message_deliveries WHERE tenant_id = ${tenantId}`;
+  await owner`DELETE FROM email_dispatches WHERE tenant_id = ${tenantId}`;
+  await owner`DELETE FROM email_messages WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM messages WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM message_definition_releases WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM message_definition_sender_bindings WHERE tenant_id = ${tenantId}`;

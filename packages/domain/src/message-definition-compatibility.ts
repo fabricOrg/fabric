@@ -17,7 +17,8 @@ export type CompatibilityCode =
   | "required_property_added"
   | "made_required"
   | "constraint_narrowed"
-  | "locale_removed";
+  | "locale_removed"
+  | "channel_removed";
 
 export interface CompatibilityChange {
   readonly path: string;
@@ -46,6 +47,8 @@ export function analyzeDefinitionCompatibility(
   candidate: VariableSchema,
   releasedLocales: readonly string[],
   candidateLocales: readonly string[],
+  releasedChannel: string,
+  candidateChannel: string,
 ): CompatibilityResult {
   const schema = analyzeCompatibility(released, candidate);
   const candidateSet = new Set(candidateLocales);
@@ -55,7 +58,13 @@ export function analyzeDefinitionCompatibility(
       path: `content.locales.${locale}`,
       code: "locale_removed" as const,
     }));
-  const breaking = [...schema.breaking, ...removed];
+  // A released version is single-channel (ADR-0005 Amendment A1). Changing the channel removes the
+  // released channel a stale caller may depend on — breaking, forcing a new stable key.
+  const channelChange: CompatibilityChange[] =
+    releasedChannel !== candidateChannel
+      ? [{ path: "channel", code: "channel_removed" as const }]
+      : [];
+  const breaking = [...schema.breaking, ...removed, ...channelChange];
   return {
     verdict: breaking.length === 0 ? "compatible" : "breaking",
     breaking,

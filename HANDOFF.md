@@ -3,7 +3,230 @@
 _Snapshot: 2026-07-18. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-18 → 07-21): SDK-003/004/005 closeout — PR #158 OPEN
+## Latest (2026-07-21): sandbox program kickoff (SDK-007→008→010) — design only, no code
+
+`dev` clean at `21c9c8c` (= origin/dev). **PR #158 MERGED, CI green** — the closeout section below is
+retained but its "PR #158 OPEN" framing is superseded.
+
+- **Independent completion audit of SDK-001→005 done** (user asked for hard assurance). Ran a read-only
+  adversarial sweep on gemini (free bucket) against real code + tests, then verified its one adverse
+  finding on Opus. Result: **SDK-001→005 genuinely COMPLETE** — real tables/RLS, registered endpoints,
+  BullMQ workers + cron with production callers, real-Postgres idempotency/crash-recovery/ledger tests,
+  real dashboard surfaces (no mock backing). Gemini's lone "GAP" (`definitions:write` unenforced api-key
+  scope) was a **false positive** — it conflated `apiKeyScopeValues` (has only `definitions:read`) with
+  the *membership* catalog (`permissions.ts:29`, where `definitions:write` correctly lives). Audit
+  report: `scratchpad/audit-report.md`.
+- **SDK-006 confirmed NOT done** (verified in code, not docs): no managed live-promotion path, no
+  `sdk-006.md` evidence, managed send dispatches only through the sandbox Virtual Phone. Live SMS +
+  npm publish stay redlined (human go).
+- **Direction chosen (user): option 2 — the sandbox program SDK-007 → 008 → 010.** Build the full
+  managed Email + cross-channel routing + SMS Journeys surface against **fakes**, with every live path
+  (SDK-006/009/011) deferred to admin-console config behind the live redline. Hard guardrail restated:
+  **no visible-but-dead live control ships** (backlog §Delivery policy 40–55) — live surfaces stay
+  absent until their real execution path exists and is tested.
+- **SDK-007 readiness + slice-0 written (NON-CODE, awaiting sign-off):**
+  `docs/sdk/sdk-007-readiness.md` + `docs/sdk/sdk-007-slice0-design.md`. Built on an independent reuse
+  map (`scratchpad/reuse-map-report.md`, gemini) with every file:line re-verified on Opus. Key findings:
+  the managed engine was built **channel-aware** — `message_deliveries`/`_attempts` already carry a
+  `channel` column with channel-neutral containment FKs; only two CHECK constraints pin `channel='sms'`
+  (`managed-messages.ts:78,:173`). Direct Email exists + is sandbox-gated (`FakeEmailProvider`,
+  `email.service.ts:175`). So Email is an **extension, not a rebuild**.
+- **Locked design (Opus calls):** extend-don't-fork channel dispatch (SMS→SMS engine, Email→the existing
+  FakeEmailProvider path); additive schema (`channel` col on versions, relax CHECK to `IN('sms','email')`,
+  polymorphic `emailVariantContent`); SDK-004-**AC02 channel narrowing closes here** (completion
+  condition); **light ADR-0005 amendment** (channels were already reserved in the model — not a new ADR);
+  7-slice decomposition, feature invisible until the release gate.
+- **User decisions captured:** Email sandbox pricing = **size-tiered** (rendered-byte bands 50/150/256
+  KiB, hard-ceiling blocker over 256 KiB, pure `rateEmailBySize` beside `rateSegments`); next step =
+  **slice-0 design note then STOP** (done — this is that stop point).
+- **ADR-0005 Amendment A1 RATIFIED** (product owner, 2026-07-21) — recorded in the ADR; the two locked
+  decisions (size-tier boundaries + channel model) are signed off.
+- **Slice 1 DONE + committed** (contracts + schema + compat + migration `0083` + tests). Additive,
+  feature invisible: `messageChannel`/`emailVariantContent`/`messageVariantContent` exported for later
+  slices but the version RESPONSE DTO stays SMS-shaped (zero ripple to dashboard/preview/SDK); `channel`
+  column on versions (default `'sms'`, backfills) + CHECK; delivery/attempt CHECKs relaxed to
+  `IN('sms','email')`; `analyzeDefinitionCompatibility` gains `channel_removed`. Gates: typecheck +
+  unit (contracts 61 / domain 74 / api 157) + biome + **real-Postgres integration 14/14** (incl. 3 new
+  channel/CHECK tests). Independently reviewed (gemini): APPROVE-WITH-NITS, all nits dismissed
+  (already-addressed / deliberate slice-boundary / against repo CHECK convention).
+  - **Local DB gotcha found + fixed:** the docker `postgres` container was running with **no published
+    host port** (`docker ps` showed `5432/tcp`, not `0.0.0.0:5432->`), so `127.0.0.1:5432` refused all
+    connections. `docker compose down && up` (volume preserved) republished it. Creds:
+    `app_owner:localdev` (SUPER) + `app_runtime:localdev_app` (APP), db on `127.0.0.1:5432`. The full
+    `test:integration` tier also has pre-existing local-data pollution (leftover `email_*` fixtures block
+    account-delete teardown in unrelated suites) — run the target spec in isolation to see it green.
+- **Slice 2 DONE + committed** — pure `@app/domain` Email render + preview core. `rateEmailBySize`
+  (size-tiered: base×{1,3,6} at 50/150/256 KiB bands, `EMAIL_MAX_BYTES` ceiling, `EmailPayloadTooLargeError`,
+  GHS/NGN/USD base table) in `rating.ts`; new `email-render.ts` (`previewEmail`: subject/text/html render,
+  **HTML-escapes variable values in the html context, rejects CR/LF in the subject = header-injection
+  guard**, byte-size measure via `TextEncoder`, tier pricing, path-coded blockers that never echo the
+  value); new `message-preview.ts` (`previewMessage` channel dispatcher). Shared token/validation helpers
+  (`TOKEN`, `resolve`, `pathIsDeclaredScalar`) exported from `message-render.ts` so both channels use one
+  grammar (parity). 15 new unit tests (escaping vs plain-text context, header-injection, size ceiling,
+  tier pricing, no-PII-echo, determinism, dispatch). Gates: domain typecheck + 89 tests + biome, files
+  under length guard. Pure functions — no integration tier. **Not yet independently reviewed** (slice 1
+  was).
+- **Slice 3 DONE + committed** — Email branch of `POST /v1/messages/preview`. `previewMessageResponse`
+  gains `channel` + nullable `email_preview` (SMS `preview` unchanged → dashboard SMS parse unaffected);
+  service selects `channel`, **LEFT-joins** the SMS sender binding (Email has none), branches: email →
+  `resolveEmailParts` (locale) → `previewEmail`, `sender.status="not_evaluated"` + no SMS compliance
+  (email sending-domain binding deferred — honest readiness gap). READ-ONLY. Gates: contracts/domain/api/
+  dashboard typecheck + api unit 157 + biome + **real-Postgres preview 7/7** (2 email + 1 regression).
+  Independently reviewed (gemini, per the always-review directive): verdict CHANGES-NEEDED →
+  **Blocker fixed** (LEFT join let an SMS release with no binding preview an empty sender instead of 404;
+  restored the 404 + regression test). Dispositioned: required `channel` = additive at runtime (old SDKs
+  strip unknowns; internal typecheck clean) — kept; OpenAPI "drift" = non-issue (`openapi:check` current,
+  generator doesn't derive this response's fields); `as EmailVariantContent` nit = matches existing
+  `as SmsVariantContent` pattern. Reviewer confirmed LEFT-join tenancy safe + skip-email-compliance is a
+  valid incremental disposition.
+- **Slice 4 (managed Email send) — decomposed into reviewed sub-slices** (money vertical; user ratified
+  the approach: extract a shared channel-neutral acceptance core + per-channel nullable FK, NOT a fork of
+  the shipped SMS engine):
+  - **4a-i DONE + committed** — channel-neutral acceptance core + per-channel attempt FK. Schema:
+    `message_delivery_attempts.email_message_id` FK→`email_messages` + a CHECK that exactly the
+    channel-matching ref is set (migration `0084`, additive). `persistManagedAcceptance` generalized with
+    a `channel` param (delivery/attempt channel + per-channel message ref + outbox message_id derived
+    from it); `prepare-send.ts` passes `channel:"sms"`. **SMS money path provably unchanged** — sms-engine
+    typecheck + 4 unit + **18 managed-SMS integration tests** (idempotent replay, concurrent-collapse,
+    rechecks, negatives, crash-recovery) all green. Independently reviewed: APPROVE, no findings (SMS
+    identical, 0084 safe on existing data).
+  - **4a-ii DONE + committed** (`739b61e`) — Email accept/persist path. One tenant tx inserts an
+    `email_messages` row (id = deliveryId, symmetric with SMS), stores rendered subject/text/html in the
+    `SendEmailRequest` vault shape the dispatch worker already reads, reserves the wallet by the slice-2
+    tier price (`referenceId` = deliveryId), records the `email_dispatches` intent, then calls the shared
+    `persistManagedAcceptance(channel:"email", emailMessageId)`. **Replay-check-first ⇒ no double-reserve;
+    every insert `ON CONFLICT DO NOTHING`; `message.accepted` outbox only** (NOT the direct path's
+    `message.created` — managed uses accepted, like SMS). `ManagedMessagesService.send` now dispatches on
+    `preview.channel`. Migration `0085` + mirror unique index on
+    `message_delivery_attempts(email_message_id)` (NULL-distinct, SMS rows don't collide). ACCEPT ONLY —
+    dispatch worker is 4b. Two files split to hold the length guard: `managed-send-plan.ts` (pure
+    send-planning helpers) + `email-managed-accept.ts` (the accept core).
+    - **OPEN DESIGN POINT RESOLVED (both decisions user-signed-off):**
+      1. **`to` = `z.union([e164, emailAddress])`** — one field, no fork; unchanged `messages.send`. The
+         DEFINITION's channel is authoritative; `to` is validated against it pre-acceptance (mismatch →
+         400 `recipient_channel_mismatch`, **no PII echo**). No email-recipient compliance yet (matches
+         slice-3 `not_evaluated`).
+      2. **`from` authored on the definition** (`emailVariantContent.from`, optional) with a **synthetic
+         sandbox fallback** `no-reply@sandbox.fabric.dev` when absent. Grounded in a real-world email study
+         (SPF/DKIM/DMARC + verified sending domain = the authority layer; template carries a default
+         sender): the authored `from` is the template-default pattern; the **domain-binding + DNS
+         verification gate is the honest deferred readiness gap (4b/4c)** — sandbox never hits a real MTA
+         (`FakeEmailProvider`), so no dead live control ships.
+    - **Verified:** managed email spec 7/7 + managed SMS spec 10/10 real-Postgres (17/17 after the file
+      split), full api integration 180 pass (only the 2 documented pre-existing local-env failures:
+      retention fixture pollution + `senders` missing `DATABASE_URL_PROVISIONER`), api typecheck,
+      `db:assert:drift`, biome, file-length guard. **Independent review (gemini):** all 9 money/idempotency/
+      tenancy/PII/CHECK/migration points OK, NOTHING BLOCKING — findings cross-checked against the diff.
+      **Committed on `feature/ops-sdk007-email-sandbox`; nothing pushed, no redline crossed.**
+  - **4b-i DONE + committed** (`73cbf30`) — managed Email dispatch **money resolution**. New
+    `email-managed-resolve.ts` `reconcileManagedEmailTerminal`: looks up the attempt by
+    `email_message_id` (no row ⇒ direct email, no-op), then **delivered ⇒ commit / undelivered|failed|
+    expired ⇒ refund** (idempotent, `referenceId` = deliveryId = email message id — works because 4a-ii
+    reused `reserve()`'s `sms_reserve` ledger reason). Updates attempt + delivery status +
+    `resource_version`; cost columns untouched (email price fixed at accept). No extra outbox —
+    `resolve()` already emits `message.updated` keyed by `message_id` (= deliveryId). Wired into
+    `EmailService.resolve` inside its existing tx, after the terminal-freeze guard (no double-settle;
+    commit/refund independently idempotent). Mirrors SMS `engine.ts:resolveMessage`. FakeEmailProvider
+    test hooks: `reject@`⇒undelivered, `fail@`⇒failed, else delivered. **Verified by me:** dispatch 6 +
+    acceptance 7 + managed SMS 10 + direct email 5 = **28/28 real-Postgres**, api typecheck, biome,
+    file-length. **Independent review (gemini):** money-direction/double-settle/direct-email/tenancy/
+    outbox OK; the reserve-reason SUSPECT was a false positive (the passing commit test proves the
+    reservation is found); a pre-existing **unlogged `enqueue().catch(()=>undefined)` in the direct
+    `send()`** (SMS logs the equivalent deferral) is out of 4b-i scope — **FOLLOW-UP: add the deferral
+    log to email `send()`** for Redis-outage observability. Committed, nothing pushed.
+  - **4b-ii DONE + committed** (`ce12fbb`) — managed Email attempt-time recheck + TTL crash-recovery
+    sweep; both refund through the 4b-i reconcile (no second refund path). Recheck
+    (`email-dispatch-recovery.ts emailDispatchBlockReason`): re-checks `platform.email_sending` before
+    provider contact, block ⇒ `resolve('failed')` (refund for managed / plain fail for direct), NO
+    provider contact; **email has no consent/opt-out** (that catalog is phone-keyed via `hashMsisdn`), so
+    kill-switch is the only recheck; **fail-open** on store error. Sweep (`sweepManagedEmailExpired` +
+    `EmailService.sweepStuck`): managed-only (`EXISTS message_delivery_attempts`) stuck-past-TTL ⇒
+    `expired` ⇒ refund once, zero provider contact; wired into `maintenance.service runSweep` via
+    `maintenance-email-sweep.ts` (provisioner read-only discovery — `0063`/`0082` grant `app_provisioner`
+    SELECT on email_messages/attempts — then per-tenant `withTenant` mutation, try/catch-continue).
+    `assertSandboxEnvironment` extracted to `email-environment.ts` (email.service now 295 lines).
+    **Verified by me:** recovery 6 + dispatch + `maintenance.integration` (real provisioner sweep path) +
+    managed SMS = **26/26 real-Postgres**, api typecheck, biome, file-length guard. **Independent review
+    (gemini):** recheck/refund/double-refund/scoping/tenancy OK; the provisioner-RLS SUSPECT dispositioned
+    **two ways** (0063/0082 policies + the passing `maintenance.integration`); no module cycle
+    (`email.module` has no maintenance import); the pre-existing `enqueue().catch` is cleanup-debt #3.
+    Committed, nothing pushed. **Slice 4b (money vertical for dispatch) COMPLETE — accept (4a-ii) +
+    settle/refund (4b-i) + recheck/crash-recovery (4b-ii) all shipped.**
+  - **4c DONE + committed** (`3d3927c`) — Email authoring through the message-definitions API
+    (channel-polymorphic). Contracts (Opus): create/add-version requests → `z.discriminatedUnion(
+    "channel")` (SMS arm keeps `sender_id`, Email arm has none — email sender identity is `from` on the
+    content); `messageDefinitionVersion` response gains `channel` + `content` = SMS|Email union
+    (consumers narrow on `channel`); variable-schema subset extracted to
+    `message-definition-variable-schema.ts` (re-exported, length guard). Service (codex): create/
+    addVersion persist `channel`, sender-binding SMS-only, **channel immutable across versions**
+    (`channel_immutable` before the compat check, real channels to `analyzeDefinitionCompatibility`),
+    publish requires a sender binding only for SMS (email publishes without one). Dashboard **SMS-
+    narrowed** (Opus, taste): channel-guarded content reads, SMS unchanged, email version → read-only
+    stub, Edit hidden for email, create dialog sends `channel:"sms"` — **rich email authoring UI is
+    4e**. **Verified by me:** api email/definitions/preview 17/17 + dashboard route specs 12/12 real-
+    Postgres, contracts/domain/api/dashboard typecheck, file-length + browser-safe, OpenAPI regen +
+    `openapi:check`, biome. **Independent review (gemini, full diff after 4 tooling-flake retries): 15
+    files all OK, NOTHING BLOCKING**; lone nit = a test-only `as unknown as AuditService` mock cast.
+    Committed, nothing pushed.
+  - **4d DONE + committed** (`7f44207`) — test-only hardening (no production change). Preview↔send
+    **byte-parity** (vault-stored send subject/text/html identical to the managed preview incl.
+    HTML-escaped vars; reserve + delivery/attempt cost == preview.cost_minor); send-boundary negatives
+    (oversized / subject-newline header-injection / invalid-vars) each with a before/after side-effect
+    snapshot proving nothing persisted + no PII echo; **both tracked coverage gaps closed** — email
+    concurrent same-key race (3 → one delivery+attempt+email_message+reserve) + recheck fail-open unit
+    (throwing kill-switch → proceeds). Verified by me: 18/18 real-Postgres + 3 fail-open unit, guards,
+    biome. NOTE: independent-review tooling (gemini/codex) flaked repeatedly this session; for this
+    test-only slice self-review of the (substantive, non-vacuous) assertions stood in. Committed.
+  - **4e DONE + committed (2026-07-22)** — email authoring end-to-end, decomposed + independently
+    reviewed like the 4a/4b pattern:
+    - **4e-i (`f285786`)** — SDK managed Email support. `MessagePreview` gains `channel` + `emailPreview`
+      (new `EmailPreview` type + `parseEmailPreview`); `MessageDelivery`/`Attempt` channel `sms`→`sms|email`;
+      `send()` accepts email OR E.164 via `requireRecipient`. `release:check` green. Codex review: nothing
+      blocking.
+    - **4e-ii (`a8a4eb5`)** — dashboard Email authoring UI. Channel selector (create-only, immutable on
+      edit/version); `EmailContentFields` (from/subject/text/html) + `EmailLocalizedVariantsEditor`
+      (per-locale partial overrides); `EmailPreviewPanel` renders via the pure `previewEmail` (preview↔send
+      parity) + server "check released"; Edit enabled for email; `email-authoring.ts` (token spread across
+      subject+text+html, `buildEmailContent` with a code-point subject-header-injection guard). 71 dashboard
+      tests (9 new email-authoring unit + 2 route). **Codex review found + fixed one Medium**: the email
+      preview recipient field would 422 against the E.164-only `previewMessageRequest.to`; removed the field
+      (email eligibility is not recipient-keyed — no consent/opt-out, sender `not_evaluated`).
+  - **SDK-007 CLEANUP DEBT — ALL CLEARED (2026-07-22), before slice 5:**
+    1. **`sms_reserve` → channel-neutral `message_reserve`** — DONE (`dfb5682`). Additive enum migration
+       `0086` (`ADD VALUE IF NOT EXISTS`, sms_* retained); `reserve/commit/refund` write `message_*`;
+       `reservedFor` matches `IN('message_reserve','sms_reserve')`. **Backward-compat proven** on real
+       Postgres (`legacy-reserve-compat.integration.spec.ts`: a forged legacy `sms_reserve` reservation
+       still commits + refunds). Codex money review: nothing blocking. **`0086` proven CI-applicable**:
+       the full 86-migration journal applies `exit 0` on a fresh throwaway DB (enum lands the 8 correct
+       values). The local dev DB's pre-existing `__drizzle_migrations` desync (records ended at `0082`)
+       was reconciled — `drizzle-kit migrate` now completes `exit 0` locally too.
+    2. **`email.service.ts` re-org** — DONE (`6048cbe`). Extracted `/v1/email` reads to `email-reads.ts`;
+       service now a 284-line orchestrator.
+    3. **Unlogged `enqueue().catch` in direct email `send()`** — DONE (`6048cbe`). Logs the deferral now.
+    4. **Evidence consolidation** — DONE (`4df0e5e`). One `docs/sdk/evidence/sdk-007.md` (slice ledger +
+       AC01–AC05 traceability); the three slice fragments removed.
+    5. **Coverage gaps** — DONE in 4d (`7f44207`).
+    6. **Lost `acceptManaged` doc-comment** — DONE (`6048cbe`), restored during the §2 re-org.
+  - **SLICE 5 DONE + committed (`436c400`, 2026-07-23) — SDK-007 FULLY CLOSED (all ACs AC01–AC05).**
+    Channel narrowing closes AC04 + the inherited SDK-004-AC02. Contracts: catalog `channels` widened to
+    `array(messageChannel)`, `previewMessageRequest` gains optional `channel`. API: catalog emits the real
+    per-definition channel; the preview service (single choke point for preview + managed send) rejects a
+    mismatched asserted channel with 400 `channel_mismatch` — also fixed the latent
+    `sendManagedMessageRequest.channel` accepted-but-dropped smell. CLI manifest accepts sms|email. SDK:
+    `CatalogPreviewOptions.channel` narrows to the key's channel; `catalog.type-test.ts` `@ts-expect-error`
+    fixtures prove a wrong-channel literal fails to compile. Verified: SDK 41 + release:check, CLI 6, api
+    typecheck + unit 161 + real-Postgres preview(channel-mismatch)/managed/catalog, biome, OpenAPI current.
+    Codex review: nothing blocking. Evidence: `sdk-007.md` (all ACs closed), `sdk-004.md` AC02 → implemented.
+    **Remaining for SDK-007 are redlines only: npm publish + live Email (SDK-009).**
+  - **Local DB fully healthy (2026-07-23):** the pre-existing `__drizzle_migrations` desync was reconciled
+    and `0086` proven CI-applicable on a fresh DB; `drizzle-kit migrate` now `exit 0` locally. The stale
+    `delivery-retention` fixture was fixed (`98c8930`).
+- **ADR gate for later:** SDK-008 (routing state machine) and SDK-010 (Journey run/step/wakeup state
+  machine) each need their OWN ADR — flagged, not written yet. SDK-010 also has NO backend today (zero
+  `journey` rows/controllers/services); its frontend React Flow canvas + palette are reusable, but it
+  persists only to localStorage (`fabric.journeys.draft.v1`) — the mock debt SDK-010 retires.
+
+## Earlier (2026-07-18 → 07-21): SDK-003/004/005 closeout — PR #158 MERGED (21c9c8c)
 
 Branch `fix/ops-sdk004-closeout` (off `dev`), **pushed 2026-07-21, PR #158 → dev, MERGEABLE, CI
 running** (`verify:push` passed on push). 12 commits. fifi ff-merges `dev` — do not self-merge.

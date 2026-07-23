@@ -47,6 +47,7 @@ export function toVersionDto(
     id: row.id,
     definition_id: row.definitionId,
     version: row.version,
+    channel: row.channel as MessageDefinitionVersionDto["channel"],
     // Stored jsonb; validated as the closed subset on write, so it round-trips as the DTO shape.
     variable_schema:
       row.variableSchema as MessageDefinitionVersionDto["variable_schema"],

@@ -144,7 +144,12 @@ export async function openTerminalTxn(
   }
 }
 
-/** The reserved amount + currency for a message (from its sms_reserve reserved_clearing credit). */
+/**
+ * The reserved amount + currency for a message (from its reserve reserved_clearing credit). Matches
+ * BOTH the channel-neutral message_reserve (SDK-007 onward) and the legacy sms_reserve so a reservation
+ * placed before the rename still commits/refunds. A reference has at most one reserve leg, so the IN is
+ * unambiguous.
+ */
 export async function reservedFor(
   tx: TenantTx,
   referenceId: string,
@@ -152,7 +157,8 @@ export async function reservedFor(
   const rows = (await tx`
     SELECT e.amount_minor, a.currency
     FROM ledger_entries e JOIN ledger_accounts a ON a.id = e.account_id
-    WHERE e.reference_id = ${referenceId} AND e.reason = 'sms_reserve'
+    WHERE e.reference_id = ${referenceId}
+      AND e.reason IN ('message_reserve', 'sms_reserve')
       AND a.kind = 'reserved_clearing' AND e.direction = 'credit'`) as Row[];
   if (!rows[0]) throw new NoReservationError(referenceId);
   return {

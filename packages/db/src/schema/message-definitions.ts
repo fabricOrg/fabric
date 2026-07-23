@@ -96,11 +96,14 @@ export const messageDefinitionVersions = pgTable(
     definitionId: uuid("definition_id").notNull(),
     applicationId: uuid("application_id").notNull().$type<ApplicationId>(),
     version: integer("version").notNull(),
+    // The managed channel this version targets (ADR-0005 Amendment A1). Single-channel per version;
+    // defaults to 'sms' so existing rows backfill safely.
+    channel: text("channel").notNull().default("sms"),
     // Portable, closed JSON-Schema subset (docs/sdk/sdk-003-slice0-design.md §2). Validated + compiled
     // to zod at the API boundary; never executed.
     variableSchema: jsonb("variable_schema").notNull(),
-    // SMS variant content + locale rules. Rendered server-side; the renderer is the single source both
-    // preview (SDK-003) and managed send (SDK-005) consume.
+    // SMS or Email variant content + locale rules, discriminated by `channel`. Rendered server-side; the
+    // renderer is the single source both preview (SDK-003) and managed send (SDK-005/007) consume.
     content: jsonb("content").notNull(),
     defaultLocale: text("default_locale").notNull(),
     createdBy: uuid("created_by").$type<UserId>(),
@@ -120,6 +123,10 @@ export const messageDefinitionVersions = pgTable(
       t.definitionId,
     ),
     check("message_def_version_positive_check", sql`${t.version} > 0`),
+    check(
+      "message_definition_version_channel_check",
+      sql`${t.channel} in ('sms', 'email')`,
+    ),
     foreignKey({
       columns: [t.definitionId, t.tenantId, t.applicationId],
       foreignColumns: [

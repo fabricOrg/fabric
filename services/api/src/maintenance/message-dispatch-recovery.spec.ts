@@ -1,6 +1,7 @@
 import type { ProvisioningDb } from "@app/db";
 import type { ConfigService } from "@nestjs/config";
 import { describe, expect, it, vi } from "vitest";
+import type { EmailService } from "../email/email.service.js";
 import type { SmsService } from "../sms/sms.service.js";
 import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
 import { MaintenanceService } from "./maintenance.service.js";
@@ -26,6 +27,7 @@ describe("scheduled durable message dispatch recovery", () => {
     const service = new MaintenanceService(
       { db: { transaction } } as unknown as ProvisioningDb,
       { enqueuePending } as unknown as SmsService,
+      {} as EmailService,
       {} as VirtualPhoneService,
       { get: () => undefined } as unknown as ConfigService,
     );
@@ -42,6 +44,7 @@ describe("scheduled durable message dispatch recovery", () => {
     const service = new MaintenanceService(
       {} as ProvisioningDb,
       {} as SmsService,
+      {} as EmailService,
       {} as VirtualPhoneService,
       { get: () => undefined } as unknown as ConfigService,
     );

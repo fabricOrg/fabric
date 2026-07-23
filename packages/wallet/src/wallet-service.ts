@@ -106,7 +106,9 @@ export async function reserve(
   if (balance < p.amountMinor) {
     throw new InsufficientFundsError(p.currency, balance, p.amountMinor);
   }
-  await postLegs(tx, txnId, p.referenceId, "sms_reserve", p.amountMinor, {
+  // Channel-neutral reason (SDK-007): managed reserve backs SMS and Email. reservedFor() matches both
+  // this and the legacy sms_reserve so in-flight/historical SMS reservations still commit/refund.
+  await postLegs(tx, txnId, p.referenceId, "message_reserve", p.amountMinor, {
     debit: customer,
     credit: reserved,
   });
@@ -133,7 +135,7 @@ export async function commit(
   if (replayed) return { txnId, amountMinor, replayed: true };
   const reserved = await accountId(tx, currency, "reserved_clearing");
   const revenue = await accountId(tx, currency, "revenue");
-  await postLegs(tx, txnId, p.referenceId, "sms_commit", amountMinor, {
+  await postLegs(tx, txnId, p.referenceId, "message_commit", amountMinor, {
     debit: reserved,
     credit: revenue,
   });
@@ -161,7 +163,7 @@ export async function refund(
   if (replayed) return { txnId, amountMinor, replayed: true };
   const reserved = await accountId(tx, currency, "reserved_clearing");
   const customer = await accountId(tx, currency, "customer");
-  await postLegs(tx, txnId, p.referenceId, "sms_refund", amountMinor, {
+  await postLegs(tx, txnId, p.referenceId, "message_refund", amountMinor, {
     debit: reserved,
     credit: customer,
   });

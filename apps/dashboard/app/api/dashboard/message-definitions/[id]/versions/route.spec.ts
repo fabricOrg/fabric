@@ -21,6 +21,7 @@ vi.mock("@/lib/server/api-client", () => ({
 import { POST } from "./route.js";
 
 const body = {
+  channel: "sms",
   content: { body: "Hi {{name}}", class: "transactional", locales: {} },
   variable_schema: {
     type: "object",

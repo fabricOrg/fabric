@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   createMessageDefinitionRequest,
+  emailVariantContent,
   localeTag,
+  messageChannel,
+  messageVariantContent,
   smsVariantContent,
   stableKey,
   variableSchema,
@@ -170,5 +173,65 @@ describe("variable-schema subset (SDK-003 slice-0 §2)", () => {
       required: ["a", "ghost"],
     };
     expect(variableSchema.safeParse(s).success).toBe(false);
+  });
+});
+
+// SDK-007 slice 1 — the channel/content building blocks Email authoring (slice 3/4) consumes. The
+// version RESPONSE DTO stays SMS-shaped in this slice; these types are exported standalone.
+describe("message channel + variant content (ADR-0005 Amendment A1)", () => {
+  it("channel is the closed sms|email catalog", () => {
+    expect(messageChannel.options).toEqual(["sms", "email"]);
+  });
+
+  it("accepts an email variant with html only, filling empty locales", () => {
+    expect(
+      emailVariantContent.parse({
+        subject: "Your order shipped",
+        html: "<p>On its way</p>",
+      }),
+    ).toEqual({
+      subject: "Your order shipped",
+      html: "<p>On its way</p>",
+      locales: {},
+    });
+  });
+
+  it("accepts an email variant with text only", () => {
+    expect(
+      emailVariantContent.safeParse({ subject: "Hi", text: "hello" }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an email variant with neither text nor html", () => {
+    const result = emailVariantContent.safeParse({ subject: "Empty" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe("email_content_required");
+    }
+  });
+
+  it("rejects an email locale override with an unknown key (strict)", () => {
+    expect(
+      emailVariantContent.safeParse({
+        subject: "Hi",
+        text: "hello",
+        locales: { "fr-FR": { subject: "Salut", note: "nope" } },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("discriminates sms and email content in the variant union", () => {
+    const sms = messageVariantContent.parse({
+      body: "hello",
+      class: "transactional",
+      locales: {},
+    });
+    expect("body" in sms).toBe(true);
+
+    const email = messageVariantContent.parse({
+      subject: "Hi",
+      html: "<p>hi</p>",
+    });
+    expect("subject" in email).toBe(true);
   });
 });

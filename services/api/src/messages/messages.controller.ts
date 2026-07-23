@@ -48,6 +48,7 @@ export class MessagesController {
       tenant.environmentId,
     );
     return {
+      channel: out.channel,
       version_id: out.version_id,
       environment: out.environment,
       resolved_locale: out.resolved_locale,
@@ -60,6 +61,7 @@ export class MessagesController {
       sender: out.sender,
       message_class: out.message_class,
       preview: out.preview,
+      email_preview: out.email_preview,
       request_id: newRequestId(),
     };
   }

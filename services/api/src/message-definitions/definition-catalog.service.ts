@@ -5,7 +5,7 @@ import {
   DEFINITION_CATALOG_SDK_CONTRACT_VERSION,
   type DefinitionCatalogEntry,
   type DefinitionCatalogManifest,
-  type SmsVariantContent,
+  messageChannel,
   type VariableSchema,
 } from "@app/contracts";
 import {
@@ -57,6 +57,7 @@ export class DefinitionCatalogService {
         .select({
           key: messageDefinitions.key,
           version: messageDefinitionVersions.version,
+          channel: messageDefinitionVersions.channel,
           defaultLocale: messageDefinitionVersions.defaultLocale,
           variableSchema: messageDefinitionVersions.variableSchema,
           content: messageDefinitionVersions.content,
@@ -101,15 +102,19 @@ export class DefinitionCatalogService {
 function toEntry(row: {
   key: string;
   version: number;
+  channel: string;
   defaultLocale: string;
   variableSchema: unknown;
   content: unknown;
 }): DefinitionCatalogEntry {
-  const content = row.content as SmsVariantContent;
+  // Both SMS and Email variant content carry a `locales` record — read it channel-agnostically.
+  const content = row.content as { locales: Record<string, unknown> };
   return {
     key: row.key,
     version: row.version,
-    channels: ["sms"],
+    // The drizzle column types as string; parse through the enum to narrow (the DB CHECK already
+    // constrains it to sms|email, so this never throws in practice).
+    channels: [messageChannel.parse(row.channel)],
     default_locale: row.defaultLocale,
     locales: [row.defaultLocale, ...Object.keys(content.locales)].sort(),
     data_schema: row.variableSchema as VariableSchema,

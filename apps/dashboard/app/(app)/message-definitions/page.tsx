@@ -1,4 +1,8 @@
-import type { MessageDefinitionState } from "@app/contracts";
+import type {
+  EmailVariantContent,
+  MessageDefinitionState,
+  SmsVariantContent,
+} from "@app/contracts";
 import { PageContainer } from "@app/ui/components/ui/app-shell";
 import { Badge } from "@app/ui/components/ui/badge";
 import {
@@ -15,6 +19,7 @@ import { DefinitionApplicationSelector } from "@/components/message-definitions/
 import { variablesFromSchema } from "@/components/message-definitions/definition-authoring";
 import { DefinitionDeveloperSetup } from "@/components/message-definitions/definition-developer-setup";
 import { DefinitionPreviewPanel } from "@/components/message-definitions/definition-preview-panel";
+import { EmailPreviewPanel } from "@/components/message-definitions/email-preview-panel";
 import { BffError } from "@/lib/server/api-client";
 import { listApplications } from "@/lib/server/applications-client";
 import { requireDashboardSession } from "@/lib/server/auth";
@@ -33,7 +38,9 @@ function useInCodeSnippet(state: MessageDefinitionState): string {
     .map((k) => `    ${k}: "…"`)
     .join(",\n");
   const locale = state.latest_version?.default_locale ?? "en";
-  return `await fabric.messages.send("${state.definition.key}", {\n  to: "+233…",\n  data: {\n${data}\n  },\n  locale: "${locale}",\n  idempotencyKey: "order-1042",\n});`;
+  const to =
+    state.latest_version?.channel === "email" ? "user@example.com" : "+233…";
+  return `await fabric.messages.send("${state.definition.key}", {\n  to: "${to}",\n  data: {\n${data}\n  },\n  locale: "${locale}",\n  idempotencyKey: "order-1042",\n});`;
 }
 
 function DefinitionCard({
@@ -68,10 +75,23 @@ function DefinitionCard({
       {latest_version ? (
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary">{latest_version.default_locale}</Badge>
-          <Badge variant="secondary">{latest_version.content.class}</Badge>
-          <Badge variant="secondary">
-            Sender: {sandboxSender ?? "Not bound"}
-          </Badge>
+          <Badge variant="secondary">{latest_version.channel}</Badge>
+          {latest_version.channel === "sms" ? (
+            <>
+              <Badge variant="secondary">
+                {(latest_version.content as SmsVariantContent).class}
+              </Badge>
+              <Badge variant="secondary">
+                Sender: {sandboxSender ?? "Not bound"}
+              </Badge>
+            </>
+          ) : (
+            <Badge variant="secondary">
+              From:{" "}
+              {(latest_version.content as EmailVariantContent).from ??
+                "sandbox default"}
+            </Badge>
+          )}
         </div>
       ) : null}
 
@@ -85,9 +105,18 @@ function DefinitionCard({
         </pre>
       </div>
 
-      {latest_version ? (
+      {latest_version?.channel === "sms" ? (
         <DefinitionPreviewPanel
-          body={latest_version.content.body}
+          body={(latest_version.content as SmsVariantContent).body}
+          schema={latest_version.variable_schema}
+          fields={variablesFromSchema(latest_version.variable_schema)}
+          definitionKey={definition.key}
+        />
+      ) : latest_version ? (
+        <EmailPreviewPanel
+          subject={(latest_version.content as EmailVariantContent).subject}
+          text={(latest_version.content as EmailVariantContent).text ?? ""}
+          html={(latest_version.content as EmailVariantContent).html ?? ""}
           schema={latest_version.variable_schema}
           fields={variablesFromSchema(latest_version.variable_schema)}
           definitionKey={definition.key}

@@ -90,5 +90,31 @@ Status at acceptance (2026-07-19): three of four satisfied.
   defence-in-depth recommendation to land the never-shipped NOT-NULL on `api_keys.application_id`.
 - ~~Define managed-delivery and attempt webhook schemas with compatibility guarantees.~~ Done —
   typed canonical events in SDK-002/005, `webhook-event-contract.spec`.
-- ~~Implement the authoritative vertical increments and gates.~~ Done — SDK-003/004/005; SDK-004's
-  AC02 channel clause remains an open implement-or-record-non-applicability call.
+- ~~Implement the authoritative vertical increments and gates.~~ Done — SDK-003/004/005. SDK-004's
+  AC02 channel clause was recorded a **reviewed non-applicability** (2026-07-21, `docs/sdk/evidence/sdk-004.md`)
+  while SMS was the only managed channel, and is **implemented** by SDK-007 (Amendment A1 §5) — the
+  first item that makes a second channel selectable.
+
+## Amendment A1 — second managed channel: Email (accepted 2026-07-21, product owner)
+
+Records the implementation decisions for extending the managed layer to Email in sandbox (SDK-007).
+Amends, does not supersede, the Decision above. Design source: `docs/sdk/sdk-007-slice0-design.md`.
+
+1. A managed definition **version is single-channel**; content is polymorphic on `channel` (SMS `body`;
+   Email `subject`/`text`/`html`, ≥1 of text/html). `variableSchema` is channel-agnostic and shared.
+   Multi-channel-per-intent remains routing (SDK-008, which carries its own ADR).
+2. The managed engine **dispatches by channel** onto per-channel runtimes; Email reuses the existing
+   direct-Email sandbox provider path (`FakeEmailProvider`) as its runtime. No second engine, delivery
+   table, idempotency store, or wallet.
+3. Delivery/attempt rows are **channel-tagged** (`channel` column; CHECK `IN ('sms','email')`); the
+   delivery aggregate (Decision 1) is unchanged — it already owns zero-or-more channel attempts.
+4. **Pricing is per-channel and pure:** SMS by `rateSegments`, Email by `rateEmailBySize` (size-tiered,
+   rendered-byte bands with a hard-ceiling blocker). Preview and send price through the same function.
+5. The generated catalog carries `channel` and **compile-time constrains `messages.send`** by it,
+   closing this ADR's AC02 follow-up.
+6. Execution/acceptance/idempotency/webhook/privacy semantics are unchanged — ADR-0006 governs them and
+   applies to the Email runtime as-is.
+
+**Scope guard:** no live Email path, provider, domain selector, capability-matrix entry, or catalog
+channel ships until its real execution path exists and is tested. Live Email is SDK-009, behind the live
+redline. Sandbox Email stays absent from all public surfaces until the SDK-007 release gate.

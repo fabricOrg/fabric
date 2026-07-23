@@ -582,6 +582,34 @@
       "when": 1784280680000,
       "tag": "0082_managed_message_deliveries_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1784637241714,
+      "tag": "0083_flimsy_hercules",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1784675210576,
+      "tag": "0084_rich_angel",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1784700000000,
+      "tag": "0085_managed_email_attempt_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1784756761780,
+      "tag": "0086_blushing_stryfe",
+      "breakpoints": true
     }
   ]
 }
