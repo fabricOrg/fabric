@@ -63,6 +63,16 @@ async function cleanup() {
     "DELETE FROM message_deliveries WHERE tenant_id IN ($1, $2)",
     [TENANT_A, TENANT_B],
   );
+  // The email-channel fixture seeds an email_messages row (+ its data_subjects parent) that the attempt
+  // references (RESTRICT). Clear them after the attempts, before the account delete.
+  await owner.unsafe("DELETE FROM email_messages WHERE tenant_id IN ($1, $2)", [
+    TENANT_A,
+    TENANT_B,
+  ]);
+  await owner.unsafe("DELETE FROM data_subjects WHERE tenant_id IN ($1, $2)", [
+    TENANT_A,
+    TENANT_B,
+  ]);
   // Delete ONLY our two tenants; accounts -> applications -> environments -> definitions ->
   // versions/releases all cascade on tenant delete. Never blanket-delete shared tables — other local
   // fixtures (e.g. email messages) hold FKs to environments/accounts and would block teardown.
@@ -325,11 +335,26 @@ describe("SDK-003 — message definition isolation + invariants", () => {
           'GHS', 'idem-email-1', $7, now() + interval '1 day')`,
       [deliveryId, TENANT_A, appA, envA, defA, verA1, "a".repeat(64)],
     );
+    // An email attempt must reference an email_messages row (0084 channel-message CHECK: channel='email'
+    // ⇒ email_message_id NOT NULL, message_id NULL). Seed the minimal chain: data_subjects → email_messages.
+    const subjectId = first(
+      await owner.unsafe<{ subject_id: string }[]>(
+        "INSERT INTO data_subjects (tenant_id) VALUES ($1) RETURNING subject_id",
+        [TENANT_A],
+      ),
+    ).subject_id;
+    const emailMessageId = first(
+      await owner.unsafe<{ id: string }[]>(
+        `INSERT INTO email_messages (tenant_id, application_id, environment_id, subject_id)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [TENANT_A, appA, envA, subjectId],
+      ),
+    ).id;
     await owner.unsafe(
       `INSERT INTO message_delivery_attempts
-         (tenant_id, application_id, environment_id, delivery_id, ordinal, channel, currency)
-       VALUES ($1, $2, $3, $4, 1, 'email', 'GHS')`,
-      [TENANT_A, appA, envA, deliveryId],
+         (tenant_id, application_id, environment_id, delivery_id, ordinal, channel, email_message_id, currency)
+       VALUES ($1, $2, $3, $4, 1, 'email', $5, 'GHS')`,
+      [TENANT_A, appA, envA, deliveryId, emailMessageId],
     );
     const seen = await owner.unsafe<{ n: number }[]>(
       "SELECT count(*)::int AS n FROM message_delivery_attempts WHERE delivery_id = $1 AND channel = 'email'",
