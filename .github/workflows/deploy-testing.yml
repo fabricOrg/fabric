@@ -1,0 +1,113 @@
+name: Deploy testing (Vercel + Render)
+
+# TESTING-ONLY deploy to the free stack: frontends → Vercel, API → Render, DB is Neon.
+# AWS (deploy.yml / deploy-ecs.yml) remains the FUTURE staging/production path and is untouched.
+# This workflow has its OWN gate var (VERCEL_RENDER_TESTING_ENABLED) so it never double-fires with
+# the AWS testing job. There is NO staging/production job here by design — prod stays on AWS, gated.
+#
+# Required repo/GitHub-Environment config (provision before enabling — Claude does not set these):
+#   var  VERCEL_RENDER_TESTING_ENABLED = "true"
+#   secret VERCEL_TOKEN
+#   secret VERCEL_ORG_ID
+#   secret VERCEL_PROJECT_ID_DASHBOARD / _ADMIN / _WWW   (one per Vercel project)
+#   secret RENDER_API_KEY
+#   secret RENDER_API_SERVICE_ID        (the api service, e.g. srv-…)
+
+on:
+  push:
+    branches: [testing]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-testing-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-frontends:
+    name: Vercel · ${{ matrix.app }}
+    if: vars.VERCEL_RENDER_TESTING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: dashboard
+            projectSecret: VERCEL_PROJECT_ID_DASHBOARD
+          - app: admin-console
+            projectSecret: VERCEL_PROJECT_ID_ADMIN
+          - app: www
+            projectSecret: VERCEL_PROJECT_ID_WWW
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets[matrix.projectSecret] }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Skip if this app's project is not configured
+        id: guard
+        shell: bash
+        run: |
+          if [[ -z "$VERCEL_PROJECT_ID" || -z "$VERCEL_TOKEN" ]]; then
+            echo "::notice::${{ matrix.app }} Vercel project/token not configured — skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install Vercel CLI
+        if: steps.guard.outputs.skip != 'true'
+        run: npm install --global vercel@latest
+      # Vercel builds each app from its own project (root-directory set in the Vercel project), so the
+      # monorepo build is driven by project settings — we pull them, build, and deploy the prebuilt output.
+      - name: Pull Vercel project settings
+        if: steps.guard.outputs.skip != 'true'
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build
+        if: steps.guard.outputs.skip != 'true'
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy (prebuilt)
+        if: steps.guard.outputs.skip != 'true'
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+  deploy-api-render:
+    name: Render · api
+    if: vars.VERCEL_RENDER_TESTING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_API_SERVICE_ID: ${{ secrets.RENDER_API_SERVICE_ID }}
+        shell: bash
+        run: |
+          if [[ -z "$RENDER_API_KEY" || -z "$RENDER_API_SERVICE_ID" ]]; then
+            echo "::notice::Render API key/service id not configured — skipping."
+            exit 0
+          fi
+          # Render builds the api from its own service config (Dockerfile/build command). Trigger a
+          # deploy of the current pushed commit and wait for it to finish (fail the job if it errors).
+          deploy_id=$(curl -sS -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            "https://api.render.com/v1/services/$RENDER_API_SERVICE_ID/deploys" \
+            -d '{"clearCache":"do_not_clear"}' | jq -r '.id')
+          if [[ -z "$deploy_id" || "$deploy_id" == "null" ]]; then
+            echo "::error::Render deploy did not return an id." && exit 1
+          fi
+          echo "Render deploy $deploy_id started; polling…"
+          for _ in $(seq 1 60); do
+            sleep 15
+            status=$(curl -sS \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/services/$RENDER_API_SERVICE_ID/deploys/$deploy_id" \
+              | jq -r '.status')
+            echo "status=$status"
+            case "$status" in
+              live) echo "Render deploy live." && exit 0 ;;
+              build_failed|update_failed|canceled|deactivated|pre_deploy_failed)
+                echo "::error::Render deploy $status." && exit 1 ;;
+            esac
+          done
+          echo "::error::Render deploy timed out." && exit 1
