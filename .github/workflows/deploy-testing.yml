@@ -26,9 +26,26 @@ permissions:
   contents: read
 
 jobs:
+  # Read the enable flag inside the `testing` environment (env-scoped variables are available in a
+  # STEP once the environment is assigned, but NOT reliably in a job-level `if:`). Downstream jobs
+  # gate on this output via the `needs` context, which IS available in `if:`.
+  gate:
+    name: Gate (testing env)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    environment: testing
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        shell: bash
+        run: echo "enabled=${{ vars.VERCEL_RENDER_TESTING_ENABLED }}" >> "$GITHUB_OUTPUT"
+
   deploy-frontends:
     name: Vercel · ${{ matrix.app }}
-    if: vars.VERCEL_RENDER_TESTING_ENABLED == 'true'
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    environment: testing
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -72,7 +89,9 @@ jobs:
 
   deploy-api-render:
     name: Render · api
-    if: vars.VERCEL_RENDER_TESTING_ENABLED == 'true'
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    environment: testing
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

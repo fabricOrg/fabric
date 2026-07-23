@@ -28,13 +28,14 @@ the FUTURE staging/production path and is left untouched** — this workflow add
 stack and has its own gate so the two never double-fire. There is **no staging/production job here**
 by design; production stays on AWS behind its existing gates + a human go.
 
-**Trigger:** push to `testing` (or manual dispatch), gated on `vars.VERCEL_RENDER_TESTING_ENABLED == 'true'`.
-
-**Required config (GitHub repo or a `testing` Environment):**
+**Trigger:** push to `testing` (or manual dispatch). All jobs run in the **`testing` GitHub
+Environment**. A small `gate` job reads the enable flag *inside* that environment (env-scoped
+variables are available in a step, but not reliably in a job-level `if:`) and the deploy jobs gate on
+its output. Put the config in the **`testing` Environment** (Settings → Environments → testing):
 
 | Kind | Name | Purpose |
 | --- | --- | --- |
-| var | `VERCEL_RENDER_TESTING_ENABLED` | `"true"` to enable this workflow (distinct from the AWS `TESTING_DEPLOYMENTS_ENABLED`) |
+| **environment var** | `VERCEL_RENDER_TESTING_ENABLED` | `"true"` to enable (a `testing`-environment **Variable**, not a secret — secrets can't be read in `if:`; distinct from the AWS `TESTING_DEPLOYMENTS_ENABLED`) |
 | secret | `VERCEL_TOKEN` | Vercel deploy token |
 | secret | `VERCEL_ORG_ID` | Vercel org/team id |
 | secret | `VERCEL_PROJECT_ID_DASHBOARD` | dashboard Vercel project id |
