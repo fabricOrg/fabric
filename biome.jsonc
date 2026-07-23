@@ -41,6 +41,9 @@
       "!**/.next",
       "!**/.astro",
       "!**/.vercel",
+      // .astro components are linted/formatted by `astro check` — biome only sees the frontmatter in
+      // isolation and false-flags template-used consts as unused. Exclude the file type here.
+      "!**/*.astro",
       "!**/coverage",
       "!**/node_modules",
       "!**/playwright-report",

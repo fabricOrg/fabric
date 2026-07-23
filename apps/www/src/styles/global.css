@@ -1,5 +1,18 @@
 @import "@app/ui/theme.css";
+/* Load the brand fonts and bind them to the --font-* vars @app/ui expects (the product apps supply
+ * these via next/font; Astro supplies them here). Clash Display = Fontshare; Inter + JetBrains Mono =
+ * Google. Without this the display/mono vars fall back to system fonts and the site reads generic. */
+@import url("https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
+:root {
+  --font-clash: "Clash Display";
+  --font-inter: "Inter";
+  --font-jbm: "JetBrains Mono";
+}
+
+/* Bridge Starlight's theme variables onto the @app/ui semantic tokens so the docs match the product.
+ * theme.css is the single source of truth; we only remap Starlight's --sl-* names. */
 :root {
   color-scheme: light;
   --sl-color-white: var(--card);
@@ -36,171 +49,4 @@ html {
 
 body {
   min-height: 100vh;
-}
-
-.site-shell {
-  min-height: 100vh;
-  background:
-    linear-gradient(
-      color-mix(in oklab, var(--primary) 10%, transparent),
-      transparent 28rem
-    ),
-    var(--background);
-}
-
-.site-header,
-.site-footer,
-.hero,
-.features {
-  margin-inline: auto;
-  width: min(100% - 2rem, 72rem);
-}
-
-.site-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-block: 1.25rem;
-}
-
-.brand {
-  color: var(--foreground);
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.header-nav {
-  display: flex;
-  gap: 1rem;
-}
-
-.header-nav a,
-.footer-link {
-  color: var(--muted-foreground);
-  font-size: 0.9375rem;
-  text-decoration: none;
-}
-
-.header-nav a:hover,
-.footer-link:hover {
-  color: var(--foreground);
-}
-
-.hero {
-  display: grid;
-  gap: 2rem;
-  min-height: 34rem;
-  padding-block: 5rem 4rem;
-}
-
-.hero-copy {
-  max-width: 44rem;
-}
-
-.eyebrow {
-  color: var(--primary);
-  font-size: 0.875rem;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.hero h1 {
-  margin-block: 1rem;
-  color: var(--foreground);
-  font-family: var(--font-display);
-  font-size: clamp(2.5rem, 4rem, 5rem);
-  line-height: 1;
-  letter-spacing: 0;
-}
-
-.hero p {
-  margin: 0;
-  color: var(--muted-foreground);
-  font-size: 1.125rem;
-  line-height: 1.7;
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 2rem;
-}
-
-.button {
-  align-items: center;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  display: inline-flex;
-  font-weight: 700;
-  justify-content: center;
-  min-height: 2.75rem;
-  padding-inline: 1rem;
-  text-decoration: none;
-}
-
-.button-primary {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--primary-foreground);
-}
-
-.button-secondary {
-  background: var(--card);
-  color: var(--foreground);
-}
-
-.features {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding-block: 1rem 4rem;
-}
-
-.feature-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  color: var(--card-foreground);
-  padding: 1.25rem;
-}
-
-.feature-card h2 {
-  font-size: 1rem;
-  margin: 0 0 0.5rem;
-}
-
-.feature-card p {
-  color: var(--muted-foreground);
-  line-height: 1.6;
-  margin: 0;
-}
-
-.site-footer {
-  border-top: 1px solid var(--border);
-  color: var(--muted-foreground);
-  display: flex;
-  justify-content: space-between;
-  padding-block: 1.5rem;
-}
-
-@media (max-width: 720px) {
-  .site-header,
-  .site-footer {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .hero {
-    min-height: auto;
-    padding-block: 3rem;
-  }
-
-  .features {
-    grid-template-columns: 1fr;
-  }
 }
