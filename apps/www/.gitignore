@@ -1,2 +1,5 @@
 .astro/
 dist/
+
+.vercel
+.vercel/

@@ -39,6 +39,8 @@
       "**",
       "!**/dist",
       "!**/.next",
+      "!**/.astro",
+      "!**/.vercel",
       "!**/coverage",
       "!**/node_modules",
       "!**/playwright-report",
