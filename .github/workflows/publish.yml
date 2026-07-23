@@ -59,6 +59,10 @@ jobs:
     needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Must match the npm trusted-publisher binding (configured on npmjs for publish.yml → the
+    # `testing` GitHub Environment). The OIDC token's environment claim has to line up or npm
+    # rejects the trusted publish.
+    environment: testing
     permissions:
       contents: read
       id-token: write

@@ -13,8 +13,10 @@ Publishes `@fabric-messaging/sdk` and `@fabric-messaging/cli` to the public npm 
 - **workflow_dispatch** with a `package` choice (`sdk` | `cli`).
 
 **One-time setup (npmjs.com, per package):** Package → Settings → Trusted publishers → add this
-repository (`fabricOrg/fabric`) + workflow `publish.yml`. Provenance also needs the repo's Actions to
-be allowed `id-token: write` (already set in the workflow). No `NPM_TOKEN` secret is used.
+repository (`fabricOrg/fabric`) + workflow `publish.yml` + the **`testing` GitHub Environment**. The
+publish job declares `environment: testing`, so the OIDC token's environment claim matches the
+trusted-publisher binding — they must agree or npm rejects the publish. Provenance also needs
+`id-token: write` (set in the workflow). No `NPM_TOKEN` secret is used.
 
 **Flow:** checkout → pnpm/node 22 → `pnpm install --frozen-lockfile` → `pnpm release:check` in the
 package (build + typecheck + tests + pack smoke) → `npm publish --provenance --access public`.
