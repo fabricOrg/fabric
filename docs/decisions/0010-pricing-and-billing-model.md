@@ -1,8 +1,8 @@
 # ADR 0010: Pricing and billing model
 
-Status: **proposed 2026-07-24** (requires product-owner ratification, and a wallet + security review
-of the token subsystem before acceptance — it is money-adjacent). Shaped with the product owner in
-session; supersedes nothing but extends the wallet money semantics of
+Status: **accepted 2026-07-24** (product owner). A wallet + security review of the token subsystem
+is still required before/alongside implementation — it is money-adjacent. Shaped with the product
+owner in session; supersedes nothing but extends the wallet money semantics of
 [ADR 0006](./0006-managed-delivery-acceptance-and-execution.md).
 
 ## Context
@@ -109,8 +109,11 @@ consumable credit because every SMS carries a real carrier cost.
 ## Follow-up
 
 - Wallet + security review of the token subsystem and deferred-revenue accounting before acceptance.
-- Decide the **unused-token refund policy** (refundable? partial? none?) — it drives revenue
-  recognition and the counter's lifecycle states.
+- ~~Decide the unused-token refund policy.~~ **Resolved (product owner, 2026-07-24): unused tokens
+  are NON-refundable for now.** Simplifies revenue recognition (recognized at consumption; the
+  unconsumed remainder is a breakage/forfeiture on expiry-or-never) and the counter lifecycle (no
+  refund-to-wallet path, which also fits token buyers having no wallet). Revisit if support/GTM
+  demands it.
 - ~~Confirm the email attachment decision.~~ **Resolved (product owner, 2026-07-24):** keep the
   256 KiB transactional cap + flat per-send; a per-MB data surcharge (SES-style $/GB) is deferred
   until/unless the cap is raised to allow real attachments.
