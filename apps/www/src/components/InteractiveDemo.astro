@@ -19,7 +19,7 @@ await fabric.messages.send("order.shipped", {
       <button class="replay" type="button" data-replay>Replay</button>
     </header>
     <pre aria-label="Fabric SDK request being typed"><code data-code></code><span class="cursor" aria-hidden="true"></span></pre>
-    <output class="result" data-result aria-live="polite">Preparing the request...</output>
+    <output class="result" data-result aria-live="polite">Preparing the request…</output>
   </section>
 
   <section class="deliveries" aria-labelledby="deliveries-title">
@@ -124,7 +124,7 @@ await fabric.messages.send("order.shipped", {
     const current = ++sequence;
     removeAnimatedDelivery();
     setCode("");
-    setResult("Typing a server-side Fabric request...");
+    setResult("Typing a server-side Fabric request…");
     if (replayButton instanceof HTMLButtonElement) replayButton.disabled = true;
 
     if (reduceMotion.matches) {
@@ -158,18 +158,26 @@ await fabric.messages.send("order.shipped", {
     if (replayButton instanceof HTMLButtonElement) replayButton.disabled = false;
 
     await sleep(2400);
-    if (current === sequence && !reduceMotion.matches) {
+    // Loop only while the demo is on screen — an off-screen typing loop just burns CPU.
+    if (current === sequence && !reduceMotion.matches && inView) {
       void play();
     }
   };
 
   replayButton?.addEventListener("click", play);
 
+  let inView = false;
+  let started = false;
   const observer = new IntersectionObserver(
     (entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      observer.disconnect();
-      void play();
+      inView = entries.some((entry) => entry.isIntersecting);
+      if (!inView) return;
+      if (!started) {
+        started = true;
+        void play();
+      } else if (result?.dataset.tone === "success") {
+        void play();
+      }
     },
     { threshold: 0.35 },
   );

@@ -124,7 +124,7 @@ const capIcon = (k: string): string => ({
     <meta property="og:title" content="Fabric — communications infrastructure for developers" />
     <meta property="og:description" content="Every message your product sends, on infrastructure you can trust. One integration for SMS and email — WhatsApp, push, and voice next." />
     <meta name="twitter:card" content="summary" />
-    <link rel="icon" href={`data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%233f3aa8"/><path d="M18 14h31v9H28v9h18v9H28v15H18z" fill="%23fff"/></svg>')}`} />
+    <link rel="icon" href={`data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%23383a96"/><path d="M18 14h31v9H28v9h18v9H28v15H18z" fill="%23fff"/></svg>')}`} />
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -232,7 +232,7 @@ const capIcon = (k: string): string => ({
         </div>
         <div class="chan-note">
           <span class="cn-live">SMS · Email live</span>
-          <span class="cn-soon">WhatsApp · Push · Voice · In-app on the roadmap</span>
+          <span class="cn-soon">WhatsApp · Push · Voice on the roadmap</span>
         </div>
       </section>
 
@@ -241,7 +241,7 @@ const capIcon = (k: string): string => ({
         <div class="split-top">
           <div class="sec-head">
             <p class="num">Production readiness</p>
-            <h2>Trustworthy when it's <span class="hl">3am and busy</span>.</h2>
+            <h2>Trustworthy at <span class="hl">3am, under load</span>.</h2>
             <p class="section-lede">Reliability and security aren't a page in the docs — they're how the platform is built. The data plane never dies because a dependency did.</p>
           </div>
           <figure class="il split-il"><Image src={reliabilityImg} alt="A message queue: packets moving along a pipeline, one looping back as a retry, guarded by a fail-closed shield." widths={[360, 480, 567]} sizes="(min-width: 62rem) 30rem, 80vw" format="webp" quality={88} loading="lazy" /></figure>
@@ -324,7 +324,7 @@ const capIcon = (k: string): string => ({
       <section class="docs">
         <div class="sec-head">
           <p class="num">Quick start</p>
-          <h2>Your first message, in <span class="hl">four lines</span>.</h2>
+          <h2>Your first message, in <span class="hl">four steps</span>.</h2>
         </div>
         <div class="qs-grid">
           <ol class="qs-steps">
@@ -380,6 +380,34 @@ const capIcon = (k: string): string => ({
         <div class="ftr-legal"><span>© 2026 Fabric</span><span>Built for Ghana & Nigeria</span></div>
       </footer>
     </main>
+
+    <script is:inline>
+      (() => {
+        // Close the mobile menu after a same-page anchor tap (a <details> panel stays open otherwise).
+        const mnav = document.querySelector(".mobile-nav");
+        mnav?.addEventListener("click", (e) => {
+          if (e.target instanceof Element && e.target.closest("a")) mnav.removeAttribute("open");
+        });
+        // Scroll-reveal for section heads. Classes are added here, not in markup, so no-JS and
+        // reduced-motion readers get fully static content.
+        if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const io = new IntersectionObserver(
+          (entries) => {
+            for (const en of entries) {
+              if (en.isIntersecting) {
+                en.target.classList.add("in");
+                io.unobserve(en.target);
+              }
+            }
+          },
+          { rootMargin: "0px 0px -10% 0px" },
+        );
+        for (const el of document.querySelectorAll(".sec-head, .lc-head, .trustbar, .cov-copy, .flows-copy, .cta")) {
+          el.classList.add("pre");
+          io.observe(el);
+        }
+      })();
+    </script>
 
     <style>
       :root { --maxw: 74rem; --section-y: clamp(4rem, 7.5vw, 7rem); --head-gap: clamp(2.75rem, 4.5vw, 4rem); --card-pad: 1.9rem 1.7rem; }
@@ -450,13 +478,9 @@ const capIcon = (k: string): string => ({
       .guarantees strong { font-family: var(--font-display); font-size: .95rem; color: var(--foreground); }
       .guarantees span { font-size: .8rem; color: var(--muted-foreground); }
 
-      /* how */
-      .how { padding-block: var(--section-y); }
+      /* shared illustration frame */
       .il { margin: 0; }
       .il :global(img) { display: block; width: 100%; height: auto; filter: drop-shadow(0 30px 40px rgba(30,27,75,.16)); }
-      .how-grid { display: grid; gap: clamp(2rem, 5vw, 4rem); align-items: center; }
-      @media (min-width: 62rem) { .how-grid { grid-template-columns: 1fr 1fr; } }
-      .how-il { width: 100%; max-width: 34rem; margin-inline: auto; }
 
       /* dx journey */
       .dx { padding-block: var(--section-y); }
@@ -512,7 +536,7 @@ const capIcon = (k: string): string => ({
       /* coverage */
       .coverage { display: grid; gap: 2.5rem; align-items: center; padding-block: var(--section-y); }
       @media (min-width: 62rem) { .coverage { grid-template-columns: 1.05fr .95fr; } }
-      .cov-copy h2 { margin: .6rem 0 0; font-size: clamp(1.9rem,3.6vw,2.7rem); }
+      .cov-copy h2 { margin: .6rem 0 0; font-size: clamp(1.9rem,3.7vw,2.7rem); line-height: 1.05; }
       .cov-copy > p { margin: 1rem 0 1.4rem; color: var(--muted-foreground); line-height: 1.6; }
       .cov-legend { display: grid; gap: .6rem; margin: 0 0 1.6rem; padding: 0; list-style: none; }
       .cov-legend li { display: flex; align-items: center; gap: .6rem; font-size: .9rem; color: var(--foreground); }
@@ -524,13 +548,13 @@ const capIcon = (k: string): string => ({
 
       /* dashboard preview */
       .preview { padding-block: var(--section-y); }
-      .preview-frame { max-width: 60rem; margin: 2.5rem auto 0; }
+      .preview-frame { max-width: 60rem; margin: var(--head-gap) auto 0; }
 
       /* business workflows */
       .flows { padding-block: var(--section-y); }
       .flows-inner { display: grid; gap: 2.5rem; }
       @media (min-width: 64rem) { .flows-inner { grid-template-columns: 1fr 1fr; align-items: center; } }
-      .flows-copy h2 { margin: .6rem 0 0; font-size: clamp(1.9rem,3.6vw,2.6rem); }
+      .flows-copy h2 { margin: .6rem 0 0; font-size: clamp(1.9rem,3.7vw,2.7rem); line-height: 1.05; }
       .flows-il { margin: 1.8rem 0 0; }
       .flows-il img { display: block; width: 100%; height: auto; max-width: 30rem; }
       .flow-cards { display: grid; gap: 1rem; }
@@ -560,13 +584,14 @@ const capIcon = (k: string): string => ({
 
       /* faq */
       .faq { padding-block: var(--section-y); }
-      .faq-list { max-width: 48rem; margin: 2.5rem auto 0; border-top: 1px solid var(--border); }
+      .faq-list { max-width: 48rem; margin: var(--head-gap) auto 0; border-top: 1px solid var(--border); }
       .qa { border-bottom: 1px solid var(--border); }
       .qa summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.2rem .2rem; cursor: pointer; list-style: none; font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; color: var(--foreground); }
       .qa summary::-webkit-details-marker { display: none; }
       .q-mark { color: var(--primary); font-family: var(--font-mono); font-size: 1.3rem; transition: transform .2s; }
       .qa[open] .q-mark { transform: rotate(45deg); }
       .qa p { margin: 0 0 1.2rem; max-width: 44rem; color: var(--muted-foreground); line-height: 1.6; }
+      .qa[open] p { animation: fadeUp .3s cubic-bezier(.2,.7,.2,1); }
 
       /* cta */
       .cta { text-align: center; padding-block: calc(var(--section-y) * 1.5); }
@@ -589,9 +614,13 @@ const capIcon = (k: string): string => ({
 
       /* motion */
       .reveal { opacity: 0; transform: translateY(14px); animation: fadeUp .7s cubic-bezier(.2,.7,.2,1) forwards; animation-delay: var(--d,0s); }
-      @keyframes fadeUp { to { opacity: 1; transform: none; } }
+      @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+      /* scroll-reveal — .pre is added by JS only when IO exists and motion is allowed, so no-JS
+       * and reduced-motion readers always see static content */
+      :global(.pre) { opacity: 0; transform: translateY(14px); transition: opacity .65s cubic-bezier(.2,.7,.2,1), transform .65s cubic-bezier(.2,.7,.2,1); }
+      :global(.pre.in) { opacity: 1; transform: none; }
       @media (max-width: 48rem) { .nav { display: none; } .mobile-nav { display: block; } }
-      @media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } }
+      @media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } .qa[open] p { animation: none; } }
       :is(a, summary, details):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
     </style>
   </body>

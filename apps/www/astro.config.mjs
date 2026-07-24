@@ -11,7 +11,7 @@ export default defineConfig({
     starlight({
       title: "Fabric Docs",
       description:
-        "Build reliable SMS and email workflows with Fabric's API, TypeScript SDK, sandbox, and webhooks.",
+        "Build reliable SMS and email workflows with Fabric's TypeScript SDK, zero-gate sandbox, and signed webhooks.",
       customCss: ["./src/styles/global.css"],
       head: [
         {

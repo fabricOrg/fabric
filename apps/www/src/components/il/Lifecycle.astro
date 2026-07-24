@@ -83,7 +83,7 @@ const steps = [
           <div class="lc-card">
             <div class="lc-card-head"><span>Analytics</span><span class="muted">7 days</span></div>
             <div class="bars"><span style="--h:40%"></span><span style="--h:55%"></span><span style="--h:48%"></span><span style="--h:66%"></span><span style="--h:72%"></span><span style="--h:61%"></span><span style="--h:88%"></span></div>
-            <div class="an-foot"><strong>99.2%</strong> delivered · reconciled to the ledger</div>
+            <div class="an-foot">Sent, delivered, failed, and cost — <strong>reconciled</strong> to the ledger</div>
           </div>
         </div>
       </div>
@@ -133,7 +133,7 @@ const steps = [
   .lc { margin-inline: auto; width: min(100% - 3rem, var(--maxw)); padding-block: var(--section-y); }
   .lc-head { max-width: 44rem; margin: 0 auto clamp(1.5rem, 3vw, 2.25rem); text-align: center; }
   .num { margin: 0; color: var(--gold-ink); font-family: var(--font-mono); font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; }
-  .lc-head h2 { margin: .6rem 0 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.7rem,3.1vw,2.35rem); line-height: 1.05; }
+  .lc-head h2 { margin: .6rem 0 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.9rem,3.7vw,2.7rem); line-height: 1.05; }
   .hl { color: var(--primary); }
   .lc-lede { margin: 1rem auto 0; max-width: 40rem; color: var(--muted-foreground); line-height: 1.6; }
 
@@ -201,7 +201,9 @@ const steps = [
   .lc-steps::after { content: ""; position: absolute; left: 1.2rem; top: 0; width: 2px; height: var(--prog, 0px); background: var(--primary); transition: height .3s ease; }
   .lc-step { position: relative; min-height: 74vh; display: flex; flex-direction: column; justify-content: flex-start; padding: clamp(2rem, 12vh, 7rem) 0 0 3.6rem; opacity: .4; transition: opacity .35s ease; }
   .lc-step.is-active { opacity: 1; }
-  @media (max-width: 60rem) { .lc-step { min-height: 56vh; padding-top: 1.5rem; } }
+  /* the last step needs no runway below it — shorten so the section hands off cleanly */
+  .lc-step:last-child { min-height: 46vh; }
+  @media (max-width: 60rem) { .lc-step { min-height: 56vh; padding-top: 1.5rem; } .lc-step:last-child { min-height: 34vh; } }
   @media (prefers-reduced-motion: reduce) { .lc-step { opacity: 1; transition: none; } .lc-steps::after { transition: none; } }
   .lc-n { position: absolute; left: 1.2rem; top: clamp(2rem, 12vh, 7rem); transform: translate(-50%, -.15rem); display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; background: var(--card); border: 2px solid var(--border); color: var(--muted-foreground); font: 600 .72rem var(--font-mono); z-index: 1; transition: border-color .3s, color .3s, background .3s, box-shadow .3s, transform .3s; }
   /* completed step */
