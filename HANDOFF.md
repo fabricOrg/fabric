@@ -1,7 +1,44 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-07-18. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-07-24. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
+
+## Latest (2026-07-24): apps/www — SDK-only docs + landing redesign (committed, not pushed)
+
+Branch `feature/ops-www-scaffold`, commit **`9c61e91`** (45 files, +2630/−521). All pre-commit guards
+passed (branch-name, file-length, browser-safe, biome, commit-msg). **Nothing pushed** — needs a human
+go for the shared ref. Dev server: `apps/www` runs a **daemonized** `astro dev` on **:3400** —
+`pnpm --filter @app/www start | stop | status | logs` (added this session).
+
+- **Docs (ADR-0009 w-3) — full SDK-first IA, verified against the real SDK surface** (`packages/sdk`):
+  get-started (+ sandbox-and-keys, authentication) · quickstarts (Node/Next/CLI) · messaging (SMS,
+  sender-IDs w/ GH-NG registration, delivery-reports, message-definitions) · email (domains-DNS,
+  templates, deliverability) · webhooks (events, signatures, retries-idempotency) · SDKs & tools
+  (Node, CLI) · guides (OTP, transactional, broadcast, two-way) · account (wallet-billing, rate-limits
+  **120/min key + 600/min tenant, real numbers**, going-live, compliance GH-DPA/NG-NDPR). **SDK-ONLY
+  directive**: removed API-reference / curl / OpenAPI / Postman pages; sidebar restructured. Two
+  read-only recon agents mapped the surface first — facts corrected drift (managed vs SMS delivery
+  states, webhook event names, wallet shape). Honesty holds: inbound/two-way labelled **sandbox-only**
+  (no live MO); no MCP page (none exists); DNS record values marked illustrative.
+- **Landing (`src/pages/index.astro`) — guided product story**, visual language preserved (indigo/gold,
+  Clash Display, dotted canvas, floating cutouts): hero (dispatch illustration as product-hero, floats)
+  → why-Fabric → honest engineering-trust strip (NO fabricated metrics — real guarantees only) →
+  **signature Lifecycle scroll** → developer-experience (live `InteractiveDemo`) → platform capabilities
+  → reliability+security → pricing (wallet flow) → coverage (map + legend) → dashboard preview →
+  business workflows (fintech/ecom/saas + restored `connected-people` webp) → quickstart → FAQ → CTA →
+  expanded footer. Spacing-scale tokens `--section-y`/`--head-gap`/`--card-pad`.
+- **Signature Lifecycle** (`src/components/il/Lifecycle.astro`): native-scroll sticky stage that swaps
+  7 stage cards (code → render → reserve/queue → SMS → email → webhook → analytics) as a **connected
+  progress thread** advances — vertical fill, three-state nodes (done filled / live glowing ring /
+  upcoming muted), and a card→thread connector anchored to the pinned card (dot on the thread).
+  IntersectionObserver-driven, reduced-motion safe, keyboard/SR-friendly.
+- **Illustrations**: user generated transparent raster in ChatGPT GPT-5.6 (dispatch/architecture/
+  coverage/wallet/reliability) — no image-gen tool exists in-session (Canva/Figma/mcp-image all
+  ruled out; mcp-image needs a Gemini/OpenAI key the user lacks). Optimized to webp via `astro:assets`
+  (`src/assets/il/`). Dashboard mock is `src/components/il/Dashboard.astro` (SVG/HTML).
+- **NOT independently reviewed** (codex credits out, gemini dead) — self-reviewed build + visual (Chrome).
+  Remaining keynote chapters deferred: bold trust band, section transitions, richer dashboard, footer
+  ecosystem.
 
 ## Latest (2026-07-21): sandbox program kickoff (SDK-007→008→010) — design only, no code
 
