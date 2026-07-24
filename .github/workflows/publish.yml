@@ -84,6 +84,12 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # release:check runs tsc over specs that import the @app/contracts workspace package, whose
+      # types come from its build output — build the shared libs first (same as the main verify),
+      # or typecheck fails with "Cannot find module '@app/contracts'".
+      - name: Build workspace dependencies
+        run: pnpm build:shared
+
       - name: Release check (build + typecheck + tests + pack smoke)
         working-directory: ${{ env.PKG_DIR }}
         run: pnpm release:check
