@@ -3,7 +3,30 @@
 _Snapshot: 2026-07-24. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-24): apps/www — SDK-only docs + landing redesign (committed, not pushed)
+## Latest (2026-07-24, later): www polish + SDK audit fixes (committed, not pushed)
+
+Same branch, five commits on top of `9c61e91`: `2c6563d` (HANDOFF), `ae2cc4b` (consistency/honesty/
+spacing/motion polish incl. removing a fabricated 99.2% stat), `ed62029` (duotone animated capability
+icons + **catch-and-release Lifecycle rewrite** + OG card `public/og.png` + branded 404 + docs-header
+mark + preconnects), `b482ecc` (SDK: `InsufficientFundsError` 402, webhooks `remove`/`disable` =
+soft-delete documented, README/CHANGELOG accuracy, lint in `release:check`, 5 new spec files — 55/55).
+
+- **Lifecycle now "catch & release"**: per-stage rows; card pins (`position: sticky`) near viewport
+  centre, description scrolls up the centre thread, and because card+copy share the same fixed
+  `--lc-band` at the row's end the sticky range ends exactly when they align — the pair exits
+  together. Verified in headless Chromium (local playwright + `chromium-1208` binaries) at 1440/390px.
+  **Gotcha**: Vite once served a stale compiled stylesheet after a full-file component rewrite
+  (new markup + old CSS = "broken" screenshot); fix = `astro dev stop`, delete `apps/www/node_modules/.vite`
+  + `.astro`, `start`.
+- **SDK audit verdicts (verified, not yet fixed)**: license contradiction UNLICENSED vs public+provenance
+  publish (needs human license choice); hand-maintained `openapi-definitions.mjs` (drift risk — wants a
+  contracts→OpenAPI generator); SMS read endpoints are camelCase on the wire per `@app/contracts` while
+  email/webhooks are snake_case — normalization = coordinated pre-1.0 breaking change (deferred);
+  CLI beta.1 vs SDK beta.5 skew; playground pins a vendored tgz.
+- Reviewer false positive to remember: "SMS camelCase is a bug" — it matches the real contract
+  (`packages/contracts/src/sms.ts:30-41`, `services/api/src/sms/sms-read.ts:73`).
+
+## Earlier (2026-07-24): apps/www — SDK-only docs + landing redesign (committed, not pushed)
 
 Branch `feature/ops-www-scaffold`, commit **`9c61e91`** (45 files, +2630/−521). All pre-commit guards
 passed (branch-name, file-length, browser-safe, biome, commit-msg). **Nothing pushed** — needs a human
