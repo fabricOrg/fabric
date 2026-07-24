@@ -81,6 +81,12 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      # OIDC trusted publishing (minting short-lived creds from the id-token, no NODE_AUTH_TOKEN)
+      # requires npm >= 11.5.1; Node 22 ships npm 10.x, which ignores the OIDC flow and publishes
+      # unauthenticated — npm then masks the auth failure as an E404 on the package PUT.
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
