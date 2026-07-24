@@ -279,9 +279,12 @@ describe("canonical contract parity", () => {
       () =>
         clientReturning({ endpoints: [{ env: "sandbox" }] }).webhooks.list(),
     ],
-  ])("fails closed for malformed %s success responses", async (_name, request) => {
-    await expect(request()).rejects.toBeInstanceOf(ResponseValidationError);
-  });
+  ])(
+    "fails closed for malformed %s success responses",
+    async (_name, request) => {
+      await expect(request()).rejects.toBeInstanceOf(ResponseValidationError);
+    },
+  );
 });
 
 function clientReturning(payload: unknown): Fabric {

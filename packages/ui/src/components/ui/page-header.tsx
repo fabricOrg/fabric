@@ -104,9 +104,9 @@ function PageHeaderBack({
 
 export {
   PageHeader,
-  PageHeaderHeading,
-  PageHeaderTitle,
-  PageHeaderDescription,
   PageHeaderActions,
   PageHeaderBack,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
 };

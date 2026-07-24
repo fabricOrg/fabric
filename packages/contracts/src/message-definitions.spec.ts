@@ -11,14 +11,12 @@ import {
 } from "./message-definitions.js";
 
 describe("stable key grammar (SDK-003 slice-0 §1)", () => {
-  it.each([
-    "order",
-    "order.shipped",
-    "order.item-shipped",
-    "a.b.c.d",
-  ])("accepts %s", (k) => {
-    expect(stableKey.safeParse(k).success).toBe(true);
-  });
+  it.each(["order", "order.shipped", "order.item-shipped", "a.b.c.d"])(
+    "accepts %s",
+    (k) => {
+      expect(stableKey.safeParse(k).success).toBe(true);
+    },
+  );
 
   it.each([
     "Order.Shipped", // uppercase
