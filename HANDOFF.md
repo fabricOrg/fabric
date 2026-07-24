@@ -3,7 +3,36 @@
 _Snapshot: 2026-07-24. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-24, night): MIT licensing + pricing ADR 0010 (proposed)
+## Latest (2026-07-24, late): testing deploy live + publish pipeline + ADR 0010 ratified
+
+Big integration+deploy night. `dev` is the DEFAULT branch now (flipped from `main`, which was 126
+commits stale and blocked workflow dispatch). All the feature/ops-www-scaffold work is on `dev`.
+
+- **Merged to `dev`** (#161) then found/fixed a `dev`-red: the sms-pagination integration test
+  re-derived Postgres sort order in JS (fragile) — rewrote it to compare the paged walk to a single
+  unpaged query from the same DB (#164). Dependabot #155/#162/#163 merged.
+- **`dev`→`testing` promoted; ALL FOUR surfaces deployed green** via `deploy-testing.yml`: API on
+  **Render**, dashboard/admin/www on **Vercel** (git-integration, gated by `testing` env var
+  `VERCEL_RENDER_TESTING_ENABLED`). Fixes needed on the way + **back-ported to `dev`** (#165) so
+  `dev`≡`testing`: (a) biome lint debt in divergent files; (b) `deploy-testing.yml` missing pnpm
+  setup before `vercel build` (`sh: pnpm: not found`) — added setup-node+corepack; (c) added
+  `apps/www/vercel.json` (framework astro). **Gotcha**: the www Vercel project's **Root Directory
+  must be `apps/www`** (dashboard setting, not repo) or Astro's `dist` isn't found — user set it.
+- **MIT** on SDK+CLI (#95af820). **ADR 0010 ratified** (#166) — **unused tokens NON-refundable**.
+- **npm publish pipeline (`publish.yml`) fixed + PROVEN** (#167 added `pnpm build:shared` before
+  release:check). It now builds, passes checks, and **signs provenance** — but the final upload is
+  **blocked on npm account config**: `@fabric-messaging/sdk` exists (maintainer `dacostaaboagye`,
+  published beta.1–3; beta.4/5/6 never actually published) and npm rejects the OIDC publish with a
+  masked **E404 = trusted-publisher not authorizing**. **ACTION (user, npmjs.com):** on the
+  `@fabric-messaging/sdk` (and `/cli`) package → Trusted Publishers → add repo `fabricOrg/fabric` +
+  workflow `publish.yml` + environment `testing`. Publish job requires `--ref testing` (the `testing`
+  env restricts deploy branches). Then re-dispatch `publish.yml`.
+- **Pricing build (ADR 0010) not started** — deferred to a fresh focused session. Phase 1 =
+  rate-card + price-books (contracts → DB → API resolution replacing hardcoded `DEFAULT_RATES` →
+  admin-console config), flatten email to per-send. Phase 2 (tokens) gated on a wallet/security
+  review per the ADR. Pricing branch `feature/ops-pricing-model` exists (rebase on `dev` first).
+
+## Earlier (2026-07-24, night): MIT licensing + pricing ADR 0010 (proposed)
 
 - **SDK + CLI now MIT** (`95af820`) — resolves the publish blocker (was UNLICENSED + public
   publishConfig). Copyright "Fabric", 2026. Server/dashboard/API stay proprietary. **Publish still
