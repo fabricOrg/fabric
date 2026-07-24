@@ -3,7 +3,27 @@
 _Snapshot: 2026-07-24. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-24, evening): SDK 1.0-path batch — casing, pagination, beta.6 (committed, not pushed)
+## Latest (2026-07-24, night): MIT licensing + pricing ADR 0010 (proposed)
+
+- **SDK + CLI now MIT** (`95af820`) — resolves the publish blocker (was UNLICENSED + public
+  publishConfig). Copyright "Fabric", 2026. Server/dashboard/API stay proprietary. **Publish still
+  needs human go.**
+- **Pricing model designed → `docs/decisions/0010-pricing-and-billing-model.md` (proposed).** Shaped
+  with the product owner over a long session; grounded in a full wallet/rating recon + web research
+  on email/SMS pricing. Decisions locked: two modes — **subscription** (existing money wallet, PAYG,
+  auto-topup) + **tokens** (count-based per-channel counters, NO wallet, one-off, price-locked,
+  procured on demand — no physical pool since Arkesel supply is elastic); **price books** (named
+  rate plans per account, admin-console configurable, control-plane read-through cache, fail-open
+  except money); **tokens priced above subscription** for lock-in + spend-based auto price-book
+  upgrade; SMS per-segment, **email flat per-send** (retire the un-cost-justified 1/3/6 size tier),
+  voice roadmap-only; **no token expiry**; send path = price-book → tokens-first → wallet → reject.
+  **Email ESP = Amazon SES** (margin-first, eu-west-1, own deliverability; behind the existing
+  `FakeEmailProvider`; live human-gated). Email attachments deferred (keep 256 KiB cap).
+- **NOT yet done / open**: ADR needs product-owner **ratification** + a wallet/security review
+  before any build; **unused-token refund policy** undecided (drives revenue recognition). No code
+  until ratified. Phased build sequence is in the ADR Follow-up.
+
+## Earlier (2026-07-24, evening): SDK 1.0-path batch — casing, pagination, beta.6 (committed, not pushed)
 
 Three more commits on the same branch:
 
