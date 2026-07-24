@@ -30,7 +30,7 @@ export async function listMessages(
       messages: visible.map(toMessageSummary),
       next_cursor:
         hasMore && last
-          ? encodeCursor({ createdAt: last.createdAt, id: last.id })
+          ? encodeCursor({ createdAt: last.cursorTs, id: last.id })
           : null,
     };
   });

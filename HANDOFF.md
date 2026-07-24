@@ -3,7 +3,39 @@
 _Snapshot: 2026-07-24. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-24, later): www polish + SDK audit fixes (committed, not pushed)
+## Latest (2026-07-24, evening): SDK 1.0-path batch — casing, pagination, beta.6 (committed, not pushed)
+
+Three more commits on the same branch:
+
+- **`14a20bf` refactor(sms)** — BREAKING: SMS read wire fields normalized to snake_case
+  (`created_at`, `delivery_mode`, `sender_id`, `failure_reason`, `request_id`) across contracts →
+  API serializer (`sms-read.ts`) → SDK parsers → dashboard (messages-table, overview route). SDK TS
+  surface stays camelCase. openapi regenerated.
+- **`a0a8331` feat(api)** — cursor pagination (keyset `created_at DESC, id DESC`, opaque base64url
+  cursor, limit 1..100 default 50, limit+1 detection) on GET /v1/messages, /v1/email/messages,
+  /v1/webhooks/:id/deliveries. New `services/api/src/http/cursor.ts` (codec + parsePageQuery,
+  fails closed `invalid_cursor`/`invalid_page`); contracts `pagination.ts` + required nullable
+  `next_cursor` on the 3 envelopes. SDK: `list({limit,cursor})` → `{items,nextCursor}` page +
+  `sms.iterate`/`email.iterate`/`webhooks.iterateDeliveries` generators. Splits for file-length
+  guard: `sdk/src/webhook-parsers.ts`, `api/src/webhooks/webhook-delivery-reads.ts`. www docs
+  snippets updated (sms, email index, retries-idempotency, node table).
+- **`76efda6` chore(sdk)** — SDK+CLI both bumped **0.1.0-beta.6** (CLI adopts SDK version each
+  release; CLI CHANGELOG added). New `pnpm playground:refresh` packs SDK into
+  `examples/sdk-playground/vendor/fabric-messaging-sdk.tgz` (STABLE name; old versioned tgz
+  deleted; playground dep updated). ESM-only decision recorded (Node≥22 require(esm); no CJS).
+
+**Gates run**: SDK `release:check` green end-to-end; CLI `release:check` green; API tsc + 161/161
+unit tests; dashboard + contracts tsc clean. **NOT yet done**: independent review of the
+pagination/casing batch (phases A+B+C committed on gates only — run a reviewer next session);
+full `verify:push`; push/PR (needs human go). Earlier batches (www + SDK audit fixes) WERE
+independently reviewed.
+
+**Still parked for human decisions**: SDK+CLI license (UNLICENSED vs public publish — blocker),
+public domain (site/sitemap/canonical/absolute og:image), www deploy to Vercel, legal pages,
+pricing numbers. Remaining engineering ticket: contracts→OpenAPI generator (openapi-definitions.mjs
+still hand-maintained).
+
+## Earlier (2026-07-24, later): www polish + SDK audit fixes (committed, not pushed)
 
 Same branch, five commits on top of `9c61e91`: `2c6563d` (HANDOFF), `ae2cc4b` (consistency/honesty/
 spacing/motion polish incl. removing a fabricated 99.2% stat), `ed62029` (duotone animated capability

@@ -5,7 +5,7 @@ import {
   type TenantId,
   webhookDeliveries,
 } from "@app/db";
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { encodeCursor, type PageInput } from "../http/cursor.js";
 import { toDeliveryDto } from "./webhook-dto.js";
 
@@ -18,10 +18,13 @@ export async function listEndpointDeliveries(
   page: PageInput,
 ): Promise<{ deliveries: WebhookDeliveryDto[]; next_cursor: string | null }> {
   return db.withTenantDrizzle(tenantId, async (tx) => {
+    // The cursor timestamp travels as µs-precise text (cursorTs) — a JS Date would truncate to
+    // ms, breaking both the < comparison and the id tiebreak for same-transaction rows.
     const rows = await tx
       .select({
         delivery: webhookDeliveries,
         eventType: outboxEvents.eventType,
+        cursorTs: sql<string>`to_char(${webhookDeliveries.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
       })
       .from(webhookDeliveries)
       .innerJoin(outboxEvents, eq(outboxEvents.id, webhookDeliveries.eventId))
@@ -32,9 +35,9 @@ export async function listEndpointDeliveries(
           state ? eq(webhookDeliveries.state, state) : undefined,
           page.before
             ? or(
-                lt(webhookDeliveries.createdAt, page.before.createdAt),
+                sql`${webhookDeliveries.createdAt} < ${page.before.createdAt}::timestamptz`,
                 and(
-                  eq(webhookDeliveries.createdAt, page.before.createdAt),
+                  sql`${webhookDeliveries.createdAt} = ${page.before.createdAt}::timestamptz`,
                   lt(webhookDeliveries.id, page.before.id),
                 ),
               )
@@ -53,7 +56,7 @@ export async function listEndpointDeliveries(
       next_cursor:
         hasMore && last
           ? encodeCursor({
-              createdAt: last.delivery.createdAt,
+              createdAt: last.cursorTs,
               id: last.delivery.id,
             })
           : null,

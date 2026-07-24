@@ -25,17 +25,19 @@ export async function listEmails(
   environmentId: string,
   page: PageInput,
 ): Promise<EmailPageResult> {
-  // limit + 1 signals a further page; Postgres row-tuple comparison keeps the keyset exact.
+  // limit + 1 signals a further page. The cursor timestamp is compared and re-emitted at full µs
+  // precision (cursor_ts) — a JS Date would truncate to ms and skip sub-ms neighbours.
   const rows = (await db.withTenant(
     tenantId,
     (tx) => tx`
       SELECT id, subject_id, content_pii_id, status::text, provider_slug,
-             error_code, created_at
+             error_code, created_at,
+             to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_ts
       FROM email_messages
       WHERE environment_id = ${environmentId}
       ${
         page.before
-          ? tx`AND (created_at, id) < (${page.before.createdAt}, ${page.before.id})`
+          ? tx`AND (created_at, id) < (${page.before.createdAt}::timestamptz, ${page.before.id})`
           : tx``
       }
       ORDER BY created_at DESC, id DESC
@@ -49,10 +51,7 @@ export async function listEmails(
     next_cursor:
       hasMore && last
         ? encodeCursor({
-            createdAt:
-              last.created_at instanceof Date
-                ? last.created_at
-                : new Date(String(last.created_at)),
+            createdAt: String(last.cursor_ts),
             id: String(last.id),
           })
         : null,

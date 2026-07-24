@@ -160,7 +160,9 @@ export class SmsResource {
         options,
       );
       yield* page.data.items;
-      cursor = page.data.nextCursor ?? undefined;
+      const next = page.data.nextCursor ?? undefined;
+      // defensive: a buggy server echoing the same cursor must not hang the client
+      cursor = next === cursor ? undefined : next;
     } while (cursor);
   }
 }

@@ -3,7 +3,7 @@
 // playground's package.json never changes across SDK versions — re-run this script on every SDK
 // release instead of hand-committing a new versioned tgz.
 import { execSync } from "node:child_process";
-import { copyFileSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,15 +20,15 @@ execSync(`pnpm pack --pack-destination "${vendor}"`, {
   stdio: "inherit",
 });
 
-const packed = readdirSync(vendor)
-  .filter(
-    (file) =>
-      /^fabric-messaging-sdk-.+\.tgz$/.test(file) &&
-      file !== "fabric-messaging-sdk.tgz",
-  )
-  .sort()
-  .pop();
-if (!packed) throw new Error("pnpm pack produced no tarball in vendor/");
+// Deterministic: pnpm pack names the tarball after the current package version — no directory
+// scan (a lexicographic sort would misorder beta.9 vs beta.10).
+const { version } = JSON.parse(
+  readFileSync(path.join(sdkRoot, "package.json"), "utf8"),
+);
+const packed = `fabric-messaging-sdk-${version}.tgz`;
+if (!existsSync(path.join(vendor, packed))) {
+  throw new Error(`pnpm pack did not produce vendor/${packed}`);
+}
 copyFileSync(
   path.join(vendor, packed),
   path.join(vendor, "fabric-messaging-sdk.tgz"),
