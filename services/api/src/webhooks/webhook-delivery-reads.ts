@@ -35,9 +35,11 @@ export async function listEndpointDeliveries(
           state ? eq(webhookDeliveries.state, state) : undefined,
           page.before
             ? or(
-                sql`${webhookDeliveries.createdAt} < ${page.before.createdAt}::timestamptz`,
+                // ::text::timestamptz — a bare ::timestamptz on the driver-bound ISO string
+                // truncates to ms, skipping sub-ms rows; the text hop preserves µs. See cursor.ts.
+                sql`${webhookDeliveries.createdAt} < ${page.before.createdAt}::text::timestamptz`,
                 and(
-                  sql`${webhookDeliveries.createdAt} = ${page.before.createdAt}::timestamptz`,
+                  sql`${webhookDeliveries.createdAt} = ${page.before.createdAt}::text::timestamptz`,
                   lt(webhookDeliveries.id, page.before.id),
                 ),
               )

@@ -127,9 +127,12 @@ export async function listCustomerMessages(
           : undefined,
         page.before
           ? or(
-              sql`${messages.createdAt} < ${page.before.createdAt}::timestamptz`,
+              // ::text::timestamptz (not a bare ::timestamptz): the postgres.js driver binds an
+              // ISO string such that a direct cast truncates to millisecond, silently skipping
+              // sub-ms rows and breaking the same-tx id tiebreak. The text hop preserves µs.
+              sql`${messages.createdAt} < ${page.before.createdAt}::text::timestamptz`,
               and(
-                sql`${messages.createdAt} = ${page.before.createdAt}::timestamptz`,
+                sql`${messages.createdAt} = ${page.before.createdAt}::text::timestamptz`,
                 lt(messages.id, page.before.id),
               ),
             )

@@ -36,8 +36,10 @@ export async function listEmails(
       FROM email_messages
       WHERE environment_id = ${environmentId}
       ${
+        // ::text::timestamptz: a direct ::timestamptz on the driver-bound ISO string truncates
+        // to millisecond, skipping sub-ms neighbours; the text hop keeps full µs precision.
         page.before
-          ? tx`AND (created_at, id) < (${page.before.createdAt}::timestamptz, ${page.before.id})`
+          ? tx`AND (created_at, id) < (${page.before.createdAt}::text::timestamptz, ${page.before.id})`
           : tx``
       }
       ORDER BY created_at DESC, id DESC

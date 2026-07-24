@@ -9,7 +9,9 @@ import { invalidRequest } from "./api-error.js";
  * (to_char … 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), never a JS Date: timestamptz stores µs while
  * Date holds only ms, and a ms-truncated cursor both skips sub-ms neighbours and breaks the
  * id tiebreak for rows written in the same transaction (identical created_at — e.g. a batch).
- * Queries compare it via `created_at < ${value}::timestamptz`, which stays index-friendly.
+ * Queries MUST compare it via `created_at < ${value}::text::timestamptz` — the postgres.js driver
+ * binds the ISO string so that a bare `::timestamptz` re-truncates to millisecond; the text hop
+ * forces full-precision parsing. Verified against a real Postgres keyset walk.
  */
 export interface KeysetCursor {
   readonly createdAt: string;
