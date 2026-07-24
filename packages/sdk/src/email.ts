@@ -2,6 +2,8 @@ import type { Transport } from "./transport.js";
 import type {
   EmailMessage,
   FabricResponse,
+  ListParams,
+  Page,
   RequestOptions,
   SendEmailParams,
   WriteOptions,
@@ -9,6 +11,8 @@ import type {
 import {
   ApiShapeError,
   enumField,
+  nullableStringField,
+  pageQueryString,
   record,
   requireNonEmpty,
   stringField,
@@ -75,11 +79,12 @@ export class EmailResource {
   }
 
   async list(
+    params?: ListParams,
     options?: RequestOptions,
-  ): Promise<FabricResponse<ReadonlyArray<EmailMessage>>> {
+  ): Promise<FabricResponse<Page<EmailMessage>>> {
     const response = await this.transport.request<Record<string, unknown>>({
       method: "GET",
-      path: "/v1/email/messages",
+      path: `/v1/email/messages${pageQueryString(params)}`,
       ...(options ? { options } : {}),
     });
     if (!Array.isArray(response.data.messages)) {
@@ -87,8 +92,33 @@ export class EmailResource {
     }
     return {
       ...response,
-      data: response.data.messages.map((item) => parseEmail(record(item))),
+      data: {
+        items: response.data.messages.map((item) => parseEmail(record(item))),
+        nextCursor: nullableStringField(
+          response.data.next_cursor,
+          "next_cursor",
+        ),
+      },
     };
+  }
+
+  /** Walk the whole email log page by page, following `next_cursor` until it is null. */
+  async *iterate(
+    params?: Pick<ListParams, "limit">,
+    options?: RequestOptions,
+  ): AsyncGenerator<EmailMessage, void, undefined> {
+    let cursor: string | undefined;
+    do {
+      const page = await this.list(
+        {
+          ...(params?.limit ? { limit: params.limit } : {}),
+          ...(cursor ? { cursor } : {}),
+        },
+        options,
+      );
+      yield* page.data.items;
+      cursor = page.data.nextCursor ?? undefined;
+    } while (cursor);
   }
 }
 

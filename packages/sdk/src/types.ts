@@ -23,6 +23,18 @@ export interface FabricResponse<T> {
   readonly statusCode: number;
 }
 
+/** Cursor-pagination input for list calls. Limit defaults to 50 server-side (max 100). */
+export interface ListParams {
+  readonly limit?: number;
+  readonly cursor?: string;
+}
+
+/** One page of a cursor-paginated list; `nextCursor` is null on the final page. */
+export interface Page<T> {
+  readonly items: ReadonlyArray<T>;
+  readonly nextCursor: string | null;
+}
+
 export interface Money {
   readonly minor: string;
   readonly currency: "GHS" | "NGN" | "USD";

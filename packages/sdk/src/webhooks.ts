@@ -3,19 +3,22 @@ import { WebhookVerificationError } from "./errors.js";
 import type { Transport } from "./transport.js";
 import type {
   FabricResponse,
+  ListParams,
+  Page,
   RequestOptions,
   WebhookDelivery,
   WebhookEndpoint,
   WriteOptions,
 } from "./types.js";
 import {
-  enumField,
-  numberField,
+  nullableStringField,
+  pageQueryString,
   record,
   requireNonEmpty,
   stringField,
 } from "./validation.js";
 import { parseWebhookEvent, type WebhookEvent } from "./webhook-events.js";
+import { parseDelivery, parseEndpoint } from "./webhook-parsers.js";
 
 export interface CreateWebhookParams {
   readonly url: string;
@@ -26,7 +29,7 @@ export interface CreateWebhookParams {
 export interface CreatedWebhookEndpoint extends WebhookEndpoint {
   readonly secret: string;
 }
-export interface ListWebhookDeliveriesParams {
+export interface ListWebhookDeliveriesParams extends ListParams {
   readonly state?: "pending" | "delivering" | "delivered" | "dead";
 }
 export interface VerifyWebhookParams {
@@ -114,9 +117,12 @@ export class WebhooksResource {
     endpointId: string,
     params: ListWebhookDeliveriesParams = {},
     options?: RequestOptions,
-  ): Promise<FabricResponse<ReadonlyArray<WebhookDelivery>>> {
+  ): Promise<FabricResponse<Page<WebhookDelivery>>> {
     requireNonEmpty(endpointId, "endpointId");
-    const query = params.state ? `?state=${params.state}` : "";
+    const page = pageQueryString(params);
+    const query = params.state
+      ? `${page ? `${page}&` : "?"}state=${params.state}`
+      : page;
     const response = await this.transport.request<Record<string, unknown>>({
       method: "GET",
       path: `/v1/webhooks/${encodeURIComponent(endpointId)}/deliveries${query}`,
@@ -127,8 +133,34 @@ export class WebhooksResource {
     }
     return {
       ...response,
-      data: response.data.deliveries.map((item) => parseDelivery(record(item))),
+      data: {
+        items: response.data.deliveries.map((item) =>
+          parseDelivery(record(item)),
+        ),
+        nextCursor: nullableStringField(
+          response.data.next_cursor,
+          "next_cursor",
+        ),
+      },
     };
+  }
+
+  /** Walk an endpoint's delivery history page by page, following `next_cursor` until null. */
+  async *iterateDeliveries(
+    endpointId: string,
+    params: Omit<ListWebhookDeliveriesParams, "cursor"> = {},
+    options?: RequestOptions,
+  ): AsyncGenerator<WebhookDelivery, void, undefined> {
+    let cursor: string | undefined;
+    do {
+      const page = await this.listDeliveries(
+        endpointId,
+        { ...params, ...(cursor ? { cursor } : {}) },
+        options,
+      );
+      yield* page.data.items;
+      cursor = page.data.nextCursor ?? undefined;
+    } while (cursor);
   }
 
   async replayDelivery(
@@ -213,61 +245,6 @@ export class WebhooksResource {
     }
     return parseWebhookEvent(parsed);
   }
-}
-
-function parseEndpoint(data: Record<string, unknown>): WebhookEndpoint {
-  const health = record(data.health);
-  return {
-    id: stringField(data.id, "id"),
-    url: stringField(data.url, "url"),
-    status: enumField(data.status, ["active", "disabled"] as const, "status"),
-    description:
-      data.description === null
-        ? null
-        : stringField(data.description, "description"),
-    environment: enumField(data.env, ["sandbox", "live"] as const, "env"),
-    secretPrefix: stringField(data.secret_prefix, "secret_prefix"),
-    createdAt: stringField(data.created_at, "created_at"),
-    health: {
-      pending: numberField(health.pending, "health.pending"),
-      dead: numberField(health.dead, "health.dead"),
-      lastDeliveredAt: nullableString(
-        health.last_delivered_at,
-        "health.last_delivered_at",
-      ),
-    },
-  };
-}
-
-function parseDelivery(data: Record<string, unknown>): WebhookDelivery {
-  return {
-    id: stringField(data.id, "id"),
-    endpointId: stringField(data.endpoint_id, "endpoint_id"),
-    eventId: stringField(data.event_id, "event_id"),
-    eventType: stringField(data.event_type, "event_type"),
-    state: enumField(
-      data.state,
-      ["pending", "delivering", "delivered", "dead"] as const,
-      "state",
-    ),
-    attempts: numberField(data.attempts, "attempts"),
-    nextAttemptAt: stringField(data.next_attempt_at, "next_attempt_at"),
-    lastAttemptAt: nullableString(data.last_attempt_at, "last_attempt_at"),
-    deliveredAt: nullableString(data.delivered_at, "delivered_at"),
-    lastErrorCategory: nullableString(
-      data.last_error_category,
-      "last_error_category",
-    ),
-    lastHttpStatus:
-      data.last_http_status === null
-        ? null
-        : numberField(data.last_http_status, "last_http_status"),
-    createdAt: stringField(data.created_at, "created_at"),
-  };
-}
-
-function nullableString(value: unknown, name: string): string | null {
-  return value === null ? null : stringField(value, name);
 }
 
 function verificationError(

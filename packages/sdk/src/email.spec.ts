@@ -8,6 +8,17 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+const messageFixture = {
+  id: "eml_1",
+  status: "delivered",
+  to: "ama@example.com",
+  from: "hello@merchant.example",
+  subject: "Welcome",
+  provider: "sandbox",
+  created_at: "2026-07-24T10:00:00.000Z",
+  error_code: null,
+};
+
 describe("email resource", () => {
   it("maps send input to the wire shape and parses the acceptance", async () => {
     const fetch = vi
@@ -78,12 +89,20 @@ describe("email resource", () => {
       created_at: "2026-07-24T10:00:00.000Z",
       error_code: null,
     };
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(json({ messages: [message], request_id: "req_e2" }));
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      json({
+        messages: [message],
+        next_cursor: "b3BhcXVl",
+        request_id: "req_e2",
+      }),
+    );
     const client = new Fabric({ apiKey: "sk_test_example", fetch });
-    const response = await client.email.list();
-    expect(response.data).toEqual([
+    const response = await client.email.list({ limit: 1 });
+    expect(String(fetch.mock.calls[0]?.[0])).toContain(
+      "/v1/email/messages?limit=1",
+    );
+    expect(response.data.nextCursor).toBe("b3BhcXVl");
+    expect(response.data.items).toEqual([
       {
         id: "eml_1",
         status: "delivered",
@@ -95,6 +114,30 @@ describe("email resource", () => {
         errorCode: null,
       },
     ]);
+  });
+
+  it("iterate follows next_cursor to the end of the log", async () => {
+    const pageOne = {
+      messages: [{ ...messageFixture, id: "eml_1" }],
+      next_cursor: "Y3Vyc29y",
+      request_id: "req_p1",
+    };
+    const pageTwo = {
+      messages: [{ ...messageFixture, id: "eml_2" }],
+      next_cursor: null,
+      request_id: "req_p2",
+    };
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(json(pageOne))
+      .mockResolvedValueOnce(json(pageTwo));
+    const client = new Fabric({ apiKey: "sk_test_example", fetch });
+    const seen: string[] = [];
+    for await (const message of client.email.iterate({ limit: 1 })) {
+      seen.push(message.id);
+    }
+    expect(seen).toEqual(["eml_1", "eml_2"]);
+    expect(String(fetch.mock.calls[1]?.[0])).toContain("cursor=Y3Vyc29y");
   });
 
   it("rejects a list payload that does not match the contract", async () => {

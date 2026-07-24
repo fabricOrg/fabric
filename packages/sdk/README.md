@@ -43,11 +43,19 @@ key prevents a duplicate charge/message. View the returned message ID in Dashboa
 
 ```ts
 const message = await fabric.sms.retrieve("msg_...");
-const messages = await fabric.sms.list();
+
+const page = await fabric.sms.list({ limit: 50 });
+console.log(page.data.items.length, page.data.nextCursor);
+
+// Or walk the whole log — the iterator follows next_cursor until it is null.
+for await (const summary of fabric.sms.iterate({ limit: 100 })) {
+  console.log(summary.id, summary.status);
+}
 ```
 
-The current API returns a bounded message list without pagination. The SDK will add explicit pages
-and async iteration when the public API supports cursors; it does not pretend to paginate today.
+Message, email, and webhook-delivery lists are cursor-paginated (`limit` 1–100, default 50). Treat
+`nextCursor` as opaque: pass it back exactly as returned. `email.iterate` and
+`webhooks.iterateDeliveries` follow the same pattern.
 
 ## Send a sandbox Email
 
@@ -96,8 +104,9 @@ Inspect and replay a dead endpoint-specific delivery without changing its event 
 
 ```ts
 const dead = await fabric.webhooks.listDeliveries(endpointId, { state: "dead" });
-if (dead.data[0]) {
-  await fabric.webhooks.replayDelivery(endpointId, dead.data[0].id);
+const first = dead.data.items[0];
+if (first) {
+  await fabric.webhooks.replayDelivery(endpointId, first.id);
 }
 ```
 
@@ -142,13 +151,13 @@ keys in client bundles, logs, commits, screenshots, or support tickets.
 ## Supported resources
 
 - `fabric.messages.send`, `preview`, `retrieveDelivery` (managed, template-key messages)
-- `fabric.sms.send`, `retrieve`, `list`
+- `fabric.sms.send`, `retrieve`, `list`, `iterate`
 - `fabric.sms.sendBatch`, `retrieveBatch`
-- `fabric.email.send`, `retrieve`, `list`
-- `fabric.senderIds.create`, `list`
+- `fabric.email.send`, `retrieve`, `list`, `iterate`
+- `fabric.senderIds.create`, `list` (bounded — sender IDs are few; not paginated)
 - `fabric.verify.start`, `check`
 - `fabric.wallet.retrieve`
-- `fabric.webhooks.create`, `list`, `remove`/`disable`, `listDeliveries`, `replayDelivery`, `verify`
+- `fabric.webhooks.create`, `list`, `remove`/`disable`, `listDeliveries`, `iterateDeliveries`, `replayDelivery`, `verify`
 
 `webhooks.remove` and `webhooks.disable` are the same call: the API soft-deletes, marking the
 endpoint `disabled` while retaining its delivery history.

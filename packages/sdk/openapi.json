@@ -216,7 +216,7 @@
     "/v1/messages": {
       "get": {
         "operationId": "listMessages",
-        "summary": "List recent messages",
+        "summary": "List recent messages (cursor-paginated)",
         "responses": {
           "200": {
             "description": "Messages",
@@ -224,13 +224,16 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["messages", "request_id"],
+                  "required": ["messages", "next_cursor", "request_id"],
                   "properties": {
                     "messages": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/MessageSummary"
                       }
+                    },
+                    "next_cursor": {
+                      "type": ["string", "null"]
                     },
                     "request_id": {
                       "type": "string"
@@ -290,7 +293,27 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation token from a previous page's next_cursor."
+          }
+        ]
       }
     },
     "/v1/messages/preview": {
@@ -1047,7 +1070,7 @@
       },
       "get": {
         "operationId": "listEmailMessages",
-        "summary": "List Email messages",
+        "summary": "List Email messages (cursor-paginated)",
         "responses": {
           "200": {
             "description": "Email messages",
@@ -1055,13 +1078,16 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["messages", "request_id"],
+                  "required": ["messages", "next_cursor", "request_id"],
                   "properties": {
                     "messages": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/EmailMessage"
                       }
+                    },
+                    "next_cursor": {
+                      "type": ["string", "null"]
                     },
                     "request_id": {
                       "type": "string"
@@ -1121,7 +1147,27 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation token from a previous page's next_cursor."
+          }
+        ]
       }
     },
     "/v1/email/messages/{id}": {
@@ -1965,7 +2011,7 @@
     "/v1/webhooks/{id}/deliveries": {
       "get": {
         "operationId": "listWebhookDeliveries",
-        "summary": "List endpoint deliveries",
+        "summary": "List endpoint deliveries (cursor-paginated)",
         "responses": {
           "200": {
             "description": "Webhook deliveries",
@@ -1973,13 +2019,16 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["deliveries", "request_id"],
+                  "required": ["deliveries", "next_cursor", "request_id"],
                   "properties": {
                     "deliveries": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/WebhookDelivery"
                       }
+                    },
+                    "next_cursor": {
+                      "type": ["string", "null"]
                     },
                     "request_id": {
                       "type": "string"
@@ -2055,6 +2104,24 @@
             "schema": {
               "enum": ["pending", "delivering", "delivered", "dead"]
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation token from a previous page's next_cursor."
           }
         ]
       }

@@ -84,12 +84,18 @@ item's `status` and `errorCode`. Retrieve it again later with `fabric.sms.retrie
 const detail = await fabric.sms.retrieve(sms.id);
 console.log(detail.data.status, detail.data.timeline, detail.data.failureReason);
 
-const recent = await fabric.sms.list();
+const page = await fabric.sms.list({ limit: 50 });
+console.log(page.data.items.length, page.data.nextCursor);
+
+for await (const summary of fabric.sms.iterate()) {
+  console.log(summary.id, summary.status);
+}
 ```
 
 `retrieve` returns a `MessageDetail` with the delivery `timeline`, `senderId`, and — unless the
-record is `redacted` — the `body`. `list` returns recent `MessageSummary` rows, each tagged with its
-`deliveryMode` (`virtual` in sandbox, `live` in production).
+record is `redacted` — the `body`. `list` is cursor-paginated (`limit` 1–100, default 50) and
+returns `MessageSummary` rows, each tagged with its `deliveryMode` (`virtual` in sandbox, `live`
+in production); `iterate` follows `nextCursor` across pages for you.
 
 <Steps>
 1. Send with an idempotency key.

@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { messageStatus } from "./message-status.js";
 import { money } from "./money.js";
+import { nextCursor } from "./pagination.js";
 import { deliveryMode } from "./virtual-phone.js";
 
 /** GSM-7 vs UCS-2 — surfaced on responses (drives the segment count + cost). */
@@ -84,9 +85,10 @@ export const sendSmsApiResponse = sendSmsResponse.extend({
 });
 export type SendSmsApiResponse = z.infer<typeof sendSmsApiResponse>;
 
-/** GET /v1/messages - newest-first tenant message log. */
+/** GET /v1/messages - newest-first tenant message log, cursor-paginated. */
 export const messageListResponse = z.object({
   messages: z.array(messageSummary),
+  next_cursor: nextCursor,
   request_id: z.string(),
 });
 export type MessageListResponse = z.infer<typeof messageListResponse>;

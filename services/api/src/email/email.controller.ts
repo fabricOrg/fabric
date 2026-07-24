@@ -12,6 +12,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -21,6 +22,7 @@ import {
   requireScope,
 } from "../api-keys/api-key.guard.js";
 import { invalidRequest, newRequestId } from "../http/api-error.js";
+import { parsePageQuery } from "../http/cursor.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
 import { EmailService } from "./email.service.js";
 
@@ -84,12 +86,16 @@ export class EmailController {
   }
 
   @Get()
-  async list(@Req() request: AuthedRequest): Promise<EmailMessageListResponse> {
+  async list(
+    @Req() request: AuthedRequest,
+    @Query() query: Record<string, unknown>,
+  ): Promise<EmailMessageListResponse> {
     const tenant = requireEmailContext(
       requireScope(request.tenant, "email:read"),
     );
+    const page = parsePageQuery(query);
     return {
-      messages: await this.email.list(tenant.tenantId, tenant.environmentId),
+      ...(await this.email.list(tenant.tenantId, tenant.environmentId, page)),
       request_id: newRequestId(),
     };
   }

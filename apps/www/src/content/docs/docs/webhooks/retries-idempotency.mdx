@@ -31,8 +31,11 @@ precedes it; design state transitions so a later event cannot regress a terminal
 Fabric tracks the state of each attempt to reach your endpoint. Inspect them per endpoint:
 
 ```ts
-const deliveries = await fabric.webhooks.listDeliveries(endpointId, { state: "dead" });
+const page = await fabric.webhooks.listDeliveries(endpointId, { state: "dead" });
+console.log(page.data.items.length, page.data.nextCursor);
 ```
+
+The list is cursor-paginated; `iterateDeliveries(endpointId, { state })` walks every page.
 
 | State | Meaning |
 | --- | --- |

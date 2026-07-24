@@ -40,12 +40,12 @@ Each namespace maps to a part of the API:
 | Namespace | Methods |
 | --- | --- |
 | `fabric.messages` | `preview(key, …)` · `send(key, …)` · `retrieveDelivery(id)` |
-| `fabric.sms` | `send` · `sendBatch` · `retrieve` · `retrieveBatch` · `list` |
-| `fabric.email` | `send` · `retrieve` · `list` |
+| `fabric.sms` | `send` · `sendBatch` · `retrieve` · `retrieveBatch` · `list` · `iterate` |
+| `fabric.email` | `send` · `retrieve` · `list` · `iterate` |
 | `fabric.verify` | `start` · `check` |
 | `fabric.senderIds` | `create` · `list` |
 | `fabric.wallet` | `retrieve` |
-| `fabric.webhooks` | `create` · `list` · `remove` · `listDeliveries` · `replayDelivery` · `verify` |
+| `fabric.webhooks` | `create` · `list` · `remove` · `listDeliveries` · `iterateDeliveries` · `replayDelivery` · `verify` |
 
 Every request-returning method resolves to a `FabricResponse<T>`:
 

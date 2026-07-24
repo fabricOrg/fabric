@@ -13,6 +13,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -26,6 +27,7 @@ import {
   invalidRequest,
   newRequestId,
 } from "../http/api-error.js";
+import { parsePageQuery } from "../http/cursor.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
 import { MessagingInsightsService } from "./messaging-insights.service.js";
 import { SmsService } from "./sms.service.js";
@@ -156,10 +158,14 @@ export class SmsController {
   }
 
   @Get("messages")
-  async list(@Req() req: AuthedRequest): Promise<MessageListResponse> {
+  async list(
+    @Req() req: AuthedRequest,
+    @Query() query: Record<string, unknown>,
+  ): Promise<MessageListResponse> {
     const tenant = requireScope(req.tenant, "sms:read");
+    const page = parsePageQuery(query);
     return {
-      messages: await this.sms.list(tenant.id, tenant.environmentId),
+      ...(await this.sms.list(tenant.id, tenant.environmentId, page)),
       request_id: newRequestId(),
     };
   }

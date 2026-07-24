@@ -2,8 +2,10 @@ import type { Transport } from "./transport.js";
 import type {
   FabricResponse,
   IdempotentWriteOptions,
+  ListParams,
   MessageDetail,
   MessageSummary,
+  Page,
   RequestOptions,
   SendSmsBatchItem,
   SendSmsParams,
@@ -15,7 +17,9 @@ import {
   ApiShapeError,
   booleanField,
   enumField,
+  nullableStringField,
   numberField,
+  pageQueryString,
   record,
   requireE164,
   requireNonEmpty,
@@ -117,19 +121,47 @@ export class SmsResource {
   }
 
   async list(
+    params?: ListParams,
     options?: RequestOptions,
-  ): Promise<FabricResponse<ReadonlyArray<MessageSummary>>> {
+  ): Promise<FabricResponse<Page<MessageSummary>>> {
     const response = await this.transport.request<Record<string, unknown>>({
       method: "GET",
-      path: "/v1/messages",
+      path: `/v1/messages${pageQueryString(params)}`,
       ...(options ? { options } : {}),
     });
     if (!Array.isArray(response.data.messages))
       throw new ApiShapeError("messages");
     return {
       ...response,
-      data: response.data.messages.map((item) => messageSummary(record(item))),
+      data: {
+        items: response.data.messages.map((item) =>
+          messageSummary(record(item)),
+        ),
+        nextCursor: nullableStringField(
+          response.data.next_cursor,
+          "next_cursor",
+        ),
+      },
     };
+  }
+
+  /** Walk the whole message log page by page, following `next_cursor` until it is null. */
+  async *iterate(
+    params?: Pick<ListParams, "limit">,
+    options?: RequestOptions,
+  ): AsyncGenerator<MessageSummary, void, undefined> {
+    let cursor: string | undefined;
+    do {
+      const page = await this.list(
+        {
+          ...(params?.limit ? { limit: params.limit } : {}),
+          ...(cursor ? { cursor } : {}),
+        },
+        options,
+      );
+      yield* page.data.items;
+      cursor = page.data.nextCursor ?? undefined;
+    } while (cursor);
   }
 }
 

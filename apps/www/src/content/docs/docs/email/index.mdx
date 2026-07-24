@@ -37,11 +37,17 @@ twice.
 const message = await fabric.email.retrieve(response.data.id);
 console.log(message.data.status, message.data.errorCode);
 
-const recent = await fabric.email.list();
+const page = await fabric.email.list({ limit: 50 });
+console.log(page.data.items.length, page.data.nextCursor);
+
+for await (const recent of fabric.email.iterate()) {
+  console.log(recent.id, recent.status);
+}
 ```
 
 `retrieve` returns the `EmailMessage` — `status`, `from`, `subject`, `provider`, and a nullable
-`errorCode`. `list` returns recent messages for the key's environment.
+`errorCode`. `list` is cursor-paginated (`limit` 1–100, default 50): each page carries `items` and
+an opaque `nextCursor` (null on the last page). `iterate` follows the cursor for you.
 
 <CardGrid>
   <LinkCard

@@ -1,6 +1,7 @@
 import type { EmailMessage } from "@app/contracts";
 import type { AppDb } from "@app/db";
 import { notFound } from "../http/api-error.js";
+import { encodeCursor, type PageInput } from "../http/cursor.js";
 import type { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { hydrateEmailRows } from "./email-content.js";
 
@@ -12,12 +13,19 @@ import { hydrateEmailRows } from "./email-content.js";
 
 type Row = Record<string, unknown>;
 
+export interface EmailPageResult {
+  messages: EmailMessage[];
+  next_cursor: string | null;
+}
+
 export async function listEmails(
   db: AppDb,
   vault: PiiVaultService,
   tenantId: string,
   environmentId: string,
-): Promise<EmailMessage[]> {
+  page: PageInput,
+): Promise<EmailPageResult> {
+  // limit + 1 signals a further page; Postgres row-tuple comparison keeps the keyset exact.
   const rows = (await db.withTenant(
     tenantId,
     (tx) => tx`
@@ -25,10 +33,30 @@ export async function listEmails(
              error_code, created_at
       FROM email_messages
       WHERE environment_id = ${environmentId}
+      ${
+        page.before
+          ? tx`AND (created_at, id) < (${page.before.createdAt}, ${page.before.id})`
+          : tx``
+      }
       ORDER BY created_at DESC, id DESC
-      LIMIT 100`,
+      LIMIT ${page.limit + 1}`,
   )) as Row[];
-  return hydrateEmailRows(vault, tenantId, rows);
+  const hasMore = rows.length > page.limit;
+  const visible = hasMore ? rows.slice(0, page.limit) : rows;
+  const last = visible[visible.length - 1];
+  return {
+    messages: await hydrateEmailRows(vault, tenantId, visible),
+    next_cursor:
+      hasMore && last
+        ? encodeCursor({
+            createdAt:
+              last.created_at instanceof Date
+                ? last.created_at
+                : new Date(String(last.created_at)),
+            id: String(last.id),
+          })
+        : null,
+  };
 }
 
 export async function getEmail(
