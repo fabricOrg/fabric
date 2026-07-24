@@ -8,8 +8,8 @@
  * Stack: Tailwind v4 + shadcn (new-york). Tokens exposed to utilities via `@theme inline`
  * (no tailwind.config.js).
  *
- * PALETTE — "Indigo Dye & Raw Cotton" (Direction A, ratified 2026-07-02). The brand anchor is a
- * deep West-African indigo dye on an undyed-cotton canvas, dye-pot ochre as the sparing accent.
+ * PALETTE — "Indigo Dye". The brand anchor is a deep West-African indigo dye on a cool neutral
+ * canvas, with clean white surfaces and dye-pot ochre as the sparing accent.
  * Values are hex (the approved source of truth); green/amber/red stay reserved for delivery status
  * so a status colour never doubles as the brand. Fonts: Clash Display (display) · Inter (body) ·
  * JetBrains Mono (keys/IDs/money) — supplied by each app via next/font (the --font-* vars below).
@@ -25,22 +25,22 @@
  * LIGHT — default (customer dashboard + dev-portal)
  * ───────────────────────────────────────────────────────────────────────── */
 :root {
-  --radius: 0.5rem; /* 8px base → inputs/buttons 8, cards 12 (lg), modals 16 (xl) */
+  --radius: 0rem; /* 8px base → inputs/buttons 8, cards 12 (lg), modals 16 (xl) */
 
-  --background: #edeae3; /* raw cotton — warm canvas */
+  --background: #fcfcfd; /* near-white canvas — surfaces read as white, elevation via border/shadow */
   --foreground: #1a1b2e; /* indigo-ink */
-  --card: #fbfaf6; /* surface */
+  --card: #ffffff; /* clean elevated surface */
   --card-foreground: #1a1b2e;
-  --popover: #fbfaf6;
+  --popover: #ffffff;
   --popover-foreground: #1a1b2e;
 
   --primary: #383a96; /* indigo dye — the brand anchor */
   --primary-foreground: #f4f3fb;
-  --secondary: #e9e5da; /* warm muted surface */
+  --secondary: #eef0f5; /* cool muted surface */
   --secondary-foreground: #2a2b72;
-  --muted: #e9e5da;
-  --muted-foreground: #6a6554; /* warm greige — secondary text (WCAG AA: 4.85:1 on bg, 5.58:1 on card) */
-  --accent: #e9e5da; /* neutral hover/selected surface */
+  --muted: #eef0f5;
+  --muted-foreground: #667085; /* WCAG AA: ~4.9:1 on the near-white canvas and on card */
+  --accent: #eef0f5; /* neutral hover/selected surface */
   --accent-foreground: #2a2b72; /* brand-ink on hover/active */
 
   --destructive: #a63b34; /* failed — warm brick red (harmonises with cotton) */
@@ -51,8 +51,8 @@
   --warning-foreground: #fff8ec;
   --warning-strong: #845a10; /* warning TEXT on a warning/15 tint — WCAG AA 4.81:1 (base warning fails at 3.73) */
 
-  --border: #ded8cb; /* warm greige hairline */
-  --input: #ded8cb;
+  --border: #dfe3eb; /* cool neutral hairline */
+  --input: #dfe3eb;
   --ring: #383a96; /* visible AA focus ring = brand */
 
   /* dye-pot ochre — the sparing warm accent (auto-reload, celebration, highlights). NOT a status. */
@@ -70,13 +70,13 @@
 
   /* sidebar — CUSTOMER default is LIGHT (surface chrome). admin-console overrides to navy in its
    * own layer (data-app/dark). */
-  --sidebar: #fbfaf6;
-  --sidebar-foreground: #66658a; /* indigo-slate — WCAG AA 5.30:1 on light sidebar (#fbfaf6) */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #66658a; /* indigo-slate — WCAG AA 5.54:1 on white */
   --sidebar-primary: #383a96;
   --sidebar-primary-foreground: #f4f3fb;
   --sidebar-accent: #e7e7f4; /* active nav bg = brand tint */
   --sidebar-accent-foreground: #2a2b72;
-  --sidebar-border: #ded8cb;
+  --sidebar-border: #dfe3eb;
   --sidebar-ring: #383a96;
 
   /* domain aliases — enforce the transparency brand in the token layer, not per screen */
@@ -206,10 +206,17 @@
   --color-audit-added: var(--audit-added);
   --color-audit-removed: var(--audit-removed);
 
-  --radius-sm: calc(var(--radius) - 4px); /* 4  — chips inner */
-  --radius-md: var(--radius); /* 8  — inputs / buttons */
-  --radius-lg: calc(var(--radius) + 4px); /* 12 — cards */
-  --radius-xl: calc(var(--radius) + 8px); /* 16 — modals / drawers */
+  /* Squared-corner system: every rectangular radius step maps to --radius (0). Utilities
+   * rounded-sm..rounded-3xl all read these, so a single --radius change re-rounds the whole app.
+   * --radius-full is intentionally NOT overridden — avatars, status dots and pills stay circular. */
+  --radius-xs: var(--radius);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

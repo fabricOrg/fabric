@@ -95,6 +95,27 @@ export class SendersService {
     return rows.length > 0;
   }
 
+  async senderStatus(
+    tenantId: string,
+    senderId: string,
+    country: string,
+  ): Promise<"active" | "pending" | "rejected" | "unregistered"> {
+    const [row] = await this.db.withTenantDrizzle(tenantId, (tx) =>
+      tx
+        .select({ status: senders.status })
+        .from(senders)
+        .where(
+          and(
+            eq(senders.tenantId, tenantId as never),
+            eq(senders.senderId, senderId),
+            eq(senders.country, country),
+          ),
+        )
+        .limit(1),
+    );
+    return row?.status ?? "unregistered";
+  }
+
   /** Staff review queue — pending first, cross-tenant on the provisioning connection. */
   async reviewQueue(): Promise<Array<SenderDto & { tenant_id: string }>> {
     const rows = await this.provisioning.db

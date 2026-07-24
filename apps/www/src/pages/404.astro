@@ -1,0 +1,48 @@
+---
+// Branded 404 for the whole site (Astro serves this for any unmatched route). Same visual
+// language as the landing: dotted canvas, Clash Display, indigo/gold, flat buttons.
+import "../styles/global.css";
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Page not found · Fabric</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://api.fontshare.com" />
+    <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin />
+  </head>
+  <body>
+    <main class="wrap">
+      <svg class="mark" viewBox="0 0 64 64" width="44" height="44" aria-hidden="true">
+        <rect width="64" height="64" rx="12" fill="var(--primary)" />
+        <path d="M18 14h31v9H28v9h18v9H28v15H18z" fill="#f4f3fb" />
+      </svg>
+      <p class="code">404</p>
+      <h1>This page doesn't exist.</h1>
+      <p class="hint">The address may have moved or never shipped. The platform is fine.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="/">Back to the homepage</a>
+        <a class="btn btn-line" href="/docs/">Open the docs →</a>
+      </div>
+    </main>
+
+    <style>
+      body { margin: 0; background: var(--background); background-image: radial-gradient(color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px); background-size: 26px 26px; background-position: -13px -13px; }
+      .wrap { display: grid; place-content: center; justify-items: center; gap: .4rem; min-height: 100vh; padding: 1.5rem; text-align: center; color: var(--foreground); font-family: var(--font-sans); }
+      .mark { margin-bottom: 1.4rem; }
+      .code { margin: 0; color: var(--gold-ink); font-family: var(--font-mono); font-size: .8rem; letter-spacing: .18em; }
+      h1 { margin: .5rem 0 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(2rem, 5.5vw, 3rem); line-height: 1.05; }
+      .hint { margin: .9rem 0 0; max-width: 26rem; color: var(--muted-foreground); line-height: 1.6; }
+      .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .75rem; margin-top: 2rem; }
+      .btn { display: inline-flex; align-items: center; min-height: 2.85rem; padding-inline: 1.35rem; font-weight: 600; font-size: .95rem; text-decoration: none; border: 1px solid transparent; }
+      .btn-primary { background: var(--primary); color: #fff; }
+      .btn-primary:hover { filter: brightness(1.1); }
+      .btn-line { background: var(--card); color: var(--foreground); border-color: var(--border); }
+      .btn-line:hover { border-color: var(--primary); color: var(--primary); }
+      :is(a):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+    </style>
+  </body>
+</html>

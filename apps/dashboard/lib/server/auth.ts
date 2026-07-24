@@ -3,15 +3,15 @@ import "server-only";
 import {
   type AppSession,
   type RealmConfig,
-  readSession,
-  refreshSession,
+  readUserSession,
+  refreshUserSession,
+  type UserSession,
+  type WorkspaceMembershipClaim,
 } from "@app/fe-auth";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  resolveOrganizationForUser,
-  resolveWorkOSSession,
-} from "./identity-client";
+import { resolveUserSessionV2 } from "./identity-client";
+import { selectWorkspace, WORKSPACE_COOKIE } from "./workspace-cookie";
 
 export const WORKOS_COOKIE = "wos-session";
 export const OAUTH_STATE_COOKIE = "fabric-oauth-state";
@@ -75,17 +75,33 @@ export function customerRealmConfig(): RealmConfig {
       path: "/",
       maxAge: 7 * 24 * 60 * 60,
     },
-    resolveSession: resolveWorkOSSession,
-    resolveOrganization: resolveOrganizationForUser,
+    // ADR-0007: the customer realm is user-level only — no org-scoped resolver at all.
+    resolveUserSession: resolveUserSessionV2,
   };
 }
 
-export async function readDashboardSession(): Promise<AppSession | null> {
+/** ADR-0007: the user-level session — WHO is signed in plus every workspace they can enter. */
+export async function readDashboardUserSession(): Promise<UserSession | null> {
   if (!workosAuthConfigured()) return null;
   const store = await cookies();
   const workosCookie = store.get(WORKOS_COOKIE)?.value;
   if (!workosCookie) return null;
-  return readSession(customerRealmConfig(), workosCookie);
+  return readUserSession(customerRealmConfig(), workosCookie);
+}
+
+/**
+ * The ACTIVE workspace session — the user-level session narrowed to the workspace the selector
+ * cookie names, revalidated against a fresh membership list on THIS request (fail closed). Kept in
+ * the legacy AppSession shape so the BFF routes' permission/tenant plumbing is unchanged: `orgId`
+ * is now simply the selected tenant id.
+ */
+export async function readDashboardSession(): Promise<AppSession | null> {
+  const user = await readDashboardUserSession();
+  if (!user) return null;
+  const store = await cookies();
+  const membership = selectWorkspace(user, store.get(WORKSPACE_COOKIE)?.value);
+  if (!membership) return null;
+  return toWorkspaceSession(user, membership);
 }
 
 /**
@@ -97,11 +113,21 @@ export async function readDashboardSession(): Promise<AppSession | null> {
  * Returns null if there's no cookie or the refresh token is spent/revoked (→ genuine re-login).
  */
 export async function refreshDashboardSession(): Promise<AppSession | null> {
+  const user = await refreshDashboardUserSession();
+  if (!user) return null;
+  const store = await cookies();
+  const membership = selectWorkspace(user, store.get(WORKSPACE_COOKIE)?.value);
+  if (!membership) return null;
+  return toWorkspaceSession(user, membership);
+}
+
+/** User-level variant of the silent refresh — same cookie rotation semantics. */
+export async function refreshDashboardUserSession(): Promise<UserSession | null> {
   if (!workosAuthConfigured()) return null;
   const store = await cookies();
   const sealed = store.get(WORKOS_COOKIE)?.value;
   if (!sealed) return null;
-  const refreshed = await refreshSession(customerRealmConfig(), sealed);
+  const refreshed = await refreshUserSession(customerRealmConfig(), sealed);
   if (!refreshed) return null;
   try {
     store.set(WORKOS_COOKIE, refreshed.sealedCookie, sessionCookieOptions());
@@ -112,17 +138,59 @@ export async function refreshDashboardSession(): Promise<AppSession | null> {
   return refreshed.session;
 }
 
-export async function requireDashboardSession(): Promise<AppSession> {
+/** Both halves of an authenticated request: the person and their ACTIVE workspace session. */
+export interface DashboardWorkspaceContext {
+  readonly user: UserSession;
+  readonly session: AppSession;
+}
+
+/**
+ * Page-level gate. Signed-in users without a usable workspace are routed to the surface that fixes
+ * it: no memberships → onboarding (create one), several without a selection → the picker. Returns
+ * BOTH the user-level session (for the workspace switcher) and the workspace-scoped AppSession so
+ * layouts don't resolve the identity twice.
+ */
+export async function requireDashboardWorkspaceContext(): Promise<DashboardWorkspaceContext> {
   const store = await cookies();
-  const session = await readDashboardSession();
-  if (session) return session;
+  const user = await requireDashboardUserSession();
+  const membership = selectWorkspace(user, store.get(WORKSPACE_COOKIE)?.value);
+  if (!membership) {
+    redirect(user.memberships.length === 0 ? "/onboarding" : "/workspaces");
+  }
+  return { user, session: toWorkspaceSession(user, membership) };
+}
+
+export async function requireDashboardSession(): Promise<AppSession> {
+  return (await requireDashboardWorkspaceContext()).session;
+}
+
+/** Page-level gate for surfaces that need a signed-in USER but no workspace (onboarding/picker). */
+export async function requireDashboardUserSession(): Promise<UserSession> {
+  const store = await cookies();
+  const user = await readDashboardUserSession();
+  if (user) return user;
   if (workosAuthConfigured() && store.has(WORKOS_COOKIE)) {
-    // Carry the current path through the refresh hop so a reload returns here, not the home route.
     const pathname = (await headers()).get("x-pathname");
     const returnTo = pathname?.startsWith("/") ? pathname : "/";
     redirect(`/auth/refresh?return_to=${encodeURIComponent(returnTo)}`);
   }
-  redirect("/login");
+  redirect("/signin");
+}
+
+function toWorkspaceSession(
+  user: UserSession,
+  membership: WorkspaceMembershipClaim,
+): AppSession {
+  return {
+    userId: user.userId,
+    orgId: membership.tenantId,
+    role: membership.role,
+    permissions: membership.permissions,
+    sessionId: user.sessionId,
+    email: user.email,
+    name: user.name ?? undefined,
+    plan: membership.plan,
+  };
 }
 
 export function sessionCookieOptions() {

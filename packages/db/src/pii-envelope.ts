@@ -122,6 +122,17 @@ export function phoneBlindIndex(
     .digest("hex");
 }
 
+/** Tenant-scoped blind index for a normalized email address. */
+export function emailBlindIndex(
+  indexKey: Buffer,
+  tenantId: string,
+  email: string,
+): string {
+  return createHmac("sha256", indexKey)
+    .update(`${tenantId}:${email.trim().toLowerCase()}`)
+    .digest("hex");
+}
+
 /** Strip spaces/dashes/parens so the same human number always lands on the same subject. */
 export function normalizeE164(value: string): string {
   return value.replace(/[^\d+]/g, "");

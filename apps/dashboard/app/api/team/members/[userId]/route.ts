@@ -40,7 +40,12 @@ export async function PATCH(
         400,
       );
     }
-    const member = await updateMemberRole(gate.orgId, userId, parsed.data);
+    const member = await updateMemberRole(
+      gate.orgId,
+      userId,
+      parsed.data,
+      gate.email,
+    );
     return NextResponse.json(member);
   } catch (error) {
     return toErrorResponse(error);
@@ -62,7 +67,7 @@ export async function DELETE(
     );
   }
   try {
-    await removeMember(gate.orgId, userId);
+    await removeMember(gate.orgId, userId, gate.email);
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return toErrorResponse(error);
@@ -72,7 +77,10 @@ export async function DELETE(
 /** Shared origin + owner/admin gate. Returns the session's orgId, or a NextResponse to return. */
 async function authorize(
   request: Request,
-): Promise<{ orgId: string; userId: string } | { response: NextResponse }> {
+): Promise<
+  | { orgId: string; userId: string; email: string | null }
+  | { response: NextResponse }
+> {
   if (!hasTrustedOrigin(request)) {
     return {
       response: unauthorized("invalid_origin", "Request rejected.", 403),
@@ -98,7 +106,11 @@ async function authorize(
       ),
     };
   }
-  return { orgId: session.orgId, userId: session.userId };
+  return {
+    orgId: session.orgId,
+    userId: session.userId,
+    email: session.email ?? null,
+  };
 }
 
 function toErrorResponse(error: unknown) {

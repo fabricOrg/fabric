@@ -44,12 +44,16 @@ export async function runCloudSeed(): Promise<void> {
         id: tenantId as TenantId,
         name: "Fabric Testing",
         slug: "fabric-testing",
+        // Sandbox until go-live — matches self-serve provisioning (SANDBOX_PLAN). The schema default
+        // "free" makes the dashboard treat the workspace as live and hide every sandbox resource.
+        plan: "sandbox",
         ...(workosOrganizationId ? { workosOrganizationId } : {}),
       })
       .onConflictDoUpdate({
         target: accounts.id,
         set: {
           name: "Fabric Testing",
+          plan: "sandbox",
           ...(workosOrganizationId ? { workosOrganizationId } : {}),
         },
       });

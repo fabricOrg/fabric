@@ -35,11 +35,12 @@ interface Actor {
 }
 
 /**
- * Ops-provisioned tenant onboarding (docs/PI-3/ORG-PROVISIONING.md):
- *   1) create the WorkOS organization  (external write)
- *   2) insert the accounts row, mapped by workos_organization_id  (slug/org uniqueness = DB constraints)
- *   3) invite the first admin           (external write — sends a real email)
- * If the DB step fails, the WorkOS org is deleted so a failure never orphans an organization.
+ * Ops-provisioned tenant onboarding (docs/PI-3/ORG-PROVISIONING.md, amended by ADR-0007):
+ *   1) insert the accounts row + first-admin invite rows in ONE local transaction (no WorkOS org —
+ *      tenancy lives only in Fabric; workos_organization_id stays null, reserved for future SSO)
+ *   2) send the org-less WorkOS invitation email  (external write — sends a real email)
+ * The invitation is best-effort AFTER the rows exist: a mail hiccup leaves a valid tenant the
+ * operator can re-invite into, instead of an orphaned IdP org.
  */
 @Injectable()
 export class TenantProvisioningService {
@@ -158,107 +159,93 @@ export class TenantProvisioningService {
   async provision(
     request: ProvisionTenantRequest,
   ): Promise<ProvisionTenantResponse> {
-    const workos = this.workosClient();
+    const adminEmail = request.adminEmail.trim().toLowerCase();
+    // Account + the first admin's Fabric invite are written atomically: a pending `invited` user
+    // (external_subject_id filled on first login) and an `invited` owner membership. This is what
+    // makes access invite-only — resolve-v2 binds/activates this row and an identity with no
+    // membership sees no workspace. The WorkOS invitation alone grants nothing on the Fabric side.
+    const account = await this.provisioning.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(accounts)
+        .values({
+          name: request.name,
+          slug: request.slug,
+          plan: request.plan,
+          dataRegion: request.dataRegion,
+          status: "active",
+        })
+        .returning({ id: accounts.id });
+      if (!created) throw new Error("Account insert returned no row.");
 
-    const organization = await workos.organizations.createOrganization({
-      name: request.name,
+      // Reuse an existing human if this email was already invited to another org (users.email is
+      // unique — one row per person, many memberships).
+      await tx
+        .insert(users)
+        .values({ email: adminEmail, status: "invited" })
+        .onConflictDoNothing({ target: users.email });
+      const [admin] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, adminEmail))
+        .limit(1);
+      if (!admin) throw new Error("Admin user upsert returned no row.");
+
+      // Idempotent: re-provisioning the same admin leaves any existing membership untouched.
+      await tx
+        .insert(memberships)
+        .values({
+          tenantId: created.id,
+          userId: admin.id,
+          role: "owner",
+          status: "invited",
+        })
+        .onConflictDoNothing({
+          target: [memberships.tenantId, memberships.userId],
+        });
+
+      // ADR-0004: same workspace birth as the self-serve path — a default application + a sandbox
+      // environment and a live environment. Ops provisioning is the ENTERPRISE EXCEPTION (a human
+      // operator deliberately onboards the tenant), and its plans are all live-eligible
+      // ('free'|'growth'|'scale' — never 'sandbox'), so the live env is active immediately rather
+      // than locked-until-go-live. Idempotent: re-provisioning leaves an existing default app be.
+      const [app] = await tx
+        .insert(applications)
+        .values({ tenantId: created.id, name: "Default", slug: "default" })
+        .onConflictDoNothing({
+          target: [applications.tenantId, applications.slug],
+        })
+        .returning({ id: applications.id });
+      if (app) {
+        await tx.insert(environments).values([
+          {
+            tenantId: created.id,
+            applicationId: app.id,
+            type: "sandbox",
+            status: "active",
+          },
+          {
+            tenantId: created.id,
+            applicationId: app.id,
+            type: "live",
+            status: "active",
+          },
+        ]);
+      }
+
+      return created;
     });
 
-    try {
-      const adminEmail = request.adminEmail.trim().toLowerCase();
-      // Account + the first admin's Fabric invite are written atomically: a pending `invited` user
-      // (external_subject_id filled on first login) and an `invited` owner membership. This is what
-      // makes the dashboard invite-only — resolve() binds/activates this row and refuses anyone with
-      // no membership. Without it, the WorkOS invite alone would grant nothing on the Fabric side.
-      const account = await this.provisioning.db.transaction(async (tx) => {
-        const [created] = await tx
-          .insert(accounts)
-          .values({
-            name: request.name,
-            slug: request.slug,
-            plan: request.plan,
-            dataRegion: request.dataRegion,
-            workosOrganizationId: organization.id,
-            status: "active",
-          })
-          .returning({ id: accounts.id });
-        if (!created) throw new Error("Account insert returned no row.");
+    // Best-effort AFTER the rows exist (ADR-0007): a mail hiccup leaves a valid tenant the
+    // operator can re-invite into via team management, not an orphaned IdP org.
+    await this.workosClient()
+      .userManagement.sendInvitation({ email: adminEmail })
+      .catch(() => undefined);
 
-        // Reuse an existing human if this email was already invited to another org (users.email is
-        // unique — one row per person, many memberships).
-        await tx
-          .insert(users)
-          .values({ email: adminEmail, status: "invited" })
-          .onConflictDoNothing({ target: users.email });
-        const [admin] = await tx
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.email, adminEmail))
-          .limit(1);
-        if (!admin) throw new Error("Admin user upsert returned no row.");
-
-        // Idempotent: re-provisioning the same admin leaves any existing membership untouched.
-        await tx
-          .insert(memberships)
-          .values({
-            tenantId: created.id,
-            userId: admin.id,
-            role: "owner",
-            status: "invited",
-          })
-          .onConflictDoNothing({
-            target: [memberships.tenantId, memberships.userId],
-          });
-
-        // ADR-0004: same workspace birth as the self-serve path — a default application + a sandbox
-        // environment and a live environment. Ops provisioning is the ENTERPRISE EXCEPTION (a human
-        // operator deliberately onboards the tenant), and its plans are all live-eligible
-        // ('free'|'growth'|'scale' — never 'sandbox'), so the live env is active immediately rather
-        // than locked-until-go-live. Idempotent: re-provisioning leaves an existing default app be.
-        const [app] = await tx
-          .insert(applications)
-          .values({ tenantId: created.id, name: "Default", slug: "default" })
-          .onConflictDoNothing({
-            target: [applications.tenantId, applications.slug],
-          })
-          .returning({ id: applications.id });
-        if (app) {
-          await tx.insert(environments).values([
-            {
-              tenantId: created.id,
-              applicationId: app.id,
-              type: "sandbox",
-              status: "active",
-            },
-            {
-              tenantId: created.id,
-              applicationId: app.id,
-              type: "live",
-              status: "active",
-            },
-          ]);
-        }
-
-        return created;
-      });
-
-      await workos.userManagement.sendInvitation({
-        email: request.adminEmail,
-        organizationId: organization.id,
-        roleSlug: "admin",
-      });
-
-      return {
-        tenant_id: account.id,
-        workos_organization_id: organization.id,
-        slug: request.slug,
-        invited_email: request.adminEmail,
-      };
-    } catch (error) {
-      await workos.organizations
-        .deleteOrganization(organization.id)
-        .catch(() => undefined);
-      throw error;
-    }
+    return {
+      tenant_id: account.id,
+      workos_organization_id: null,
+      slug: request.slug,
+      invited_email: request.adminEmail,
+    };
   }
 }

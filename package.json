@@ -22,6 +22,7 @@
     "dev:seed:infisical": "infisical run --env=dev -- pnpm dev:seed",
     "dev:dashboard:infisical": "infisical run --env=dev -- pnpm dev",
     "dev:admin": "pnpm --filter @app/admin-console dev",
+    "dev:sdk-playground": "npm --prefix examples/sdk-playground start",
     "dev:all": "pnpm build:shared && pnpm -r --parallel --filter @app/dashboard --filter @app/admin-console dev",
     "dev:all:infisical": "infisical run --env=dev -- pnpm dev:all",
     "dev:stack": "pnpm build:shared && pnpm -r --parallel --filter @app/api --filter @app/dashboard --filter @app/admin-console dev",
@@ -51,14 +52,14 @@
   "devDependencies": {
     "@app/db": "workspace:*",
     "@app/wallet": "workspace:*",
-    "@biomejs/biome": "2.4.5",
-    "@infisical/cli": "^0.43.0",
+    "@biomejs/biome": "2.5.5",
+    "@infisical/cli": "^0.43.113",
     "@playwright/test": "^1.61.1",
     "drizzle-orm": "^0.45.2",
     "husky": "^9.1.7",
     "postgres": "^3.4.0",
-    "tsx": "^4.19.0",
-    "turbo": "^2.5.0",
+    "tsx": "^4.23.1",
+    "turbo": "^2.10.6",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }

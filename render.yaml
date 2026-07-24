@@ -1,0 +1,43 @@
+# Render Blueprint — Fabric API on the free tier (stakeholder testing).
+# AWS account suspended 2026-07-18; this is the interim hosting path. The AWS pipeline
+# (deploy.yml → ECS) remains the production design and resumes on reactivation.
+#
+# Free-tier realities: the service SLEEPS after ~15 min idle (first request wakes it in
+# 30–60s) and gets 512MB RAM. Fine for stakeholder testing; never for customer traffic.
+#
+# Secrets (sync: false) are set once in the Render dashboard — values come from Infisical.
+# Never commit values. Redlines hold: SMS_PROVIDER=fake, sk_test_ keys only.
+services:
+  - type: web
+    name: fabric-api
+    runtime: node
+    plan: free
+    region: frankfurt # closest free region to eu-west-1/WorkOS Staging
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @app/api... build
+    startCommand: node services/api/dist/main.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      # Neon connection strings (one Neon project, four roles — see docs/DEPLOY-FREE-TIER.md).
+      - key: DATABASE_URL_APP
+        sync: false
+      - key: DATABASE_URL_PROVISIONER
+        sync: false
+      # Auth + BFF seam
+      - key: BFF_INTERNAL_TOKEN
+        sync: false
+      - key: TENANT_TOKEN_SECRET
+        sync: false
+      - key: OPERATOR_TOKEN
+        sync: false
+      # PII vault key material (index/data keys derive from the one master key)
+      - key: PII_MASTER_KEY
+        sync: false
+      # Providers stay sandboxed (redline)
+      - key: SMS_PROVIDER
+        value: fake
+      # No Redis on the free stack — the engine's inline dispatch fallback is the design.
+      # REDIS_QUEUE_URL intentionally unset.

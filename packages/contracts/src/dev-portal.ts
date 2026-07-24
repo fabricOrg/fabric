@@ -6,12 +6,30 @@ import { z } from "zod";
 
 // ── API keys ────────────────────────────────────────────────────────────────────────────────────
 
-/** test = sandbox (never charges/sends) · live = real money/delivery. Must be visually unmistakable. */
-export const apiKeyEnv = z.enum(["test", "live"]);
+/** Sandbox never charges/sends; live can spend money and contact real recipients. */
+export const apiKeyEnv = z.enum(["sandbox", "live"]);
 export type ApiKeyEnv = z.infer<typeof apiKeyEnv>;
 
 export const apiKeyStatus = z.enum(["active", "revoked"]);
 export type ApiKeyStatus = z.infer<typeof apiKeyStatus>;
+
+/** Closed catalog of permissions enforced by today's public data-plane endpoints. */
+export const apiKeyScopeValues = [
+  "sms:send",
+  "sms:read",
+  "email:send",
+  "email:read",
+  "wallet:read",
+  "request_logs:read",
+  "api_keys:read",
+  "api_keys:write",
+  "definitions:read",
+  "messages:send",
+  "messages:read",
+] as const;
+export const apiKeyScope = z.enum(apiKeyScopeValues);
+export type ApiKeyScope = z.infer<typeof apiKeyScope>;
+export const apiKeyScopes = z.array(apiKeyScope).min(1);
 
 /** A key as listed — the full secret is NEVER here, only the display prefix (e.g. "sk_test_ab3d…"). */
 export const apiKey = z.object({
@@ -32,7 +50,7 @@ export type ApiKey = z.infer<typeof apiKey>;
 export const createApiKeyRequest = z.object({
   name: z.string().min(1),
   env: apiKeyEnv,
-  scopes: z.array(z.string()).min(1),
+  scopes: apiKeyScopes,
 });
 export type CreateApiKeyRequest = z.infer<typeof createApiKeyRequest>;
 
@@ -46,6 +64,7 @@ export type CreateApiKeyResult = z.infer<typeof createApiKeyResult>;
 // ── Webhooks ────────────────────────────────────────────────────────────────────────────────────
 
 export const webhookEventType = z.enum([
+  "message.accepted",
   "message.sent",
   "message.delivered",
   "message.undelivered",

@@ -1,8 +1,10 @@
 import type {
   MessageDetailResponse,
   MessageListResponse,
+  MessagingInsightsResponse,
   SendSmsApiResponse,
 } from "@app/contracts";
+import { sendSmsRequest } from "@app/contracts";
 import {
   Body,
   Controller,
@@ -11,6 +13,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -19,30 +22,18 @@ import {
   type RequestTenant,
   requireScope,
 } from "../api-keys/api-key.guard.js";
-import { invalidRequest, newRequestId } from "../http/api-error.js";
+import {
+  asInsufficientFunds,
+  invalidRequest,
+  newRequestId,
+} from "../http/api-error.js";
+import { parsePageQuery } from "../http/cursor.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
+import { MessagingInsightsService } from "./messaging-insights.service.js";
 import { SmsService } from "./sms.service.js";
 
 interface AuthedRequest {
   tenant?: RequestTenant;
-}
-
-interface SendBody {
-  to?: unknown;
-  sender_id?: unknown;
-  body?: unknown;
-  currency?: unknown;
-}
-
-function requireString(v: unknown, param: string): string {
-  if (typeof v !== "string" || v.length === 0) {
-    throw invalidRequest(
-      "invalid_field",
-      `\`${param}\` is required and must be a non-empty string.`,
-      param,
-    );
-  }
-  return v;
 }
 
 /**
@@ -57,31 +48,38 @@ export class SmsController {
     @Inject(SmsService) private readonly sms: SmsService,
     @Inject(IdempotencyService)
     private readonly idempotency: IdempotencyService,
+    @Inject(MessagingInsightsService)
+    private readonly insights: MessagingInsightsService,
   ) {}
 
-  @Post("sms/send")
+  @Post("sms/messages")
   async send(
     @Req() req: AuthedRequest,
-    @Body() body: SendBody,
+    @Body() body: unknown,
     @Headers("idempotency-key") idempotencyKey?: string,
   ): Promise<SendSmsApiResponse> {
     const tenant = requireScope(req.tenant, "sms:send");
     // E10-S5: promotional MUST be declared to receive its stricter DND/quiet-hours treatment;
     // anything else (or absence) is transactional — the platform's wedge traffic.
-    const messageClass =
-      (body as { class?: unknown }).class === "promotional"
-        ? ("promotional" as const)
-        : ("transactional" as const);
+    const parsed = sendSmsRequest.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest(
+        "invalid_sms",
+        parsed.error.issues[0]?.message ?? "Invalid SMS request.",
+        parsed.error.issues[0]?.path.join(".") || undefined,
+      );
+    }
     const input = {
       tenantId: tenant.id,
-      to: requireString(body.to, "to"),
-      senderId: requireString(body.sender_id, "sender_id"),
-      body: requireString(body.body, "body"),
-      currency: requireString(body.currency, "currency"),
-      messageClass,
+      to: parsed.data.to,
+      senderId: parsed.data.sender_id,
+      body: parsed.data.body,
+      currency: parsed.data.currency,
+      messageClass: parsed.data.class,
       // ADR-0004: route on the presenting key's environment (a sandbox key can never reach a
       // carrier). Null on the BFF token path, which falls back to the tenant/plan-based mode.
       environmentId: tenant.environmentId,
+      applicationId: tenant.applicationId,
     };
 
     // No header → the un-keyed path (a client that doesn't retry-protect gets today's behavior).
@@ -117,6 +115,16 @@ export class SmsController {
     }
   }
 
+  /** Compatibility alias for beta clients. New SDK releases use POST /v1/sms/messages. */
+  @Post("sms/send")
+  async legacySend(
+    @Req() req: AuthedRequest,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey?: string,
+  ): Promise<SendSmsApiResponse> {
+    return this.send(req, body, idempotencyKey);
+  }
+
   private async execute(input: {
     tenantId: string;
     to: string;
@@ -125,8 +133,20 @@ export class SmsController {
     currency: string;
     messageClass: "transactional" | "promotional";
     environmentId?: string | null;
+    applicationId?: string | null;
   }): Promise<SendSmsApiResponse> {
-    const result = await this.sms.send(input);
+    // Mapped at the HTTP boundary, not inside SmsService: the service keeps throwing the wallet
+    // DOMAIN error so ManagedMessagesService can still branch on it. Both single-send routes
+    // (`sms/messages` and the `sms/send` alias) funnel through here; batches are a separate
+    // controller and map it there.
+    const result = await this.sms
+      .send(input)
+      .catch((error: unknown) =>
+        asInsufficientFunds(
+          error,
+          "The wallet balance can't cover this message.",
+        ),
+      );
     return {
       id: result.id,
       status: result.status,
@@ -138,10 +158,26 @@ export class SmsController {
   }
 
   @Get("messages")
-  async list(@Req() req: AuthedRequest): Promise<MessageListResponse> {
+  async list(
+    @Req() req: AuthedRequest,
+    @Query() query: Record<string, unknown>,
+  ): Promise<MessageListResponse> {
+    const tenant = requireScope(req.tenant, "sms:read");
+    const page = parsePageQuery(query);
+    return {
+      ...(await this.sms.list(tenant.id, tenant.environmentId, page)),
+      request_id: newRequestId(),
+    };
+  }
+
+  // Declared before `sms/:id` isn't needed (distinct prefix), but kept beside the log it summarizes.
+  @Get("messages/insights")
+  async messagingInsights(
+    @Req() req: AuthedRequest,
+  ): Promise<MessagingInsightsResponse> {
     const tenant = requireScope(req.tenant, "sms:read");
     return {
-      messages: await this.sms.list(tenant.id),
+      summary: await this.insights.summary(tenant.id, tenant.environmentId),
       request_id: newRequestId(),
     };
   }
@@ -153,7 +189,7 @@ export class SmsController {
   ): Promise<MessageDetailResponse> {
     const tenant = requireScope(req.tenant, "sms:read");
     return {
-      message: await this.sms.get(tenant.id, id),
+      message: await this.sms.get(tenant.id, id, tenant.environmentId),
       request_id: newRequestId(),
     };
   }

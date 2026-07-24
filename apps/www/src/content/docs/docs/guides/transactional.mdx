@@ -1,0 +1,60 @@
+---
+title: Transactional delivery
+description: The end-to-end pattern for a reliable transactional message — send, follow, reconcile.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+A transactional message (a receipt, a shipping notice, a status change) must be reliable and
+auditable. The pattern is the same for SMS and email.
+
+<Steps>
+1. **Send by key with a stable idempotency key**
+
+   ```ts
+   const { data } = await fabric.messages.send("order.shipped", {
+     to: "+233201234567",
+     data: { name: "Ama", ref: "GH-4821" },
+     reference: "order:GH-4821",              // your business identifier
+     idempotencyKey: "order-shipped:GH-4821", // the logical operation
+   });
+   ```
+
+   Derive the idempotency key from the operation, not the attempt — if your job runs twice, the same
+   key returns the original delivery instead of sending again.
+
+2. **Record the delivery id**
+
+   Store `data.id` against your order. It is deterministic per operation, so a replay reconciles to
+   the same record.
+
+3. **Advance from the webhook, not the response**
+
+   ```ts
+   // in your verified webhook handler
+   if (event.type === "message.delivered") {
+     await markNotified(event.data.deliveryId ?? event.data.messageId, event.data.key);
+   }
+   ```
+
+   The send response means "accepted", not "delivered". Move your workflow forward on the terminal
+   [webhook event](/docs/webhooks/events/).
+
+4. **Reconcile**
+
+   Compare four facts: your `reference`, the Fabric delivery `id`, the terminal event, and the
+   [wallet](/docs/account/wallet-billing/) ledger entry. Agreement across all four is your proof of
+   delivery and cost.
+</Steps>
+
+## Guardrails
+
+- Use the **transactional** class so the message is not held by promotional quiet hours.
+- Set `maxCost` on the send if a runaway render could otherwise exceed an acceptable cost.
+- Handle `message.failed` / `message.undelivered` explicitly — retry through your own workflow with a
+  new idempotency key only when a retry is genuinely warranted.
+
+:::tip[Idempotency key vs reference]
+The **idempotency key** protects the write (retry safety). The **reference** ties the delivery to
+your domain (reconciliation). Set both, and keep them stable for the same logical send.
+:::

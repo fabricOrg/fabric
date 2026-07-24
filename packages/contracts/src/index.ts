@@ -15,8 +15,10 @@ export * from "./admin.js";
 export * from "./applications.js";
 // Audit log — append-only record of consequential staff actions.
 export * from "./audit.js";
+export * from "./definition-catalog.js";
 // Dev-portal DTOs (F8.6/F2.3) — API keys, webhook endpoints, request logs.
 export * from "./dev-portal.js";
+export * from "./email.js";
 // F8.3 error model — shared error envelope + browser-safe parser (produced by services, consumed
 // by the frontend). Keep this package zod-only / browser-safe; a CI guard enforces it.
 export * from "./errors.js";
@@ -27,14 +29,25 @@ export * from "./identity.js";
 export * from "./impersonation.js";
 // Kill switches — platform circuit breakers (pause SMS, disable a provider…).
 export * from "./kill-switches.js";
+export * from "./managed-messages.js";
 // Team-member management — owners/admins invite teammates into their tenant (dashboard).
 export * from "./members.js";
+export * from "./message-batches.js";
+// Managed message definitions (SDK-003) — stable keys, immutable versions, environment releases,
+// the portable variable-schema subset. Compatibility logic lives in @app/domain, not here.
+export * from "./message-definitions.js";
+// Public message preview (messages.preview) — render a released definition, no side effects.
+export * from "./message-preview.js";
 // F5.3 canonical message-status enum — public API value on responses/webhooks; @app/integrations
 // (raw→canonical mapping) and the L5 send pipeline import it from here (one source of truth).
 export * from "./message-status.js";
 // Money (exact, minor-unit strings) + SMS/wallet response DTOs — consumed by the dashboard/SDK.
 export * from "./money.js";
 export * from "./opt-outs.js";
+// Cursor pagination for public list endpoints (page query + next_cursor token).
+export * from "./pagination.js";
+// Membership permission catalog + baselines + per-user override (admin-managed effective permissions).
+export * from "./permissions.js";
 // Platform plugin registry (control-plane) — provider instances per capability.
 export * from "./plugins.js";
 export * from "./privacy.js";
@@ -43,6 +56,7 @@ export * from "./proposals.js";
 export * from "./request-logs.js";
 export * from "./senders.js";
 export * from "./sms.js";
+export * from "./sms-templates.js";
 // Wallet top-up (E4) — initiate a provider charge; the webhook credits the ledger.
 export * from "./topup.js";
 export * from "./verify.js";

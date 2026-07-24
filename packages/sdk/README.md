@@ -2,8 +2,8 @@
 
 The official server-side TypeScript client for sending and inspecting messages with Fabric.
 
-> Public prerelease: `0.1.0-beta.2`. Email and batch messaging are not exposed because those public
-> API endpoints do not exist yet. Install the explicit `beta` channel until 1.0 is ready.
+> Public prerelease: `0.1.0-beta.6`. Install the explicit `beta` channel until 1.0 is ready.
+> The package is ESM-only by design — Node.js 22+ (the supported floor) can `require()` it natively.
 
 ## Install
 
@@ -44,11 +44,36 @@ key prevents a duplicate charge/message. View the returned message ID in Dashboa
 
 ```ts
 const message = await fabric.sms.retrieve("msg_...");
-const messages = await fabric.sms.list();
+
+const page = await fabric.sms.list({ limit: 50 });
+console.log(page.data.items.length, page.data.nextCursor);
+
+// Or walk the whole log — the iterator follows next_cursor until it is null.
+for await (const summary of fabric.sms.iterate({ limit: 100 })) {
+  console.log(summary.id, summary.status);
+}
 ```
 
-The current API returns a bounded message list without pagination. The SDK will add explicit pages
-and async iteration when the public API supports cursors; it does not pretend to paginate today.
+Message, email, and webhook-delivery lists are cursor-paginated (`limit` 1–100, default 50). Treat
+`nextCursor` as opaque: pass it back exactly as returned. `email.iterate` and
+`webhooks.iterateDeliveries` follow the same pattern.
+
+## Send a sandbox Email
+
+```ts
+const email = await fabric.email.send(
+  {
+    to: "recipient@example.com",
+    from: "hello@merchant.example",
+    subject: "Welcome",
+    text: "Your Fabric sandbox Email works.",
+  },
+  { idempotencyKey: "welcome-email-1" },
+);
+```
+
+Sandbox Email is simulated inside Fabric and never contacts an external provider. Live keys fail
+closed until an approved sending domain and production Email provider are configured.
 
 ## Verify webhooks
 
@@ -61,13 +86,33 @@ const event = fabric.webhooks.verify({
   secret: process.env.FABRIC_WEBHOOK_SECRET!,
 });
 
-if (event.type === "sms.delivered") {
+if (event.type === "message.delivered") {
   console.log(event.data);
+}
+
+if (event.type === "unknown") {
+  console.log("Upgrade the SDK to handle", event.originalType);
 }
 ```
 
 Verification uses HMAC-SHA256, constant-time comparison, and a five-minute timestamp tolerance by
-default. Invalid, malformed, or stale events throw `WebhookVerificationError`.
+default. Invalid, malformed, or stale events throw `WebhookVerificationError`. Known direct-message
+events are `message.accepted`, `message.sent`, `message.delivered`, `message.undelivered`,
+`message.failed`, and `message.inbound`; a correctly signed newer event returns the explicit
+`unknown` variant.
+
+Inspect and replay a dead endpoint-specific delivery without changing its event ID:
+
+```ts
+const dead = await fabric.webhooks.listDeliveries(endpointId, { state: "dead" });
+const first = dead.data.items[0];
+if (first) {
+  await fabric.webhooks.replayDelivery(endpointId, first.id);
+}
+```
+
+Webhook delivery is at least once. Persist event IDs under a unique constraint before applying side
+effects; timeout-after-accept and manual replay can legitimately deliver the same event again.
 
 ## Handle errors
 
@@ -90,29 +135,35 @@ try {
 Errors never include the API key, authorization header, or message body. Optional logger callbacks
 receive only method/path/status/retry/request metadata.
 
-## Environments and production
+## Sandbox and live environments
 
-`sk_test_...` keys set `fabric.environment` to `sandbox`; `sk_live_...` keys set it to `production`.
-No separate environment setting can conflict with the key. Moving to production changes only
+`sk_test_...` keys set `fabric.environment` to `sandbox`; `sk_live_...` keys set it to `live`.
+No separate environment setting can conflict with the key. Moving to live delivery changes only
 `FABRIC_API_KEY`, but requires an approved sender ID, billing, provider configuration, and applicable
 Ghana/Nigeria compliance approval.
 
-Sandbox sends appear on the workspace’s two-way Virtual Phone and never contact a carrier. See the
-[sandbox guide](../../docs/sdk/sandbox.md) for the stable virtual number, STOP/START replies, and
-deterministic test recipients.
+Sandbox sends appear on the workspace’s two-way Virtual Phone and never contact a carrier. The
+sandbox guide on the Fabric docs site (`/docs/get-started/sandbox-and-keys`) covers the stable
+virtual number, STOP/START replies, and deterministic test recipients.
 
 This package is for trusted server runtimes only. Never import it into browser code or expose secret
 keys in client bundles, logs, commits, screenshots, or support tickets.
 
 ## Supported resources
 
-- `fabric.sms.send`, `retrieve`, `list`
-- `fabric.senderIds.create`, `list`
+- `fabric.messages.send`, `preview`, `retrieveDelivery` (managed, template-key messages)
+- `fabric.sms.send`, `retrieve`, `list`, `iterate`
+- `fabric.sms.sendBatch`, `retrieveBatch`
+- `fabric.email.send`, `retrieve`, `list`, `iterate`
+- `fabric.senderIds.create`, `list` (bounded — sender IDs are few; not paginated)
 - `fabric.verify.start`, `check`
 - `fabric.wallet.retrieve`
-- `fabric.webhooks.create`, `list`, `remove`, `verify`
+- `fabric.webhooks.create`, `list`, `remove`/`disable`, `listDeliveries`, `iterateDeliveries`, `replayDelivery`, `verify`
 
-See [the SDK guides](../../docs/sdk/README.md) and bundled [OpenAPI reference](./openapi.json)
+`webhooks.remove` and `webhooks.disable` are the same call: the API soft-deletes, marking the
+endpoint `disabled` while retaining its delivery history.
+
+See the Fabric docs site (`/docs/sdks-tools/node`) and the bundled [OpenAPI reference](./openapi.json)
 for retries, security, framework patterns, versioning, and the public wire contract. Report SDK issues through the repository issue tracker and
 include the request ID—but never credentials or message content.
 

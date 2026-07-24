@@ -14,11 +14,8 @@ import { VirtualPhoneService } from "./virtual-phone.service.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
-if (!SUPER_URL || !APP_URL) {
-  throw new Error(
-    "sandbox-routing needs DATABASE_URL_SUPER + DATABASE_URL_APP (a fresh DB migrated as app_migrator)",
-  );
-}
+if (!SUPER_URL || !APP_URL)
+  throw new Error("sandbox-routing requires both database URLs.");
 process.env.DATABASE_URL_APP = APP_URL;
 process.env.SMS_PROVIDER = "arkesel";
 process.env.ARKESEL_API_KEY = ""; // no creds — an accidental real call could never succeed anyway
@@ -214,12 +211,17 @@ describe("sandbox provider pinning (F3)", () => {
     )) as Array<{ keyword: string; virtual_number: string }>;
     expect(inbound[0]).toEqual({ keyword: "STOP", virtual_number: number });
     const events = (await owner.unsafe(
-      "SELECT event_type FROM outbox_events WHERE tenant_id = $1 ORDER BY created_at",
+      "SELECT event_type, application_id, environment_id FROM outbox_events WHERE tenant_id = $1 ORDER BY created_at",
       [SANDBOX_TENANT],
-    )) as Array<{ event_type: string }>;
+    )) as Array<Record<string, string | null>>;
     expect(events.map((event) => event.event_type)).toEqual(
       expect.arrayContaining(["message.received", "contact.opted_out"]),
     );
+    const inboundEvent = events.find(
+      (event) => event.event_type === "message.received",
+    );
+    expect(inboundEvent?.application_id).toEqual(expect.any(String));
+    expect(inboundEvent?.environment_id).toEqual(expect.any(String));
 
     const started = await virtual.reply(SANDBOX_TENANT, {
       to: "+233545227189",

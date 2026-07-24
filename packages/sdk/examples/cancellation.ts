@@ -6,7 +6,10 @@ const fabric = new Fabric({
 const controller = new AbortController();
 
 try {
-  await fabric.sms.list({ signal: controller.signal, timeout: 5_000 });
+  await fabric.sms.list(undefined, {
+    signal: controller.signal,
+    timeout: 5_000,
+  });
 } catch (error) {
   if (!(error instanceof UserAbortedError)) throw error;
 }

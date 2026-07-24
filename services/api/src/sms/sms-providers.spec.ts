@@ -1,7 +1,7 @@
 import type { Logger } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import { describe, expect, it } from "vitest";
-import { buildSmsProviders } from "./sms-providers.js";
+import { buildSmsProviders, isLiveRecipientAllowed } from "./sms-providers.js";
 
 const logger = { log: () => undefined } as unknown as Logger;
 
@@ -39,10 +39,49 @@ describe("SMS provider readiness", () => {
         SMS_PROVIDER: "arkesel",
         ARKESEL_API_KEY: "secret",
         ARKESEL_SANDBOX: "false",
+        SMS_LIVE_RECIPIENT_ALLOWLIST: "+233201234567",
       }),
       logger,
     );
     expect(live.liveReady).toBe(true);
     expect(live.provider.slug).toBe("arkesel-sms");
+  });
+
+  it("fails closed when the live recipient allowlist is absent or invalid", () => {
+    const missing = buildSmsProviders(
+      config({
+        NODE_ENV: "production",
+        SMS_PROVIDER: "arkesel",
+        ARKESEL_API_KEY: "secret",
+        ARKESEL_SANDBOX: "false",
+      }),
+      logger,
+    );
+    expect(missing.liveReady).toBe(false);
+    expect(missing.liveReadinessReason).toContain("allowlist");
+
+    const invalid = buildSmsProviders(
+      config({
+        NODE_ENV: "production",
+        SMS_PROVIDER: "arkesel",
+        ARKESEL_API_KEY: "secret",
+        ARKESEL_SANDBOX: "false",
+        SMS_LIVE_RECIPIENT_ALLOWLIST: "0201234567",
+      }),
+      logger,
+    );
+    expect(invalid.liveReady).toBe(false);
+    expect(invalid.liveReadinessReason).toContain("invalid E.164");
+  });
+
+  it("allows only exact recipients configured for live Arkesel delivery", () => {
+    const liveConfig = config({
+      SMS_PROVIDER: "arkesel",
+      ARKESEL_SANDBOX: "false",
+      SMS_LIVE_RECIPIENT_ALLOWLIST: "+233201234567, +233501234567",
+    });
+    expect(isLiveRecipientAllowed(liveConfig, "+233201234567")).toBe(true);
+    expect(isLiveRecipientAllowed(liveConfig, "+233501234567")).toBe(true);
+    expect(isLiveRecipientAllowed(liveConfig, "+233241234567")).toBe(false);
   });
 });

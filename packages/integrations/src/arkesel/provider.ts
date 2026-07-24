@@ -59,10 +59,9 @@ export class ArkeselSmsProvider implements SmsSenderPlugin {
   readonly version = "1.0.0";
   readonly configSchema: JsonSchema = {
     type: "object",
-    required: ["apiKey", "senderId"],
+    required: ["apiKey"],
     properties: {
       apiKey: { type: "string" },
-      senderId: { type: "string" }, // approved sender name (<= 11 chars), e.g. "Fabric"
       sandbox: { type: "string", enum: ["true", "false"] }, // default "true"
       callbackUrl: { type: "string" }, // DLR webhook; omit to skip delivery reports
     },
@@ -87,7 +86,7 @@ export class ArkeselSmsProvider implements SmsSenderPlugin {
 
   async send(msg: NormalizedMessage, creds: Creds): Promise<ProviderResult> {
     const apiKey = requireCred(creds, "apiKey");
-    const sender = requireCred(creds, "senderId");
+    const sender = requireSenderId(msg.senderId);
     const sandbox = creds.sandbox !== "false"; // DEFAULT SANDBOX — live delivery is an explicit flip
     const body: Record<string, unknown> = {
       sender,
@@ -169,6 +168,15 @@ function requireCred(creds: Creds, key: string): string {
   const value = creds[key];
   if (!value) throw new ArkeselError(`Arkesel ${key} is required.`);
   return value;
+}
+
+/** The reseller account owns one API key, while each approved tenant sender travels per request. */
+function requireSenderId(value: string): string {
+  const senderId = value.trim();
+  if (!senderId || senderId.length > 11) {
+    throw new ArkeselError("Arkesel senderId must contain 1 to 11 characters.");
+  }
+  return senderId;
 }
 
 /** E.164 (`+233…`) → Arkesel MSISDN (digits only, country code retained). */

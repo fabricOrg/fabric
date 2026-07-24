@@ -161,7 +161,7 @@ export function InviteMemberDialog() {
                 <Field orientation="horizontal">
                   <div className="min-w-0 flex-1">
                     <FieldLabel htmlFor="invite-developer-access">
-                      Developer Portal access
+                      Developer access
                     </FieldLabel>
                     <FieldDescription>
                       Adds API keys, webhooks, and request logs without changing

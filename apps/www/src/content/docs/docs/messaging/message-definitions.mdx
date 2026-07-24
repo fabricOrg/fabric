@@ -1,0 +1,87 @@
+---
+title: Message definitions
+description: Author, version, release, and preview managed SMS and email templates addressed by a stable key.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+A message definition is a versioned template addressed by a stable key such as `welcome.otp` or
+`order.shipped`. Your application sends by key and supplies variables; the definition owns the copy,
+the channel, and per-locale variants. Change the message without shipping application code.
+
+## Author and publish
+
+Definitions are authored and published in the **Fabric dashboard**, not through a runtime key. A
+scoped `sk_*` key can send and preview by key but cannot create, version, or publish a definition —
+that authority belongs to a signed dashboard session.
+
+<Steps>
+1. **Create** a definition with a stable key, its channel (SMS or email), and a variable schema.
+2. **Version** it. Each version is immutable once saved; edits create a new version. Fabric checks a
+   new version against the released one and rejects a **breaking** variable change.
+3. **Publish** a version into an environment. Each environment holds exactly one released version at
+   a time, so sandbox and live can run different versions deliberately.
+</Steps>
+
+The channel is fixed when the definition is created and is immutable across versions. SMS definitions
+carry a sender binding; email definitions carry a `from` and per-locale subject/body.
+
+## Preview before you send
+
+`preview` renders the released definition with no side effects — no wallet reservation, no send. It
+is the honest way to see exactly what a send would produce.
+
+```ts
+const preview = await fabric.messages.preview("order.shipped", {
+  data: { name: "Ama", ref: "GH-4821" },
+  to: "+233201234567",
+  locale: "en-GH",
+});
+
+const p = preview.data;
+console.log(p.eligible, p.channel, p.resolvedLocale);
+console.log(p.blockers);           // path-coded reasons a send would be refused
+console.log(p.preview);            // SmsPreview | null (body, encoding, segments, cost)
+console.log(p.emailPreview);       // EmailPreview | null (subject, text, html, size tier, cost)
+```
+
+`blockers` never echoes the variable values you supplied — it reports a `path` and a stable `code`
+so you can fix the input without leaking PII into logs. `warnings` are non-blocking. When `eligible`
+is `true`, a send with the same inputs will render identically (preview↔send parity).
+
+## Send by key
+
+```ts
+const response = await fabric.messages.send("order.shipped", {
+  to: "+233201234567",              // E.164 for SMS, an email address for email
+  data: { name: "Ama", ref: "GH-4821" },
+  reference: "order:GH-4821",
+  idempotencyKey: "order-shipped:GH-4821",
+  maxCost: { minor: "5000", currency: "GHS" }, // optional cost ceiling; fails closed if exceeded
+});
+```
+
+The definition's channel decides whether `to` must be a phone number or an email address; a mismatch
+is refused before acceptance with no PII echoed. `maxCost` is an optional guard that refuses the send
+if the rendered cost would exceed it.
+
+## Typed keys with the CLI
+
+Generate a typed catalog so your editor knows every key and its variables:
+
+```bash
+npx @fabric-messaging/cli definitions generate --output fabric.generated.ts
+```
+
+Then type the client with it. `messages.send`/`preview` now autocomplete keys and check the `data`
+shape at compile time:
+
+```ts
+import { Fabric } from "@fabric-messaging/sdk";
+import type { FabricCatalog } from "./fabric.generated";
+
+const fabric = new Fabric<FabricCatalog>({ apiKey: process.env.FABRIC_API_KEY! });
+```
+
+Run `fabric definitions check` in CI to fail the build if the committed catalog drifts from the
+released contract. See [SDKs & tools → CLI](/docs/sdks-tools/cli/).

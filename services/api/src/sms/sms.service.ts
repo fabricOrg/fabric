@@ -1,22 +1,10 @@
-import type {
-  DeliveryMode,
-  MessageDetail,
-  MessageSummary,
-  SendSmsResponse,
-} from "@app/contracts";
+import type { MessageDetail, SendSmsResponse } from "@app/contracts";
 import type { AppDb } from "@app/db";
-import type {
-  Creds,
-  SmsSenderPlugin,
-  VirtualPhoneProvider,
-} from "@app/integrations";
-import type { FakeProvider } from "@app/integrations/testing";
 import {
-  dispatchSend as engineDispatchSend,
   failPreparedSend as engineFailPreparedSend,
   prepareSend as enginePrepareSend,
   sweepExpired as engineSweepExpired,
-  type PreparedSend,
+  type ManagedSendContext,
   type SendInput,
   type SendResult,
 } from "@app/sms-engine";
@@ -25,37 +13,36 @@ import { ConfigService } from "@nestjs/config";
 import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest } from "../http/api-error.js";
+import type { KeysetCursor } from "../http/cursor.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { AutoTopupService } from "../payments/auto-topup.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import { SendersService } from "../senders/senders.service.js";
 import { assertSendCompliant } from "./sms-compliance.js";
-import { dispatchSend as dispatchProviderSend } from "./sms-dispatch.js";
+import { recheckedDispatch } from "./sms-dispatch-recheck.js";
+import { completeStoredDispatch } from "./sms-dispatch-store.js";
 import { ingestProviderDlr } from "./sms-dlr.js";
-import { buildSmsProviders } from "./sms-providers.js";
-import { getMessage, listMessages } from "./sms-read.js";
-import { SMS_SEND_QUEUE, type SmsSendJob } from "./sms-send.job.js";
+import { assertLiveRecipientAllowed } from "./sms-live-safety.js";
+import { replayManagedSend } from "./sms-managed-replay.js";
+import {
+  enqueueSmsJob,
+  processSmsJob,
+  recoverPendingSmsSafely,
+} from "./sms-queue-operations.js";
+import {
+  getMessage,
+  listMessages,
+  type MessagePageResult,
+} from "./sms-read.js";
+import { SmsRuntimeService } from "./sms-runtime.service.js";
+import type { SmsSendJob } from "./sms-send.job.js";
 import { VirtualPhoneService } from "./virtual-phone.service.js";
-import { maybeAutoStop } from "./virtual-phone-auto-stop.js";
 
-/**
- * Wires the HTTP boundary to the L5 send pipeline. Holds the EngineDeps (the app_runtime AppDb + the
- * SMS provider + its creds) and exposes send + DLR-ingest. Provider is selected by SMS_PROVIDER:
- * `fake` (default — sandbox/tests) or `arkesel` (real Ghana vendor). The engine + controllers stay
- * provider-agnostic via SmsSenderPlugin. Live SMS is a redline: Arkesel defaults to sandbox mode
- * (ARKESEL_SANDBOX) and every send is gated by the platform.sms_sending kill-switch.
- */
 @Injectable()
 export class SmsService {
-  private readonly provider: SmsSenderPlugin;
-  private readonly creds: Creds | undefined;
-  // Sandbox tenants are pinned to this provider and can never reach a carrier.
-  private readonly virtualProvider: VirtualPhoneProvider;
-  private readonly legacySandboxProvider: FakeProvider;
-  private readonly liveReady: boolean;
-  private readonly liveReadinessReason: string | null;
   private readonly logger = new Logger(SmsService.name);
+  private readonly runtime: SmsRuntimeService;
 
   constructor(
     @Inject(APP_DB) private readonly db: AppDb,
@@ -68,30 +55,14 @@ export class SmsService {
     @Inject(VirtualPhoneService)
     private readonly virtualPhone: VirtualPhoneService,
     @Inject(PiiVaultService) private readonly piiVault: PiiVaultService,
+    @Inject(SmsRuntimeService) runtime?: SmsRuntimeService,
   ) {
-    const wired = buildSmsProviders(this.config, this.logger);
-    this.provider = wired.provider;
-    this.creds = wired.creds;
-    this.virtualProvider = wired.virtualProvider;
-    this.legacySandboxProvider = wired.legacySandboxProvider;
-    this.liveReady = wired.liveReady;
-    this.liveReadinessReason = wired.liveReadinessReason;
+    this.runtime = runtime ?? new SmsRuntimeService(db, config, virtualPhone);
   }
 
-  private deps(deliveryMode: DeliveryMode = "live") {
-    if (deliveryMode === "virtual") {
-      return { db: this.db, provider: this.virtualProvider };
-    }
-    return {
-      db: this.db,
-      provider: this.provider,
-      ...(this.creds ? { creds: this.creds } : {}),
-    };
-  }
-
-  /** POST /v1/sms/send — the tenant is already resolved by ApiKeyGuard. */
   async send(input: {
     tenantId: string;
+    messageId?: string;
     to: string;
     senderId: string;
     body: string;
@@ -100,6 +71,9 @@ export class SmsService {
     messageClass?: "transactional" | "promotional";
     /** ADR-0004: the environment the request arrived on (sk_* keys). Null for the BFF token path. */
     environmentId?: string | null;
+    /** Application resolved from the presenting key; null only on the legacy BFF token path. */
+    applicationId?: string | null;
+    managed?: ManagedSendContext;
   }): Promise<SendSmsResponse> {
     if (await this.killSwitch.isPaused("platform.sms_sending")) {
       throw invalidRequest(
@@ -115,16 +89,16 @@ export class SmsService {
           input.environmentId,
         )
       : await this.virtualPhone.resolveMode(input.tenantId);
-    if (deliveryMode === "live" && !this.liveReady) {
+    if (deliveryMode === "live" && !this.runtime.liveReady) {
       throw invalidRequest(
         "live_provider_not_ready",
-        this.liveReadinessReason ?? "Live SMS is not configured.",
+        this.runtime.liveReadinessReason ?? "Live SMS is not configured.",
       );
     }
-    // (never a silent send, never a faked success) — the honest behavior until a 2nd provider lands.
+    assertLiveRecipientAllowed(this.config, deliveryMode, input.to);
     if (
       deliveryMode === "live" &&
-      (await this.killSwitch.isPaused(`provider.${this.provider.slug}`))
+      (await this.killSwitch.isPaused(`provider.${this.runtime.provider.slug}`))
     ) {
       throw invalidRequest(
         "provider_unavailable",
@@ -150,13 +124,27 @@ export class SmsService {
       input.tenantId,
       input.to,
     );
+    const bodyPiiId = await this.piiVault.put(
+      input.tenantId,
+      subjectId,
+      "body",
+      input.body,
+    );
     // tx1 in-request EITHER way: insufficient funds must fail the request synchronously (a queue
     // must never accept money it can't reserve).
-    const routedInput: SendInput = { ...input, deliveryMode, subjectId };
+    const routedInput: SendInput = {
+      ...input,
+      deliveryMode,
+      subjectId,
+      bodyPiiId,
+    };
     const prepared = await enginePrepareSend(
-      this.deps(deliveryMode),
+      this.runtime.deps(deliveryMode),
       routedInput,
     );
+    if (prepared.replayed && input.managed) {
+      return replayManagedSend(this, input.tenantId, prepared.messageId);
+    }
     if (deliveryMode === "virtual") {
       try {
         await this.virtualPhone.record({
@@ -164,10 +152,11 @@ export class SmsService {
           messageId: prepared.messageId,
           subjectId,
           body: input.body,
+          bodyPiiId,
         });
       } catch (error) {
         await engineFailPreparedSend(
-          this.deps(deliveryMode),
+          this.runtime.deps(deliveryMode),
           routedInput,
           prepared,
           "virtual_delivery_persistence_failed",
@@ -180,24 +169,29 @@ export class SmsService {
     if (this.queue.enabled) {
       // Queued path: the provider call + tx2 run in the worker with retry/backoff. jobId =
       // messageId → BullMQ dedupes, so an accidental double-enqueue is a no-op.
-      await this.queue
-        .queue(SMS_SEND_QUEUE)
-        .add(
-          "send",
-          { input: routedInput, prepared, deliveryMode } satisfies SmsSendJob,
-          {
-            jobId: prepared.messageId,
-            attempts: 5,
-            backoff: { type: "exponential", delay: 2_000 },
-            removeOnComplete: { count: 1_000 },
-            removeOnFail: { count: 5_000 },
-          },
+      try {
+        await enqueueSmsJob(this.queue, {
+          tenantId: input.tenantId,
+          messageId: prepared.messageId,
+          deliveryMode,
+        });
+      } catch (error) {
+        // The database dispatch intent is durable and the maintenance trigger will enqueue it
+        // again. Returning an accepted message prevents an unsafe client retry from reserving a
+        // second message merely because Redis was temporarily unavailable.
+        this.logger.error(
+          `sms-send enqueue deferred for ${prepared.messageId}: ${error instanceof Error ? error.message : "unknown"}`,
         );
+      }
       status = "sending"; // truthful: reserved + persisted, provider outcome pending
     } else {
-      // Inline fallback (no Redis configured): the pre-queue behavior, unchanged.
-      const result = await this.dispatch(routedInput, prepared, deliveryMode);
+      const result = await this.runtime.dispatch(
+        routedInput,
+        prepared,
+        deliveryMode,
+      );
       status = result.status;
+      await completeStoredDispatch(this.db, input.tenantId, prepared.messageId);
     }
 
     // After-debit trigger: the send just reserved against the wallet — check whether the balance
@@ -217,39 +211,37 @@ export class SmsService {
     };
   }
 
-  /**
-   * Worker entry for a queued send: provider call + tx2. Throwing propagates to BullMQ, which
-   * retries with backoff — safe because dispatchSend is retry-idempotent (terminal-freeze + B6)
-   * and the TTL sweeper refunds anything that never resolves.
-   */
+  /** Worker retries are safe because provider contact and wallet resolution are idempotent. */
   async processQueuedSend(job: SmsSendJob): Promise<SendResult> {
-    // Route on the flag captured at send time (a plan change mid-flight must not flip provider);
-    // pre-F3 jobs without the flag came from live-configured tenants → configured provider.
-    if (!job.deliveryMode && job.sandbox === true) {
-      return engineDispatchSend(
-        { db: this.db, provider: this.legacySandboxProvider },
-        job.input,
-        job.prepared,
-      );
-    }
-    return this.dispatch(job.input, job.prepared, job.deliveryMode ?? "live");
+    return processSmsJob({
+      db: this.db,
+      vault: this.piiVault,
+      job,
+      dispatch: recheckedDispatch({
+        killSwitch: this.killSwitch,
+        consent: this.consent,
+        senders: this.senders,
+        runtime: this.runtime,
+      }),
+      fail: (input, prepared, mode) =>
+        engineFailPreparedSend(
+          this.runtime.deps(mode),
+          input,
+          prepared,
+          "dispatch_material_unreadable",
+        ),
+      legacyDispatch: (input, prepared) =>
+        this.runtime.legacyDispatch(input, prepared),
+    });
   }
 
-  private async dispatch(
-    input: SendInput,
-    prepared: PreparedSend,
-    deliveryMode: DeliveryMode,
-  ): Promise<SendResult> {
-    const result = await dispatchProviderSend({
-      deps: this.deps(deliveryMode),
-      virtualProvider: this.virtualProvider,
-      input,
-      prepared,
-      deliveryMode,
+  async enqueuePending(tenantId: string): Promise<number> {
+    return recoverPendingSmsSafely({
+      db: this.db,
+      queue: this.queue,
+      tenantId,
+      warn: (message) => this.logger.warn(message),
     });
-    if (deliveryMode === "virtual")
-      await maybeAutoStop(this.virtualPhone, input, result);
-    return result;
   }
 
   /**
@@ -260,19 +252,27 @@ export class SmsService {
    */
   async sweepStuck(tenantId: string, olderThanIso: string): Promise<number> {
     return engineSweepExpired(
-      this.deps("live"),
+      this.runtime.deps("live"),
       tenantId,
       olderThanIso,
-      (mode) => this.deps(mode),
+      (mode) => this.runtime.deps(mode),
     );
   }
 
-  async list(tenantId: string): Promise<MessageSummary[]> {
-    return listMessages(this.db, tenantId);
+  async list(
+    tenantId: string,
+    environmentId: string | null | undefined,
+    page: { limit: number; before?: KeysetCursor },
+  ): Promise<MessagePageResult> {
+    return listMessages(this.db, tenantId, environmentId, page);
   }
 
-  async get(tenantId: string, id: string): Promise<MessageDetail> {
-    return getMessage(this.db, tenantId, id);
+  async get(
+    tenantId: string,
+    id: string,
+    environmentId?: string | null,
+  ): Promise<MessageDetail> {
+    return getMessage(this.db, tenantId, id, environmentId);
   }
 
   /**
@@ -292,8 +292,8 @@ export class SmsService {
       providerSlug,
       body,
       headers,
-      live: this.deps("live"),
-      virtual: this.deps("virtual"),
+      live: this.runtime.deps("live"),
+      virtual: this.runtime.deps("virtual"),
     });
   }
 }

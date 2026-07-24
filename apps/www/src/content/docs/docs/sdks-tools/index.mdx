@@ -1,0 +1,37 @@
+---
+title: SDKs & tools
+description: The official TypeScript SDK and the CLI — the supported way to build on Fabric.
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+You build on Fabric through the official TypeScript SDK. The CLI complements it by generating typed
+keys for your message definitions.
+
+The TypeScript SDK is the supported client today. SDKs for more languages will follow once the API
+reaches a stable release.
+
+<CardGrid>
+  <LinkCard
+    title="Node.js SDK"
+    description="Install, configure, resources, retries, and typed errors."
+    href="/docs/sdks-tools/node/"
+  />
+  <LinkCard
+    title="CLI"
+    description="Generate and check a typed catalog of your definition keys."
+    href="/docs/sdks-tools/cli/"
+  />
+</CardGrid>
+
+## At a glance
+
+| Tool | Package | Use it for |
+| --- | --- | --- |
+| SDK | `@fabric-messaging/sdk` | All server-side integration. Node.js 22+, ESM. |
+| CLI | `@fabric-messaging/cli` | Typed definition catalog, drift checks in CI. |
+
+:::caution[Both tools are server-side]
+The SDK and the CLI both carry a secret key. Keep them out of browsers, public repositories, and
+logs.
+:::

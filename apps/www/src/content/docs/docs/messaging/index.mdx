@@ -1,0 +1,92 @@
+---
+title: Messaging
+description: Send SMS through managed definitions or directly, with safe retries and honest delivery states.
+---
+
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Fabric offers two server-side paths to send a message. Both run through the same wallet, the same
+idempotency model, and the same webhook scheme.
+
+<CardGrid>
+  <Card title="Managed messages" icon="document">
+    Render a published definition by a stable key such as `order.shipped`. Copy, channel, and locale
+    change without redeploying your application.
+  </Card>
+  <Card title="Direct SMS" icon="comment">
+    Send a body and sender name in the request. Use this when your application already owns the
+    rendered content.
+  </Card>
+</CardGrid>
+
+## Managed message
+
+A managed send addresses a definition by key. The published definition decides whether the delivery
+is SMS or email, and Fabric validates the variables you supply before it reserves wallet funds.
+
+```ts
+const response = await fabric.messages.send("order.shipped", {
+  to: "+233201234567",
+  data: { name: "Ama", ref: "GH-4821" },
+  reference: "order:GH-4821",
+  idempotencyKey: "order-shipped:GH-4821",
+});
+
+console.log(response.data.id, response.data.status, response.data.cost.minor);
+```
+
+`messages.send` requires an `idempotencyKey`. The returned `MessageDelivery` carries a deterministic
+`id`, the resolved `channel`, `status`, exact `cost`, and an `attempts` timeline. Retrieve it later
+with `fabric.messages.retrieveDelivery(id)`, and render output with no side effects using
+`fabric.messages.preview(key, …)`.
+
+<LinkCard
+  title="Message definitions"
+  description="Author, version, release, and preview managed SMS and email templates."
+  href="/docs/messaging/message-definitions/"
+/>
+
+## Direct SMS
+
+```ts
+const response = await fabric.sms.send(
+  {
+    to: "+233201234567",
+    senderId: "FABRIC",
+    body: "Your order GH-4821 has shipped.",
+    currency: "GHS",
+    class: "transactional",
+  },
+  { idempotencyKey: "order-shipped:GH-4821" },
+);
+
+console.log(response.data.segments, response.data.encoding, response.data.cost.minor);
+```
+
+Numbers must use E.164 format — the SDK rejects anything else before making a request. `currency`
+defaults to `GHS` and `class` to `transactional`. Sandbox sends resolve on the virtual delivery path
+and need no carrier approval; live sends require an active sender name for the recipient's country.
+
+<CardGrid>
+  <LinkCard
+    title="Direct SMS in depth"
+    description="Encoding, segments, batches, and the direct send/retrieve/list surface."
+    href="/docs/messaging/sms/"
+  />
+  <LinkCard
+    title="Sender IDs"
+    description="Register alphanumeric sender names for Ghana and Nigeria."
+    href="/docs/messaging/sender-ids/"
+  />
+  <LinkCard
+    title="Delivery reports"
+    description="Read delivery states honestly and follow terminal events."
+    href="/docs/messaging/delivery-reports/"
+  />
+</CardGrid>
+
+:::tip[Reference vs idempotency key]
+Set `reference` to your business identifier (`order:GH-4821`) and `idempotencyKey` to the logical
+operation. The reference aids reconciliation; the idempotency key makes a retry return the original
+result instead of sending twice.
+:::

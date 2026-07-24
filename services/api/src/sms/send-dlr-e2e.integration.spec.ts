@@ -1,34 +1,3 @@
-// ============================================================================================
-// WALKING-SKELETON CAPSTONE (E2E) — the whole thin thread, end to end, over real HTTP + real DB.
-// tier: test:integration. Boots the ACTUAL NestJS+Fastify app (AppModule → ApiKeyGuard, SmsService
-// with the DI'd FakeProvider, DbModule on the app_runtime pool), drives it via Fastify `.inject()`,
-// and asserts the MONEY is correct at the ledger — not just that the HTTP call returned 2xx.
-//
-// This is the capstone the WS iteration was built toward: authed tenant-scoped SMS send with a
-// correct double-entry money ledger on FakeProvider. It proves the layers compose:
-//   L2 api-key auth → L5 send pipeline → L3 wallet reserve/commit/refund → write-time ledger triggers.
-//
-// THE 9 STEPS (F5 demo):
-//   1. migrate DB as app_migrator (harness, before this tier runs)
-//   2. seed a tenant + an ACTIVE sk_test_ key (superuser, cross-tenant)
-//   3. fund the customer wallet via a REAL double-entry top-up (credit) — never a hand-set balance,
-//      so the ledger invariant holds from the start
-//   4. boot the real app (FakeProvider wired) + inject HTTP
-//   5. POST /v1/sms/send with the key → 201 {id,status:'accepted'}
-//   6. assert money moved EXACTLY ONCE: customer ↓ cost, reserved_clearing = 0, revenue = cost
-//      (committed at 'accepted' — honest-billing)
-//   7. POST /webhooks/dlr/fake-sms {delivered} → 200; assert balances UNCHANGED (post-commit DLR is a
-//      no-op for money — decideResolution → 'none', S4-family)
-//   8. a REJECT send (magic MSISDN) → provider refuses at submit → REFUND; assert customer net-zero,
-//      reserved_clearing = 0, revenue unchanged (money returned exactly once)
-//   9. assert the ledger invariants hold across everything: every txn balances (Σ signed legs = 0)
-//      and every account's balance_minor = Σ its legs (projection never drifted)
-//
-// Env (same harness as the other integration specs): DATABASE_URL_SUPER (app_owner superuser — seeds
-// cross-tenant + reads balances, bypasses FORCE RLS), DATABASE_URL_APP (app_runtime — what the app
-// connects as, RLS-enforced). DB migrated as DATABASE_URL_OWNER (app_migrator) first.
-// ============================================================================================
-
 import "reflect-metadata";
 import { createAppDb } from "@app/db";
 import { credit } from "@app/wallet";
@@ -49,16 +18,17 @@ if (!SUPER_URL || !APP_URL) {
     "send-dlr-e2e needs DATABASE_URL_SUPER + DATABASE_URL_APP (a fresh DB migrated as app_migrator)",
   );
 }
-// The app's DbModule reads DATABASE_URL_APP off the environment — ensure the factory sees it.
 process.env.DATABASE_URL_APP = APP_URL;
 process.env.WEBHOOK_INGRESS_TOKEN = "integration-webhook-token";
-// Pin the INLINE send path: this capstone asserts synchronous provider outcomes (accepted/failed
-// in-response). The queued path (REDIS_QUEUE_URL set) has its own e2e — queue-send.integration.spec.
 process.env.REDIS_QUEUE_URL = "";
 
-// Distinct tenant id so this spec's rows never collide with the other integration specs' fixtures.
 const TENANT = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
-const ACTIVE_RAW = `sk_test_${"e".repeat(40)}`;
+const APPLICATION = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeee01";
+const ENVIRONMENT = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeee11";
+const OTHER_APPLICATION = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeee02";
+const OTHER_ENVIRONMENT = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeee12";
+const ACTIVE_RAW = `sk_live_${"e".repeat(40)}`;
+const OTHER_RAW = `sk_live_${"f".repeat(40)}`;
 const CURRENCY = "GHS";
 const FUNDING_MINOR = 100_000n; // 1,000.00 GHS in pesewas — plenty for a few 3-pesewa segments
 
@@ -85,12 +55,35 @@ beforeAll(async () => {
     [TENANT],
   );
   await owner.unsafe(
-    `INSERT INTO api_keys (tenant_id, prefix, key_hash, env, scopes, status)
-     VALUES ($1, 'sk_test_e2e', $2, 'test', '["sms:send","sms:read","wallet:read"]'::jsonb, 'active')
-     ON CONFLICT (key_hash) DO NOTHING`,
-    [TENANT, hashApiKey(ACTIVE_RAW)],
+    `INSERT INTO applications (id, tenant_id, name, slug)
+     VALUES ($1, $3, 'Primary', 'primary'), ($2, $3, 'Other', 'other')
+     ON CONFLICT (id) DO NOTHING`,
+    [APPLICATION, OTHER_APPLICATION, TENANT],
   );
-  // E10-S4: this is a LIVE-plan tenant, so its sender id must be registered + active.
+  await owner.unsafe(
+    `INSERT INTO environments (id, tenant_id, application_id, type, status)
+     VALUES ($1, $3, $4, 'live', 'active'), ($2, $3, $5, 'live', 'active')
+     ON CONFLICT (id) DO NOTHING`,
+    [ENVIRONMENT, OTHER_ENVIRONMENT, TENANT, APPLICATION, OTHER_APPLICATION],
+  );
+  await owner.unsafe(
+    `INSERT INTO api_keys (
+       tenant_id, application_id, environment_id, prefix, key_hash, env, scopes, status
+     )
+     VALUES
+       ($1, $3, $4, 'sk_live_e2e', $2, 'live', '["sms:send","sms:read","wallet:read"]'::jsonb, 'active'),
+       ($1, $5, $6, 'sk_live_other', $7, 'live', '["sms:read"]'::jsonb, 'active')
+     ON CONFLICT (key_hash) DO NOTHING`,
+    [
+      TENANT,
+      hashApiKey(ACTIVE_RAW),
+      APPLICATION,
+      ENVIRONMENT,
+      OTHER_APPLICATION,
+      OTHER_ENVIRONMENT,
+      hashApiKey(OTHER_RAW),
+    ],
+  );
   await owner.unsafe(
     `INSERT INTO senders (tenant_id, sender_id, country, use_case, status)
      VALUES ($1, 'JOJO', 'GH', 'walking-skeleton e2e', 'active')
@@ -109,7 +102,6 @@ beforeAll(async () => {
     }),
   );
 
-  // 4. boot the real app (FakeProvider is DI'd inside SmsService); inject HTTP, no network port.
   app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
@@ -149,7 +141,7 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/sms/send",
+      url: "/v1/sms/messages",
       headers: {
         authorization: `Bearer ${ACTIVE_RAW}`,
         "content-type": "application/json",
@@ -270,6 +262,40 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
       amount: { minor: cost.toString() },
       runningBalance: { minor: (FUNDING_MINOR - cost).toString() },
     });
+  });
+
+  it("does not expose a message to another application environment in the same tenant", async () => {
+    const headers = { authorization: `Bearer ${OTHER_RAW}` };
+    const messages = await app.inject({
+      method: "GET",
+      url: "/v1/messages",
+      headers,
+    });
+    expect(messages.statusCode).toBe(200);
+    expect((messages.json() as { messages: unknown[] }).messages).toEqual([]);
+
+    const detail = await app.inject({
+      method: "GET",
+      url: `/v1/sms/${messageId}`,
+      headers,
+    });
+    expect(detail.statusCode).toBe(404);
+  });
+
+  it("database constraints reject a key whose environment belongs to another application", async () => {
+    await expect(
+      owner.unsafe(
+        `INSERT INTO api_keys (
+           tenant_id, application_id, environment_id, prefix, key_hash, env, scopes, status
+         ) VALUES ($1, $2, $3, 'sk_test_mismatch', $4, 'test', '[]'::jsonb, 'active')`,
+        [
+          TENANT,
+          APPLICATION,
+          OTHER_ENVIRONMENT,
+          hashApiKey(`sk_test_${"a".repeat(40)}`),
+        ],
+      ),
+    ).rejects.toThrow();
   });
 
   it("8. a provider-rejected send refunds the reservation — customer nets to zero for that send", async () => {

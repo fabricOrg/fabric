@@ -10,8 +10,12 @@ import { PrivacyModule } from "../privacy/privacy.module.js";
 import { QueueModule } from "../queue/queue.module.js";
 import { SendersModule } from "../senders/senders.module.js";
 import { DlrController } from "./dlr.controller.js";
+import { MessagingInsightsService } from "./messaging-insights.service.js";
 import { SmsController } from "./sms.controller.js";
 import { SmsService } from "./sms.service.js";
+import { SmsBatchController } from "./sms-batch.controller.js";
+import { SmsBatchService } from "./sms-batch.service.js";
+import { SmsRuntimeService } from "./sms-runtime.service.js";
 import { SmsSendWorker } from "./sms-send.worker.js";
 import { VirtualPhoneController } from "./virtual-phone.controller.js";
 import { VirtualPhoneService } from "./virtual-phone.service.js";
@@ -38,14 +42,22 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
     // `messages` and `virtual_deliveries` reference a subject_id surrogate, never a raw number.
     PrivacyModule,
   ],
-  controllers: [SmsController, DlrController, VirtualPhoneController],
+  controllers: [
+    SmsController,
+    SmsBatchController,
+    DlrController,
+    VirtualPhoneController,
+  ],
   // SmsSendWorker consumes the sms-send queue in-process when REDIS_QUEUE_URL is set.
   providers: [
     SmsService,
+    SmsBatchService,
+    SmsRuntimeService,
     SmsSendWorker,
     WebhookTokenGuard,
     BffTokenGuard,
     VirtualPhoneService,
+    MessagingInsightsService,
   ],
   // Exported for the maintenance module: the scheduled sweeper resolves stuck reservations
   // through SmsService (same EngineDeps + provider billing basis as the live send path).

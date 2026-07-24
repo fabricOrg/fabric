@@ -1,0 +1,62 @@
+---
+title: Sender IDs
+description: Register alphanumeric sender names for Ghana and Nigeria and understand the approval gate.
+---
+
+A sender ID is the name a recipient sees as the "from" of an SMS — for example `FABRIC`. In West
+Africa a sender ID is a **delivery gate, not a label**: on live routes an unregistered sender is
+rejected by the carrier, so registration is a prerequisite for live SMS, not a nicety.
+
+## Register a sender ID
+
+```ts
+const sender = await fabric.senderIds.create({
+  senderId: "FABRIC",
+  country: "GH",           // "GH" or "NG"
+  type: "alphanumeric",    // default; "short-code" also supported
+  useCase: "Order and delivery notifications for shop.example",
+});
+
+console.log(sender.data.status); // "pending"
+```
+
+| Field | Notes |
+| --- | --- |
+| `senderId` | The displayed name. Alphanumeric names are capped at 11 characters by the GSM standard. |
+| `country` | `GH` or `NG` — the launch corridors. Register once per country you send to. |
+| `type` | `alphanumeric` (default) or `short-code`. |
+| `useCase` | A clear description of what you will send. Carriers and regulators review this. |
+
+List what you hold with `fabric.senderIds.list()`.
+
+## The approval lifecycle
+
+A sender ID moves through:
+
+`pending` → `active` (approved) — or → `rejected` (with a `rejectionReason`)
+
+Approval is a **manual review** by the carrier or national regulator (Ghana's NCA, Nigeria's NCC),
+carried out through Fabric operations. There is **no fixed turnaround encoded** — plan for lead time
+and register early. A rejected sender comes back with a reason so you can correct and resubmit.
+
+## Sandbox needs no approval
+
+Sandbox rides the virtual delivery path, so a `sk_test_` send does not require an `active` sender —
+you can build and test the whole flow immediately. A live send is gated: if the sender is not
+`active` for the recipient's country, the send is refused with the blocker code
+`sender_not_registered`.
+
+<br />
+
+| Environment | Sender requirement |
+| --- | --- |
+| Sandbox (`sk_test_`) | None — virtual delivery. |
+| Live (`sk_live_`) | An `active` sender ID for the recipient's country. |
+
+:::tip[Register before you need it]
+Because approval is manual and carrier-dependent, register your production sender IDs for both GH and
+NG well ahead of launch. Test everything else in sandbox while approval is pending.
+:::
+
+See [compliance](/docs/account/compliance/) for how transactional and promotional traffic are routed
+differently once you are live.

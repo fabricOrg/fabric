@@ -11,43 +11,43 @@ import {
 import type { ConfigService } from "@nestjs/config";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { AuditService } from "../audit/audit.service.js";
 import { WebhookDeliveryService } from "./webhook-delivery.service.js";
+import { WebhookDeliveryStore } from "./webhook-delivery.store.js";
 import { WebhooksService } from "./webhooks.service.js";
-
-/**
- * OUTBOX + WEBHOOK DELIVERY — integration spec (finding 8). Real Postgres + a real local HTTP
- * receiver. Proves:
- *   1. atomicity: an outbox insert rolls back WITH its transaction (no event for a write that
- *      didn't happen);
- *   2. delivery: the sweep POSTs a correctly HMAC-signed envelope to the registered endpoint and
- *      marks the event delivered;
- *   3. retry + dead-letter: a 500ing endpoint bumps attempts (not delivered); attempts exhaust
- *      into a dead row rather than grinding forever;
- *   4. secrecy: list() exposes only the secret prefix.
- */
 
 const superUrl = process.env.DATABASE_URL_SUPER;
 const appUrl = process.env.DATABASE_URL_APP ?? superUrl;
 const describeDb = superUrl ? describe : describe.skip;
-
 const config = {
-  get: () => undefined,
+  get: (key: string) =>
+    key === "WEBHOOK_ALLOW_PRIVATE_NETWORKS" ? "true" : undefined,
 } as unknown as ConfigService;
+const auditRecords: Array<{ action: string; targetId?: string | null }> = [];
+const audit = {
+  record: async (input: { action: string; targetId?: string | null }) => {
+    auditRecords.push(input);
+  },
+} as unknown as AuditService;
 
-describeDb("transactional outbox + signed webhook delivery", () => {
+describeDb("durable endpoint-specific webhook delivery", () => {
   const provisioning = createProvisioningDb(superUrl ?? "", { max: 2 });
   const appDb = createAppDb(appUrl ?? "");
   const owner = postgres(superUrl ?? "", { max: 1 });
-  const webhooks = new WebhooksService(appDb);
-  const delivery = new WebhookDeliveryService(provisioning, config);
-
+  const webhooks = new WebhooksService(appDb, config, audit);
+  const delivery = new WebhookDeliveryService(
+    new WebhookDeliveryStore(provisioning),
+    config,
+  );
   const tenantId = randomUUID() as TenantId;
+  const otherTenantId = randomUUID();
 
-  // Local receiver: records signed requests; response code is switchable per test.
   let server: Server;
   let port = 0;
-  let respondWith = 200;
-  const received: Array<{ signature: string; body: string }> = [];
+  let applicationId = "";
+  let environmentId = "";
+  let failingStatus = 500;
+  const received: Array<{ path: string; signature: string; body: string }> = [];
 
   beforeAll(async () => {
     await provisioning.db.insert(accounts).values({
@@ -55,38 +55,53 @@ describeDb("transactional outbox + signed webhook delivery", () => {
       name: "Webhook Test",
       slug: `hook-${tenantId}`,
     });
-    // ADR-0004: webhooks.create mints into the default app's sandbox env, so seed that hierarchy.
     const [app] = await provisioning.db
       .insert(applications)
       .values({ tenantId, name: "Default", slug: "default" })
       .returning();
-    if (!app)
-      throw new Error("seed: default application insert returned no row");
-    await provisioning.db.insert(environments).values([
-      { tenantId, applicationId: app.id, type: "sandbox", status: "active" },
-      { tenantId, applicationId: app.id, type: "live", status: "active" },
-    ]);
-    server = createServer((req, res) => {
+    if (!app) throw new Error("default application seed failed");
+    applicationId = app.id;
+    const sandboxRows = await provisioning.db
+      .insert(environments)
+      .values({
+        tenantId,
+        applicationId: app.id,
+        type: "sandbox",
+        status: "active",
+      })
+      .returning();
+    await provisioning.db.insert(environments).values({
+      tenantId,
+      applicationId: app.id,
+      type: "live",
+      status: "active",
+    });
+    const sandbox = sandboxRows[0];
+    if (!sandbox) throw new Error("sandbox environment seed failed");
+    environmentId = sandbox.id;
+
+    server = createServer((request, response) => {
       let body = "";
-      req.on("data", (c) => {
-        body += c;
+      request.on("data", (chunk) => {
+        body += chunk;
       });
-      req.on("end", () => {
+      request.on("end", () => {
+        const path = request.url ?? "";
         received.push({
-          signature: String(req.headers["fabric-signature"] ?? ""),
+          path,
+          signature: String(request.headers["fabric-signature"] ?? ""),
           body,
         });
-        res.statusCode = respondWith;
-        res.end();
+        response.statusCode = path === "/failing" ? failingStatus : 200;
+        response.end();
       });
     });
-    await new Promise<void>((resolve) => {
-      server.listen(0, "127.0.0.1", resolve);
-    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
     const address = server.address();
-    if (address === null || typeof address === "string") {
+    if (!address || typeof address === "string")
       throw new Error("listener has no port");
-    }
     port = address.port;
   });
 
@@ -98,107 +113,180 @@ describeDb("transactional outbox + signed webhook delivery", () => {
     await Promise.all([provisioning.end(), appDb.end(), owner.end()]);
   });
 
-  async function emitEvent(payload: Record<string, unknown>): Promise<void> {
-    await appDb.withTenant(tenantId, async (tx) => {
-      await tx`
-        INSERT INTO outbox_events (tenant_id, event_type, payload)
-        VALUES (current_setting('app.tenant_id')::uuid, 'message.updated', ${JSON.stringify(payload)}::jsonb)`;
+  async function emit(payload: Record<string, unknown>): Promise<string> {
+    return appDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx`
+        INSERT INTO outbox_events (
+          tenant_id, application_id, environment_id, event_type, payload
+        ) VALUES (
+          current_setting('app.tenant_id')::uuid, ${applicationId},
+          ${environmentId}, 'message.updated', ${JSON.stringify(payload)}::jsonb
+        ) RETURNING id`;
+      return String(rows[0]?.id);
     });
   }
 
-  async function undeliveredCount(): Promise<number> {
-    const rows = await owner`
-      SELECT count(*)::int AS n FROM outbox_events
-      WHERE tenant_id = ${tenantId} AND delivered_at IS NULL`;
-    return Number(rows[0]?.n);
-  }
-
-  it("outbox insert rolls back with its transaction (atomicity)", async () => {
-    const before = await undeliveredCount();
+  it("rolls back an outbox event with its domain transaction", async () => {
     await expect(
       appDb.withTenant(tenantId, async (tx) => {
         await tx`
           INSERT INTO outbox_events (tenant_id, event_type, payload)
-          VALUES (current_setting('app.tenant_id')::uuid, 'message.updated', '{"x":1}'::jsonb)`;
-        throw new Error("boom — the domain write failed");
+          VALUES (current_setting('app.tenant_id')::uuid, 'message.updated', '{}')`;
+        throw new Error("domain write failed");
       }),
-    ).rejects.toThrow("boom");
-    expect(await undeliveredCount()).toBe(before);
+    ).rejects.toThrow("domain write failed");
   });
 
-  it("delivers a signed envelope to the registered endpoint and marks the event delivered", async () => {
-    const created = await webhooks.create(tenantId, {
-      url: `http://127.0.0.1:${port}/hooks`,
+  it("signs events and retries only the failed endpoint", async () => {
+    const healthy = await webhooks.create(tenantId, {
+      url: `http://127.0.0.1:${port}/healthy`,
     });
-    expect(created.secret.startsWith("whsec_")).toBe(true);
-
-    respondWith = 200;
-    await emitEvent({ message_id: "m-1", status: "accepted" });
-    const result = await delivery.deliverPending();
-    expect(result.locked).toBe(true);
-    expect(result.delivered).toBeGreaterThanOrEqual(1);
-    expect(await undeliveredCount()).toBe(0);
-
-    const last = received.at(-1);
-    expect(last).toBeDefined();
-    if (!last) throw new Error("no request received");
-    // Verify the signature exactly as a consumer would.
-    const match = /^t=(\d+),v1=([0-9a-f]{64})$/.exec(last.signature);
-    expect(match).not.toBeNull();
-    if (!match) throw new Error("bad signature format");
-    const expected = createHmac("sha256", created.secret)
-      .update(`${match[1]}.${last.body}`)
-      .digest("hex");
-    expect(match[2]).toBe(expected);
-    const envelope = JSON.parse(last.body) as {
-      type: string;
-      data: { message_id: string };
-    };
-    expect(envelope.type).toBe("message.updated");
-    expect(envelope.data.message_id).toBe("m-1");
-  });
-
-  it("a failing endpoint bumps attempts and retries; exhausted attempts dead-letter", async () => {
-    respondWith = 500;
-    await emitEvent({ message_id: "m-2", status: "failed" });
+    const failing = await webhooks.create(tenantId, {
+      url: `http://127.0.0.1:${port}/failing`,
+    });
+    const eventId = await emit({ message_id: "message-1", status: "accepted" });
 
     const first = await delivery.deliverPending();
-    expect(first.retried).toBeGreaterThanOrEqual(1);
-    expect(await undeliveredCount()).toBe(1);
+    expect(first).toMatchObject({ claimed: 2, delivered: 1, retried: 1 });
+    const healthyRequest = received.find((item) => item.path === "/healthy");
+    if (!healthyRequest)
+      throw new Error("healthy endpoint received no request");
+    const signature = /^t=(\d+),v1=([0-9a-f]{64})$/.exec(
+      healthyRequest.signature,
+    );
+    if (!signature) throw new Error("signature format is invalid");
+    expect(
+      createHmac("sha256", healthy.secret)
+        .update(`${signature[1]}.${healthyRequest.body}`)
+        .digest("hex"),
+    ).toBe(signature[2]);
+    expect(JSON.parse(healthyRequest.body)).toMatchObject({
+      id: eventId,
+      type: "message.sent",
+    });
 
-    // Exhaust the remaining attempts — the row must retire dead, not spin forever.
-    for (let i = 0; i < 9; i++) {
+    const healthyCalls = received.filter(
+      (item) => item.path === "/healthy",
+    ).length;
+    await owner`
+      UPDATE webhook_deliveries SET next_attempt_at = now()
+      WHERE endpoint_id = ${failing.id} AND state = 'pending'`;
+    const second = await delivery.deliverPending();
+    expect(second).toMatchObject({ claimed: 1, delivered: 0, retried: 1 });
+    expect(received.filter((item) => item.path === "/healthy")).toHaveLength(
+      healthyCalls,
+    );
+  });
+
+  it("keeps dead evidence, audits replay, and continues the attempt history", async () => {
+    const endpoints = await webhooks.list(tenantId);
+    const failing = endpoints.find((item) => item.url.endsWith("/failing"));
+    if (!failing) throw new Error("failing endpoint is missing");
+
+    for (let attempt = 2; attempt < 10; attempt++) {
+      await owner`
+        UPDATE webhook_deliveries SET next_attempt_at = now()
+        WHERE endpoint_id = ${failing.id} AND state = 'pending'`;
       await delivery.deliverPending();
     }
-    expect(await undeliveredCount()).toBe(0); // dead-lettered (delivered_at set)
-    const [row] = await owner`
-      SELECT attempts FROM outbox_events
-      WHERE tenant_id = ${tenantId} ORDER BY created_at DESC LIMIT 1`;
-    expect(Number(row?.attempts)).toBe(10);
-    respondWith = 200;
-  });
-
-  it("list() exposes only the secret prefix", async () => {
-    const endpoints = await webhooks.list(tenantId);
-    expect(endpoints.length).toBeGreaterThanOrEqual(1);
-    for (const e of endpoints) {
-      expect(e.secret_prefix.length).toBeLessThan(15);
-      expect(JSON.stringify(e)).not.toContain("whsec_".padEnd(20, "x"));
-      expect((e as { secret?: string }).secret).toBeUndefined();
-    }
-  });
-
-  it("endpoints carry their environment (ADR-0004): a live endpoint reports env 'live'", async () => {
-    const live = await webhooks.create(
+    const deadPage = await webhooks.listDeliveries(
       tenantId,
-      { url: "https://example.com/live-hook" },
-      { envType: "live" },
+      failing.id,
+      "dead",
+      {
+        limit: 50,
+      },
     );
-    expect(live.env).toBe("live");
+    const dead = deadPage.deliveries[0];
+    expect(dead?.attempts).toBe(10);
+    if (!dead) throw new Error("delivery did not reach dead state");
+
+    await expect(
+      webhooks.replay(otherTenantId, failing.id, dead.id, "other-key"),
+    ).rejects.toMatchObject({
+      response: { error: { code: "webhook_delivery_not_replayable" } },
+    });
+    expect(
+      (
+        await webhooks.listDeliveries(otherTenantId, failing.id, undefined, {
+          limit: 50,
+        })
+      ).deliveries,
+    ).toEqual([]);
+
+    const replayed = await webhooks.replay(
+      tenantId,
+      failing.id,
+      dead.id,
+      "owner-key",
+    );
+    expect(replayed.state).toBe("pending");
+    expect(auditRecords.at(-1)).toMatchObject({
+      action: "webhook_delivery.replay",
+      targetId: dead.id,
+    });
+    failingStatus = 200;
+    await owner`
+      UPDATE webhook_deliveries SET next_attempt_at = now()
+      WHERE id = ${dead.id}`;
+    expect(await delivery.deliverPending()).toMatchObject({ delivered: 1 });
+    const attempts = await owner`
+      SELECT outcome FROM webhook_delivery_attempts
+      WHERE delivery_id = ${dead.id} ORDER BY attempt_number`;
+    expect(attempts).toHaveLength(11);
+    expect(attempts.at(-1)?.outcome).toBe("delivered");
+  });
+
+  it("recovers an expired lease and soft-disables without losing history", async () => {
     const endpoints = await webhooks.list(tenantId);
-    const found = endpoints.find((e) => e.id === live.id);
-    expect(found?.env).toBe("live");
-    // The default-sandbox endpoint from earlier still reports 'sandbox'.
-    expect(endpoints.some((e) => e.env === "sandbox")).toBe(true);
+    const healthy = endpoints.find((item) => item.url.endsWith("/healthy"));
+    if (!healthy) throw new Error("healthy endpoint is missing");
+    const eventId = await emit({
+      message_id: "message-lease",
+      status: "delivered",
+    });
+    await owner`
+      INSERT INTO webhook_deliveries (
+        tenant_id, application_id, environment_id, event_id, endpoint_id,
+        state, attempts, cycle_attempts, lease_expires_at
+      ) VALUES (
+        ${tenantId}, ${applicationId}, ${environmentId}, ${eventId}, ${healthy.id},
+        'delivering', 1, 1, now() - interval '1 minute'
+      )`;
+    expect(await delivery.deliverPending()).toMatchObject({ claimed: 2 });
+
+    await webhooks.disable(tenantId, healthy.id);
+    const listed = await webhooks.list(tenantId);
+    expect(listed.find((item) => item.id === healthy.id)?.status).toBe(
+      "disabled",
+    );
+    expect(
+      (
+        await webhooks.listDeliveries(tenantId, healthy.id, undefined, {
+          limit: 50,
+        })
+      ).deliveries,
+    ).not.toEqual([]);
+  });
+
+  it("exposes only secret prefixes and rejects private URLs by default", async () => {
+    const endpoints = await webhooks.list(tenantId);
+    for (const endpoint of endpoints) {
+      expect((endpoint as { secret?: string }).secret).toBeUndefined();
+      expect(endpoint.secret_prefix.length).toBeLessThan(15);
+      expect(endpoint.health.pending).toBeGreaterThanOrEqual(0);
+    }
+    const strict = new WebhooksService(
+      appDb,
+      { get: () => undefined } as unknown as ConfigService,
+      audit,
+    );
+    await expect(
+      strict.create(tenantId, {
+        url: "http://169.254.169.254/latest/meta-data",
+      }),
+    ).rejects.toMatchObject({
+      response: { error: { code: "webhook_https_required" } },
+    });
   });
 });

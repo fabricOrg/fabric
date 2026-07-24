@@ -197,6 +197,7 @@ describe("ApiKeyGuard (integration, real resolve)", () => {
       keyId: expect.stringMatching(/^[0-9a-f]{16}$/),
       applicationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
       environmentId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      isSessionToken: false,
     });
   });
 
@@ -241,6 +242,8 @@ describe("ApiKeyGuard (integration, real resolve)", () => {
       // BFF token path asserts tenant containment only — app/env selection is a later BFF concern.
       applicationId: null,
       environmentId: null,
+      // The only path that sets this true — the management gate admits sessions on this flag.
+      isSessionToken: true,
     });
   });
 });

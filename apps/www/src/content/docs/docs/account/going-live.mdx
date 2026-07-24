@@ -1,0 +1,49 @@
+---
+title: Going live
+description: The checklist to move an integration from the sandbox to a live sk_live_ key.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Going live is a deliberate switch, not a flag flip. Everything you built in sandbox stays the same;
+you add the live resources the virtual path did not need, then swap the key.
+
+<Steps>
+1. **Prove the loop in sandbox.** Send → follow the webhook to a terminal state → reconcile against
+   the wallet, all with a `sk_test_` key. Handle failures, duplicate events, and timeouts.
+
+2. **Register live sender IDs.** For each country you send SMS to (`GH`, `NG`), register a sender ID
+   and wait for it to become `active`. Approval is a manual carrier/regulator review with no fixed
+   turnaround — [start early](/docs/messaging/sender-ids/).
+
+3. **Verify live email domains.** Publish SPF, DKIM, and DMARC and verify the domain before using a
+   live `from` — see [Domains & DNS](/docs/email/domains-dns/).
+
+4. **Fund the wallet** in the correct currency. Live sends fail closed when funds cannot be reserved.
+
+5. **Create a live webhook endpoint** and store its signing secret in your secret manager. Live and
+   sandbox endpoints are separate.
+
+6. **Confirm consent handling.** Ensure your promotional audience opted in, and that your transactional
+   and promotional traffic use the right [message class](/docs/account/compliance/).
+
+7. **Swap the key.** Replace `sk_test_` with `sk_live_` in your server secret manager. The SDK picks
+   up the live environment from the prefix — no code change.
+
+8. **Do a controlled first send** to a consenting recipient and reconcile the delivery, the terminal
+   webhook, and the wallet ledger entry before you ramp volume.
+</Steps>
+
+## What changes, what does not
+
+| Stays the same | Becomes required live |
+| --- | --- |
+| Your code, keys aside | A funded wallet in the right currency |
+| Definitions and their keys | An `active` sender ID per country (SMS) |
+| Idempotency and webhook logic | A verified sending domain (email) |
+| Cost and rendering behaviour | Real consent and quiet-hours compliance |
+
+:::caution[Sandbox never proves the live route]
+Sandbox validates your integration, not the carrier path or deliverability. Ramp live volume
+gradually and watch delivery reports and bounces.
+:::

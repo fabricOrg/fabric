@@ -14,7 +14,7 @@ import { dashboardApi } from "./api-client";
  * API-key management (W-B) via the data-plane `/v1/api-keys`. dashboardApi mints a short-lived tenant
  * token from the authenticated session (ADR-0003) and enforces the membership permission before the
  * call — the tenant is the session's, never the client's. Keys mint into the workspace's default
- * application env by type (test→sandbox, live→live); live keys need the live env unlocked (go-live).
+ * application environment by type; live keys need the live environment unlocked through go-live.
  * Responses are parsed against the shared contract at the boundary.
  */
 const listResponseSchema = z.array(apiKeySchema);

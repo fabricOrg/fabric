@@ -16,7 +16,7 @@ import {
 export async function GET(request: NextRequest) {
   const sealedCookie = request.cookies.get(WORKOS_COOKIE)?.value;
   if (!sealedCookie) {
-    return NextResponse.redirect(redirectUrl("/login", request));
+    return NextResponse.redirect(redirectUrl("/signin", request));
   }
   // Return the user to the page that triggered the refresh. Accept only same-origin app paths — never
   // a protocol-relative //host escape or an /auth/* loop back into this hop.
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     );
     return response;
   }
-  const response = NextResponse.redirect(redirectUrl("/login", request));
+  const response = NextResponse.redirect(redirectUrl("/signin", request));
   if (outcome.status === "terminal") {
     response.cookies.delete(WORKOS_COOKIE);
   }

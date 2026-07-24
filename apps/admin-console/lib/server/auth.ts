@@ -50,14 +50,28 @@ export function redirectUrl(path: string, _request?: { url: string }): URL {
   return new URL(path, appBaseUrl());
 }
 
+/**
+ * The admin console shares ONE WorkOS AuthKit app with the customer dashboard (the shared
+ * WORKOS_CLIENT_ID). `authenticateWithCode` requires the client id and the API key (client secret)
+ * to belong to the SAME app; the separate admin app was never provisioned with its own key, so
+ * using its client id against the shared key broke the OAuth code exchange. The admin's redirect
+ * URIs are registered on the shared app. WORKOS_ADMIN_CLIENT_ID stays as an override hook for the
+ * day the admin app gets its own key — leave it unset to use the shared, working client.
+ */
+function staffClientId(): string {
+  return (
+    process.env.WORKOS_ADMIN_CLIENT_ID || process.env.WORKOS_CLIENT_ID || ""
+  );
+}
+
 /** No WORKOS_ORGANIZATION_ID (staff aren't org-scoped); BFF token is needed for the staff-session call. */
 export function workosAuthConfigured(): boolean {
-  return [
-    "WORKOS_API_KEY",
-    "WORKOS_CLIENT_ID",
-    "WORKOS_COOKIE_PASSWORD",
-    "BFF_INTERNAL_TOKEN",
-  ].every((name) => Boolean(process.env[name]));
+  return (
+    Boolean(process.env.WORKOS_API_KEY) &&
+    Boolean(staffClientId()) &&
+    Boolean(process.env.WORKOS_COOKIE_PASSWORD) &&
+    Boolean(process.env.BFF_INTERNAL_TOKEN)
+  );
 }
 
 export function staffRealmConfig(): RealmConfig {
@@ -68,7 +82,7 @@ export function staffRealmConfig(): RealmConfig {
   return {
     realm: "staff",
     apiKey: process.env.WORKOS_API_KEY ?? "",
-    clientId: process.env.WORKOS_CLIENT_ID ?? "",
+    clientId: staffClientId(),
     cookieName: WORKOS_COOKIE,
     cookiePassword: process.env.WORKOS_COOKIE_PASSWORD ?? "",
     redirectUri: `${base}/auth/callback`,
@@ -135,7 +149,7 @@ export async function requireAdminSession(): Promise<AppSession> {
     const returnTo = pathname?.startsWith("/") ? pathname : "/";
     redirect(`/auth/refresh?return_to=${encodeURIComponent(returnTo)}`);
   }
-  redirect("/login");
+  redirect("/signin");
 }
 
 export function sessionCookieOptions() {

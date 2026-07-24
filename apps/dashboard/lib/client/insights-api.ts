@@ -1,9 +1,7 @@
-// Messaging Insights client + app-local DTOs (mock-first, mirrors Twilio Messaging Insights).
-// The analytics surface is not yet in the platform contract, so the DTOs live here for now and the
-// data comes from a BFF stub (/api/dashboard/insights). When the real endpoint lands, lift these
-// schemas verbatim into @app/contracts and point the fetch at /v1/insights.
-//
-// TODO(BFF): promote to @app/contracts + wire /v1/insights
+// Messaging Insights client + app-local (camelCase) DTOs. The BFF (/api/dashboard/insights) now
+// serves REAL data from the data-plane /v1/messages/insights rollup and maps it into this shape;
+// these schemas are the browser-facing contract for that mapping (the wire contract itself lives in
+// @app/contracts as messagingInsights).
 
 import { z } from "zod";
 

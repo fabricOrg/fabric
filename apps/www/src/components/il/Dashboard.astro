@@ -1,0 +1,91 @@
+---
+// Dashboard preview — a composed product illustration (not a screenshot) with neutral sample
+// data, so it shows the real surfaces (deliveries, wallet, insights) without fabricating a
+// customer. HTML/CSS for crisp UI; themed by @app/ui tokens.
+const bars = [38, 52, 44, 61, 73, 58, 80];
+const rows = [
+  { ch: "sms", key: "welcome.otp", st: "delivered", cost: "0.03" },
+  { ch: "email", key: "receipt.paid", st: "delivered", cost: "0.01" },
+  { ch: "sms", key: "order.shipped", st: "sending", cost: "0.03" },
+];
+---
+
+<div class="dash" role="img" aria-label="Fabric dashboard preview: a deliveries log, wallet balance, and a weekly volume chart.">
+  <div class="chrome" aria-hidden="true">
+    <span class="dots"><i></i><i></i><i></i></span>
+    <span class="url">app.fabric.dev / deliveries</span>
+  </div>
+  <div class="body">
+    <aside class="rail" aria-hidden="true">
+      <span class="logo"></span>
+      <span class="navi on"></span><span class="navi"></span><span class="navi"></span><span class="navi"></span>
+    </aside>
+    <div class="main">
+      <div class="panel deliveries">
+        <header>Deliveries</header>
+        {rows.map((r) => (
+          <div class="row">
+            <span class={`ch ${r.ch}`}>{r.ch.toUpperCase()}</span>
+            <span class="key">{r.key}</span>
+            <span class={`st ${r.st}`}>{r.st}</span>
+            <span class="c">GHS {r.cost}</span>
+          </div>
+        ))}
+      </div>
+      <div class="side">
+        <div class="panel wallet">
+          <header>Wallet · GHS</header>
+          <strong>2,418.50</strong>
+          <span class="hint">held 0.06 · charged today 4.21</span>
+        </div>
+        <div class="panel chart">
+          <header>Sent · 7 days</header>
+          <div class="bars">
+            {bars.map((h, i) => (<span style={`--h:${h}%;--b:${i}`}></span>))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .dash { overflow: hidden; border: 1px solid var(--border); background: var(--card); box-shadow: 0 40px 80px -50px rgba(20,20,32,.55); }
+  .chrome { display: flex; align-items: center; gap: .7rem; padding: .55rem .8rem; border-bottom: 1px solid var(--border); background: color-mix(in oklab, var(--foreground) 3%, var(--card)); }
+  .dots { display: inline-flex; gap: .3rem; }
+  .dots i { width: .55rem; height: .55rem; border-radius: 50%; background: color-mix(in oklab, var(--foreground) 18%, transparent); }
+  .url { font-family: var(--font-mono); font-size: .72rem; color: var(--muted-foreground); }
+
+  .body { display: grid; grid-template-columns: 3rem 1fr; }
+  .rail { display: flex; flex-direction: column; align-items: center; gap: .7rem; padding: .9rem 0; border-right: 1px solid var(--border); background: color-mix(in oklab, var(--foreground) 2%, var(--card)); }
+  .rail .logo { width: 1.3rem; height: 1.3rem; border-radius: .3rem; background: var(--primary); }
+  .rail .navi { width: 1.15rem; height: .5rem; border-radius: 3px; background: color-mix(in oklab, var(--foreground) 12%, transparent); }
+  .rail .navi.on { background: color-mix(in oklab, var(--primary) 55%, transparent); }
+
+  .main { display: grid; gap: .8rem; grid-template-columns: 1.4fr 1fr; padding: .9rem; }
+  @media (max-width: 34rem) { .main { grid-template-columns: 1fr; } }
+  .panel { border: 1px solid var(--border); background: var(--background); padding: .7rem .75rem; }
+  .panel header { font-family: var(--font-display); font-weight: 600; font-size: .82rem; color: var(--foreground); margin-bottom: .6rem; }
+  .side { display: grid; gap: .8rem; align-content: start; }
+
+  .row { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: .5rem; padding: .42rem .3rem; border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent); font-size: .72rem; }
+  .row:first-of-type { border-top: 0; }
+  .ch { padding: .1rem .3rem; color: #fff; font: 700 .56rem var(--font-mono); }
+  .ch.sms { background: var(--sms); } .ch.email { background: var(--email); }
+  .key { font-family: var(--font-mono); color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st { padding: .08rem .32rem; color: #fff; font-size: .58rem; font-weight: 600; }
+  .st.delivered { background: var(--ok); } .st.sending { background: var(--warn); }
+  .c { font-family: var(--font-mono); font-size: .64rem; color: var(--muted-foreground); }
+
+  .wallet strong { display: block; font-family: var(--font-mono); font-size: 1.5rem; color: var(--foreground); letter-spacing: -.02em; }
+  .wallet .hint { font-family: var(--font-mono); font-size: .62rem; color: var(--muted-foreground); }
+
+  .bars { display: flex; align-items: flex-end; gap: .3rem; height: 3.6rem; }
+  .bars span { flex: 1; height: var(--h); background: color-mix(in oklab, var(--primary) 70%, transparent); border-radius: 2px 2px 0 0; transform-origin: bottom; }
+  .bars span:last-child { background: var(--primary); }
+  /* grow only when the landing's reveal observer marks the frame seen — a page-load animation
+   * would have finished long before the reader scrolls this far. Without JS, bars render full. */
+  :global(.preview-frame.in) .bars span { animation: grow .9s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--b) * 60ms); }
+  @keyframes grow { from { transform: scaleY(0); } }
+  @media (prefers-reduced-motion: reduce) { :global(.preview-frame.in) .bars span { animation: none; } }
+</style>

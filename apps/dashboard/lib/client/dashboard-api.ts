@@ -32,10 +32,11 @@ export async function getMessage(id: string) {
   return response.message;
 }
 
-export async function sendSms(input: SendSmsRequest) {
+export async function sendSms(input: SendSmsRequest, idempotencyKey: string) {
   return sendSmsApiResponse.parse(
     await bffRequest("/api/dashboard/sms/send", {
       method: "POST",
+      headers: { "idempotency-key": idempotencyKey },
       body: JSON.stringify(input),
     }),
   );

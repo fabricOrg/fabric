@@ -8,6 +8,7 @@ import { ApplicationsModule } from "./applications/applications.module.js";
 import { AuditModule } from "./audit/audit.module.js";
 import { ConsentModule } from "./consent/consent.module.js";
 import { DbModule } from "./db/db.module.js";
+import { EmailModule } from "./email/email.module.js";
 import { FlowsModule } from "./flows/flows.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { loggerParams } from "./http/logging.config.js";
@@ -16,6 +17,8 @@ import { ImpersonationModule } from "./impersonation/impersonation.module.js";
 import { KillSwitchModule } from "./kill-switches/kill-switches.module.js";
 import { MaintenanceModule } from "./maintenance/maintenance.module.js";
 import { MembersModule } from "./members/members.module.js";
+import { MessageDefinitionsModule } from "./message-definitions/message-definitions.module.js";
+import { MessagesModule } from "./messages/messages.module.js";
 import { PaymentsModule } from "./payments/payments.module.js";
 import { PluginsModule } from "./plugins/plugins.module.js";
 import { PrivacyModule } from "./privacy/privacy.module.js";
@@ -23,6 +26,7 @@ import { ProposalsModule } from "./proposals/proposals.module.js";
 import { RequestLogsModule } from "./request-logs/request-logs.module.js";
 import { SendersModule } from "./senders/senders.module.js";
 import { SmsModule } from "./sms/sms.module.js";
+import { SmsTemplatesModule } from "./sms-templates/sms-templates.module.js";
 import { VerifyModule } from "./verify/verify.module.js";
 import { WalletModule } from "./wallet/wallet.module.js";
 import { WebhooksModule } from "./webhooks/webhooks.module.js";
@@ -44,6 +48,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     IdentityModule,
     AdminModule,
     AuditModule,
+    EmailModule,
     FlowsModule,
     ImpersonationModule,
     KillSwitchModule,
@@ -54,6 +59,8 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     ProposalsModule,
     ApiKeysModule,
     ApplicationsModule,
+    MessageDefinitionsModule,
+    MessagesModule,
     RequestLogsModule,
     ConsentModule,
     SendersModule,
@@ -61,6 +68,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     // platform capability, not an SMS one.
     PrivacyModule,
     SmsModule,
+    SmsTemplatesModule,
     VerifyModule,
     WalletModule,
     WebhooksModule,

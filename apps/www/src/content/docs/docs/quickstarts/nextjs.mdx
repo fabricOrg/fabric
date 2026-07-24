@@ -1,0 +1,78 @@
+---
+title: Send from Next.js
+description: Call Fabric from a Route Handler and verify a webhook — always server-side.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Fabric is server-only, so it belongs in a Route Handler or Server Action — never a Client Component,
+`getServerSideProps` shipped to the browser, or a `NEXT_PUBLIC_` variable. The SDK throws if it is
+constructed in a browser.
+
+<Steps>
+1. **Install and configure**
+
+   ```bash
+   npm install @fabric-messaging/sdk
+   ```
+
+   ```bash title=".env.local"
+   FABRIC_API_KEY=sk_test_replace_with_your_key
+   FABRIC_WEBHOOK_SECRET=whsec_replace_with_your_secret
+   ```
+
+   Do not prefix either with `NEXT_PUBLIC_`.
+
+2. **Send from a Route Handler**
+
+   ```ts title="app/api/notify/route.ts"
+   import { Fabric } from "@fabric-messaging/sdk";
+
+   const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY! });
+
+   export async function POST(request: Request) {
+     const { orderRef, phone } = await request.json();
+
+     const result = await fabric.messages.send("order.shipped", {
+       to: phone,
+       data: { ref: orderRef },
+       reference: `order:${orderRef}`,
+       idempotencyKey: `order-shipped:${orderRef}`,
+     });
+
+     return Response.json({ id: result.data.id, status: result.data.status });
+   }
+   ```
+
+3. **Verify the webhook against the raw body**
+
+   ```ts title="app/api/fabric/webhook/route.ts"
+   import { Fabric } from "@fabric-messaging/sdk";
+
+   const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY! });
+
+   export async function POST(request: Request) {
+     const payload = await request.text(); // raw — do not JSON.parse first
+
+     try {
+       const event = fabric.webhooks.verify({
+         payload,
+         signature: request.headers.get("fabric-signature") ?? undefined,
+         secret: process.env.FABRIC_WEBHOOK_SECRET!,
+       });
+       await processOnce(event.id, event);
+       return new Response("ok", { status: 200 });
+     } catch {
+       return new Response("bad signature", { status: 400 });
+     }
+   }
+   ```
+</Steps>
+
+The App Router hands you the raw body from `request.text()`, which is exactly what signature
+verification needs. Reading `request.json()` first would reserialise the bytes and break the HMAC.
+
+:::caution[Never import the SDK into a Client Component]
+Keep every Fabric call in `route.ts`, a Server Action, or other server-only code. A key that reaches
+the browser bundle is a leaked secret.
+:::

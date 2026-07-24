@@ -19,6 +19,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Webhook } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { WebhookDeliveriesDialog } from "@/components/webhook-deliveries-dialog";
 import { toastApiError } from "@/lib/error-toast";
 
 function formatDate(value: string): string {
@@ -39,6 +40,8 @@ export function WebhooksTable({
     null,
   );
   const [deleting, setDeleting] = useState(false);
+  const [deliveryTarget, setDeliveryTarget] =
+    useState<WebhookEndpointDto | null>(null);
 
   async function confirmDelete() {
     if (!deleteTarget) return;
@@ -113,6 +116,23 @@ export function WebhooksTable({
       ),
     },
     {
+      id: "health",
+      header: "Deliveries",
+      cell: ({ row }) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setDeliveryTarget(row.original)}
+        >
+          {row.original.health.dead > 0
+            ? `${row.original.health.dead} dead`
+            : row.original.health.pending > 0
+              ? `${row.original.health.pending} pending`
+              : "Healthy"}
+        </Button>
+      ),
+    },
+    {
       id: "actions",
       header: () => null,
       cell: ({ row }) => (
@@ -122,7 +142,7 @@ export function WebhooksTable({
           className="text-destructive"
           onClick={() => setDeleteTarget(row.original)}
         >
-          Delete
+          Disable
         </Button>
       ),
     },
@@ -148,11 +168,11 @@ export function WebhooksTable({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete this endpoint?</DialogTitle>
+            <DialogTitle>Disable this endpoint?</DialogTitle>
             <DialogDescription>
               Fabric will stop delivering events to{" "}
               <span className="font-mono">{deleteTarget?.url}</span>. This
-              can&apos;t be undone.
+              Delivery history will remain available.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -164,11 +184,19 @@ export function WebhooksTable({
               onClick={confirmDelete}
               disabled={deleting}
             >
-              {deleting ? "Deleting…" : "Delete endpoint"}
+              {deleting ? "Disabling…" : "Disable endpoint"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {deliveryTarget ? (
+        <WebhookDeliveriesDialog
+          endpoint={deliveryTarget}
+          open
+          onOpenChange={(value) => !value && setDeliveryTarget(null)}
+          onChanged={() => router.refresh()}
+        />
+      ) : null}
     </>
   );
 }

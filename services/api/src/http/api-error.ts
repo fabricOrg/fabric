@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { ApiErrorEnvelope, ErrorType } from "@app/contracts";
+import { InsufficientFundsError } from "@app/wallet";
 import { HttpException, type HttpStatus } from "@nestjs/common";
 
 /**
@@ -68,6 +69,38 @@ export function invalidRequest(
 /** 404 in the F8.3 envelope (`type: "not_found_error"`). */
 export function notFound(code: string, message: string): HttpException {
   return apiError({ type: "not_found_error", code, message, status: 404 });
+}
+
+/**
+ * 402 in the F8.3 envelope (`type: "insufficient_funds_error"`) — the wallet can't cover the
+ * reserve. The money path fails CLOSED, so this is thrown before any provider contact or persisted
+ * effect. Without this the wallet's `InsufficientFundsError` escapes as an opaque 500 and the SDK
+ * can't branch on it, even though the contract has always declared the category.
+ */
+export function insufficientFunds(
+  code: string,
+  message: string,
+): HttpException {
+  return apiError({
+    type: "insufficient_funds_error",
+    code,
+    message,
+    status: 402,
+  });
+}
+
+/**
+ * Rethrow helper for a `.catch()` at an HTTP boundary: converts the wallet's balance rejection into
+ * the 402 envelope and passes every other error through untouched.
+ *
+ * Deliberately applied at the boundary rather than inside the services, so they keep throwing the
+ * DOMAIN error and callers like `ManagedMessagesService` can still branch on it.
+ */
+export function asInsufficientFunds(error: unknown, message: string): never {
+  if (error instanceof InsufficientFundsError) {
+    throw insufficientFunds("insufficient_funds", message);
+  }
+  throw error;
 }
 
 /** 429 in the F8.3 envelope (`type: "rate_limit_error"`) — back off and retry. */

@@ -1,5 +1,6 @@
 import {
   inviteMemberRequestSchema,
+  updateMemberPermissionsRequestSchema,
   updateMemberRequestSchema,
 } from "@app/contracts";
 import {
@@ -7,11 +8,13 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   Inject,
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from "@nestjs/common";
@@ -46,7 +49,11 @@ export class MembersController {
   }
 
   @Post(":tenantId/members")
-  async invite(@Param("tenantId") tenantId: string, @Body() body: unknown) {
+  async invite(
+    @Param("tenantId") tenantId: string,
+    @Body() body: unknown,
+    @Headers("x-actor-email") actorEmail?: string,
+  ) {
     if (!UUID.test(tenantId)) {
       throw invalidRequest("invalid_tenant_id", "Invalid tenant id.");
     }
@@ -57,7 +64,7 @@ export class MembersController {
         "The member invite request is invalid.",
       );
     }
-    return this.members.invite(tenantId, parsed.data);
+    return this.members.invite(tenantId, parsed.data, actorEmail ?? null);
   }
 
   @Patch(":tenantId/members/:userId")
@@ -65,6 +72,7 @@ export class MembersController {
     @Param("tenantId") tenantId: string,
     @Param("userId") userId: string,
     @Body() body: unknown,
+    @Headers("x-actor-email") actorEmail?: string,
   ) {
     if (!UUID.test(tenantId) || !UUID.test(userId)) {
       throw invalidRequest("invalid_id", "Invalid tenant or member id.");
@@ -73,7 +81,38 @@ export class MembersController {
     if (!parsed.success) {
       throw invalidRequest("invalid_role", "Provide a valid role.");
     }
-    return this.members.updateRole(tenantId, userId, parsed.data);
+    return this.members.updateRole(
+      tenantId,
+      userId,
+      parsed.data,
+      actorEmail ?? null,
+    );
+  }
+
+  @Put(":tenantId/members/:userId/permissions")
+  async setPermissions(
+    @Param("tenantId") tenantId: string,
+    @Param("userId") userId: string,
+    @Body() body: unknown,
+    @Headers("x-actor-email") actorEmail?: string,
+  ) {
+    if (!UUID.test(tenantId) || !UUID.test(userId)) {
+      throw invalidRequest("invalid_id", "Invalid tenant or member id.");
+    }
+    const parsed = updateMemberPermissionsRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest(
+        "invalid_permissions",
+        parsed.error.issues[0]?.message ?? "Provide a valid permission set.",
+        parsed.error.issues[0]?.path.map(String).join(".") || undefined,
+      );
+    }
+    return this.members.setPermissions(
+      tenantId,
+      userId,
+      parsed.data.permissions,
+      actorEmail ?? null,
+    );
   }
 
   @Delete(":tenantId/members/:userId")
@@ -81,10 +120,11 @@ export class MembersController {
   async remove(
     @Param("tenantId") tenantId: string,
     @Param("userId") userId: string,
+    @Headers("x-actor-email") actorEmail?: string,
   ) {
     if (!UUID.test(tenantId) || !UUID.test(userId)) {
       throw invalidRequest("invalid_id", "Invalid tenant or member id.");
     }
-    await this.members.remove(tenantId, userId);
+    await this.members.remove(tenantId, userId, actorEmail ?? null);
   }
 }

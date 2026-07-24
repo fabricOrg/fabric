@@ -17,6 +17,7 @@ import {
 import type { ConfigService } from "@nestjs/config";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { EmailService } from "../email/email.service.js";
 import { MaintenanceService } from "../maintenance/maintenance.service.js";
 import type { SmsService } from "../sms/sms.service.js";
 import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
@@ -152,6 +153,7 @@ describeDb("request logs (real RLS)", () => {
     const maintenance = new MaintenanceService(
       provisioning,
       {} as SmsService,
+      {} as EmailService,
       { purgeExpired: async () => 0 } as unknown as VirtualPhoneService,
       config,
     );

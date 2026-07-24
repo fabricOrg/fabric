@@ -39,10 +39,11 @@ import { listWebhooks } from "@/lib/server/webhooks-client";
 
 /** The resource tabs (API keys · Webhooks · Logs) for ONE environment. The environment itself is
  *  chosen by the outer switcher — this renders the selected env's resources. `env` is the api-key
- *  env (test/live); the webhook/log env (sandbox/live) is derived from it. */
+ *  environment (sandbox/live), shared by keys, webhooks, and logs. */
 function EnvironmentResources({
   env,
   applicationId,
+  applicationSlug,
   keys,
   webhooks,
   logs,
@@ -51,6 +52,7 @@ function EnvironmentResources({
 }: {
   env: ApiKeyEnv;
   applicationId: string;
+  applicationSlug: string;
   keys: ApiKey[];
   webhooks: WebhookEndpointDto[];
   logs: ListRequestLogsResponse;
@@ -70,7 +72,7 @@ function EnvironmentResources({
         <Card>
           <ApiKeysPanel
             keys={keys}
-            applicationId={applicationId}
+            applicationSlug={applicationSlug}
             liveActive={liveActive}
             defaultEnv={env}
             canManage={canManage}
@@ -138,7 +140,7 @@ export default async function ApplicationDetailPage({
   // Which environment the page shows follows the workspace's mode: the topbar Virtual/Live toggle is
   // the ONE environment switcher (no per-page duplicate). A sandbox workspace shows its sandbox env;
   // once go-live flips the workspace live, the live env's resources show.
-  const env: ApiKeyEnv = session.plan === "sandbox" ? "test" : "live";
+  const env: ApiKeyEnv = session.plan === "sandbox" ? "sandbox" : "live";
   const envType = env === "live" ? "live" : "sandbox";
   // Whether go-live has unlocked the live environment — gates the keys tab's Test/Live switch.
   const liveActive =
@@ -190,6 +192,7 @@ export default async function ApplicationDetailPage({
         <EnvironmentResources
           env={env}
           applicationId={app.id}
+          applicationSlug={app.slug}
           keys={keys}
           webhooks={webhooks.filter((w) => w.env === envType)}
           logs={logs}

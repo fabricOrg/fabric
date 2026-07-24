@@ -1,0 +1,11 @@
+ALTER TABLE "message_deliveries" ADD CONSTRAINT "message_delivery_channel_check" CHECK ("message_deliveries"."channel" = 'sms');--> statement-breakpoint
+ALTER TABLE "message_deliveries" ADD CONSTRAINT "message_delivery_status_check" CHECK ("message_deliveries"."status" IN ('accepted', 'processing', 'sent', 'delivered', 'undelivered', 'failed', 'expired'));--> statement-breakpoint
+ALTER TABLE "message_deliveries" ADD CONSTRAINT "message_delivery_resource_version_check" CHECK ("message_deliveries"."resource_version" > 0);--> statement-breakpoint
+ALTER TABLE "message_deliveries" ADD CONSTRAINT "message_delivery_cost_check" CHECK ("message_deliveries"."total_cost_minor" >= 0 AND ("message_deliveries"."max_cost_minor" IS NULL OR "message_deliveries"."max_cost_minor" >= 0));--> statement-breakpoint
+ALTER TABLE "message_deliveries" ADD CONSTRAINT "message_delivery_idempotency_length_check" CHECK (length("message_deliveries"."idempotency_key") BETWEEN 1 AND 255);--> statement-breakpoint
+ALTER TABLE "message_deliveries" ADD CONSTRAINT "message_delivery_fingerprint_check" CHECK ("message_deliveries"."request_fingerprint" ~ '^[a-f0-9]{64}$');--> statement-breakpoint
+ALTER TABLE "message_deliveries" ADD CONSTRAINT "message_delivery_metadata_object_check" CHECK (jsonb_typeof("message_deliveries"."metadata") = 'object');--> statement-breakpoint
+ALTER TABLE "message_delivery_attempts" ADD CONSTRAINT "message_delivery_attempt_ordinal_check" CHECK ("message_delivery_attempts"."ordinal" > 0);--> statement-breakpoint
+ALTER TABLE "message_delivery_attempts" ADD CONSTRAINT "message_delivery_attempt_channel_check" CHECK ("message_delivery_attempts"."channel" = 'sms');--> statement-breakpoint
+ALTER TABLE "message_delivery_attempts" ADD CONSTRAINT "message_delivery_attempt_status_check" CHECK ("message_delivery_attempts"."status" IN ('accepted', 'processing', 'sent', 'delivered', 'undelivered', 'failed', 'expired'));--> statement-breakpoint
+ALTER TABLE "message_delivery_attempts" ADD CONSTRAINT "message_delivery_attempt_cost_check" CHECK ("message_delivery_attempts"."cost_minor" >= 0);

@@ -1,4 +1,5 @@
 import {
+  foreignKey,
   index,
   jsonb,
   pgEnum,
@@ -67,6 +68,20 @@ export const apiKeys = pgTable(
   (t) => [
     unique("uniq_api_key_hash").on(t.keyHash),
     index("idx_api_keys_tenant").on(t.tenantId),
+    foreignKey({
+      columns: [t.applicationId, t.tenantId],
+      foreignColumns: [applications.id, applications.tenantId],
+      name: "api_keys_application_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.environmentId, t.applicationId, t.tenantId],
+      foreignColumns: [
+        environments.id,
+        environments.applicationId,
+        environments.tenantId,
+      ],
+      name: "api_keys_environment_application_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 

@@ -17,6 +17,7 @@ import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
+import { MessagingInsightsService } from "../sms/messaging-insights.service.js";
 import { SmsController } from "../sms/sms.controller.js";
 import { SmsService } from "../sms/sms.service.js";
 import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
@@ -28,7 +29,7 @@ const consentAllowAll = {
   isSuppressed: async () => false,
 } as unknown as ConsentService;
 const sendersAlwaysActive = {
-  isActiveSender: async () => true,
+  senderStatus: async () => "active" as const,
 } as unknown as SendersService;
 const liveMode = {
   resolveMode: async () => "live",
@@ -81,7 +82,11 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     vault,
   );
   const idempotency = new IdempotencyService(appDb);
-  const controller = new SmsController(sms, idempotency);
+  const controller = new SmsController(
+    sms,
+    idempotency,
+    new MessagingInsightsService(appDb),
+  );
 
   const tenantId = randomUUID() as TenantId;
   const tenant: RequestTenant = {
@@ -90,6 +95,7 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     keyId: "abcdef0123456789",
     applicationId: null,
     environmentId: null,
+    isSessionToken: false,
   };
   const req = { tenant };
   const CREDIT = 100_000n;
@@ -136,7 +142,7 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
   async function reserveCount(): Promise<number> {
     const rows = await owner`
       SELECT count(DISTINCT txn_id)::int AS n FROM ledger_entries
-      WHERE tenant_id = ${tenantId} AND reason = 'sms_reserve'`;
+      WHERE tenant_id = ${tenantId} AND reason = 'message_reserve'`;
     return Number(rows[0]?.n);
   }
 

@@ -1,8 +1,9 @@
 import type { VirtualPhoneMessage } from "@app/contracts";
 import { Badge } from "@app/ui/components/ui/badge";
 import { Button } from "@app/ui/components/ui/button";
-import { Copy, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { CopyButton } from "@/components/copy-button";
 
 export function MessageInspector({
   message,
@@ -30,15 +31,12 @@ export function MessageInspector({
           <Detail label="Message ID">
             <span className="flex items-center gap-1">
               <code className="truncate text-xs">{message.id}</code>
-              <Button
-                size="icon"
-                variant="ghost"
+              <CopyButton
+                value={message.id}
+                toastLabel="Message ID copied"
+                ariaLabel="Copy message ID"
                 className="size-7"
-                onClick={() => navigator.clipboard.writeText(message.id)}
-                aria-label="Copy message ID"
-              >
-                <Copy />
-              </Button>
+              />
             </span>
           </Detail>
           <Button variant="outline" size="sm" asChild>

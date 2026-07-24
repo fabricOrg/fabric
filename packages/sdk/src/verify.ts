@@ -1,5 +1,5 @@
 import type { Transport } from "./transport.js";
-import type { FabricResponse, RequestOptions } from "./types.js";
+import type { FabricResponse, WriteOptions } from "./types.js";
 import {
   enumField,
   numberField,
@@ -42,7 +42,7 @@ export class VerifyResource {
 
   async start(
     params: StartVerificationParams,
-    options?: RequestOptions,
+    options?: WriteOptions,
   ): Promise<FabricResponse<StartedVerification>> {
     requireE164(params.to);
     const response = await this.transport.request<Record<string, unknown>>({
@@ -75,7 +75,7 @@ export class VerifyResource {
 
   async check(
     params: CheckVerificationParams,
-    options?: RequestOptions,
+    options?: WriteOptions,
   ): Promise<FabricResponse<CheckedVerification>> {
     requireNonEmpty(params.id, "id");
     requireNonEmpty(params.code, "code");

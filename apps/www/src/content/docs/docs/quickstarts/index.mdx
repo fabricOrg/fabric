@@ -1,0 +1,34 @@
+---
+title: Quickstarts
+description: Pick the shortest supported path to a verified sandbox send.
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+<CardGrid>
+  <LinkCard
+    title="Node.js & TypeScript"
+    description="The official server-side SDK — send a published definition with a safe retry key."
+    href="/docs/quickstarts/working-quickstart/"
+  />
+  <LinkCard
+    title="Next.js"
+    description="Call Fabric from a Route Handler and verify a webhook — server-side only."
+    href="/docs/quickstarts/nextjs/"
+  />
+  <LinkCard
+    title="CLI"
+    description="Generate a typed catalog of your definition keys with the fabric CLI."
+    href="/docs/quickstarts/cli/"
+  />
+</CardGrid>
+
+## Before you begin
+
+You need Node.js 22 or later, a Fabric application, a `sk_test_` secret key, and one published
+message definition. The examples use the definition key `welcome.otp` with `name` and `code`
+variables.
+
+The SDK is the only supported integration path. It validates inputs, selects the environment from the
+key, parses response shapes, retries eligible failures, and exposes typed errors — so you never hand-
+build a request.

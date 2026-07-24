@@ -12,14 +12,15 @@ export interface RealmConfig {
   readonly redirectUri: string;
   readonly logoutRedirectUri: string;
   readonly cookieOptions: SessionCookieOptions;
-  readonly resolveSession: SessionResolver;
+  /** Org-agnostic session resolution (staff realm). ADR-0007 realms use resolveUserSession. */
+  readonly resolveSession?: SessionResolver;
   /**
-   * ADR-0002: an AuthKit login can come back WITHOUT an organization (fresh sign-up, or an
-   * unpinned sign-in). When set, the callback asks the app which organization this identity
-   * belongs to (possibly provisioning a sandbox tenant server-side), then refreshes the WorkOS
-   * session into that organization. Realms without this (staff) keep denying org-less sessions.
+   * ADR-0007: user-level session resolution — WorkOS proves WHO, the app returns the person plus
+   * every workspace membership; no organization context is ever requested from the IdP. Realms on
+   * this path use readUserSession/handleUserCallback/refreshUserSession instead of the org-scoped
+   * functions above.
    */
-  readonly resolveOrganization?: OrganizationResolver;
+  readonly resolveUserSession?: UserSessionResolver;
 }
 
 export interface SessionCookieOptions {
@@ -56,14 +57,18 @@ export interface ImpersonationClaim {
 
 export type AccountLivenessCheck = (session: AppSession) => Promise<boolean>;
 
-/** Validated WorkOS claims passed to the application-owned tenant resolver. */
+/**
+ * Validated WorkOS claims passed to the application-owned session resolver. ADR-0007: sessions
+ * are user-level, so the IdP org/role are OPTIONAL echoes (present only while a legacy org-pinned
+ * cookie is alive) — resolvers must never base authorization on them.
+ */
 export interface WorkOSSessionClaims {
   readonly externalUserId: string;
-  readonly organizationId: string;
+  readonly organizationId: string | null;
   readonly email: string;
   readonly name: string | null;
   readonly userUpdatedAt: string;
-  readonly role: string;
+  readonly role: string | null;
   readonly permissions: readonly string[];
   readonly sessionId: string;
 }
@@ -71,20 +76,6 @@ export interface WorkOSSessionClaims {
 export type SessionResolver = (
   claims: WorkOSSessionClaims,
 ) => Promise<AppSession | null>;
-
-/** Claims available from an org-less authenticated WorkOS session (pre-organization). */
-export interface OrglessSessionClaims {
-  readonly externalUserId: string;
-  readonly email: string;
-  readonly name: string | null;
-  readonly userUpdatedAt: string;
-  readonly emailVerified: boolean;
-}
-
-/** Returns the WorkOS organization id to refresh the session into, or null to deny. */
-export type OrganizationResolver = (
-  claims: OrglessSessionClaims,
-) => Promise<string | null>;
 
 /**
  * Outcome of the OAuth callback. `session` is null when the identity authenticated with WorkOS but
@@ -96,6 +87,101 @@ export interface CallbackResult {
   readonly session: AppSession | null;
   readonly sealedCookie: string | null;
 }
+
+// ---- ADR-0007 user-level sessions -------------------------------------------------------------
+
+/** One workspace the signed-in person can enter — mirrors the resolve-v2 wire membership. */
+export interface WorkspaceMembershipClaim {
+  readonly tenantId: string;
+  readonly workspaceName: string;
+  readonly workspaceSlug: string;
+  readonly role: string;
+  readonly developerAccess: boolean;
+  readonly permissions: readonly string[];
+  readonly plan: string;
+}
+
+/**
+ * A user-level session: WHO is signed in and WHERE they may go. Carries no active workspace —
+ * that selection is an application concern (workspace cookie), revalidated against `memberships`
+ * on every request before any tenant credential is minted.
+ */
+export interface UserSession {
+  readonly userId: string;
+  /** WorkOS subject id — carried so BFF flows (e.g. workspace creation) can act for this identity. */
+  readonly externalUserId: string;
+  readonly email: string;
+  readonly emailVerified: boolean;
+  readonly name: string | null;
+  readonly memberships: readonly WorkspaceMembershipClaim[];
+  readonly sessionId: string;
+}
+
+/** Validated WorkOS user claims passed to the application-owned resolve-v2 resolver. */
+export interface UserSessionClaims {
+  readonly externalUserId: string;
+  readonly email: string;
+  readonly name: string | null;
+  readonly userUpdatedAt: string;
+  readonly emailVerified: boolean;
+  readonly sessionId: string;
+}
+
+export type UserSessionResolver = (
+  claims: UserSessionClaims,
+) => Promise<UserSession | null>;
+
+/** Callback outcome for the user-level path — same sealedCookie semantics as CallbackResult. */
+export interface UserCallbackResult {
+  readonly session: UserSession | null;
+  readonly sealedCookie: string | null;
+}
+
+/**
+ * Outcome of a credential attempt (ADR-0008 — Fabric-owned auth screens). Every success ends in a
+ * resolved user-level session + the sealed cookie; the other variants tell the BFF what screen to
+ * show next. `fallback_hosted` is the escape hatch for challenges we don't render ourselves yet
+ * (MFA / SSO / passkey / Radar) — the caller redirects to the hosted AuthKit page to finish.
+ */
+export type CredentialOutcome =
+  | {
+      readonly status: "authenticated";
+      readonly session: UserSession;
+      readonly sealedCookie: string;
+    }
+  | {
+      readonly status: "verification_required";
+      readonly pendingAuthenticationToken: string;
+      readonly email: string;
+    }
+  | { readonly status: "fallback_hosted"; readonly reason: string }
+  | { readonly status: "invalid_credentials" }
+  | { readonly status: "error"; readonly message: string };
+
+/**
+ * Outcome of a STAFF credential attempt (ADR-0008, admin console). Like CredentialOutcome but the
+ * session is the staff AppSession (allowlist-resolved), and there is no email-verification step —
+ * staff are invited + verified through WorkOS, so any residual challenge falls back to hosted.
+ */
+export type StaffCredentialOutcome =
+  | {
+      readonly status: "authenticated";
+      readonly session: AppSession;
+      readonly sealedCookie: string;
+    }
+  | { readonly status: "fallback_hosted"; readonly reason: string }
+  | { readonly status: "invalid_credentials" }
+  | { readonly status: "error"; readonly message: string };
+
+/** Refresh outcome for the user-level path — same semantics as RefreshOutcome. */
+export type UserRefreshOutcome =
+  | {
+      readonly status: "refreshed";
+      readonly session: UserSession;
+      readonly sealedCookie: string;
+    }
+  | { readonly status: "terminal" }
+  | { readonly status: "transient" };
 
 /**
  * Typed refresh outcome — the caller's response depends on WHY a refresh failed:

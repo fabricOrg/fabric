@@ -1,0 +1,71 @@
+---
+title: Compliance
+description: Consent, DND, quiet hours, and data-protection duties for Ghana and Nigeria.
+---
+
+Fabric enforces the messaging rules for its launch corridors — Ghana and Nigeria — on the send path,
+and fails closed when a message would breach them. This page describes what the platform enforces and
+what remains your responsibility.
+
+## Message class decides the rules
+
+Every SMS is `transactional` or `promotional`.
+
+- **Transactional** — OTPs, receipts, alerts, status changes. Delivered around the clock and not
+  subject to the promotional quiet-hours window.
+- **Promotional** — marketing and announcements. Subject to consent and quiet hours below.
+
+Choose the class honestly. Dressing a promotion as transactional to bypass the rules risks carrier
+blocking and regulatory penalties.
+
+## Consent and DND
+
+Fabric records opt-out in a consent store and enforces it before a send:
+
+- **Opt-out scope `promotional`** — promotional messages are suppressed; **transactional still flows**.
+- **Opt-out scope `all`** — everything is suppressed.
+
+Opt-outs come from three sources: an inbound `STOP` keyword, an external DND registry, and manual
+entry. A registry or `STOP` opt-out cannot be reversed from the workspace — only the recipient can
+opt back in (e.g. `START`). A blocked send returns `recipient_opted_out`.
+
+## Quiet hours (promotional only)
+
+Promotional SMS is delivered only inside each country's window. Recipient country is derived from the
+number: `+234…` is Nigeria, everything else is Ghana.
+
+| Country | Promotional window | Notes |
+| --- | --- | --- |
+| Nigeria (NCC 2442) | 08:00–20:00 WAT (UTC+1), any day | |
+| Ghana (NCA) | 08:00–19:00 local (UTC+0) | **No promotional SMS on Sundays** |
+
+A promotional send outside the window is blocked with `promo_quiet_hours`. Transactional traffic is
+unaffected.
+
+:::note[Ghana values are a strict-reading posture]
+The Ghana window and Sunday rule reflect a deliberately strict interpretation pending full
+verification against the primary regulatory texts. Treat them as the platform's current enforced
+policy, and confirm your own obligations independently.
+:::
+
+## The send-path gate
+
+On a live send, Fabric checks, in order, failing closed on the first breach:
+
+1. The **sender ID is `active`** for the recipient's country — else `sender_not_registered`.
+2. The **recipient has not opted out** for this class — else `recipient_opted_out`.
+3. A promotional message is **within the quiet-hours window** — else `promo_quiet_hours`.
+
+## Data protection is your responsibility
+
+Fabric processes messages on your behalf; you remain the controller of your recipients' data. Ghana's
+Data Protection Act and Nigeria's data-protection regime both require a lawful basis, honouring
+opt-out, and data-minimisation. Practical duties:
+
+- Collect and store consent, and be able to evidence it.
+- Send only the personal data a message needs; do not put sensitive data in a message body.
+- Never log message content or recipient identifiers beyond what you need — log the delivery `id` and
+  your reference, not the payload.
+
+This page is operational guidance, not legal advice. Confirm your obligations with the relevant
+regulators and your own counsel.

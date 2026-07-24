@@ -1,4 +1,4 @@
-import { buildLogout, handleCallback } from "@app/fe-auth";
+import { buildLogout, handleUserCallback } from "@app/fe-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import {
   AUTH_NOTICE_COOKIE,
@@ -9,6 +9,11 @@ import {
   sessionCookieOptions,
   WORKOS_COOKIE,
 } from "@/lib/server/auth";
+import {
+  sealWorkspaceSelector,
+  WORKSPACE_COOKIE,
+  workspaceCookieOptions,
+} from "@/lib/server/workspace-cookie";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -17,22 +22,39 @@ export async function GET(request: NextRequest) {
   if (!code || !state || !expectedState) return loginError(request);
 
   try {
-    const { session, sealedCookie } = await handleCallback(
+    // ADR-0007: user-level callback — WorkOS proved WHO; where they land depends on memberships:
+    // none → onboarding (create a workspace), one → straight in (selector set), several → picker.
+    const { session, sealedCookie } = await handleUserCallback(
       customerRealmConfig(),
       { code, state, expectedState },
     );
 
     if (session && sealedCookie) {
-      const response = NextResponse.redirect(redirectUrl("/", request));
+      const single =
+        session.memberships.length === 1 ? session.memberships[0] : undefined;
+      const destination =
+        session.memberships.length === 0
+          ? "/onboarding"
+          : single
+            ? "/"
+            : "/workspaces";
+      const response = NextResponse.redirect(redirectUrl(destination, request));
       response.cookies.set(WORKOS_COOKIE, sealedCookie, sessionCookieOptions());
+      if (single) {
+        response.cookies.set(
+          WORKSPACE_COOKIE,
+          sealWorkspaceSelector(single.tenantId),
+          workspaceCookieOptions(),
+        );
+      }
       response.cookies.delete(OAUTH_STATE_COOKIE);
       response.cookies.delete(AUTH_NOTICE_COOKIE);
       return response;
     }
 
-    // Authenticated with WorkOS but NOT authorized here (invite-only). END the WorkOS session so the
-    // next attempt re-prompts for a different account instead of silently replaying this identity —
-    // and drop a flash notice so /login explains the denial instead of looking like a dead button.
+    // Authenticated with WorkOS but NOT authorized here (e.g. unverified stranger). END the WorkOS
+    // session so the next attempt re-prompts for a different account instead of silently replaying
+    // this identity — and drop a flash notice so /login explains the denial.
     if (sealedCookie) {
       const { workosLogoutUrl } = await buildLogout(
         customerRealmConfig(),
@@ -61,7 +83,7 @@ export async function GET(request: NextRequest) {
 
 function loginError(request: NextRequest) {
   const response = NextResponse.redirect(
-    redirectUrl("/login?error=authentication", request),
+    redirectUrl("/signin?error=authentication", request),
   );
   response.cookies.delete(OAUTH_STATE_COOKIE);
   return response;

@@ -19,10 +19,11 @@ const document = {
     description:
       "Server-to-server messaging API. Secret keys must never be used in browsers.",
   },
-  servers: [{ url: "https://api.fabric.africa" }],
+  servers: [{ url: "https://d2umm5b2x22zvp.cloudfront.net" }],
   security: [{ secretKey: [] }],
   tags: [
     { name: "SMS" },
+    { name: "Email" },
     { name: "Verify" },
     { name: "Wallet" },
     { name: "Sender IDs" },

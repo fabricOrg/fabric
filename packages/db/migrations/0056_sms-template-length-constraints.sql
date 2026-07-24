@@ -1,0 +1,2 @@
+ALTER TABLE "sms_templates" ADD CONSTRAINT "sms_templates_name_length_check" CHECK (char_length("sms_templates"."name") BETWEEN 1 AND 80);--> statement-breakpoint
+ALTER TABLE "sms_templates" ADD CONSTRAINT "sms_templates_body_length_check" CHECK (char_length("sms_templates"."body") BETWEEN 1 AND 1600);

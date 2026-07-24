@@ -1,0 +1,1 @@
+ALTER TABLE "message_batches" ADD COLUMN "request_hash" text NOT NULL;

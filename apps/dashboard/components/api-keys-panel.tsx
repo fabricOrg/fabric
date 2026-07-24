@@ -9,33 +9,34 @@ import {
   CardHeader,
 } from "@app/ui/components/ui/card";
 import { cn } from "@app/ui/lib/utils";
+import { Plus } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
-import { CreateApiKeyDialog } from "@/components/forms/create-api-key-dialog";
 import { ApiKeysTable } from "@/components/tables/api-keys-table";
 
 /**
- * API keys tab body. Keys come in TEST and LIVE flavours and a developer manages both, so once the
- * workspace has gone live this exposes a Test / Live switch to view + create each set. Before go-live
- * only test keys exist, so the switch is hidden and the tab is test-only. Independent of the topbar
+ * API keys tab body. Keys belong to Sandbox or Live and a developer manages both, so once the
+ * workspace has gone live this exposes a Sandbox / Live switch. Before go-live only sandbox keys
+ * exist, so the switch is hidden and the tab is sandbox-only. Independent of the topbar
  * delivery toggle (which drives webhooks/logs) — you may hold live keys while still delivering to the
  * virtual phone.
  */
 export function ApiKeysPanel({
   keys,
-  applicationId,
+  applicationSlug,
   liveActive,
   defaultEnv,
   canManage,
 }: {
   keys: readonly ApiKey[];
-  applicationId: string;
+  applicationSlug: string;
   liveActive: boolean;
   defaultEnv: ApiKeyEnv;
   canManage: boolean;
 }) {
   const [keyEnv, setKeyEnv] = useState<ApiKeyEnv>(defaultEnv);
   // Pre-go-live there are no live keys — never leave the switch on a set that can't exist.
-  const activeEnv: ApiKeyEnv = liveActive ? keyEnv : "test";
+  const activeEnv: ApiKeyEnv = liveActive ? keyEnv : "sandbox";
   const shown = keys.filter((k) => k.env === activeEnv);
 
   return (
@@ -44,7 +45,7 @@ export function ApiKeysPanel({
         <CardDescription>
           {activeEnv === "live"
             ? "Live keys spend real money and deliver to carriers."
-            : "Test keys are sandboxed — they never charge or send."}
+            : "Sandbox keys never charge or reach real recipients."}
         </CardDescription>
         <CardAction className="flex items-center gap-2">
           {liveActive ? (
@@ -53,7 +54,7 @@ export function ApiKeysPanel({
               role="group"
               aria-label="Key environment"
             >
-              {(["test", "live"] as const).map((e) => (
+              {(["sandbox", "live"] as const).map((e) => (
                 <Button
                   key={e}
                   type="button"
@@ -66,13 +67,20 @@ export function ApiKeysPanel({
                     activeEnv === e && "bg-muted text-foreground",
                   )}
                 >
-                  {e === "live" ? "Live" : "Test"}
+                  {e === "live" ? "Live" : "Sandbox"}
                 </Button>
               ))}
             </div>
           ) : null}
           {canManage ? (
-            <CreateApiKeyDialog applicationId={applicationId} env={activeEnv} />
+            <Button size="sm" variant="outline" asChild>
+              <Link
+                href={`/applications/${applicationSlug}/api-keys/new?env=${activeEnv}`}
+              >
+                <Plus data-icon="inline-start" />
+                Create key
+              </Link>
+            </Button>
           ) : null}
         </CardAction>
       </CardHeader>

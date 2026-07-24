@@ -26,7 +26,7 @@ const consentAllowAll = {
   isSuppressed: async () => false,
 } as unknown as ConsentService;
 const sendersAlwaysActive = {
-  isActiveSender: async () => true,
+  senderStatus: async () => "active" as const,
 } as unknown as SendersService;
 
 /**
@@ -65,7 +65,14 @@ describeDb("queued send pipeline (BullMQ)", () => {
   const vault = new PiiVaultService(appDb, configStub({}));
   const owner = postgres(superUrl ?? "", { max: 1 });
 
-  const queueOn = new QueueService(configStub({ REDIS_QUEUE_URL: redisUrl }));
+  // Unique prefix per run: a locally running dev stack shares this Redis and its own sms-send
+  // worker would otherwise race this spec's worker for the same jobs.
+  const queueOn = new QueueService(
+    configStub({
+      REDIS_QUEUE_URL: redisUrl,
+      REDIS_QUEUE_PREFIX: `test-${randomUUID().slice(0, 8)}`,
+    }),
+  );
   const queueOff = new QueueService(configStub({}));
   const smsQueued = new SmsService(
     appDb,
@@ -131,7 +138,7 @@ describeDb("queued send pipeline (BullMQ)", () => {
   async function commitCount(messageId: string): Promise<number> {
     const rows = await owner`
       SELECT count(DISTINCT txn_id)::int AS n FROM ledger_entries
-      WHERE tenant_id = ${tenantId} AND reason = 'sms_commit' AND reference_id = ${messageId}`;
+      WHERE tenant_id = ${tenantId} AND reason = 'message_commit' AND reference_id = ${messageId}`;
     return Number(rows[0]?.n);
   }
 
@@ -159,6 +166,37 @@ describeDb("queued send pipeline (BullMQ)", () => {
     const response = await smsQueued.send(sendInput("+233209999001"));
     expect(response.status).toBe("sending"); // reserved + enqueued, provider outcome pending
 
+    const job = await queueOn.queue(SMS_SEND_QUEUE).getJob(response.id);
+    expect(job?.data).toEqual({
+      tenantId,
+      messageId: response.id,
+      deliveryMode: "live",
+    });
+    expect(JSON.stringify(job?.data)).not.toContain("+233209999001");
+    expect(JSON.stringify(job?.data)).not.toContain("queued pipeline test");
+
+    await waitFor(
+      async () => (await messageStatus(response.id)) === "accepted",
+    );
+    expect(await commitCount(response.id)).toBe(1);
+    const dispatch = await owner`
+      SELECT completed_at FROM message_dispatches WHERE message_id = ${response.id}`;
+    expect(dispatch[0]?.completed_at).not.toBeNull();
+  });
+
+  it("recovers a committed dispatch intent when the original queue job is lost", async () => {
+    const queue = queueOn.queue(SMS_SEND_QUEUE);
+    await queue.pause();
+    const response = await smsQueued.send(sendInput("+233209999004"));
+    const original = await queue.getJob(response.id);
+    await original?.remove();
+
+    const before = await owner`
+      SELECT completed_at FROM message_dispatches WHERE message_id = ${response.id}`;
+    expect(before[0]?.completed_at).toBeNull();
+    expect(await smsQueued.enqueuePending(tenantId)).toBeGreaterThanOrEqual(1);
+
+    await queue.resume();
     await waitFor(
       async () => (await messageStatus(response.id)) === "accepted",
     );

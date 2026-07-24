@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm install --no-audit --no-fund",
+  "buildCommand": "echo static playground - no build"
+}

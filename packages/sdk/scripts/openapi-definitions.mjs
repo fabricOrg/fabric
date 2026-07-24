@@ -21,6 +21,350 @@ export const schemas = {
       currency: { enum: ["GHS", "NGN", "USD"] },
     },
   },
+  PreviewMessageRequest: {
+    type: "object",
+    required: ["key"],
+    properties: {
+      key: { type: "string" },
+      data: { type: "object", additionalProperties: true },
+      currency: { type: "string", minLength: 3, maxLength: 3 },
+      to: { type: "string", pattern: String.raw`^\+[1-9]\d{7,14}$` },
+      locale: { type: "string", pattern: "^[a-z]{2,3}(?:-[A-Z]{2})?$" },
+    },
+  },
+  PreviewBlocker: {
+    type: "object",
+    required: ["path", "code"],
+    properties: {
+      path: { type: "string" },
+      code: { type: "string" },
+    },
+  },
+  SmsPreview: {
+    type: "object",
+    required: [
+      "body",
+      "encoding",
+      "length",
+      "segments",
+      "cost_minor",
+      "currency",
+    ],
+    properties: {
+      body: { type: "string" },
+      encoding: { enum: ["gsm7", "ucs2"] },
+      length: { type: "integer" },
+      segments: { type: "integer" },
+      cost_minor: { type: "string", pattern: "^-?\\d+$" },
+      currency: { type: "string" },
+    },
+  },
+  PreviewMessageResponse: {
+    type: "object",
+    required: [
+      "version_id",
+      "environment",
+      "resolved_locale",
+      "blockers",
+      "warnings",
+      "eligible",
+      "sender",
+      "message_class",
+      "preview",
+      "request_id",
+    ],
+    properties: {
+      version_id: { type: "string" },
+      environment: { enum: ["sandbox", "live"] },
+      resolved_locale: { type: "string" },
+      blockers: { type: "array", items: ref("PreviewBlocker") },
+      warnings: { type: "array", items: ref("PreviewBlocker") },
+      eligible: { type: "boolean" },
+      sender: {
+        type: "object",
+        required: ["sender_id", "status"],
+        properties: {
+          sender_id: { type: "string" },
+          status: {
+            enum: [
+              "sandbox",
+              "active",
+              "pending",
+              "rejected",
+              "unregistered",
+              "not_evaluated",
+            ],
+          },
+        },
+      },
+      message_class: { enum: ["transactional", "promotional"] },
+      preview: { oneOf: [ref("SmsPreview"), { type: "null" }] },
+      request_id: { type: "string" },
+    },
+  },
+  SendManagedMessageRequest: {
+    type: "object",
+    required: ["key", "to"],
+    properties: {
+      key: { type: "string" },
+      to: { type: "string", pattern: "^\\+[1-9]\\d{7,14}$" },
+      data: { type: "object", additionalProperties: true },
+      locale: { type: "string", pattern: "^[a-z]{2,3}(?:-[A-Z]{2})?$" },
+      channel: { enum: ["sms"] },
+      currency: { type: "string", minLength: 3, maxLength: 3 },
+      reference: { type: "string", maxLength: 100 },
+      metadata: {
+        type: "object",
+        additionalProperties: {
+          oneOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }],
+        },
+      },
+      limits: {
+        type: "object",
+        required: ["max_cost"],
+        properties: {
+          max_cost: {
+            type: "object",
+            required: ["minor", "currency"],
+            properties: {
+              minor: { type: "string", pattern: "^\\d+$" },
+              currency: { type: "string", minLength: 3, maxLength: 3 },
+            },
+          },
+        },
+      },
+    },
+  },
+  MessageDeliveryAttempt: {
+    type: "object",
+    required: [
+      "id",
+      "ordinal",
+      "channel",
+      "message_id",
+      "status",
+      "cost",
+      "error_code",
+      "created_at",
+      "updated_at",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      ordinal: { type: "integer", minimum: 1 },
+      channel: { enum: ["sms"] },
+      message_id: {
+        oneOf: [{ type: "string", format: "uuid" }, { type: "null" }],
+      },
+      status: ref("MessageDeliveryStatus"),
+      cost: ref("Money"),
+      error_code: { oneOf: [{ type: "string" }, { type: "null" }] },
+      created_at: { type: "string", format: "date-time" },
+      updated_at: { type: "string", format: "date-time" },
+    },
+  },
+  MessageDeliveryStatus: {
+    enum: [
+      "accepted",
+      "processing",
+      "sent",
+      "delivered",
+      "undelivered",
+      "failed",
+      "expired",
+    ],
+  },
+  MessageDelivery: {
+    type: "object",
+    required: [
+      "id",
+      "key",
+      "version_id",
+      "environment",
+      "locale",
+      "channel",
+      "status",
+      "resource_version",
+      "recipient",
+      "reference",
+      "metadata",
+      "cost",
+      "attempts",
+      "created_at",
+      "updated_at",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      key: { type: "string" },
+      version_id: { type: "string", format: "uuid" },
+      environment: { enum: ["sandbox", "live"] },
+      locale: { type: "string" },
+      channel: { enum: ["sms"] },
+      status: ref("MessageDeliveryStatus"),
+      resource_version: { type: "integer", minimum: 1 },
+      recipient: { type: "string" },
+      reference: { oneOf: [{ type: "string" }, { type: "null" }] },
+      metadata: {
+        type: "object",
+        additionalProperties: {
+          oneOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }],
+        },
+      },
+      cost: ref("Money"),
+      attempts: { type: "array", items: ref("MessageDeliveryAttempt") },
+      created_at: { type: "string", format: "date-time" },
+      updated_at: { type: "string", format: "date-time" },
+    },
+  },
+  ManagedMessageResponse: {
+    type: "object",
+    required: ["delivery", "request_id"],
+    properties: {
+      delivery: ref("MessageDelivery"),
+      request_id: { type: "string" },
+    },
+  },
+  MessageDeliverySummary: {
+    type: "object",
+    required: [
+      "id",
+      "key",
+      "version_id",
+      "environment",
+      "locale",
+      "channel",
+      "status",
+      "resource_version",
+      "reference",
+      "metadata",
+      "cost",
+      "created_at",
+      "updated_at",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      key: { type: "string" },
+      version_id: { type: "string", format: "uuid" },
+      environment: { enum: ["sandbox", "live"] },
+      locale: { type: "string" },
+      channel: { enum: ["sms"] },
+      status: ref("MessageDeliveryStatus"),
+      resource_version: { type: "integer", minimum: 1 },
+      reference: { oneOf: [{ type: "string" }, { type: "null" }] },
+      metadata: {
+        type: "object",
+        additionalProperties: {
+          oneOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }],
+        },
+      },
+      cost: ref("Money"),
+      created_at: { type: "string", format: "date-time" },
+      updated_at: { type: "string", format: "date-time" },
+    },
+  },
+  MessageDeliveryWebhookStatus: {
+    type: "object",
+    required: [
+      "event_id",
+      "event_type",
+      "endpoint_id",
+      "endpoint_url",
+      "state",
+      "attempts",
+      "last_http_status",
+      "last_error_category",
+      "delivered_at",
+      "created_at",
+    ],
+    properties: {
+      event_id: { type: "string", format: "uuid" },
+      event_type: { type: "string" },
+      endpoint_id: { type: "string", format: "uuid" },
+      endpoint_url: { type: "string" },
+      state: { enum: ["pending", "delivering", "delivered", "dead"] },
+      attempts: { type: "integer", minimum: 0 },
+      last_http_status: { oneOf: [{ type: "integer" }, { type: "null" }] },
+      last_error_category: { oneOf: [{ type: "string" }, { type: "null" }] },
+      delivered_at: {
+        oneOf: [{ type: "string", format: "date-time" }, { type: "null" }],
+      },
+      created_at: { type: "string", format: "date-time" },
+    },
+  },
+  MessageDeliveryWebhooksResponse: {
+    type: "object",
+    required: ["webhooks", "request_id"],
+    properties: {
+      webhooks: { type: "array", items: ref("MessageDeliveryWebhookStatus") },
+      request_id: { type: "string" },
+    },
+  },
+  ListMessageDeliveriesResponse: {
+    type: "object",
+    required: ["deliveries", "request_id"],
+    properties: {
+      deliveries: { type: "array", items: ref("MessageDeliverySummary") },
+      request_id: { type: "string" },
+    },
+  },
+  DefinitionCatalogManifest: {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "manifest_version",
+      "minimum_sdk_contract_version",
+      "minimum_cli_contract_version",
+      "application",
+      "environment",
+      "compatibility_digest",
+      "definitions",
+    ],
+    properties: {
+      manifest_version: { type: "integer", enum: [1] },
+      minimum_sdk_contract_version: { type: "integer", minimum: 1 },
+      minimum_cli_contract_version: { type: "integer", minimum: 1 },
+      application: {
+        type: "object",
+        required: ["id"],
+        properties: { id: { type: "string", format: "uuid" } },
+      },
+      environment: {
+        type: "object",
+        required: ["id", "type"],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          type: { enum: ["sandbox", "live"] },
+        },
+      },
+      compatibility_digest: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      definitions: {
+        type: "array",
+        items: {
+          type: "object",
+          required: [
+            "key",
+            "version",
+            "channels",
+            "default_locale",
+            "locales",
+            "data_schema",
+          ],
+          properties: {
+            key: { type: "string" },
+            version: { type: "integer", minimum: 1 },
+            channels: {
+              type: "array",
+              items: { enum: ["sms"] },
+              minItems: 1,
+              maxItems: 1,
+            },
+            default_locale: { type: "string" },
+            locales: { type: "array", items: { type: "string" } },
+            data_schema: { type: "object", additionalProperties: true },
+          },
+        },
+      },
+    },
+  },
   MessageStatus: {
     enum: [
       "queued",
@@ -60,6 +404,120 @@ export const schemas = {
       request_id: { type: "string" },
     },
   },
+  SendSmsBatchRequest: {
+    type: "object",
+    additionalProperties: false,
+    required: ["items"],
+    properties: {
+      items: {
+        type: "array",
+        minItems: 1,
+        maxItems: 100,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["client_reference", "to", "sender_id", "body"],
+          properties: {
+            client_reference: {
+              type: "string",
+              minLength: 1,
+              maxLength: 100,
+            },
+            to: { type: "string", pattern: "^\\+[1-9]\\d{7,14}$" },
+            sender_id: { type: "string", minLength: 1, maxLength: 11 },
+            body: { type: "string", minLength: 1 },
+            currency: {
+              enum: ["GHS", "NGN", "USD"],
+              default: "GHS",
+            },
+            class: {
+              enum: ["transactional", "promotional"],
+              default: "transactional",
+            },
+          },
+        },
+      },
+    },
+  },
+  SmsBatch: {
+    type: "object",
+    required: [
+      "id",
+      "status",
+      "total_count",
+      "accepted_count",
+      "failed_count",
+      "items",
+      "request_id",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      status: { enum: ["processing", "completed"] },
+      total_count: { type: "integer", minimum: 1 },
+      accepted_count: { type: "integer", minimum: 0 },
+      failed_count: { type: "integer", minimum: 0 },
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["client_reference", "message_id", "status", "error_code"],
+          properties: {
+            client_reference: { type: "string" },
+            message_id: { type: ["string", "null"], format: "uuid" },
+            status: ref("MessageStatus"),
+            error_code: { type: ["string", "null"] },
+          },
+        },
+      },
+      request_id: { type: "string" },
+    },
+  },
+  SendEmailRequest: {
+    type: "object",
+    additionalProperties: false,
+    required: ["to", "from", "subject"],
+    anyOf: [{ required: ["text"] }, { required: ["html"] }],
+    properties: {
+      to: { type: "string", format: "email", maxLength: 320 },
+      from: { type: "string", format: "email", maxLength: 320 },
+      subject: { type: "string", minLength: 1, maxLength: 998 },
+      text: { type: "string", minLength: 1, maxLength: 1000000 },
+      html: { type: "string", minLength: 1, maxLength: 2000000 },
+      reply_to: { type: "string", format: "email", maxLength: 320 },
+    },
+  },
+  SendEmailResponse: {
+    type: "object",
+    required: ["id", "status", "request_id"],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      status: ref("MessageStatus"),
+      request_id: { type: "string" },
+    },
+  },
+  EmailMessage: {
+    type: "object",
+    required: [
+      "id",
+      "status",
+      "to",
+      "from",
+      "subject",
+      "provider",
+      "created_at",
+      "error_code",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      status: ref("MessageStatus"),
+      to: { type: "string" },
+      from: { type: "string" },
+      subject: { type: "string" },
+      provider: { type: "string" },
+      created_at: { type: "string", format: "date-time" },
+      error_code: { type: ["string", "null"] },
+    },
+  },
   MessageSummary: {
     type: "object",
     required: [
@@ -70,7 +528,7 @@ export const schemas = {
       "segments",
       "cost",
       "provider",
-      "createdAt",
+      "created_at",
     ],
     properties: {
       id: { type: "string" },
@@ -80,8 +538,8 @@ export const schemas = {
       segments: { type: "integer", minimum: 1 },
       cost: ref("Money"),
       provider: { type: "string" },
-      deliveryMode: { enum: ["live", "virtual"], default: "live" },
-      createdAt: { type: "string", format: "date-time" },
+      delivery_mode: { enum: ["live", "virtual"], default: "live" },
+      created_at: { type: "string", format: "date-time" },
     },
   },
   MessageDetail: {
@@ -89,9 +547,9 @@ export const schemas = {
       ref("MessageSummary"),
       {
         type: "object",
-        required: ["senderId", "redacted", "timeline"],
+        required: ["sender_id", "redacted", "timeline"],
         properties: {
-          senderId: { type: "string" },
+          sender_id: { type: "string" },
           body: { type: "string" },
           redacted: { type: "boolean" },
           timeline: {
@@ -106,8 +564,8 @@ export const schemas = {
               },
             },
           },
-          failureReason: { type: "string" },
-          requestId: { type: "string" },
+          failure_reason: { type: "string" },
+          request_id: { type: "string" },
         },
       },
     ],
@@ -195,6 +653,7 @@ export const schemas = {
       "env",
       "secret_prefix",
       "created_at",
+      "health",
     ],
     properties: {
       id: { type: "string", format: "uuid" },
@@ -204,6 +663,15 @@ export const schemas = {
       env: { enum: ["sandbox", "live"] },
       secret_prefix: { type: "string" },
       created_at: { type: "string", format: "date-time" },
+      health: {
+        type: "object",
+        required: ["pending", "dead", "last_delivered_at"],
+        properties: {
+          pending: { type: "integer", minimum: 0 },
+          dead: { type: "integer", minimum: 0 },
+          last_delivered_at: { type: ["string", "null"], format: "date-time" },
+        },
+      },
     },
   },
   CreateWebhookRequest: {
@@ -215,6 +683,37 @@ export const schemas = {
       description: { type: "string", maxLength: 200 },
       application_id: { type: "string", format: "uuid" },
       env: { enum: ["sandbox", "live"] },
+    },
+  },
+  WebhookDelivery: {
+    type: "object",
+    required: [
+      "id",
+      "endpoint_id",
+      "event_id",
+      "event_type",
+      "state",
+      "attempts",
+      "next_attempt_at",
+      "last_attempt_at",
+      "delivered_at",
+      "last_error_category",
+      "last_http_status",
+      "created_at",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      endpoint_id: { type: "string", format: "uuid" },
+      event_id: { type: "string", format: "uuid" },
+      event_type: { type: "string" },
+      state: { enum: ["pending", "delivering", "delivered", "dead"] },
+      attempts: { type: "integer", minimum: 0 },
+      next_attempt_at: { type: "string", format: "date-time" },
+      last_attempt_at: { type: ["string", "null"], format: "date-time" },
+      delivered_at: { type: ["string", "null"], format: "date-time" },
+      last_error_category: { type: ["string", "null"] },
+      last_http_status: { type: ["integer", "null"] },
+      created_at: { type: "string", format: "date-time" },
     },
   },
   ErrorEnvelope: {
@@ -262,8 +761,24 @@ const idParameter = {
   schema: { type: "string" },
 };
 
+// Shared cursor-pagination query params for the paginated GET lists.
+const pageParameters = [
+  {
+    name: "limit",
+    in: "query",
+    schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+  },
+  {
+    name: "cursor",
+    in: "query",
+    schema: { type: "string" },
+    description:
+      "Opaque continuation token from a previous page's next_cursor.",
+  },
+];
+
 export const paths = {
-  "/v1/sms/send": {
+  "/v1/sms/messages": {
     post: operation(
       "sendSms",
       "Send an SMS",
@@ -274,17 +789,173 @@ export const paths = {
       ref("SendSmsRequest"),
     ),
   },
-  "/v1/messages": {
-    get: operation("listMessages", "List recent messages", {
-      200: response("Messages", {
-        type: "object",
-        required: ["messages", "request_id"],
-        properties: {
-          messages: { type: "array", items: ref("MessageSummary") },
-          request_id: { type: "string" },
+  "/v1/sms/send": {
+    post: {
+      ...operation(
+        "sendSmsLegacy",
+        "Send an SMS (deprecated compatibility alias)",
+        {
+          201: response("Accepted", ref("SendSmsResponse")),
+          409: response("Idempotency conflict", ref("ErrorEnvelope")),
         },
+        ref("SendSmsRequest"),
+      ),
+      deprecated: true,
+    },
+  },
+  "/v1/messages": {
+    get: {
+      ...operation("listMessages", "List recent messages (cursor-paginated)", {
+        200: response("Messages", {
+          type: "object",
+          required: ["messages", "next_cursor", "request_id"],
+          properties: {
+            messages: { type: "array", items: ref("MessageSummary") },
+            next_cursor: { type: ["string", "null"] },
+            request_id: { type: "string" },
+          },
+        }),
       }),
-    }),
+      parameters: pageParameters,
+    },
+  },
+  "/v1/messages/preview": {
+    post: operation(
+      "previewMessage",
+      "Preview a released message definition (no side effects)",
+      { 200: response("Preview", ref("PreviewMessageResponse")) },
+      ref("PreviewMessageRequest"),
+    ),
+  },
+  "/v1/message-deliveries": {
+    get: operation(
+      "listManagedMessages",
+      "List recent managed deliveries for the key's environment (summaries, no recipient)",
+      {
+        200: response(
+          "Managed deliveries",
+          ref("ListMessageDeliveriesResponse"),
+        ),
+      },
+    ),
+    post: {
+      ...operation(
+        "sendManagedMessage",
+        "Send a released message definition by stable key (idempotent)",
+        {
+          202: response("Delivery accepted", ref("ManagedMessageResponse")),
+          409: response("Idempotency conflict", ref("ErrorEnvelope")),
+        },
+        ref("SendManagedMessageRequest"),
+      ),
+      parameters: [
+        {
+          name: "Idempotency-Key",
+          in: "header",
+          required: true,
+          schema: { type: "string", minLength: 1, maxLength: 255 },
+          description:
+            "Required. A replay with the same key returns the same delivery; a different payload under the same key is rejected.",
+        },
+      ],
+    },
+  },
+  "/v1/message-deliveries/{id}/webhooks": {
+    get: {
+      ...operation(
+        "listManagedMessageWebhooks",
+        "Webhook fan-out status for a managed delivery's events",
+        {
+          200: response(
+            "Webhook deliveries",
+            ref("MessageDeliveryWebhooksResponse"),
+          ),
+          404: response("Not found", ref("ErrorEnvelope")),
+        },
+      ),
+      parameters: [idParameter],
+    },
+  },
+  "/v1/message-deliveries/{id}": {
+    get: {
+      ...operation("retrieveManagedMessage", "Retrieve a managed delivery", {
+        200: response("Managed delivery", ref("ManagedMessageResponse")),
+        404: response("Not found", ref("ErrorEnvelope")),
+      }),
+      parameters: [idParameter],
+    },
+  },
+  "/v1/definitions/catalog": {
+    get: operation(
+      "readDefinitionCatalog",
+      "Read the released definition contract for this API key environment",
+      { 200: response("Definition catalog", ref("DefinitionCatalogManifest")) },
+    ),
+  },
+  "/v1/sms/batches": {
+    post: operation(
+      "sendSmsBatch",
+      "Send an SMS batch",
+      {
+        201: response("Batch completed", ref("SmsBatch")),
+        409: response("Idempotency conflict", ref("ErrorEnvelope")),
+      },
+      ref("SendSmsBatchRequest"),
+    ),
+  },
+  "/v1/sms/batches/{id}": {
+    get: {
+      ...operation("retrieveSmsBatch", "Retrieve an SMS batch", {
+        200: response("SMS batch", ref("SmsBatch")),
+        404: response("Not found", ref("ErrorEnvelope")),
+      }),
+      parameters: [idParameter],
+    },
+  },
+  "/v1/email/messages": {
+    post: operation(
+      "sendEmail",
+      "Send an Email",
+      {
+        201: response("Accepted", ref("SendEmailResponse")),
+        409: response("Idempotency conflict", ref("ErrorEnvelope")),
+      },
+      ref("SendEmailRequest"),
+    ),
+    get: {
+      ...operation(
+        "listEmailMessages",
+        "List Email messages (cursor-paginated)",
+        {
+          200: response("Email messages", {
+            type: "object",
+            required: ["messages", "next_cursor", "request_id"],
+            properties: {
+              messages: { type: "array", items: ref("EmailMessage") },
+              next_cursor: { type: ["string", "null"] },
+              request_id: { type: "string" },
+            },
+          }),
+        },
+      ),
+      parameters: pageParameters,
+    },
+  },
+  "/v1/email/messages/{id}": {
+    get: {
+      ...operation("retrieveEmail", "Retrieve an Email message", {
+        200: response("Email message", {
+          type: "object",
+          required: ["message", "request_id"],
+          properties: {
+            message: ref("EmailMessage"),
+            request_id: { type: "string" },
+          },
+        }),
+        404: response("Not found", ref("ErrorEnvelope")),
+      }),
+      parameters: [idParameter],
+    },
   },
   "/v1/sms/{id}": {
     get: {
@@ -387,10 +1058,61 @@ export const paths = {
   },
   "/v1/webhooks/{id}": {
     delete: {
-      ...operation("deleteWebhookEndpoint", "Delete a webhook endpoint", {
-        204: { description: "Deleted" },
+      ...operation("disableWebhookEndpoint", "Disable a webhook endpoint", {
+        204: { description: "Disabled; delivery history retained" },
       }),
       parameters: [idParameter],
+    },
+  },
+  "/v1/webhooks/{id}/deliveries": {
+    get: {
+      ...operation(
+        "listWebhookDeliveries",
+        "List endpoint deliveries (cursor-paginated)",
+        {
+          200: response("Webhook deliveries", {
+            type: "object",
+            required: ["deliveries", "next_cursor", "request_id"],
+            properties: {
+              deliveries: { type: "array", items: ref("WebhookDelivery") },
+              next_cursor: { type: ["string", "null"] },
+              request_id: { type: "string" },
+            },
+          }),
+        },
+      ),
+      parameters: [
+        idParameter,
+        {
+          name: "state",
+          in: "query",
+          schema: { enum: ["pending", "delivering", "delivered", "dead"] },
+        },
+        ...pageParameters,
+      ],
+    },
+  },
+  "/v1/webhooks/{id}/deliveries/{deliveryId}/replay": {
+    post: {
+      ...operation("replayWebhookDelivery", "Replay a dead delivery", {
+        200: response("Delivery queued for replay", {
+          type: "object",
+          required: ["delivery", "request_id"],
+          properties: {
+            delivery: ref("WebhookDelivery"),
+            request_id: { type: "string" },
+          },
+        }),
+      }),
+      parameters: [
+        idParameter,
+        {
+          name: "deliveryId",
+          in: "path",
+          required: true,
+          schema: { type: "string", format: "uuid" },
+        },
+      ],
     },
   },
 };

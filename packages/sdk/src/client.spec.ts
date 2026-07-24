@@ -2,9 +2,34 @@ import { describe, expect, it, vi } from "vitest";
 import {
   type AuthenticationError,
   Fabric,
+  type FabricEnvironment,
+  type IdempotentWriteOptions,
   type RateLimitError,
+  type RequestOptions,
   ValidationError,
+  type WriteOptions,
 } from "./index.js";
+
+const requestOptions: RequestOptions = { timeout: 1_000 };
+// @ts-expect-error The public environment vocabulary is sandbox/live only.
+const invalidEnvironment: FabricEnvironment = "production";
+const writeOptions: WriteOptions = { idempotencyKey: "optional-for-direct" };
+const idempotentOptions: IdempotentWriteOptions = {
+  idempotencyKey: "required-for-managed",
+};
+// @ts-expect-error Read options cannot silently enable write retry semantics.
+const invalidRequestOptions: RequestOptions = { idempotencyKey: "wrong" };
+// @ts-expect-error Durable managed writes require a caller idempotency key.
+const invalidIdempotentOptions: IdempotentWriteOptions = {};
+
+void [
+  requestOptions,
+  writeOptions,
+  idempotentOptions,
+  invalidRequestOptions,
+  invalidIdempotentOptions,
+  invalidEnvironment,
+];
 
 function json(
   body: unknown,
@@ -22,9 +47,7 @@ describe("Fabric client", () => {
     expect(new Fabric({ apiKey: "sk_test_example" }).environment).toBe(
       "sandbox",
     );
-    expect(new Fabric({ apiKey: "sk_live_example" }).environment).toBe(
-      "production",
-    );
+    expect(new Fabric({ apiKey: "sk_live_example" }).environment).toBe("live");
     expect(() => new Fabric({ apiKey: "secret" })).toThrow(/sk_test_/);
   });
 
@@ -35,6 +58,18 @@ describe("Fabric client", () => {
       client.sms.send({ to: "0244", senderId: "Fabric", body: "Hello" }),
     ).rejects.toBeInstanceOf(ValidationError);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("uses the deployed Fabric API without consumer endpoint configuration", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(
+        json({ messages: [], next_cursor: null, request_id: "req_default" }),
+      );
+    await new Fabric({ apiKey: "sk_test_example", fetch }).sms.list();
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(
+      "https://d2umm5b2x22zvp.cloudfront.net/v1/messages",
+    );
   });
 
   it("maps SMS input, authentication, idempotency, and response metadata", async () => {
@@ -135,7 +170,9 @@ describe("Fabric client", () => {
       .mockResolvedValueOnce(
         json({ error: { code: "upstream", message: "Unavailable" } }, 503),
       )
-      .mockResolvedValueOnce(json({ messages: [], request_id: "req_ok" }));
+      .mockResolvedValueOnce(
+        json({ messages: [], next_cursor: null, request_id: "req_ok" }),
+      );
     const client = new Fabric({
       apiKey: "sk_test_example",
       fetch,
@@ -149,7 +186,9 @@ describe("Fabric client", () => {
   it("isolates requests from logger failures", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(json({ messages: [], request_id: "req_logger" }));
+      .mockResolvedValue(
+        json({ messages: [], next_cursor: null, request_id: "req_logger" }),
+      );
     const client = new Fabric({
       apiKey: "sk_test_example",
       fetch,

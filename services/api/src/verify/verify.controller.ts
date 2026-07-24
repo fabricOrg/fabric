@@ -41,7 +41,10 @@ export class VerifyController {
         String(parsed.error.issues[0]?.path[0] ?? "to"),
       );
     }
-    return this.verify.start(tenant.id, parsed.data);
+    return this.verify.start(tenant.id, parsed.data, {
+      environmentId: tenant.environmentId,
+      applicationId: tenant.applicationId,
+    });
   }
 
   @Get("overview")

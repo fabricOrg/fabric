@@ -25,7 +25,14 @@ describeDb("member invites", () => {
   const workos = {
     userManagement: { sendInvitation },
   } as unknown as WorkOS;
-  const service = new MembersService(db, () => workos);
+  const auditRecords: Array<{ action: string; actorEmail?: string | null }> =
+    [];
+  const audit = {
+    record: async (input: { action: string; actorEmail?: string | null }) => {
+      auditRecords.push(input);
+    },
+  } as unknown as import("../audit/audit.service.js").AuditService;
+  const service = new MembersService(db, () => workos, audit);
 
   beforeAll(async () => {
     await db.db.insert(accounts).values({
@@ -59,11 +66,8 @@ describeDb("member invites", () => {
     });
 
     expect(member).toMatchObject({ email, role: "member", status: "invited" });
-    expect(sendInvitation).toHaveBeenCalledWith({
-      email,
-      organizationId,
-      roleSlug: "member",
-    });
+    // ADR-0007: org-less invitation — role/tenancy are the local rows, never WorkOS state.
+    expect(sendInvitation).toHaveBeenCalledWith({ email });
 
     const [user] = await db.db
       .select({
@@ -140,12 +144,7 @@ describeDb("member invites", () => {
       developer_access: true,
       status: "invited",
     });
-    // `developer` is Fabric-local — WorkOS gets email + org only, no roleSlug.
-    expect(sendInvitation).toHaveBeenCalledWith({
-      email: devEmail,
-      organizationId,
-      roleSlug: "member",
-    });
+    expect(sendInvitation).toHaveBeenCalledWith({ email: devEmail });
 
     const [membership] = await db.db
       .select({
@@ -223,6 +222,48 @@ describeDb("member invites", () => {
   it("fails closed removing a member that doesn't exist", async () => {
     await expect(service.remove(tenantId, randomUUID())).rejects.toMatchObject({
       response: { error: { code: "member_not_found" } },
+    });
+  });
+
+  it("sets an explicit per-user permission override (full override)", async () => {
+    const [user] = await db.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email));
+    if (!user) throw new Error("member not seeded by the invite test");
+    auditRecords.length = 0;
+    const updated = await service.setPermissions(
+      tenantId,
+      user.id,
+      ["sms:read", "definitions:publish"],
+      "admin@example.com",
+    );
+    expect(updated.permissions).toEqual(["sms:read", "definitions:publish"]);
+    expect(updated.permissions_customized).toBe(true);
+    // The grant is audited with the acting admin's email.
+    expect(auditRecords).toContainEqual(
+      expect.objectContaining({
+        action: "member.permissions_changed",
+        actorEmail: "admin@example.com",
+      }),
+    );
+    const [row] = await db.db
+      .select({ permissions: memberships.permissions })
+      .from(memberships)
+      .where(eq(memberships.userId, user.id));
+    expect(row?.permissions).toEqual(["sms:read", "definitions:publish"]);
+  });
+
+  it("refuses to set the owner's permissions (no lock-out)", async () => {
+    const [owner] = await db.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, ownerEmail));
+    if (!owner) throw new Error("owner not seeded by the owner test");
+    await expect(
+      service.setPermissions(tenantId, owner.id, ["sms:read"]),
+    ).rejects.toMatchObject({
+      response: { error: { code: "owner_immutable" } },
     });
   });
 });

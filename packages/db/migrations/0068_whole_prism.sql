@@ -1,0 +1,3 @@
+ALTER TABLE "webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_state_check" CHECK ("webhook_deliveries"."state" IN ('pending', 'delivering', 'delivered', 'dead'));--> statement-breakpoint
+ALTER TABLE "webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_attempts_check" CHECK ("webhook_deliveries"."attempts" >= 0);--> statement-breakpoint
+ALTER TABLE "webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_http_status_check" CHECK ("webhook_deliveries"."last_http_status" IS NULL OR ("webhook_deliveries"."last_http_status" BETWEEN 100 AND 599));

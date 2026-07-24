@@ -58,7 +58,7 @@ function toLedgerEntry(row: {
   const type: LedgerEntryType =
     reason === "topup"
       ? "topup"
-      : reason === "sms_refund"
+      : reason === "sms_refund" || reason === "message_refund"
         ? "refund"
         : reason === "adjustment"
           ? "adjustment"

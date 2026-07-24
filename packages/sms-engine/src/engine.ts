@@ -1,54 +1,22 @@
-import type { AppDb, TenantTx } from "@app/db";
+import type { TenantTx } from "@app/db";
+import { decideResolution } from "@app/domain";
 import {
-  decideResolution,
-  encodeAndSegment,
-  type RateTable,
-  rateSegments,
-} from "@app/domain";
-import {
-  type Creds,
   isTerminalMessageStatus,
   type MessageStatus,
-  type SmsSenderPlugin,
   STATUS_RANK,
 } from "@app/integrations";
-import { commit, refund, reserve } from "@app/wallet";
+import { commit, refund } from "@app/wallet";
+import type {
+  EngineDeps,
+  PreparedSend,
+  SendInput,
+  SendResult,
+} from "./engine-types.js";
+import { prepareSend } from "./prepare-send.js";
 
-/**
- * SEND PIPELINE (L5) — normalize → segment → rate → RESERVE → send → COMMIT-on-billable | REFUND,
- * DLR reconcile (out-of-order tolerant), and the TTL sweeper. Orchestrates @app/wallet primitives +
- * the SmsSenderPlugin over @app/db `withTenant`. The commit/refund DECISION is @app/domain
- * (decideResolution); money movement is @app/wallet; this is the I/O orchestration.
- *
- * Two-phase on purpose (B2): tx1 persists the message as `sending` + reserves BEFORE the network
- * call (so a crash/retry can't double-send/double-charge — reserve is idempotent on reserve:{id});
- * then send() runs OUTSIDE any open tx; then tx2 applies the outcome. commit/refund are idempotent
- * (commit:{id}/refund:{id}) and mutually exclusive (B6 index) — so reconcile/sweeper are safe to retry.
- */
+/** Two-phase SMS pipeline: persist + reserve, dispatch outside the transaction, then reconcile. */
 
 type Row = Record<string, unknown>;
-
-export interface EngineDeps {
-  db: AppDb;
-  provider: SmsSenderPlugin;
-  creds?: Creds;
-  rates?: RateTable;
-}
-
-export interface SendInput {
-  tenantId: string;
-  to: string;
-  senderId: string;
-  body: string;
-  currency: string;
-  subjectId?: string;
-  deliveryMode?: "virtual" | "live";
-}
-
-export interface SendResult {
-  messageId: string;
-  status: MessageStatus;
-}
 
 /**
  * The shared transition core (send-outcome, DLR, sweeper all funnel here). Locks the message row
@@ -68,7 +36,8 @@ async function resolveMessage(
   } = {},
 ): Promise<MessageStatus> {
   const rows = (await tx`
-    SELECT status FROM messages WHERE id = ${messageId} FOR UPDATE`) as Row[];
+    SELECT status, application_id, environment_id
+    FROM messages WHERE id = ${messageId} FOR UPDATE`) as Row[];
   const prior = String(rows[0]?.status) as MessageStatus;
   // Terminal-freeze + monotonicity: never regress a recorded status or overwrite a terminal one.
   if (isTerminalMessageStatus(prior)) return prior;
@@ -103,13 +72,44 @@ async function resolveMessage(
       error_code = COALESCE(${opts.errorCode ?? null}, error_code),
       updated_at = now()
     WHERE id = ${messageId}`;
+  await tx`
+    UPDATE message_delivery_attempts SET
+      status = ${newStatus},
+      cost_minor = (SELECT cost_minor FROM messages WHERE id = ${messageId}),
+      error_code = COALESCE(${opts.errorCode ?? null}, error_code),
+      provider_accepted_at = CASE
+        WHEN ${newStatus} IN ('accepted', 'sent', 'delivered', 'undelivered')
+          THEN COALESCE(provider_accepted_at, now())
+        ELSE provider_accepted_at
+      END,
+      updated_at = now()
+    WHERE message_id = ${messageId}`;
+  await tx`
+    UPDATE message_deliveries SET
+      status = ${newStatus},
+      total_cost_minor = (SELECT cost_minor FROM messages WHERE id = ${messageId}),
+      resource_version = resource_version + 1,
+      updated_at = now()
+    WHERE id = (
+      SELECT delivery_id FROM message_delivery_attempts WHERE message_id = ${messageId}
+    )`;
+  const applicationId = rows[0]?.application_id
+    ? String(rows[0].application_id)
+    : null;
+  const environmentId = rows[0]?.environment_id
+    ? String(rows[0].environment_id)
+    : null;
   // Transactional outbox (finding 8): the domain event commits or rolls back WITH the status
   // change — never an event for a transition that didn't happen, never a lost transition.
   // Delivery to tenant-registered webhook endpoints is the poller/worker's job, not ours.
   await tx`
-    INSERT INTO outbox_events (tenant_id, event_type, payload)
+    INSERT INTO outbox_events (
+      tenant_id, application_id, environment_id, event_type, payload
+    )
     VALUES (
       current_setting('app.tenant_id')::uuid,
+      ${applicationId},
+      ${environmentId},
       'message.updated',
       ${JSON.stringify({
         message_id: messageId,
@@ -119,42 +119,6 @@ async function resolveMessage(
       })}::jsonb
     )`;
   return newStatus;
-}
-
-/** The persisted-and-reserved message tx1 produced — everything dispatch needs later. */
-export interface PreparedSend {
-  messageId: string;
-  encoding: "gsm7" | "ucs2";
-  segments: number;
-}
-
-/**
- * tx1 — segment → rate → persist as `sending` + reserve, atomically, BEFORE any network call (B2).
- * Kept separate from {@link dispatchSend} so the API can run THIS in-request (insufficient funds
- * still fails the request synchronously) and hand the provider call to a queue worker.
- */
-export async function prepareSend(
-  deps: EngineDeps,
-  input: SendInput,
-): Promise<PreparedSend> {
-  const seg = encodeAndSegment(input.body);
-  const cost = rateSegments(seg.segments, input.currency, deps.rates);
-
-  const messageId = await deps.db.withTenant(input.tenantId, async (tx) => {
-    const rows = (await tx`
-      INSERT INTO messages (tenant_id, subject_id, sender_id, status, status_rank, encoding, segments, cost_minor, currency, delivery_mode, provider_slug)
-      VALUES (current_setting('app.tenant_id')::uuid, ${input.subjectId ?? null}, ${input.senderId}, 'sending', ${STATUS_RANK.sending}, ${seg.encoding}, ${seg.segments}, ${cost.toString()}::bigint, ${input.currency}, ${input.deliveryMode ?? "live"}, ${deps.provider.slug})
-      RETURNING id`) as Row[];
-    const id = String(rows[0]?.id);
-    await reserve(tx, {
-      currency: input.currency,
-      amountMinor: cost,
-      idempotencyKey: `reserve:${id}`,
-      referenceId: id,
-    });
-    return id;
-  });
-  return { messageId, encoding: seg.encoding, segments: seg.segments };
 }
 
 /**

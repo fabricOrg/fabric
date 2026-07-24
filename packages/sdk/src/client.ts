@@ -1,3 +1,6 @@
+import type { DefinitionCatalog, UngeneratedCatalog } from "./catalog.js";
+import { EmailResource } from "./email.js";
+import { MessagesResource } from "./messages.js";
 import { SenderIdsResource } from "./sender-ids.js";
 import { SmsResource } from "./sms.js";
 import { type FabricLogger, Transport } from "./transport.js";
@@ -6,8 +9,10 @@ import { VerifyResource } from "./verify.js";
 import { WalletResource } from "./wallet.js";
 import { WebhooksResource } from "./webhooks.js";
 
-const VERSION = "0.1.0-beta.2";
-const DEFAULT_BASE_URL = "https://api.fabric.africa";
+const VERSION = "0.1.0-beta.6";
+// The SDK owns endpoint selection. Consumers only provide a key; `baseUrl` is reserved for
+// loopback development and private test deployments.
+const DEFAULT_BASE_URL = "https://d2umm5b2x22zvp.cloudfront.net";
 
 export interface FabricConfig {
   readonly apiKey: string;
@@ -18,13 +23,15 @@ export interface FabricConfig {
   readonly logger?: FabricLogger;
 }
 
-export class Fabric {
+export class Fabric<Catalog extends DefinitionCatalog = UngeneratedCatalog> {
   readonly environment: FabricEnvironment;
   readonly sms: SmsResource;
+  readonly email: EmailResource;
   readonly senderIds: SenderIdsResource;
   readonly verify: VerifyResource;
   readonly wallet: WalletResource;
   readonly webhooks: WebhooksResource;
+  readonly messages: MessagesResource<Catalog>;
 
   constructor(config: FabricConfig) {
     assertServerRuntime();
@@ -53,10 +60,12 @@ export class Fabric {
       ...(config.logger ? { logger: config.logger } : {}),
     });
     this.sms = new SmsResource(transport);
+    this.email = new EmailResource(transport);
     this.senderIds = new SenderIdsResource(transport);
     this.verify = new VerifyResource(transport);
     this.wallet = new WalletResource(transport);
     this.webhooks = new WebhooksResource(transport);
+    this.messages = new MessagesResource<Catalog>(transport);
   }
 }
 
@@ -64,7 +73,7 @@ export { Fabric as MessagingClient };
 
 function environmentForKey(apiKey: string): FabricEnvironment {
   if (apiKey.startsWith("sk_test_")) return "sandbox";
-  if (apiKey.startsWith("sk_live_")) return "production";
+  if (apiKey.startsWith("sk_live_")) return "live";
   throw new TypeError(
     "`apiKey` must be a Fabric secret key beginning with `sk_test_` or `sk_live_`.",
   );
@@ -88,7 +97,7 @@ function isLoopback(url: URL): boolean {
 }
 
 function assertServerRuntime(): void {
-  if (typeof window !== "undefined" && typeof window.document !== "undefined") {
+  if (typeof window !== "undefined" && window.document !== undefined) {
     throw new TypeError(
       "@fabric-messaging/sdk contains secret API keys and can only run in a trusted server environment.",
     );

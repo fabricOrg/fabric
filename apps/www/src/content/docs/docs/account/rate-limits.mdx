@@ -1,0 +1,55 @@
+---
+title: Rate limits
+description: The per-key and per-tenant request limits, the 429 response, and how to handle them.
+---
+
+Fabric rate-limits requests with a token bucket, enforced on two levels at once so that minting extra
+keys cannot dodge the account-wide ceiling.
+
+## The limits
+
+| Scope | Default | Error code |
+| --- | --- | --- |
+| Per API key | 120 requests / minute | `rate_limited` |
+| Per account (all keys) | 600 requests / minute | `tenant_rate_limited` |
+
+Each bucket has a full-minute burst capacity and refills continuously (the per-minute limit divided
+across the minute). Both buckets are checked on every request; whichever is exhausted first returns
+the limit.
+
+## The 429 response
+
+Over the limit, Fabric returns HTTP **429** with the error envelope:
+
+```json
+{ "error": { "type": "rate_limit_error", "code": "rate_limited", "message": "…" } }
+```
+
+The SDK raises `RateLimitError` for a `429`. It also **retries** a `429` automatically (up to
+`maxRetries`) with exponential backoff, honouring `Retry-After` when present.
+
+```ts
+import { RateLimitError } from "@fabric-messaging/sdk";
+
+try {
+  await fabric.sms.send(params, { idempotencyKey });
+} catch (err) {
+  if (err instanceof RateLimitError) {
+    // err.retryAfter may hold a seconds hint
+  }
+}
+```
+
+## Stay under the limit
+
+- **Pace bulk work.** Use [batches](/docs/guides/broadcast/) (1–100 items in one request) instead of
+  many single sends, and space batches out.
+- **Back off with jitter.** On a `429`, wait and retry with randomised backoff — the SDK does this for
+  eligible requests, but apply the same discipline in your own orchestration.
+- **Attribute usage per service.** Give each deployment its own key so one noisy service does not
+  starve another — though remember the account-wide bucket still applies.
+
+:::note[Numbers can differ by account]
+The 120/600 defaults are the platform baseline. Your account may be configured differently — treat a
+`429` as authoritative and design for it rather than hard-coding a fixed rate.
+:::

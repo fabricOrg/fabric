@@ -1,8 +1,8 @@
 {
   "name": "@fabric-messaging/sdk",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.6",
   "description": "Official TypeScript SDK for the Fabric communications platform",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,6 +19,7 @@
   },
   "exports": {
     ".": {
+      "development": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
@@ -47,11 +48,13 @@
     "artifact:check": "node scripts/validate-package.mjs",
     "examples:typecheck": "tsc -p tsconfig.examples.json",
     "openapi:generate": "node scripts/openapi.mjs",
+    "playground:refresh": "node scripts/refresh-playground.mjs",
     "openapi:check": "node scripts/openapi.mjs --check",
     "typecheck": "tsc --noEmit",
+    "lint": "biome check src scripts",
     "test": "vitest run",
     "pack:check": "pnpm pack --dry-run",
-    "release:check": "pnpm openapi:check && pnpm typecheck && pnpm examples:typecheck && pnpm test && pnpm build && pnpm pack:check && pnpm artifact:check"
+    "release:check": "pnpm openapi:check && pnpm lint && pnpm typecheck && pnpm examples:typecheck && pnpm test && pnpm build && pnpm pack:check && pnpm artifact:check"
   },
   "devDependencies": {
     "@app/contracts": "workspace:*",

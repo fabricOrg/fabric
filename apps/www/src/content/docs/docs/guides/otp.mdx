@@ -1,0 +1,47 @@
+---
+title: One-time verification (OTP)
+description: Start and check a one-time code with the verify resource, safely.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Fabric's verify resource sends a one-time code over SMS and checks it for you, so you never store or
+compare codes yourself.
+
+<Steps>
+1. **Start a verification**
+
+   ```ts
+   const started = await fabric.verify.start({ to: "+233201234567" });
+   // { id, status, to, channel: "sms", expiresIn, debugCode? }
+   ```
+
+   Persist `started.data.id` against the user's session. `expiresIn` tells you how long the code is
+   valid. In sandbox, `debugCode` returns the code so you can test without a handset — it is never
+   present on a live verification.
+
+2. **Check the submitted code**
+
+   ```ts
+   const result = await fabric.verify.check({ id, code: userInput });
+   if (result.data.verifiedAt !== null) {
+     // verified — verifiedAt holds the timestamp; result.data.status reflects the outcome
+   }
+   ```
+</Steps>
+
+## Do it safely
+
+- **Cap attempts.** Limit how many times a user may submit a code for one `id`, and how many codes a
+  user or IP may request in a window. Verification is a common abuse target.
+- **Do not reveal account existence.** Show the same "we sent a code" response whether or not the
+  number maps to an account. Branch on the verify result, not on whether the account exists.
+- **Never log the code.** Treat the OTP like a password. Log the verification `id` and outcome, not
+  the code itself.
+- **Respect expiry.** After `expiresIn`, start a fresh verification rather than reusing the old `id`.
+
+## Transactional class bypasses quiet hours
+
+An OTP is transactional, so it is delivered around the clock — it is not subject to the promotional
+quiet-hours window described in [compliance](/docs/account/compliance/). Keep verification traffic on
+the transactional class; sending OTPs as promotional risks them being held or blocked.

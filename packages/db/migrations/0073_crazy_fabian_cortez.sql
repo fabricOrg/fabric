@@ -1,0 +1,4 @@
+CREATE UNIQUE INDEX "uniq_outbox_events_containment" ON "outbox_events" USING btree ("id","tenant_id","application_id","environment_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "uniq_webhook_endpoints_containment" ON "webhook_endpoints" USING btree ("id","tenant_id","application_id","environment_id");--> statement-breakpoint
+ALTER TABLE "webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_event_containment_fk" FOREIGN KEY ("event_id","tenant_id","application_id","environment_id") REFERENCES "public"."outbox_events"("id","tenant_id","application_id","environment_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_endpoint_containment_fk" FOREIGN KEY ("endpoint_id","tenant_id","application_id","environment_id") REFERENCES "public"."webhook_endpoints"("id","tenant_id","application_id","environment_id") ON DELETE cascade ON UPDATE no action;

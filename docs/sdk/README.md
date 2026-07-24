@@ -11,19 +11,25 @@ production concerns that should not obscure first success.
 - [Errors](errors.md)
 - [Versioning, compatibility, and releases](releasing.md)
 - [Language-neutral SDK contract](language-contract.md)
+- [Managed messaging SDK DX — first iteration](managed-messaging-dx.md) *(historical proposal; refined by later iterations)*
+- [SDK DX — design iteration 2](sdk-dx-iteration-2.md) *(historical proposal; refined by iteration 3)*
+- [Final managed messaging SDK contract](sdk-dx-iteration-3.md) *(authoritative proposal; not implemented)*
+- [Managed messaging SDK delivery backlog](managed-messaging-sdk-backlog.md) *(vertical, testable work items)*
+- [SDK release evidence](evidence/README.md) *(criterion-to-test audits for release candidates)*
+- [Managed messaging and Journeys architecture plan](managed-messaging-architecture-plan.md) *(proposed; not implemented)*
 
 ## Current API capability matrix
 
 | Capability | SDK | Public API | Notes |
 | --- | --- | --- | --- |
-| Send SMS | Yes | `POST /v1/sms/send` | Idempotency supported |
+| Send SMS | Yes | `POST /v1/sms/messages` | Idempotency supported; `/sms/send` is a compatibility alias |
 | Retrieve/list SMS | Yes | `GET /v1/sms/:id`, `GET /v1/messages` | List is not yet paginated |
 | Verify OTP | Yes | `POST /v1/verify`, `/check` | Sandbox may return a debug code |
 | Sender IDs | Create/list | `POST/GET /v1/senders` | Retrieve-by-ID is not available |
 | Webhooks | Create/list/delete + local verification | `/v1/webhooks` | Secret shown once |
 | Wallet | Retrieve | `GET /v1/wallet` | Exact minor-unit strings |
-| Email | Not exposed | Not implemented | Must not fake success |
-| Batch send | Not exposed | Not implemented | No atomicity claim |
+| Email | Send/retrieve/list | `/v1/email/messages` | Sandbox simulation; live fails closed pending provider/domain approval |
+| SMS batch send | Send/retrieve | `/v1/sms/batches` | Up to 100 items with durable per-item outcomes |
 
 Documentation must be updated with the public API and SDK in the same change whenever this table
 changes.

@@ -18,6 +18,8 @@ export interface ConfiguredSmsProviders {
   readonly liveReadinessReason: string | null;
 }
 
+const E164 = /^\+[1-9]\d{7,14}$/;
+
 export function buildSmsProviders(
   config: ConfigService,
   logger: Logger,
@@ -38,11 +40,9 @@ export function buildSmsProviders(
   // Sandbox by default — real delivery needs ARKESEL_SANDBOX=false, a deliberate human-gated flip.
   const callbackUrl = dlrCallbackUrl(config);
   const apiKey = config.get<string>("ARKESEL_API_KEY") ?? "";
-  const senderId = config.get<string>("ARKESEL_SENDER_ID") ?? "";
   const sandbox = config.get<string>("ARKESEL_SANDBOX") ?? "true";
   const creds: Creds = {
     apiKey,
-    senderId,
     sandbox,
     ...(callbackUrl ? { callbackUrl } : {}),
   };
@@ -74,23 +74,74 @@ function liveProviderReadiness(config: ConfigService): {
   if ((config.get<string>("NODE_ENV") ?? process.env.NODE_ENV) === "test") {
     return { ready: true, reason: null };
   }
+  // Reasons are user-facing (surfaced as the `live_provider_not_ready` API error): keep them
+  // provider-neutral — never leak the carrier's name (Arkesel) to a customer.
   if (config.get<string>("SMS_PROVIDER") !== "arkesel") {
     return {
       ready: false,
-      reason: "Arkesel is not configured as the live SMS provider.",
+      reason: "Live SMS delivery is not enabled for this environment.",
     };
   }
   const apiKey = config.get<string>("ARKESEL_API_KEY") ?? "";
   if (!apiKey || apiKey === "REPLACE_ME") {
-    return { ready: false, reason: "Arkesel credentials are not configured." };
+    return {
+      ready: false,
+      reason: "Live SMS delivery is not enabled for this environment.",
+    };
   }
   if ((config.get<string>("ARKESEL_SANDBOX") ?? "true") !== "false") {
     return {
       ready: false,
-      reason: "Arkesel carrier delivery is still in sandbox mode.",
+      reason: "Live SMS carrier delivery is still in sandbox mode.",
+    };
+  }
+  const allowlist = parseLiveRecipientAllowlist(config);
+  if (!allowlist.valid) {
+    return {
+      ready: false,
+      reason: allowlist.reason,
     };
   }
   return { ready: true, reason: null };
+}
+
+/** A live Arkesel request is permitted only for explicitly verified E.164 recipients. */
+export function isLiveRecipientAllowed(
+  config: ConfigService,
+  recipient: string,
+): boolean {
+  if (config.get<string>("SMS_PROVIDER") !== "arkesel") return true;
+  if ((config.get<string>("ARKESEL_SANDBOX") ?? "true") !== "false") {
+    return true;
+  }
+  const allowlist = parseLiveRecipientAllowlist(config);
+  return allowlist.valid && allowlist.recipients.has(recipient);
+}
+
+function parseLiveRecipientAllowlist(
+  config: ConfigService,
+):
+  | { valid: true; recipients: ReadonlySet<string> }
+  | { valid: false; reason: string } {
+  const raw = config.get<string>("SMS_LIVE_RECIPIENT_ALLOWLIST") ?? "";
+  const recipients = raw
+    .split(",")
+    .map((recipient) => recipient.trim())
+    .filter(Boolean);
+  if (recipients.length === 0) {
+    return {
+      valid: false,
+      reason: "The live SMS recipient allowlist is not configured.",
+    };
+  }
+  if (recipients.some((recipient) => !E164.test(recipient))) {
+    return {
+      valid: false,
+      reason:
+        "The live SMS recipient allowlist contains an invalid E.164 number.",
+    };
+  }
+  return { valid: true, recipients: new Set(recipients) };
 }
 
 /**

@@ -1,7 +1,15 @@
-import { accounts, apiKeys, createAppDb, staffUsers } from "@app/db";
+import {
+  accounts,
+  apiKeys,
+  createAppDb,
+  smsTemplates,
+  staffUsers,
+  type TenantId,
+} from "@app/db";
 import { credit } from "@app/wallet";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { apiKeyScopeValues } from "../../packages/contracts/src/dev-portal.js";
 import { hashApiKey } from "../../services/api/src/api-keys/api-key.crypto.js";
 
 const tenantId =
@@ -18,6 +26,34 @@ const staffEmails = (
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter((email) => email.length > 0);
+
+const localSmsTemplates = [
+  {
+    name: "Delivery update",
+    body: "Hi {{name}}, your delivery {{reference}} is on the way and should arrive by {{eta}}.",
+    messageClass: "transactional",
+  },
+  {
+    name: "Payment receipt",
+    body: "Hi {{name}}, we received your payment of {{amount}}. Reference: {{reference}}.",
+    messageClass: "transactional",
+  },
+  {
+    name: "Verification code",
+    body: "Your Fabric verification code is {{code}}. It expires in {{minutes}} minutes. Do not share this code.",
+    messageClass: "transactional",
+  },
+  {
+    name: "Appointment reminder",
+    body: "Hi {{name}}, this is a reminder for your appointment on {{date}} at {{time}}. Reply if you need help.",
+    messageClass: "transactional",
+  },
+  {
+    name: "Customer offer",
+    body: "Hi {{name}}, enjoy {{offer}} until {{expiry}}. Terms apply. Reply STOP to opt out.",
+    messageClass: "promotional",
+  },
+] as const;
 
 if (!rawKey || !superUrl || !appUrl) {
   throw new Error(
@@ -37,12 +73,17 @@ async function main(): Promise<void> {
         id: tenantId,
         name: "Fabric Local",
         slug: "fabric-local",
+        // Sandbox until go-live — matches self-serve provisioning (SANDBOX_PLAN). Without this the
+        // schema default "free" makes the dashboard treat the workspace as live and hide every
+        // sandbox key / log / webhook / email.
+        plan: "sandbox",
         ...(workosOrganizationId ? { workosOrganizationId } : {}),
       })
       .onConflictDoUpdate({
         target: accounts.id,
         set: {
           name: "Fabric Local",
+          plan: "sandbox",
           ...(workosOrganizationId ? { workosOrganizationId } : {}),
         },
       });
@@ -54,13 +95,13 @@ async function main(): Promise<void> {
         prefix: rawKey.slice(0, 16),
         keyHash: hashApiKey(rawKey),
         env: "test",
-        scopes: ["sms:send", "sms:read", "wallet:read"],
+        scopes: [...apiKeyScopeValues],
       })
       .onConflictDoUpdate({
         target: apiKeys.keyHash,
         set: {
           status: "active",
-          scopes: ["sms:send", "sms:read", "wallet:read"],
+          scopes: [...apiKeyScopeValues],
         },
       });
     for (const email of staffEmails) {
@@ -72,6 +113,19 @@ async function main(): Promise<void> {
           set: { role: "admin", status: "active" },
         });
     }
+    await appDb.withTenantDrizzle(tenantId, async (tx) => {
+      for (const template of localSmsTemplates) {
+        await tx
+          .insert(smsTemplates)
+          .values({
+            tenantId: tenantId as TenantId,
+            ...template,
+          })
+          .onConflictDoNothing({
+            target: [smsTemplates.tenantId, smsTemplates.name],
+          });
+      }
+    });
     await appDb.withTenant(tenantId, (tx) =>
       credit(tx, {
         currency: "GHS",
@@ -81,6 +135,7 @@ async function main(): Promise<void> {
       }),
     );
     console.log(`Local tenant ready: ${tenantId}`);
+    console.log(`SMS templates ready: ${localSmsTemplates.length}`);
     console.log(`Staff seeded: ${staffEmails.join(", ")}`);
   } finally {
     await ownerPool.end();

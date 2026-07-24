@@ -3,15 +3,22 @@ import { WebhookVerificationError } from "./errors.js";
 import type { Transport } from "./transport.js";
 import type {
   FabricResponse,
+  ListParams,
+  Page,
   RequestOptions,
+  WebhookDelivery,
   WebhookEndpoint,
+  WriteOptions,
 } from "./types.js";
 import {
-  enumField,
+  nullableStringField,
+  pageQueryString,
   record,
   requireNonEmpty,
   stringField,
 } from "./validation.js";
+import { parseWebhookEvent, type WebhookEvent } from "./webhook-events.js";
+import { parseDelivery, parseEndpoint } from "./webhook-parsers.js";
 
 export interface CreateWebhookParams {
   readonly url: string;
@@ -22,6 +29,9 @@ export interface CreateWebhookParams {
 export interface CreatedWebhookEndpoint extends WebhookEndpoint {
   readonly secret: string;
 }
+export interface ListWebhookDeliveriesParams extends ListParams {
+  readonly state?: "pending" | "delivering" | "delivered" | "dead";
+}
 export interface VerifyWebhookParams {
   readonly payload: string | Uint8Array;
   readonly signature: string | string[] | undefined;
@@ -29,19 +39,12 @@ export interface VerifyWebhookParams {
   readonly tolerance?: number;
   readonly now?: Date;
 }
-export interface WebhookEvent<T = unknown> {
-  readonly id?: string;
-  readonly type: string;
-  readonly createdAt?: string;
-  readonly data: T;
-}
-
 export class WebhooksResource {
   constructor(private readonly transport: Transport) {}
 
   async create(
     params: CreateWebhookParams,
-    options?: RequestOptions,
+    options?: WriteOptions,
   ): Promise<FabricResponse<CreatedWebhookEndpoint>> {
     requireNonEmpty(params.url, "url");
     const response = await this.transport.request<Record<string, unknown>>({
@@ -86,9 +89,13 @@ export class WebhooksResource {
     };
   }
 
+  /**
+   * Take an endpoint out of service. The Fabric API soft-deletes: the endpoint is marked
+   * `disabled` and its delivery history is retained for inspection and replay.
+   */
   async remove(
     id: string,
-    options?: RequestOptions,
+    options?: WriteOptions,
   ): Promise<FabricResponse<void>> {
     requireNonEmpty(id, "id");
     return this.transport.request<void>({
@@ -98,7 +105,82 @@ export class WebhooksResource {
     });
   }
 
-  verify<T = unknown>(params: VerifyWebhookParams): WebhookEvent<T> {
+  /** Alias of {@link remove} — the API disables rather than hard-deletes, so both are the same call. */
+  async disable(
+    id: string,
+    options?: WriteOptions,
+  ): Promise<FabricResponse<void>> {
+    return this.remove(id, options);
+  }
+
+  async listDeliveries(
+    endpointId: string,
+    params: ListWebhookDeliveriesParams = {},
+    options?: RequestOptions,
+  ): Promise<FabricResponse<Page<WebhookDelivery>>> {
+    requireNonEmpty(endpointId, "endpointId");
+    const page = pageQueryString(params);
+    const query = params.state
+      ? `${page ? `${page}&` : "?"}state=${params.state}`
+      : page;
+    const response = await this.transport.request<Record<string, unknown>>({
+      method: "GET",
+      path: `/v1/webhooks/${encodeURIComponent(endpointId)}/deliveries${query}`,
+      ...(options ? { options } : {}),
+    });
+    if (!Array.isArray(response.data.deliveries)) {
+      throw new TypeError("Fabric returned an invalid webhook delivery list.");
+    }
+    return {
+      ...response,
+      data: {
+        items: response.data.deliveries.map((item) =>
+          parseDelivery(record(item)),
+        ),
+        nextCursor: nullableStringField(
+          response.data.next_cursor,
+          "next_cursor",
+        ),
+      },
+    };
+  }
+
+  /** Walk an endpoint's delivery history page by page, following `next_cursor` until null. */
+  async *iterateDeliveries(
+    endpointId: string,
+    params: Omit<ListWebhookDeliveriesParams, "cursor"> = {},
+    options?: RequestOptions,
+  ): AsyncGenerator<WebhookDelivery, void, undefined> {
+    let cursor: string | undefined;
+    do {
+      const page = await this.listDeliveries(
+        endpointId,
+        { ...params, ...(cursor ? { cursor } : {}) },
+        options,
+      );
+      yield* page.data.items;
+      const next = page.data.nextCursor ?? undefined;
+      // defensive: a buggy server echoing the same cursor must not hang the client
+      cursor = next === cursor ? undefined : next;
+    } while (cursor);
+  }
+
+  async replayDelivery(
+    endpointId: string,
+    deliveryId: string,
+    options?: WriteOptions,
+  ): Promise<FabricResponse<WebhookDelivery>> {
+    requireNonEmpty(endpointId, "endpointId");
+    requireNonEmpty(deliveryId, "deliveryId");
+    const response = await this.transport.request<Record<string, unknown>>({
+      method: "POST",
+      path: `/v1/webhooks/${encodeURIComponent(endpointId)}/deliveries/${encodeURIComponent(deliveryId)}/replay`,
+      ...(options ? { options } : {}),
+    });
+    return { ...response, data: parseDelivery(record(response.data.delivery)) };
+  }
+
+  verify(params: VerifyWebhookParams): WebhookEvent {
     const signature = Array.isArray(params.signature)
       ? params.signature[0]
       : params.signature;
@@ -163,31 +245,8 @@ export class WebhooksResource {
         { code: "invalid_payload", cause },
       );
     }
-    const event = record(parsed);
-    return {
-      type: typeof event.type === "string" ? event.type : "unknown",
-      data: (event.data ?? event) as T,
-      ...(typeof event.id === "string" ? { id: event.id } : {}),
-      ...(typeof event.created_at === "string"
-        ? { createdAt: event.created_at }
-        : {}),
-    };
+    return parseWebhookEvent(parsed);
   }
-}
-
-function parseEndpoint(data: Record<string, unknown>): WebhookEndpoint {
-  return {
-    id: stringField(data.id, "id"),
-    url: stringField(data.url, "url"),
-    status: enumField(data.status, ["active", "disabled"] as const, "status"),
-    description:
-      data.description === null
-        ? null
-        : stringField(data.description, "description"),
-    environment: enumField(data.env, ["sandbox", "live"] as const, "env"),
-    secretPrefix: stringField(data.secret_prefix, "secret_prefix"),
-    createdAt: stringField(data.created_at, "created_at"),
-  };
 }
 
 function verificationError(

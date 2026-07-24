@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { AuditModule } from "../audit/audit.module.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { ProvisioningDbModule } from "../identity/provisioning-db.module.js";
 import {
@@ -11,7 +12,7 @@ import { MembersService } from "./members.service.js";
 
 /** Tenant team-member management (dashboard): list + invite (WorkOS org invitation + membership). */
 @Module({
-  imports: [ProvisioningDbModule],
+  imports: [ProvisioningDbModule, AuditModule],
   controllers: [MembersController],
   providers: [
     MembersService,

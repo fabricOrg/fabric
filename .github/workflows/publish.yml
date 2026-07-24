@@ -1,0 +1,95 @@
+name: Publish packages
+
+# Publishes @fabric-messaging/sdk and @fabric-messaging/cli to the public npm registry.
+# DELIBERATE, never on a plain push:
+#   - a GitHub Release whose tag is `sdk-v*` / `cli-v*` (cut a release to publish that package), or
+#   - a manual workflow_dispatch (pick the package).
+# Uses npm PROVENANCE via OIDC trusted publishing — no long-lived NPM token is stored. Enable
+# trusted publishing for each package on npmjs.com (Package settings → Trusted publishers → this
+# repo + this workflow) before the first run. Until then a publish attempt fails closed (no token).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package to publish
+        required: true
+        type: choice
+        options:
+          - sdk
+          - cli
+
+concurrency:
+  group: publish-${{ github.event.release.tag_name || inputs.package }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # required for npm provenance / OIDC trusted publishing
+
+jobs:
+  resolve:
+    name: Resolve target package
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      package: ${{ steps.pick.outputs.package }}
+    steps:
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.event.release.tag_name }}
+          INPUT_PKG: ${{ inputs.package }}
+        shell: bash
+        run: |
+          if [[ "$EVENT" == "workflow_dispatch" ]]; then
+            echo "package=$INPUT_PKG" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" == sdk-v* ]]; then
+            echo "package=sdk" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" == cli-v* ]]; then
+            echo "package=cli" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Release tag '$TAG' is not sdk-v*/cli-v* — nothing to publish." && exit 1
+          fi
+
+  publish:
+    name: Publish ${{ needs.resolve.outputs.package }}
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Must match the npm trusted-publisher binding (configured on npmjs for publish.yml → the
+    # `testing` GitHub Environment). The OIDC token's environment claim has to line up or npm
+    # rejects the trusted publish.
+    environment: testing
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # sdk → packages/sdk (@fabric-messaging/sdk); cli → packages/cli (@fabric-messaging/cli).
+      PKG_DIR: packages/${{ needs.resolve.outputs.package }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Release check (build + typecheck + tests + pack smoke)
+        working-directory: ${{ env.PKG_DIR }}
+        run: pnpm release:check
+
+      - name: Publish (provenance via OIDC trusted publishing)
+        working-directory: ${{ env.PKG_DIR }}
+        # No NODE_AUTH_TOKEN: trusted publishing mints short-lived credentials from the OIDC id-token.
+        # --provenance attaches a signed build-provenance attestation. publishConfig.access is "public".
+        run: npm publish --provenance --access public

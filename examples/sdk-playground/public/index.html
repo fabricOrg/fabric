@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Fabric SDK Playground</title>
+  <style>
+    :root{
+      --bg:#0a0e12; --grad:#0f2019; --surface:#111820; --surface-2:#0d141a; --inset:#0a1116;
+      --border:#1e2a31; --border-soft:#182229; --hair:#141d23;
+      --ink:#e9f1ef; --muted:#8ea4ab; --faint:#5c6f77;
+      --accent:#34e3a0; --accent-ink:#04160e; --accent-dim:rgba(52,227,160,.13); --accent-line:rgba(52,227,160,.35);
+      --ok:#34e3a0; --err:#ff6b7a; --warn:#ffcf70;
+      --tok-key:#7fd1ff; --tok-str:#9be7bd; --tok-num:#ffcf70; --tok-bool:#c9a6ff;
+      --mono:ui-monospace,"JetBrains Mono","Cascadia Code","SF Mono",Consolas,monospace;
+      --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 34px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html{-webkit-text-size-adjust:100%}
+    body{margin:0;color:var(--ink);font-family:var(--sans);line-height:1.55;
+      background:radial-gradient(1100px 520px at 12% -8%,var(--grad),transparent 60%),var(--bg);
+      background-attachment:fixed;-webkit-font-smoothing:antialiased;}
+    a{color:var(--accent);text-decoration:none}
+    ::selection{background:var(--accent-dim)}
+
+    /* ---- top bar ---- */
+    .topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;
+      padding:14px clamp(16px,4vw,40px);border-bottom:1px solid var(--hair);
+      background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(9px);}
+    .mark{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
+      background:linear-gradient(150deg,var(--accent),#1fbf82);color:var(--accent-ink);font-weight:900;font-size:15px;
+      box-shadow:0 0 0 1px var(--accent-line),0 4px 14px rgba(52,227,160,.25)}
+    .brand{font-weight:700;letter-spacing:-.01em}
+    .brand span{color:var(--faint);font-weight:500}
+    .tag{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+      color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:5px 11px}
+
+    main{max-width:1240px;margin:0 auto;padding:clamp(22px,4vw,44px) clamp(16px,4vw,40px) 72px}
+
+    /* ---- hero ---- */
+    .hero{margin-bottom:22px}
+    .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin:0 0 10px;font-weight:600}
+    h1{font-size:clamp(2rem,4.6vw,3.4rem);line-height:1.02;margin:0 0 12px;letter-spacing:-.03em;font-weight:800;text-wrap:balance}
+    .lede{max-width:64ch;color:var(--muted);margin:0;font-size:15.5px}
+    .lede code{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--inset);border:1px solid var(--border-soft);padding:1px 6px;border-radius:5px}
+
+    /* ---- info strip ---- */
+    .info{display:flex;gap:12px;align-items:flex-start;margin:22px 0 26px;padding:13px 16px;border:1px solid var(--border-soft);
+      border-left:3px solid var(--accent-line);border-radius:11px;background:linear-gradient(90deg,var(--accent-dim),transparent 70%);font-size:13.5px;color:var(--muted)}
+    .info strong{color:var(--ink)} .info svg{flex:none;margin-top:2px;color:var(--accent)}
+    .info code{font-family:var(--mono);font-size:12px;color:var(--ink)}
+
+    /* ---- layout ---- */
+    .layout{display:grid;grid-template-columns:minmax(320px,440px) 1fr;gap:20px;align-items:start}
+    .card{background:linear-gradient(180deg,color-mix(in srgb,var(--surface) 96%,transparent),var(--surface-2));
+      border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+    .card-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--hair)}
+    .card-head h2{font-size:12px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0;font-weight:700}
+    .card-head .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+    .card-body{padding:18px}
+    .response .card-head{justify-content:space-between}
+
+    /* ---- form ---- */
+    .field{margin-bottom:15px}
+    label{display:flex;align-items:baseline;gap:8px;margin:0 0 7px;font-size:12.5px;font-weight:600;color:var(--ink)}
+    label .opt{font-weight:400;color:var(--faint);font-size:11.5px}
+    input,select,textarea{width:100%;border-radius:10px;border:1px solid var(--border);background:var(--inset);color:var(--ink);
+      padding:11px 12px;font:inherit;font-size:14px;transition:border-color .12s,box-shadow .12s;outline:none}
+    input::placeholder,textarea::placeholder{color:var(--faint)}
+    input:focus,select:focus,textarea:focus{border-color:var(--accent-line);box-shadow:0 0 0 3px var(--accent-dim)}
+    input,select,#params{font-family:var(--mono);font-size:13px}
+    select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+      background-position:calc(100% - 18px) 55%,calc(100% - 13px) 55%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:34px;cursor:pointer}
+    optgroup{color:var(--faint);font-style:normal;font-weight:700}
+    option{color:var(--ink);background:var(--surface)}
+    #params{min-height:230px;resize:vertical;line-height:1.6;tab-size:2}
+
+    .run{width:100%;margin-top:4px;border:0;border-radius:11px;padding:13px;font:inherit;font-weight:800;font-size:14.5px;cursor:pointer;
+      color:var(--accent-ink);background:linear-gradient(150deg,var(--accent),#1fbf82);
+      box-shadow:0 6px 18px rgba(52,227,160,.22);transition:transform .08s,box-shadow .12s,filter .12s;
+      display:flex;align-items:center;justify-content:center;gap:9px}
+    .run:hover{filter:brightness(1.05)} .run:active{transform:translateY(1px)}
+    .run:disabled{opacity:.5;cursor:progress;filter:saturate(.6)}
+    .run .spin{width:15px;height:15px;border-radius:50%;border:2px solid rgba(4,22,14,.35);border-top-color:var(--accent-ink);animation:spin .7s linear infinite;display:none}
+    .run.busy .spin{display:inline-block} .run.busy .lbl{opacity:.85}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(prefers-reduced-motion:reduce){.run .spin{animation:none}}
+    .foot{margin:14px 0 0;font-size:12px;color:var(--faint);line-height:1.5}
+
+    /* ---- response ---- */
+    .meta{display:flex;flex-wrap:wrap;gap:7px}
+    .chip{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.03em;padding:3px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted);white-space:nowrap}
+    .chip.ok{color:var(--ok);border-color:var(--accent-line);background:var(--accent-dim)}
+    .chip.err{color:var(--err);border-color:rgba(255,107,122,.4);background:rgba(255,107,122,.1)}
+    .chip.env{color:var(--warn);border-color:rgba(255,207,112,.35)}
+    .copy{margin-left:auto;border:1px solid var(--border);background:var(--inset);color:var(--muted);border-radius:8px;
+      padding:5px 10px;font:inherit;font-size:11.5px;font-family:var(--mono);cursor:pointer;transition:color .12s,border-color .12s}
+    .copy:hover{color:var(--ink);border-color:var(--accent-line)} .copy:disabled{opacity:.4;cursor:default}
+    .out-wrap{position:relative}
+    pre{margin:0;padding:18px;min-height:430px;max-height:64vh;overflow:auto;white-space:pre-wrap;word-break:break-word;
+      font-family:var(--mono);font-size:12.9px;line-height:1.65;color:#cdeede;background:var(--inset);border-top:1px solid var(--hair)}
+    pre.placeholder{color:var(--faint);display:flex;align-items:center;justify-content:center;text-align:center}
+    .tk{color:var(--tok-key)} .ts{color:var(--tok-str)} .tn{color:var(--tok-num)} .tb{color:var(--tok-bool)} .tnull{color:var(--faint)}
+
+    @media(max-width:820px){.layout{grid-template-columns:1fr}pre{min-height:300px}}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="mark">F</span>
+    <span class="brand">Fabric <span>· SDK Playground</span></span>
+    <span class="tag">@fabric-messaging/sdk</span>
+  </div>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">Hosted test lab</p>
+      <h1>Run every shipped capability.</h1>
+      <p class="lede">Enter a sandbox API key, pick an operation, and run it against the live Fabric API. Your key is sent only with the request and never stored.</p>
+    </section>
+
+    <div class="info">
+      <svg role="img" aria-label="Info" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><title>Info</title><path d="M12 8h.01M11 12h1v4h1"/><circle cx="12" cy="12" r="9"/></svg>
+      <div><strong>Virtual phone is two-way.</strong> Every workspace has a stable <code>+999…</code> number — open Dashboard → Virtual phone to reply, test STOP/START, page history, or reset the inbox. The <em>virtualPhone.*</em> presets exercise deterministic delivery outcomes.</div>
+    </div>
+
+    <div class="layout">
+      <section class="card">
+        <div class="card-head"><span class="dot"></span><h2>Request</h2></div>
+        <div class="card-body">
+          <div class="field">
+            <label for="apiKey">Sandbox API key</label>
+            <input id="apiKey" type="password" autocomplete="off" placeholder="sk_test_…" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="action">Operation</label>
+            <select id="action"></select>
+          </div>
+          <div class="field">
+            <label for="params">Parameters <span class="opt">JSON</span></label>
+            <textarea id="params" spellcheck="false"></textarea>
+          </div>
+          <button id="run" class="run" type="button"><span class="spin"></span><span class="lbl">Run operation</span></button>
+          <p class="foot">Create or copy a sandbox key from the Fabric Dashboard. Live-key mutations fail closed unless explicitly enabled.</p>
+        </div>
+      </section>
+
+      <section class="card response">
+        <div class="card-head">
+          <div class="meta" id="meta"><h2 style="margin:0">Response</h2></div>
+          <button class="copy" id="copy" type="button" disabled>Copy</button>
+        </div>
+        <div class="out-wrap">
+          <pre id="output" class="placeholder">Choose an operation and run it to see the response.</pre>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const examples={
+      "sms.send":{to:"+233545227189",senderId:"SANDBOX",body:"Hello from the SDK playground",class:"transactional",idempotencyKey:"playground-send-001"},
+      "sms.retrieve":{id:"replace-with-message-id"},"sms.list":{},
+      "sms.sendBatch":{idempotencyKey:"playground-batch-001",items:[{clientReference:"customer-1",to:"+233545227189",senderId:"SANDBOX",body:"First batch message"},{clientReference:"customer-2",to:"+233545227190",senderId:"SANDBOX",body:"Second batch message"}]},
+      "sms.retrieveBatch":{id:"replace-with-batch-id"},
+      "email.send":{to:"recipient@example.com",from:"hello@merchant.example",subject:"Welcome",text:"Your Fabric sandbox Email works.",idempotencyKey:"playground-email-001"},
+      "email.retrieve":{id:"replace-with-email-id"},"email.list":{},
+      "verify.start":{to:"+233545227189",senderId:"SANDBOX"},"verify.check":{id:"replace-with-verification-id",code:"123456"},
+      "wallet.retrieve":{},
+      "messages.preview":{key:"order.shipped",data:{name:"Ada",count:2},locale:"en"},
+      "messages.send":{key:"order.shipped",to:"+233545227189",data:{name:"Ada",count:2},reference:"playground-managed-001",idempotencyKey:"playground-managed-001"},
+      "messages.retrieveDelivery":{id:"replace-with-delivery-id"},
+      "senderIds.create":{senderId:"MYBRAND",country:"GH",type:"alphanumeric",useCase:"Transactional notifications"},"senderIds.list":{},
+      "webhooks.create":{url:"https://example.com/webhooks/fabric",description:"Playground endpoint",environment:"sandbox"},"webhooks.list":{},"webhooks.remove":{id:"replace-with-webhook-id"},
+      "webhooks.verify":{payload:"{\"type\":\"sms.delivered\",\"data\":{}}",signature:"t=...,v1=...",secret:"whsec_..."},
+      "webhooks.signAndVerify":{payload:"{\"type\":\"playground.test\",\"data\":{\"ok\":true}}",secret:"local-demo-secret"},
+      "virtualPhone.carrierReject":{senderId:"SANDBOX",body:"Carrier rejection test",idempotencyKey:"vp-reject-001"},
+      "virtualPhone.platformFault":{senderId:"SANDBOX",body:"Platform failure test",idempotencyKey:"vp-fault-001"},
+      "virtualPhone.delayedDlr":{senderId:"SANDBOX",body:"Delayed delivery test",idempotencyKey:"vp-delay-001"},
+      "virtualPhone.autoStop":{senderId:"SANDBOX",body:"Automatic STOP test",idempotencyKey:"vp-stop-001"}};
+
+    const GROUPS={sms:"SMS",email:"Email",verify:"Verify (OTP)",wallet:"Wallet",messages:"Managed messages",senderIds:"Sender IDs",webhooks:"Webhooks",virtualPhone:"Virtual phone"};
+    const $=(s)=>document.querySelector(s);
+    const apiKey=$("#apiKey"),action=$("#action"),params=$("#params"),output=$("#output"),run=$("#run"),meta=$("#meta"),copy=$("#copy");
+
+    // Build grouped <optgroup> select from the example keys.
+    const byGroup={};
+    for(const key of Object.keys(examples)){const g=key.split(".")[0];if(!byGroup[g])byGroup[g]=[];byGroup[g].push(key)}
+    for(const g of Object.keys(byGroup)){
+      const og=document.createElement("optgroup");og.label=GROUPS[g]??g;
+      for(const key of byGroup[g]){const o=document.createElement("option");o.value=key;o.textContent=key.split(".")[1];og.append(o)}
+      action.append(og);
+    }
+    function load(){params.value=JSON.stringify(examples[action.value],null,2)}
+    action.addEventListener("change",load);load();
+
+    function esc(s){return s.replace(/[&<>]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
+    // Lightweight JSON syntax highlight — runs on already-escaped text, so it's XSS-safe.
+    function highlight(json){
+      return esc(json).replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(\.\d+)?([eE][+-]?\d+)?)/g,
+        (m)=>{let c="tn";
+          if(/^"/.test(m)) c=/:$/.test(m)?"tk":"ts";
+          else if(/true|false/.test(m)) c="tb";
+          else if(/null/.test(m)) c="tnull";
+          return `<span class="${c}">${m}</span>`;});
+    }
+    function setMeta(chips){meta.innerHTML=`<h2 style="margin:0">Response</h2>${chips.map((c)=>`<span class="chip ${c.k||''}">${esc(c.t)}</span>`).join("")}`}
+
+    let lastText="";
+    copy.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(lastText);copy.textContent="Copied";setTimeout(()=>copy.textContent="Copy",1200)}catch{copy.textContent="Copy failed";setTimeout(()=>copy.textContent="Copy",1200)}});
+
+    run.addEventListener("click",async()=>{
+      run.disabled=true;run.classList.add("busy");copy.disabled=true;
+      output.classList.remove("placeholder");output.textContent="Running…";
+      meta.innerHTML='<h2 style="margin:0">Response</h2><span class="chip">…</span>';
+      let payload;
+      try{payload=JSON.parse(params.value||"{}")}
+      catch(e){run.disabled=false;run.classList.remove("busy");setMeta([{t:"invalid JSON",k:"err"}]);output.textContent=String(e);return}
+      const t0=performance.now();
+      try{
+        const res=await fetch("/api/run",{method:"POST",headers:{"content-type":"application/json"},
+          body:JSON.stringify({apiKey:apiKey.value,action:action.value,params:payload})});
+        const ms=Math.round(performance.now()-t0);
+        const data=await res.json();
+        const chips=[{t:`HTTP ${res.status}`,k:res.ok?"ok":"err"},{t:`${ms} ms`}];
+        if(data.environment) chips.push({t:data.environment,k:"env"});
+        if(data.code) chips.push({t:data.code,k:"err"});
+        if(data.requestId) chips.push({t:data.requestId});
+        setMeta(chips);
+        lastText=JSON.stringify(data,null,2);
+        output.innerHTML=highlight(lastText);
+        copy.disabled=false;
+      }catch(error){
+        setMeta([{t:"network error",k:"err"}]);
+        output.textContent=String(error);
+      }finally{run.disabled=false;run.classList.remove("busy")}
+    });
+  </script>
+</body>
+</html>

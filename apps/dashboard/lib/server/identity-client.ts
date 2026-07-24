@@ -1,15 +1,11 @@
 import "server-only";
 
 import {
-  organizationForUserResponseSchema,
-  type ResolveIdentitySessionResponse,
-  resolveIdentitySessionResponseSchema,
+  type CreateWorkspaceResponse,
+  createWorkspaceResponseSchema,
+  resolveUserSessionResponseSchema,
 } from "@app/contracts";
-import type {
-  AppSession,
-  OrglessSessionClaims,
-  WorkOSSessionClaims,
-} from "@app/fe-auth";
+import type { UserSession, UserSessionClaims } from "@app/fe-auth";
 
 function backendConfiguration() {
   const baseUrl = process.env.API_BASE_URL;
@@ -20,53 +16,17 @@ function backendConfiguration() {
   return { baseUrl, bffToken };
 }
 
-export async function resolveWorkOSSession(
-  claims: WorkOSSessionClaims,
-): Promise<AppSession | null> {
-  const { baseUrl, bffToken } = backendConfiguration();
-  // ADR-0003: no tenant API key — the API resolves the tenant from organization_id, which the
-  // BFF took from the sealed WorkOS session it verified server-side.
-  const response = await fetch(new URL("/internal/identity/session", baseUrl), {
-    method: "POST",
-    cache: "no-store",
-    headers: {
-      "content-type": "application/json",
-      "x-bff-token": bffToken,
-    },
-    body: JSON.stringify({
-      external_user_id: claims.externalUserId,
-      organization_id: claims.organizationId,
-      email: claims.email,
-      name: claims.name,
-      user_updated_at: claims.userUpdatedAt,
-      role: claims.role,
-      permissions: claims.permissions,
-      session_id: claims.sessionId,
-    }),
-  });
-  if (!response.ok) {
-    console.error(`Identity resolution failed with status ${response.status}.`);
-    return null;
-  }
-  return toAppSession(
-    resolveIdentitySessionResponseSchema.parse(await response.json()),
-    claims.email,
-    claims.name,
-  );
-}
-
 /**
- * ADR-0002: org-less login (fresh sign-up / unpinned sign-in) → which organization? The API
- * resolves an existing membership's org, or — dashboard only (`allow_provision`) — provisions a
- * sandbox tenant for a verified stranger. 403 = no workspace and signup didn't apply → null →
- * the normal access-denied path.
+ * ADR-0007 resolve-v2: user-level resolution — the API returns the person plus EVERY workspace
+ * membership; no organization travels either way. 403 = unknown identity that could not be
+ * signed in (e.g. unverified stranger) → null → the normal access-denied path.
  */
-export async function resolveOrganizationForUser(
-  claims: OrglessSessionClaims,
-): Promise<string | null> {
+export async function resolveUserSessionV2(
+  claims: UserSessionClaims,
+): Promise<UserSession | null> {
   const { baseUrl, bffToken } = backendConfiguration();
   const response = await fetch(
-    new URL("/internal/identity/organization-for-user", baseUrl),
+    new URL("/internal/identity/session-v2", baseUrl),
     {
       method: "POST",
       cache: "no-store",
@@ -80,35 +40,70 @@ export async function resolveOrganizationForUser(
         name: claims.name,
         user_updated_at: claims.userUpdatedAt,
         email_verified: claims.emailVerified,
-        allow_provision: true,
+        session_id: claims.sessionId,
       }),
     },
   );
   if (!response.ok) {
     if (response.status !== 403) {
       console.error(
-        `Organization resolution failed with status ${response.status}.`,
+        `User session resolution failed with status ${response.status}.`,
       );
     }
     return null;
   }
-  const parsed = organizationForUserResponseSchema.parse(await response.json());
-  return parsed.workos_organization_id;
+  const parsed = resolveUserSessionResponseSchema.parse(await response.json());
+  return {
+    userId: parsed.user_id,
+    externalUserId: claims.externalUserId,
+    emailVerified: claims.emailVerified,
+    email: parsed.email,
+    name: parsed.name,
+    sessionId: parsed.session_id,
+    memberships: parsed.memberships.map((membership) => ({
+      tenantId: membership.tenant_id,
+      workspaceName: membership.workspace_name,
+      workspaceSlug: membership.workspace_slug,
+      role: membership.role,
+      developerAccess: membership.developer_access,
+      permissions: membership.permissions,
+      plan: membership.plan,
+    })),
+  };
 }
 
-function toAppSession(
-  response: ResolveIdentitySessionResponse,
-  email: string,
-  name: string | null,
-): AppSession {
-  return {
-    userId: response.user_id,
-    orgId: response.tenant_id,
-    role: response.role,
-    permissions: response.permissions,
-    sessionId: response.session_id,
-    email,
-    name: name ?? undefined,
-    plan: response.plan,
-  };
+/** ADR-0007 onboarding submit: local-only workspace creation. Null = refused (gates/kill-switch). */
+export async function createWorkspaceForUser(input: {
+  externalUserId: string;
+  email: string;
+  emailVerified: boolean;
+  workspaceName: string;
+}): Promise<CreateWorkspaceResponse | null> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL("/internal/identity/workspaces", baseUrl),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-bff-token": bffToken,
+      },
+      body: JSON.stringify({
+        external_user_id: input.externalUserId,
+        email: input.email,
+        email_verified: input.emailVerified,
+        workspace_name: input.workspaceName,
+      }),
+    },
+  );
+  if (!response.ok) {
+    if (response.status !== 403) {
+      console.error(
+        `Workspace creation failed with status ${response.status}.`,
+      );
+    }
+    return null;
+  }
+  return createWorkspaceResponseSchema.parse(await response.json());
 }
