@@ -528,7 +528,7 @@ export const schemas = {
       "segments",
       "cost",
       "provider",
-      "createdAt",
+      "created_at",
     ],
     properties: {
       id: { type: "string" },
@@ -538,8 +538,8 @@ export const schemas = {
       segments: { type: "integer", minimum: 1 },
       cost: ref("Money"),
       provider: { type: "string" },
-      deliveryMode: { enum: ["live", "virtual"], default: "live" },
-      createdAt: { type: "string", format: "date-time" },
+      delivery_mode: { enum: ["live", "virtual"], default: "live" },
+      created_at: { type: "string", format: "date-time" },
     },
   },
   MessageDetail: {
@@ -547,9 +547,9 @@ export const schemas = {
       ref("MessageSummary"),
       {
         type: "object",
-        required: ["senderId", "redacted", "timeline"],
+        required: ["sender_id", "redacted", "timeline"],
         properties: {
-          senderId: { type: "string" },
+          sender_id: { type: "string" },
           body: { type: "string" },
           redacted: { type: "boolean" },
           timeline: {
@@ -564,8 +564,8 @@ export const schemas = {
               },
             },
           },
-          failureReason: { type: "string" },
-          requestId: { type: "string" },
+          failure_reason: { type: "string" },
+          request_id: { type: "string" },
         },
       },
     ],

@@ -34,7 +34,7 @@ export async function getMessage(
     const summary = toMessageSummary(row);
     return {
       ...summary,
-      senderId: row.senderId,
+      sender_id: row.senderId,
       redacted: true,
       timeline: [
         {
@@ -42,7 +42,7 @@ export async function getMessage(
           at: row.updatedAt.toISOString(),
         },
       ],
-      ...(row.errorCode ? { failureReason: row.errorCode } : {}),
+      ...(row.errorCode ? { failure_reason: row.errorCode } : {}),
     };
   });
 }
@@ -70,7 +70,7 @@ function toMessageSummary(row: {
       minor: row.costMinor.toString(),
     },
     provider: row.providerSlug ?? "pending",
-    deliveryMode: row.deliveryMode === "virtual" ? "virtual" : "live",
-    createdAt: row.createdAt.toISOString(),
+    delivery_mode: row.deliveryMode === "virtual" ? "virtual" : "live",
+    created_at: row.createdAt.toISOString(),
   };
 }

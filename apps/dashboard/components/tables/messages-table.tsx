@@ -130,7 +130,7 @@ const columns: ColumnDef<MessageSummary>[] = [
     ),
   },
   {
-    accessorKey: "createdAt",
+    accessorKey: "created_at",
     header: ({ column }) => (
       <div className="flex justify-end">
         <DataTableColumnHeader column={column} title="Time" />
@@ -138,7 +138,7 @@ const columns: ColumnDef<MessageSummary>[] = [
     ),
     cell: ({ row }) => (
       <div className="text-right text-muted-foreground">
-        {formatTime(row.original.createdAt)}
+        {formatTime(row.original.created_at)}
       </div>
     ),
   },
@@ -305,24 +305,24 @@ export function MessagesTable({
                 </p>
               </div>
 
-              {detail.failureReason && (
+              {detail.failure_reason && (
                 <div className="flex flex-col gap-2 rounded-lg bg-destructive/8 p-3">
                   <span className="text-xs font-medium text-destructive">
                     Failure reason
                   </span>
-                  <p className="text-sm">{detail.failureReason}</p>
+                  <p className="text-sm">{detail.failure_reason}</p>
                   <p className="text-sm">
-                    {failureGuidance(detail.failureReason).cause}{" "}
-                    {failureGuidance(detail.failureReason).action}
+                    {failureGuidance(detail.failure_reason).cause}{" "}
+                    {failureGuidance(detail.failure_reason).action}
                   </p>
                   <p className="text-xs font-medium text-destructive">
                     Automatic retry is disabled because the recipient shown here
                     is masked and retry safety cannot be established.
                   </p>
-                  {detail.requestId && (
+                  {detail.request_id && (
                     <p className="text-xs text-muted-foreground">
                       Contact support with{" "}
-                      <code className="font-mono">{detail.requestId}</code>.
+                      <code className="font-mono">{detail.request_id}</code>.
                     </p>
                   )}
                   <Button

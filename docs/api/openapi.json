@@ -3150,7 +3150,7 @@
           "segments",
           "cost",
           "provider",
-          "createdAt"
+          "created_at"
         ],
         "properties": {
           "id": {
@@ -3176,11 +3176,11 @@
           "provider": {
             "type": "string"
           },
-          "deliveryMode": {
+          "delivery_mode": {
             "enum": ["live", "virtual"],
             "default": "live"
           },
-          "createdAt": {
+          "created_at": {
             "type": "string",
             "format": "date-time"
           }
@@ -3193,9 +3193,9 @@
           },
           {
             "type": "object",
-            "required": ["senderId", "redacted", "timeline"],
+            "required": ["sender_id", "redacted", "timeline"],
             "properties": {
-              "senderId": {
+              "sender_id": {
                 "type": "string"
               },
               "body": {
@@ -3223,10 +3223,10 @@
                   }
                 }
               },
-              "failureReason": {
+              "failure_reason": {
                 "type": "string"
               },
-              "requestId": {
+              "request_id": {
                 "type": "string"
               }
             }

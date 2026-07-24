@@ -181,11 +181,11 @@ function messageSummary(data: Record<string, unknown>): MessageSummary {
     to: stringField(data.to, "to"),
     provider: stringField(data.provider, "provider"),
     deliveryMode: enumField(
-      data.deliveryMode ?? "live",
+      data.delivery_mode ?? "live",
       ["live", "virtual"] as const,
-      "deliveryMode",
+      "delivery_mode",
     ),
-    createdAt: stringField(data.createdAt, "createdAt"),
+    createdAt: stringField(data.created_at, "created_at"),
   };
 }
 
@@ -202,12 +202,12 @@ function messageDetail(data: Record<string, unknown>): MessageDetail {
     : [];
   return {
     ...messageSummary(data),
-    senderId: stringField(data.senderId, "senderId"),
+    senderId: stringField(data.sender_id, "sender_id"),
     redacted: booleanField(data.redacted, "redacted"),
     timeline,
     ...(typeof data.body === "string" ? { body: data.body } : {}),
-    ...(typeof data.failureReason === "string"
-      ? { failureReason: data.failureReason }
+    ...(typeof data.failure_reason === "string"
+      ? { failureReason: data.failure_reason }
       : {}),
   };
 }

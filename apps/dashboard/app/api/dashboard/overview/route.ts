@@ -54,7 +54,7 @@ export async function GET() {
 
     // This-month message stats.
     const monthMessages = messages.filter(
-      (m) => new Date(m.createdAt).getTime() >= monthStart,
+      (m) => new Date(m.created_at).getTime() >= monthStart,
     );
     const resolved = monthMessages.filter((m) => RESOLVED.has(m.status));
     const delivered = monthMessages.filter((m) => m.status === "delivered");
@@ -74,7 +74,7 @@ export async function GET() {
       traffic.push({ date: dayLabel(d), sent: 0, delivered: 0 });
     }
     for (const m of messages) {
-      const bucket = buckets.get(dayKey(m.createdAt));
+      const bucket = buckets.get(dayKey(m.created_at));
       if (!bucket) continue;
       bucket.sent += 1;
       if (m.status === "delivered") bucket.delivered += 1;
@@ -96,7 +96,7 @@ export async function GET() {
         id: m.id,
         kind: "message" as const,
         label: m.to,
-        at: m.createdAt,
+        at: m.created_at,
         status: m.status,
       })),
       ...wallet.ledger
