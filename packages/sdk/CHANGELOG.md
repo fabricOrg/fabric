@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-beta.6
 
 - **Breaking:** `sms.list`, `email.list`, and `webhooks.listDeliveries` now return a page —
   `{ items, nextCursor }` — instead of a bare array, and accept `{ limit, cursor }`. New

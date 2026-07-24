@@ -2,7 +2,8 @@
 
 The official server-side TypeScript client for sending and inspecting messages with Fabric.
 
-> Public prerelease: `0.1.0-beta.5`. Install the explicit `beta` channel until 1.0 is ready.
+> Public prerelease: `0.1.0-beta.6`. Install the explicit `beta` channel until 1.0 is ready.
+> The package is ESM-only by design — Node.js 22+ (the supported floor) can `require()` it natively.
 
 ## Install
 

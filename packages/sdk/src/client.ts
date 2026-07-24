@@ -9,7 +9,7 @@ import { VerifyResource } from "./verify.js";
 import { WalletResource } from "./wallet.js";
 import { WebhooksResource } from "./webhooks.js";
 
-const VERSION = "0.1.0-beta.5";
+const VERSION = "0.1.0-beta.6";
 // The SDK owns endpoint selection. Consumers only provide a key; `baseUrl` is reserved for
 // loopback development and private test deployments.
 const DEFAULT_BASE_URL = "https://d2umm5b2x22zvp.cloudfront.net";
