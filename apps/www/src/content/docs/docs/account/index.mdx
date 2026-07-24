@@ -1,0 +1,44 @@
+---
+title: Account & platform
+description: Applications, keys, wallet and billing, rate limits, going live, and compliance.
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+## Applications and environments
+
+Create a separate Fabric application for each independently deployed integration. Sandbox and live
+are isolated inside the application — API keys, activity, definitions, and webhook endpoints all
+belong to one environment.
+
+## API keys
+
+- Give each deployment its own key so it can be revoked without affecting another service.
+- Grant only the scopes the service needs.
+- Store keys in a secret manager and show only their prefix in logs or support messages.
+- Rotate immediately after suspected exposure.
+
+## Explore the platform
+
+<CardGrid>
+  <LinkCard
+    title="Wallet & billing"
+    description="Minor-unit money, balances, the ledger, and fail-closed reservations."
+    href="/docs/account/wallet-billing/"
+  />
+  <LinkCard
+    title="Rate limits"
+    description="The per-key and per-tenant request limits and the 429 response."
+    href="/docs/account/rate-limits/"
+  />
+  <LinkCard
+    title="Going live"
+    description="The checklist for moving from sk_test_ to sk_live_."
+    href="/docs/account/going-live/"
+  />
+  <LinkCard
+    title="Compliance"
+    description="GH/NG consent, quiet hours, DND, and data-protection duties."
+    href="/docs/account/compliance/"
+  />
+</CardGrid>

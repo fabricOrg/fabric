@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { nextCursor } from "./pagination.js";
 
 /**
  * /v1/webhooks — tenant-registered webhook endpoints (finding 8). The signing secret appears
@@ -80,6 +81,7 @@ export type WebhookDeliveryDto = z.infer<typeof webhookDeliverySchema>;
 
 export const listWebhookDeliveriesResponseSchema = z.object({
   deliveries: z.array(webhookDeliverySchema),
+  next_cursor: nextCursor,
   request_id: z.string(),
 });
 export type ListWebhookDeliveriesResponse = z.infer<

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { messageStatus } from "./message-status.js";
+import { nextCursor } from "./pagination.js";
 
 export const emailAddress = z.string().trim().email().max(320);
 
@@ -44,6 +45,7 @@ export type EmailMessageResponse = z.infer<typeof emailMessageResponse>;
 
 export const emailMessageListResponse = z.object({
   messages: z.array(emailMessage),
+  next_cursor: nextCursor,
   request_id: z.string(),
 });
 export type EmailMessageListResponse = z.infer<typeof emailMessageListResponse>;

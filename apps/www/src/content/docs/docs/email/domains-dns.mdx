@@ -1,0 +1,55 @@
+---
+title: Domains & DNS
+description: Authenticate a live sending domain with SPF, DKIM, and DMARC so mail is trusted.
+---
+
+Sandbox email uses a fake provider and never leaves Fabric, so it needs no DNS. Before you send from
+an `sk_live_` key you must prove you own the `from` domain and let receiving servers verify each
+message. Three DNS records do this.
+
+## SPF
+
+SPF lists the servers allowed to send for your domain. Publish a `TXT` record on the sending domain
+that authorises Fabric's mail servers, alongside any other senders you use. The dashboard shows the
+exact `include:` host for your account — the shape looks like this:
+
+```txt
+example.com.  TXT  "v=spf1 include:<shown-in-dashboard> -all"
+```
+
+Keep a single SPF record per domain and merge every sender into its `include:` list — multiple SPF
+records are invalid and cause soft failures.
+
+## DKIM
+
+DKIM cryptographically signs each message so a receiver can confirm it was not altered in transit.
+Fabric generates a key pair per domain and gives you a `CNAME` (or `TXT`) record to publish. Copy the
+selector host and target from the dashboard exactly, then wait for propagation before verifying — the
+record has this shape:
+
+```txt
+<selector>._domainkey.example.com.  CNAME  <target-shown-in-dashboard>
+```
+
+## DMARC
+
+DMARC tells receivers what to do when SPF or DKIM fails, and where to send aggregate reports. Start
+in monitor mode and tighten once you confirm your mail passes.
+
+```txt
+_dmarc.example.com.  TXT  "v=DMARC1; p=none; rua=mailto:dmarc@example.com"
+```
+
+Move to `p=quarantine` and then `p=reject` after your reports show authenticated mail passing.
+
+## Verify in the dashboard
+
+1. Add your sending domain in the dashboard and copy the generated records.
+2. Publish them at your DNS provider.
+3. Return and verify — Fabric checks that SPF and DKIM resolve.
+4. Only a **verified** domain may be used as a live `from` address.
+
+:::caution[Alignment matters]
+For DMARC to pass, the authenticated domain must align with the visible `from` domain. Send live mail
+from a subdomain or domain you have verified — not a free mailbox provider you do not control.
+:::

@@ -1,0 +1,64 @@
+---
+title: Retries & idempotency
+description: How Fabric retries webhook deliveries, the delivery states, and how to replay a dead one.
+---
+
+Fabric delivers each event **at least once**. A slow endpoint, a timeout, or a non-`2xx` response
+causes a retry, so the same event can arrive more than once. Your consumer must be idempotent.
+
+## Make your consumer idempotent
+
+<br />
+
+1. Verify the [signature](/docs/webhooks/signatures/) against the raw body.
+2. **Persist the `event.id`** in a uniqueness-constrained table before you act.
+3. If the id already exists, return `2xx` and do nothing — that is the whole point.
+4. Only return `2xx` after the event is durably recorded. A `2xx` tells Fabric to stop retrying.
+
+```ts
+async function processOnce(eventId: string, event: WebhookEvent) {
+  const inserted = await db.insertEventIfNew(eventId); // no-op if it already exists
+  if (!inserted) return;                               // duplicate delivery — ignore
+  await applySideEffect(event);
+}
+```
+
+Never trust ordering. A `message.delivered` can arrive before the `message.sent` that logically
+precedes it; design state transitions so a later event cannot regress a terminal state.
+
+## Delivery states
+
+Fabric tracks the state of each attempt to reach your endpoint. Inspect them per endpoint:
+
+```ts
+const page = await fabric.webhooks.listDeliveries(endpointId, { state: "dead" });
+console.log(page.data.items.length, page.data.nextCursor);
+```
+
+The list is cursor-paginated; `iterateDeliveries(endpointId, { state })` walks every page.
+
+| State | Meaning |
+| --- | --- |
+| `pending` | Queued, not yet attempted. |
+| `delivering` | An attempt is in flight. |
+| `delivered` | Your endpoint returned `2xx`. |
+| `dead` | Retries were exhausted; the delivery stopped. |
+
+Each `WebhookDelivery` records `attempts`, `lastHttpStatus`, `lastErrorCategory`, and
+`nextAttemptAt`, plus the endpoint's rolling `health` (`pending` / `dead` counts).
+
+## Replay a dead delivery
+
+After you fix your endpoint, replay a dead delivery instead of resending the original message:
+
+```ts
+await fabric.webhooks.replayDelivery(endpointId, deliveryId);
+```
+
+Replay resets the dead cycle and appends a fresh attempt while keeping the full attempt history. It
+is audited.
+
+:::tip[Respond fast, work later]
+Do the minimum inside the request — verify, record the id, enqueue — then return `2xx`. Heavy work in
+the handler causes timeouts, which look like failures and trigger needless retries.
+:::

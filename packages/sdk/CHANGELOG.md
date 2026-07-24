@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.0-beta.6
+
+- **Breaking:** `sms.list`, `email.list`, and `webhooks.listDeliveries` now return a page —
+  `{ items, nextCursor }` — instead of a bare array, and accept `{ limit, cursor }`. New
+  `sms.iterate`, `email.iterate`, and `webhooks.iterateDeliveries` async generators follow
+  `next_cursor` to walk a whole log. Sender-ID and webhook-endpoint lists stay bounded arrays.
+- **Breaking:** the SMS read wire fields are now snake_case (`created_at`, `delivery_mode`,
+  `sender_id`, `failure_reason`), matching every other resource. The SDK's TypeScript surface is
+  unchanged (still camelCase) — only raw-JSON consumers of those two endpoints are affected.
+- Decision: the package stays ESM-only. Node >= 22 (the supported floor) can `require()` ESM
+  natively, so a separate CommonJS build adds weight without adding reach.
+- Added `InsufficientFundsError` — a 402 now surfaces as a dedicated typed error instead of the
+  base `ApiError`, matching the documented `insufficient_funds` failure.
+- Documented that `webhooks.remove`/`webhooks.disable` are the same soft-delete call (the API
+  marks the endpoint `disabled` and keeps delivery history).
+- Added test coverage for email send/list, sender ID create, webhook create/remove, SMS detail
+  retrieval, and the browser/base-URL/config guards.
+- Added a lint step to `release:check`.
+
 ## 0.1.0-beta.5
 
 - Normalized public environments to `sandbox | live` while retaining `sk_test_` and `sk_live_` key
@@ -38,4 +57,6 @@
 `fabric-messaging@0.1.0-beta.1` and `0.1.0-beta.2` are deprecated. Install
 `@fabric-messaging/sdk@beta` instead.
 
-Email, batch sending, cursor pagination, and CommonJS are intentionally not included in this beta.
+Cursor pagination shipped after beta.5 (see Unreleased). CommonJS is intentionally not included:
+Node >= 22 can `require()` ESM natively. (Email and batch sending shipped in beta.4/beta.5 —
+earlier copies of this note predate them.)

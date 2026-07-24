@@ -121,6 +121,7 @@ describe("canonical contract parity", () => {
     };
     const listed = listWebhookDeliveriesResponseSchema.parse({
       deliveries: [delivery],
+      next_cursor: null,
       request_id: "req_deliveries",
     });
     await expect(
@@ -128,7 +129,10 @@ describe("canonical contract parity", () => {
         state: "dead",
       }),
     ).resolves.toMatchObject({
-      data: [{ eventId: delivery.event_id, lastHttpStatus: 500 }],
+      data: {
+        items: [{ eventId: delivery.event_id, lastHttpStatus: 500 }],
+        nextCursor: null,
+      },
     });
     const replayed = replayWebhookDeliveryResponseSchema.parse({
       delivery: { ...delivery, state: "pending", attempts: 10 },

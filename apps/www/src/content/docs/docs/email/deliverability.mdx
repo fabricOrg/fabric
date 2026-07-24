@@ -1,0 +1,43 @@
+---
+title: Email deliverability
+description: Practices that keep transactional email authenticated, trusted, and out of spam.
+---
+
+Deliverability is the odds that an accepted message reaches the inbox rather than spam or a bounce.
+Fabric accepts and sends your mail; whether it lands depends mostly on authentication, reputation,
+and content — which you control.
+
+## Authenticate first
+
+Nothing else matters until SPF, DKIM, and DMARC pass and align with your visible `from` domain. See
+[Domains & DNS](/docs/email/domains-dns/). Unauthenticated mail is the single most common reason a
+message is filtered or rejected outright.
+
+## Send the right mail
+
+- **Keep transactional and marketing streams separate.** Mixing a promotional blast with receipts on
+  the same domain drags your transactional reputation down with it.
+- **Always include a plain-text part.** Supplying both `text` and `html` improves scoring and gives
+  clients a fallback.
+- **Send to addresses that expect you.** Only mail recipients who gave consent; a spike of unknown
+  or invalid recipients looks like spam to receivers.
+
+## Watch the signals
+
+- **Bounces** — a message that a receiver rejects. Retrieve the `EmailMessage` and branch on its
+  `errorCode`; stop sending to a hard-bouncing address.
+- **`errorCode`** — stable and machine-readable. Log it with your business reference, never the
+  recipient content.
+- **Volume ramp** — a brand-new domain has no reputation. Increase live volume gradually rather than
+  sending your entire list on day one.
+
+## Verify in sandbox
+
+Sandbox uses a fake provider, so you can exercise the full send → retrieve → webhook loop and your
+bounce handling with deterministic outcomes before any real inbox is involved. Wire up your
+consumers there, then authenticate a domain and ramp live volume.
+
+:::tip[Reputation is per-domain]
+Deliverability follows the authenticated sending domain, not the API. Protect it: authenticate, send
+wanted mail, and react to bounces quickly.
+:::

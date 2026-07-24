@@ -1,0 +1,57 @@
+---
+title: Typed keys with the CLI
+description: Generate a typed catalog of your definition keys so the SDK checks them at compile time.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+The `@fabric-messaging/cli` reads your released [message definitions](/docs/messaging/message-definitions/)
+and generates a typed catalog. Type the SDK client with it and every `messages.send` / `preview` call
+autocompletes keys and checks the `data` shape at compile time.
+
+<Steps>
+1. **Point the CLI at your environment**
+
+   ```bash title=".env"
+   FABRIC_API_KEY=sk_test_replace_with_your_key
+   ```
+
+   The CLI reads `FABRIC_API_KEY` and infers the environment from its prefix, exactly like the SDK.
+
+2. **Generate the catalog**
+
+   ```bash
+   npx @fabric-messaging/cli definitions generate --output fabric.generated.ts
+   ```
+
+   This writes a `FabricCatalog` type describing every released key and its variables.
+
+3. **Type the client**
+
+   ```ts
+   import { Fabric } from "@fabric-messaging/sdk";
+   import type { FabricCatalog } from "./fabric.generated";
+
+   const fabric = new Fabric<FabricCatalog>({ apiKey: process.env.FABRIC_API_KEY! });
+
+   // key is autocompleted; data is checked against the definition's variables
+   await fabric.messages.send("order.shipped", {
+     to: "+233201234567",
+     data: { name: "Ama", ref: "GH-4821" },
+     idempotencyKey: "order-shipped:GH-4821",
+   });
+   ```
+
+4. **Guard against drift in CI**
+
+   ```bash
+   npx @fabric-messaging/cli definitions check
+   ```
+
+   `check` regenerates in memory and compares against the committed file. It exits non-zero if the
+   catalog has drifted from the released contract, so a definition change that outdates your types
+   fails the build.
+</Steps>
+
+The CLI redacts key patterns from its own error output, but treat it like any secret-bearing tool:
+run it in a trusted shell or CI job, and never commit a key or a generated file containing secrets.

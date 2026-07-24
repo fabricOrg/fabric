@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { messageStatus } from "./message-status.js";
 import { money } from "./money.js";
+import { nextCursor } from "./pagination.js";
 import { deliveryMode } from "./virtual-phone.js";
 
 /** GSM-7 vs UCS-2 — surfaced on responses (drives the segment count + cost). */
@@ -18,7 +19,10 @@ export const statusEvent = z.object({
 });
 export type StatusEvent = z.infer<typeof statusEvent>;
 
-/** A row in the message log. Recipient is masked for PII (raw lives only in the vault). */
+/** A row in the message log. Recipient is masked for PII (raw lives only in the vault).
+ *  Wire casing is snake_case — the platform-wide convention (request DTOs, email, webhooks,
+ *  senders). These fields were the one camelCase holdout; normalized pre-1.0 while the only
+ *  consumers (dashboard BFF + SDK beta) are in-repo. */
 export const messageSummary = z.object({
   id: z.string(), // "msg_…"
   to: z.string(), // masked E.164, e.g. "+233 24● ●●● ●●12"
@@ -27,19 +31,19 @@ export const messageSummary = z.object({
   segments: z.number().int().positive(),
   cost: money,
   provider: z.string(),
-  deliveryMode: deliveryMode.optional().default("live"),
-  createdAt: z.string(),
+  delivery_mode: deliveryMode.optional().default("live"),
+  created_at: z.string(),
 });
 export type MessageSummary = z.infer<typeof messageSummary>;
 
 /** Full message detail (drawer): summary + body (may be redacted), timeline, failure reason. */
 export const messageDetail = messageSummary.extend({
-  senderId: z.string(),
+  sender_id: z.string(),
   body: z.string().optional(), // absent when redacted
   redacted: z.boolean(),
   timeline: z.array(statusEvent),
-  failureReason: z.string().optional(), // set when undelivered/failed
-  requestId: z.string().optional(), // req_… — support handle on failures
+  failure_reason: z.string().optional(), // set when undelivered/failed
+  request_id: z.string().optional(), // req_… — support handle on failures
 });
 export type MessageDetail = z.infer<typeof messageDetail>;
 
@@ -81,9 +85,10 @@ export const sendSmsApiResponse = sendSmsResponse.extend({
 });
 export type SendSmsApiResponse = z.infer<typeof sendSmsApiResponse>;
 
-/** GET /v1/messages - newest-first tenant message log. */
+/** GET /v1/messages - newest-first tenant message log, cursor-paginated. */
 export const messageListResponse = z.object({
   messages: z.array(messageSummary),
+  next_cursor: nextCursor,
   request_id: z.string(),
 });
 export type MessageListResponse = z.infer<typeof messageListResponse>;

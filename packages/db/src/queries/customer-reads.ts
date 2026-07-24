@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import type { TenantDrizzleTx } from "../client.js";
 import { ledgerAccounts, ledgerEntries, messages } from "../schema/index.js";
 
@@ -37,6 +37,8 @@ export interface CustomerMessageRead {
   errorCode: string | null;
   createdAt: Date;
   updatedAt: Date;
+  /** created_at rendered at full µs precision — feeds the keyset cursor (JS Date is ms-only). */
+  cursorTs: string;
 }
 
 export async function readCustomerWallet(
@@ -86,6 +88,7 @@ export async function readCustomerWallet(
 
 const messageSelection = {
   id: messages.id,
+  cursorTs: sql<string>`to_char(${messages.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
   senderId: messages.senderId,
   status: messages.status,
   encoding: messages.encoding,
@@ -100,20 +103,44 @@ const messageSelection = {
   updatedAt: messages.updatedAt,
 };
 
+/** Keyset page input: fetch rows strictly older than `before` on the (created_at, id) sort.
+ *  `createdAt` is the µs-precise timestamp TEXT from a previous page's cursor — compared via
+ *  ::timestamptz so no precision is lost (a ms-truncated Date would skip sub-ms neighbours). */
+export interface CustomerMessagePage {
+  limit: number;
+  before?: { createdAt: string; id: string };
+}
+
 export async function listCustomerMessages(
   db: TenantDrizzleTx,
-  environmentId?: string | null,
+  environmentId: string | null | undefined,
+  page: CustomerMessagePage,
 ): Promise<CustomerMessageRead[]> {
+  // limit + 1: the extra row only signals "another page exists"; the caller slices it off.
   const rows = await db
     .select(messageSelection)
     .from(messages)
     .where(
-      environmentId
-        ? sql`${messages.environmentId} = ${environmentId}::uuid`
-        : undefined,
+      and(
+        environmentId
+          ? sql`${messages.environmentId} = ${environmentId}::uuid`
+          : undefined,
+        page.before
+          ? or(
+              // ::text::timestamptz (not a bare ::timestamptz): the postgres.js driver binds an
+              // ISO string such that a direct cast truncates to millisecond, silently skipping
+              // sub-ms rows and breaking the same-tx id tiebreak. The text hop preserves µs.
+              sql`${messages.createdAt} < ${page.before.createdAt}::text::timestamptz`,
+              and(
+                sql`${messages.createdAt} = ${page.before.createdAt}::text::timestamptz`,
+                lt(messages.id, page.before.id),
+              ),
+            )
+          : undefined,
+      ),
     )
     .orderBy(desc(messages.createdAt), desc(messages.id))
-    .limit(100);
+    .limit(page.limit + 1);
   return rows.map((row) => ({ ...row, costMinor: BigInt(row.costMinor) }));
 }
 

@@ -102,7 +102,7 @@ describe.sequential("real HTTP transport", () => {
       apiKey: "sk_test_http",
       baseUrl,
       maxRetries: 0,
-    }).sms.list({ timeout: 10 });
+    }).sms.list(undefined, { timeout: 10 });
     await expect(request).rejects.toMatchObject({
       code: "request_timeout",
       retryable: true,
@@ -116,7 +116,7 @@ describe.sequential("real HTTP transport", () => {
       apiKey: "sk_test_http",
       baseUrl,
       maxRetries: 0,
-    }).sms.list({ signal: controller.signal });
+    }).sms.list(undefined, { signal: controller.signal });
     controller.abort();
     await expect(request).rejects.toBeInstanceOf(UserAbortedError);
   });
@@ -130,7 +130,11 @@ describe.sequential("real HTTP transport", () => {
 });
 
 function sendMessages(response: ServerResponse): void {
-  json(response, 200, { messages: [], request_id: "req_list_1" });
+  json(response, 200, {
+    messages: [],
+    next_cursor: null,
+    request_id: "req_list_1",
+  });
 }
 
 function json(response: ServerResponse, status: number, body: unknown): void {

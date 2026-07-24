@@ -1,0 +1,48 @@
+---
+title: Two-way & keywords
+description: Receive inbound replies and STOP/START/HELP keywords — a sandbox capability today.
+---
+
+:::note[Availability]
+Inbound messaging currently works in **sandbox only**, simulated through the dashboard's virtual
+phone. There is no live carrier inbound (mobile-originated) ingestion or virtual-number provisioning
+yet. Build against the event shape now; the live path is on the roadmap.
+:::
+
+## The inbound event
+
+When a reply arrives on a sandbox virtual number, Fabric emits a `message.inbound`
+[webhook event](/docs/webhooks/events/):
+
+```ts
+if (event.type === "message.inbound") {
+  const { messageId, channel } = event.data; // InboundMessageWebhookData
+  await handleReply(messageId, channel);
+}
+```
+
+Verify the signature and dedupe on `event.id` exactly as you do for delivery events.
+
+## Keywords are handled for you
+
+`STOP`, `START`, and `HELP` are consent keywords, and Fabric applies them automatically:
+
+- **`STOP`** opts the recipient out. Subsequent promotional sends to that number are suppressed.
+- **`START`** opts the recipient back in.
+- **`HELP`** triggers the help response.
+
+You do not implement opt-out yourself — Fabric records it in the consent store so the send-path gate
+enforces it on your behalf. See [compliance](/docs/account/compliance/) for how opt-out interacts
+with transactional vs promotional traffic.
+
+## Test it in sandbox
+
+Send a sandbox message, then use the dashboard's virtual phone to reply (including a `STOP`), and
+watch the `message.inbound` event reach your webhook while the opt-out takes effect on the next
+promotional send. This lets you build and verify your inbound handling before any live inbound route
+exists.
+
+:::caution[Do not ship a live inbound feature yet]
+Because live inbound is not implemented, do not promise customers two-way messaging on a live route.
+Use this to prepare your handler, not to launch a live product surface.
+:::

@@ -51,6 +51,36 @@ export function stringField(value: unknown, name: string): string {
   return value;
 }
 
+export function nullableStringField(
+  value: unknown,
+  name: string,
+): string | null {
+  if (value === null) return null;
+  return stringField(value, name);
+}
+
+/**
+ * Build the `?limit=&cursor=` query for a paginated list. The limit is validated client-side so
+ * an out-of-range page size fails before any network call, mirroring the server's 1..100 rule.
+ */
+export function pageQueryString(params?: {
+  readonly limit?: number;
+  readonly cursor?: string;
+}): string {
+  if (!params) return "";
+  if (
+    params.limit !== undefined &&
+    (!Number.isInteger(params.limit) || params.limit < 1 || params.limit > 100)
+  ) {
+    throw new TypeError("`limit` must be an integer between 1 and 100.");
+  }
+  const query = new URLSearchParams();
+  if (params.limit !== undefined) query.set("limit", String(params.limit));
+  if (params.cursor) query.set("cursor", params.cursor);
+  const encoded = query.toString();
+  return encoded ? `?${encoded}` : "";
+}
+
 export function numberField(value: unknown, name: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new ApiShapeError(name);

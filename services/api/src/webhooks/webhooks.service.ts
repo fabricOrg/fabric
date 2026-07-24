@@ -17,10 +17,12 @@ import {
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
+import type { PageInput } from "../http/cursor.js";
+import { listEndpointDeliveries } from "./webhook-delivery-reads.js";
 import { emptyHealth, toDeliveryDto, toEndpointDto } from "./webhook-dto.js";
 import { webhookEnvScope } from "./webhook-env-scope.js";
 import { resolveWebhookTarget } from "./webhook-url-policy.js";
@@ -163,27 +165,10 @@ export class WebhooksService {
   async listDeliveries(
     tenantId: string,
     endpointId: string,
-    state?: "pending" | "delivering" | "delivered" | "dead",
-  ): Promise<WebhookDeliveryDto[]> {
-    return this.db.withTenantDrizzle(tenantId, async (tx) => {
-      const rows = await tx
-        .select({
-          delivery: webhookDeliveries,
-          eventType: outboxEvents.eventType,
-        })
-        .from(webhookDeliveries)
-        .innerJoin(outboxEvents, eq(outboxEvents.id, webhookDeliveries.eventId))
-        .where(
-          and(
-            eq(webhookDeliveries.tenantId, tenantId as TenantId),
-            eq(webhookDeliveries.endpointId, endpointId),
-            state ? eq(webhookDeliveries.state, state) : undefined,
-          ),
-        )
-        .orderBy(desc(webhookDeliveries.createdAt))
-        .limit(100);
-      return rows.map((row) => toDeliveryDto(row.delivery, row.eventType));
-    });
+    state: "pending" | "delivering" | "delivered" | "dead" | undefined,
+    page: PageInput,
+  ): Promise<{ deliveries: WebhookDeliveryDto[]; next_cursor: string | null }> {
+    return listEndpointDeliveries(this.db, tenantId, endpointId, state, page);
   }
 
   async disable(tenantId: string, id: string): Promise<void> {

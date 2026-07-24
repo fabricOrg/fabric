@@ -189,7 +189,15 @@ describeDb("durable endpoint-specific webhook delivery", () => {
         WHERE endpoint_id = ${failing.id} AND state = 'pending'`;
       await delivery.deliverPending();
     }
-    const [dead] = await webhooks.listDeliveries(tenantId, failing.id, "dead");
+    const deadPage = await webhooks.listDeliveries(
+      tenantId,
+      failing.id,
+      "dead",
+      {
+        limit: 50,
+      },
+    );
+    const dead = deadPage.deliveries[0];
     expect(dead?.attempts).toBe(10);
     if (!dead) throw new Error("delivery did not reach dead state");
 
@@ -198,9 +206,13 @@ describeDb("durable endpoint-specific webhook delivery", () => {
     ).rejects.toMatchObject({
       response: { error: { code: "webhook_delivery_not_replayable" } },
     });
-    expect(await webhooks.listDeliveries(otherTenantId, failing.id)).toEqual(
-      [],
-    );
+    expect(
+      (
+        await webhooks.listDeliveries(otherTenantId, failing.id, undefined, {
+          limit: 50,
+        })
+      ).deliveries,
+    ).toEqual([]);
 
     const replayed = await webhooks.replay(
       tenantId,
@@ -248,7 +260,13 @@ describeDb("durable endpoint-specific webhook delivery", () => {
     expect(listed.find((item) => item.id === healthy.id)?.status).toBe(
       "disabled",
     );
-    expect(await webhooks.listDeliveries(tenantId, healthy.id)).not.toEqual([]);
+    expect(
+      (
+        await webhooks.listDeliveries(tenantId, healthy.id, undefined, {
+          limit: 50,
+        })
+      ).deliveries,
+    ).not.toEqual([]);
   });
 
   it("exposes only secret prefixes and rejects private URLs by default", async () => {

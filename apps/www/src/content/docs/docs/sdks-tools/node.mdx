@@ -1,0 +1,102 @@
+---
+title: Node.js SDK
+description: Install and configure the TypeScript SDK, and understand its resources, retries, and errors.
+---
+
+`@fabric-messaging/sdk` is the official, server-only TypeScript SDK. It targets Node.js 22+ and ships
+as ESM.
+
+```bash
+npm install @fabric-messaging/sdk
+```
+
+## Construct the client
+
+```ts
+import { Fabric } from "@fabric-messaging/sdk";
+
+const fabric = new Fabric({
+  apiKey: process.env.FABRIC_API_KEY!, // required; sk_test_ or sk_live_
+  timeout: 10_000,                     // ms per request, default 10_000
+  maxRetries: 2,                       // default 2
+});
+```
+
+| Option | Default | Notes |
+| --- | --- | --- |
+| `apiKey` | — | Required. The prefix selects sandbox vs live. |
+| `timeout` | `10_000` | Per-request timeout in milliseconds. |
+| `maxRetries` | `2` | Retries for eligible failures (see below). |
+| `baseUrl` | Fabric endpoint | Loopback/private testing only; HTTPS unless localhost. |
+| `fetch` | global `fetch` | Inject a custom fetch implementation. |
+| `logger` | — | A `FabricLogger` for `request` / `response` / `retry` events. |
+
+`Fabric` is also exported as `MessagingClient`. It throws if constructed in a browser.
+
+## Resources
+
+Each namespace maps to a part of the API:
+
+| Namespace | Methods |
+| --- | --- |
+| `fabric.messages` | `preview(key, …)` · `send(key, …)` · `retrieveDelivery(id)` |
+| `fabric.sms` | `send` · `sendBatch` · `retrieve` · `retrieveBatch` · `list` · `iterate` |
+| `fabric.email` | `send` · `retrieve` · `list` · `iterate` |
+| `fabric.verify` | `start` · `check` |
+| `fabric.senderIds` | `create` · `list` |
+| `fabric.wallet` | `retrieve` |
+| `fabric.webhooks` | `create` · `list` · `remove` · `listDeliveries` · `iterateDeliveries` · `replayDelivery` · `verify` |
+
+Every request-returning method resolves to a `FabricResponse<T>`:
+
+```ts
+{ data: T; requestId?: string; retryCount: number; statusCode: number }
+```
+
+Read your result from `.data`; `.requestId` is worth logging for support.
+
+## Retries
+
+The SDK retries automatically on `429`, `500`, `502`, `503`, and `504`. A request is retried **only**
+if it is a `GET` or was sent with an `idempotencyKey` — so a non-idempotent write is never silently
+duplicated. Backoff is randomised exponential, capped at 4 seconds, and honours `Retry-After` on rate
+limits.
+
+```ts
+await fabric.sms.send(params, { idempotencyKey: "op-123" }); // now eligible for retry
+```
+
+## Typed errors
+
+Catch the exported classes rather than branching on message text:
+
+```ts
+import { RateLimitError, ValidationError, AuthenticationError } from "@fabric-messaging/sdk";
+
+try {
+  await fabric.messages.send("order.shipped", opts);
+} catch (err) {
+  if (err instanceof RateLimitError) {
+    // err.retryAfter (seconds) may be set
+  } else if (err instanceof ValidationError) {
+    // err.code, err.details.param
+  } else if (err instanceof AuthenticationError) {
+    // bad or revoked key
+  }
+}
+```
+
+| Class | When |
+| --- | --- |
+| `AuthenticationError` | `401` — key missing, malformed, or revoked. |
+| `AuthorizationError` | `403` — key lacks the required scope. |
+| `ValidationError` | `400` / `422`, or a client-side input error before the request. |
+| `NotFoundError` | `404`. |
+| `ConflictError` | `409` — e.g. an idempotency key reused with a different body. |
+| `RateLimitError` | `429` — carries `retryAfter` when the server sends it. |
+| `TimeoutError` · `ConnectionError` · `UserAbortedError` | Transport failures. |
+| `WebhookVerificationError` | A signature failed to verify. |
+| `ResponseValidationError` | The response did not match the expected shape. |
+
+Every error carries a stable `code`, and `retryable` tells you whether the SDK considered it eligible
+for a retry.

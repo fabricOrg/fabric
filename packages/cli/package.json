@@ -1,8 +1,8 @@
 {
   "name": "@fabric-messaging/cli",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.6",
   "description": "Contract generation CLI for Fabric managed messaging",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "fabric": "./dist/bin.js"

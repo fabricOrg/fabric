@@ -6,17 +6,33 @@ import {
 } from "@app/contracts";
 import { type AppDb, findCustomerMessage, listCustomerMessages } from "@app/db";
 import { notFound } from "../http/api-error.js";
+import { encodeCursor, type KeysetCursor } from "../http/cursor.js";
 
 /** Read-side message shaping for SmsService (split out for the file-length guard). */
+
+export interface MessagePageResult {
+  messages: MessageSummary[];
+  next_cursor: string | null;
+}
 
 export async function listMessages(
   db: AppDb,
   tenantId: string,
-  environmentId?: string | null,
-): Promise<MessageSummary[]> {
+  environmentId: string | null | undefined,
+  page: { limit: number; before?: KeysetCursor },
+): Promise<MessagePageResult> {
   return db.withTenantDrizzle(tenantId, async (tx) => {
-    const rows = await listCustomerMessages(tx, environmentId);
-    return rows.map(toMessageSummary);
+    const rows = await listCustomerMessages(tx, environmentId, page);
+    const hasMore = rows.length > page.limit;
+    const visible = hasMore ? rows.slice(0, page.limit) : rows;
+    const last = visible[visible.length - 1];
+    return {
+      messages: visible.map(toMessageSummary),
+      next_cursor:
+        hasMore && last
+          ? encodeCursor({ createdAt: last.cursorTs, id: last.id })
+          : null,
+    };
   });
 }
 
@@ -34,7 +50,7 @@ export async function getMessage(
     const summary = toMessageSummary(row);
     return {
       ...summary,
-      senderId: row.senderId,
+      sender_id: row.senderId,
       redacted: true,
       timeline: [
         {
@@ -42,7 +58,7 @@ export async function getMessage(
           at: row.updatedAt.toISOString(),
         },
       ],
-      ...(row.errorCode ? { failureReason: row.errorCode } : {}),
+      ...(row.errorCode ? { failure_reason: row.errorCode } : {}),
     };
   });
 }
@@ -70,7 +86,7 @@ function toMessageSummary(row: {
       minor: row.costMinor.toString(),
     },
     provider: row.providerSlug ?? "pending",
-    deliveryMode: row.deliveryMode === "virtual" ? "virtual" : "live",
-    createdAt: row.createdAt.toISOString(),
+    delivery_mode: row.deliveryMode === "virtual" ? "virtual" : "live",
+    created_at: row.createdAt.toISOString(),
   };
 }

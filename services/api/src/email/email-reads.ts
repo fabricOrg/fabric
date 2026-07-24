@@ -1,6 +1,7 @@
 import type { EmailMessage } from "@app/contracts";
 import type { AppDb } from "@app/db";
 import { notFound } from "../http/api-error.js";
+import { encodeCursor, type PageInput } from "../http/cursor.js";
 import type { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { hydrateEmailRows } from "./email-content.js";
 
@@ -12,23 +13,51 @@ import { hydrateEmailRows } from "./email-content.js";
 
 type Row = Record<string, unknown>;
 
+export interface EmailPageResult {
+  messages: EmailMessage[];
+  next_cursor: string | null;
+}
+
 export async function listEmails(
   db: AppDb,
   vault: PiiVaultService,
   tenantId: string,
   environmentId: string,
-): Promise<EmailMessage[]> {
+  page: PageInput,
+): Promise<EmailPageResult> {
+  // limit + 1 signals a further page. The cursor timestamp is compared and re-emitted at full µs
+  // precision (cursor_ts) — a JS Date would truncate to ms and skip sub-ms neighbours.
   const rows = (await db.withTenant(
     tenantId,
     (tx) => tx`
       SELECT id, subject_id, content_pii_id, status::text, provider_slug,
-             error_code, created_at
+             error_code, created_at,
+             to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_ts
       FROM email_messages
       WHERE environment_id = ${environmentId}
+      ${
+        // ::text::timestamptz: a direct ::timestamptz on the driver-bound ISO string truncates
+        // to millisecond, skipping sub-ms neighbours; the text hop keeps full µs precision.
+        page.before
+          ? tx`AND (created_at, id) < (${page.before.createdAt}::text::timestamptz, ${page.before.id})`
+          : tx``
+      }
       ORDER BY created_at DESC, id DESC
-      LIMIT 100`,
+      LIMIT ${page.limit + 1}`,
   )) as Row[];
-  return hydrateEmailRows(vault, tenantId, rows);
+  const hasMore = rows.length > page.limit;
+  const visible = hasMore ? rows.slice(0, page.limit) : rows;
+  const last = visible[visible.length - 1];
+  return {
+    messages: await hydrateEmailRows(vault, tenantId, visible),
+    next_cursor:
+      hasMore && last
+        ? encodeCursor({
+            createdAt: String(last.cursor_ts),
+            id: String(last.id),
+          })
+        : null,
+  };
 }
 
 export async function getEmail(

@@ -1,0 +1,53 @@
+---
+title: Email templates
+description: Author email as a managed definition with a from address, per-locale variants, and size tiers.
+---
+
+An email [message definition](/docs/messaging/message-definitions/) lets non-developers own the
+subject and body. Your application sends by key and supplies variables; the definition renders the
+rest. Email and SMS share one authoring model — the channel is chosen when the definition is created
+and is fixed for its lifetime.
+
+## What an email definition carries
+
+- **`from`** — the sender identity, authored on the definition. In sandbox an absent `from` falls
+  back to a synthetic sandbox address; live sending requires a [verified domain](/docs/email/domains-dns/).
+- **Subject, text, and HTML** — with variables interpolated from the `data` you send.
+- **Per-locale variants** — override the subject or body for a locale; the base content fills any gap.
+
+## Variables and escaping
+
+Variables use the same stable-key grammar as SMS. In the HTML body, variable **values are HTML-escaped**
+so a value containing `<` or `&` cannot inject markup. The subject rejects carriage returns and line
+feeds, closing the header-injection vector. You never need to pre-escape values yourself.
+
+## Preview shows the rendered result and its cost
+
+```ts
+const preview = await fabric.messages.preview("receipt.paid", {
+  channel: "email",
+  data: { name: "Ama", amount: "GHS 120.00" },
+  to: "ama@example.com",
+});
+
+const email = preview.data.emailPreview; // null unless the definition is an email channel
+console.log(email?.subject, email?.sizeBytes, email?.tier, email?.costMinor);
+```
+
+Email is priced by rendered size, not segments. `emailPreview.tier` is one of `standard`, `large`,
+or `xlarge`, and a message over the hard ceiling is refused before it is priced — a `blocker`, not a
+silent truncation. Preview and send render byte-for-byte identically, so the previewed cost is the
+cost you pay.
+
+## Send by key
+
+```ts
+await fabric.messages.send("receipt.paid", {
+  to: "ama@example.com",
+  data: { name: "Ama", amount: "GHS 120.00" },
+  idempotencyKey: "receipt:GH-4821",
+});
+```
+
+The definition's channel makes `to` an email address; a phone number is refused before acceptance.
+Use [direct email](/docs/email/) instead when your server already owns the subject and body.

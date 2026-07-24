@@ -1,8 +1,4 @@
-import type {
-  MessageDetail,
-  MessageSummary,
-  SendSmsResponse,
-} from "@app/contracts";
+import type { MessageDetail, SendSmsResponse } from "@app/contracts";
 import type { AppDb } from "@app/db";
 import {
   failPreparedSend as engineFailPreparedSend,
@@ -17,6 +13,7 @@ import { ConfigService } from "@nestjs/config";
 import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest } from "../http/api-error.js";
+import type { KeysetCursor } from "../http/cursor.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { AutoTopupService } from "../payments/auto-topup.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
@@ -33,7 +30,11 @@ import {
   processSmsJob,
   recoverPendingSmsSafely,
 } from "./sms-queue-operations.js";
-import { getMessage, listMessages } from "./sms-read.js";
+import {
+  getMessage,
+  listMessages,
+  type MessagePageResult,
+} from "./sms-read.js";
 import { SmsRuntimeService } from "./sms-runtime.service.js";
 import type { SmsSendJob } from "./sms-send.job.js";
 import { VirtualPhoneService } from "./virtual-phone.service.js";
@@ -260,9 +261,10 @@ export class SmsService {
 
   async list(
     tenantId: string,
-    environmentId?: string | null,
-  ): Promise<MessageSummary[]> {
-    return listMessages(this.db, tenantId, environmentId);
+    environmentId: string | null | undefined,
+    page: { limit: number; before?: KeysetCursor },
+  ): Promise<MessagePageResult> {
+    return listMessages(this.db, tenantId, environmentId, page);
   }
 
   async get(

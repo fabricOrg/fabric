@@ -1,0 +1,57 @@
+---
+title: Webhooks
+description: Receive delivery events, verify every signature, and process at-least-once safely.
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+An accepted send only means Fabric owns the work. The terminal outcome — delivered, undelivered,
+failed — arrives later as a signed webhook event. Fabric delivers **at least once**, so your endpoint
+must verify the signature against the raw body, respond quickly, and treat each event idempotently.
+
+## Verify with the SDK
+
+```ts
+import { Fabric } from "@fabric-messaging/sdk";
+
+const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY! });
+
+export async function POST(request: Request) {
+  const payload = await request.text();
+
+  const event = fabric.webhooks.verify({
+    payload,
+    signature: request.headers.get("fabric-signature") ?? undefined,
+    secret: process.env.FABRIC_WEBHOOK_SECRET!,
+  });
+
+  await processOnce(event.id, event);
+  return new Response("ok", { status: 200 });
+}
+```
+
+Pass the **raw** request text — never a parsed-and-reserialised object. Any byte change invalidates
+the HMAC. `verify` returns a typed `WebhookEvent` or throws `WebhookVerificationError`.
+
+<CardGrid>
+  <LinkCard
+    title="Events"
+    description="The event catalog and the payload shape for each type."
+    href="/docs/webhooks/events/"
+  />
+  <LinkCard
+    title="Signatures"
+    description="The signing scheme, tolerance, and every verification failure code."
+    href="/docs/webhooks/signatures/"
+  />
+  <LinkCard
+    title="Retries & idempotency"
+    description="Delivery states, replay of a dead delivery, and safe consumers."
+    href="/docs/webhooks/retries-idempotency/"
+  />
+</CardGrid>
+
+:::danger[Secret handling]
+The signing secret is shown once, when the endpoint is created. Store it in a secret manager, never
+log it, and rotate it if it may have been exposed.
+:::

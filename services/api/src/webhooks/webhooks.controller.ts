@@ -25,6 +25,7 @@ import {
   requireScope,
 } from "../api-keys/api-key.guard.js";
 import { invalidRequest, newRequestId } from "../http/api-error.js";
+import { parsePageQuery } from "../http/cursor.js";
 import { WebhooksService } from "./webhooks.service.js";
 
 interface AuthedRequest {
@@ -101,6 +102,7 @@ export class WebhooksController {
     @Req() req: AuthedRequest,
     @Param("id") id: string,
     @Query("state") state: unknown,
+    @Query() query: Record<string, unknown>,
   ): Promise<ListWebhookDeliveriesResponse> {
     const tenant = requireScope(req.tenant, "api_keys:read");
     const parsedState = webhookDeliveryStateSchema.safeParse(state);
@@ -111,12 +113,14 @@ export class WebhooksController {
         "state",
       );
     }
+    const page = parsePageQuery(query);
     return {
-      deliveries: await this.webhooks.listDeliveries(
+      ...(await this.webhooks.listDeliveries(
         tenant.id,
         id,
         parsedState.success ? parsedState.data : undefined,
-      ),
+        page,
+      )),
       request_id: newRequestId(),
     };
   }

@@ -1,7 +1,131 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-07-18. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-07-24. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
+
+## Latest (2026-07-24, night): MIT licensing + pricing ADR 0010 (proposed)
+
+- **SDK + CLI now MIT** (`95af820`) — resolves the publish blocker (was UNLICENSED + public
+  publishConfig). Copyright "Fabric", 2026. Server/dashboard/API stay proprietary. **Publish still
+  needs human go.**
+- **Pricing model designed → `docs/decisions/0010-pricing-and-billing-model.md` (proposed).** Shaped
+  with the product owner over a long session; grounded in a full wallet/rating recon + web research
+  on email/SMS pricing. Decisions locked: two modes — **subscription** (existing money wallet, PAYG,
+  auto-topup) + **tokens** (count-based per-channel counters, NO wallet, one-off, price-locked,
+  procured on demand — no physical pool since Arkesel supply is elastic); **price books** (named
+  rate plans per account, admin-console configurable, control-plane read-through cache, fail-open
+  except money); **tokens priced above subscription** for lock-in + spend-based auto price-book
+  upgrade; SMS per-segment, **email flat per-send** (retire the un-cost-justified 1/3/6 size tier),
+  voice roadmap-only; **no token expiry**; send path = price-book → tokens-first → wallet → reject.
+  **Email ESP = Amazon SES** (margin-first, eu-west-1, own deliverability; behind the existing
+  `FakeEmailProvider`; live human-gated). Email attachments deferred (keep 256 KiB cap).
+- **NOT yet done / open**: ADR needs product-owner **ratification** + a wallet/security review
+  before any build; **unused-token refund policy** undecided (drives revenue recognition). No code
+  until ratified. Phased build sequence is in the ADR Follow-up.
+
+## Earlier (2026-07-24, evening): SDK 1.0-path batch — casing, pagination, beta.6 (committed, not pushed)
+
+Three more commits on the same branch:
+
+- **`14a20bf` refactor(sms)** — BREAKING: SMS read wire fields normalized to snake_case
+  (`created_at`, `delivery_mode`, `sender_id`, `failure_reason`, `request_id`) across contracts →
+  API serializer (`sms-read.ts`) → SDK parsers → dashboard (messages-table, overview route). SDK TS
+  surface stays camelCase. openapi regenerated.
+- **`a0a8331` feat(api)** — cursor pagination (keyset `created_at DESC, id DESC`, opaque base64url
+  cursor, limit 1..100 default 50, limit+1 detection) on GET /v1/messages, /v1/email/messages,
+  /v1/webhooks/:id/deliveries. New `services/api/src/http/cursor.ts` (codec + parsePageQuery,
+  fails closed `invalid_cursor`/`invalid_page`); contracts `pagination.ts` + required nullable
+  `next_cursor` on the 3 envelopes. SDK: `list({limit,cursor})` → `{items,nextCursor}` page +
+  `sms.iterate`/`email.iterate`/`webhooks.iterateDeliveries` generators. Splits for file-length
+  guard: `sdk/src/webhook-parsers.ts`, `api/src/webhooks/webhook-delivery-reads.ts`. www docs
+  snippets updated (sms, email index, retries-idempotency, node table).
+- **`76efda6` chore(sdk)** — SDK+CLI both bumped **0.1.0-beta.6** (CLI adopts SDK version each
+  release; CLI CHANGELOG added). New `pnpm playground:refresh` packs SDK into
+  `examples/sdk-playground/vendor/fabric-messaging-sdk.tgz` (STABLE name; old versioned tgz
+  deleted; playground dep updated). ESM-only decision recorded (Node≥22 require(esm); no CJS).
+
+**Reviewed + hardened** (commits `<hotfix>` after the batch): independent reviewer flagged a real
+keyset bug — the cursor round-tripped `created_at` through a JS `Date` (ms) while timestamptz is µs,
+skipping sub-ms rows and breaking the same-transaction id tiebreak (a 100-msg batch shares one
+`now()`). Fixed in two steps: (a) carry the cursor as µs-precise `to_char` TEXT; (b) **compare via
+`::text::timestamptz`, NOT a bare `::timestamptz`** — verified against real Postgres that the
+postgres.js driver binds the ISO string so a direct `::timestamptz` cast RE-TRUNCATES to ms (a SQL
+literal keeps µs; a bound param does not). New `sms-pagination.integration.spec.ts` walks a page
+boundary landing inside a 3-row µs-identical batch and asserts every row once — fails with a bare
+cast. Commits: `1b66e88` (final cast fix + integration guard) on top of the earlier partial fix.
+
+**Driver gotcha to remember**: with postgres.js/drizzle, `${isoString}::timestamptz` truncates to
+millisecond; use `${isoString}::text::timestamptz` when µs matters.
+
+**Gates run**: SDK `release:check` green; CLI `release:check` green; API tsc + 167 unit +
+sms-pagination integration green; dashboard + contracts tsc clean. **NOT yet done**: full
+`verify:push`; push/PR (needs human go). Earlier batches (www + SDK audit fixes) also independently
+reviewed.
+
+**Still parked for human decisions**: SDK+CLI license (UNLICENSED vs public publish — blocker),
+public domain (site/sitemap/canonical/absolute og:image), www deploy to Vercel, legal pages,
+pricing numbers. Remaining engineering ticket: contracts→OpenAPI generator (openapi-definitions.mjs
+still hand-maintained).
+
+## Earlier (2026-07-24, later): www polish + SDK audit fixes (committed, not pushed)
+
+Same branch, five commits on top of `9c61e91`: `2c6563d` (HANDOFF), `ae2cc4b` (consistency/honesty/
+spacing/motion polish incl. removing a fabricated 99.2% stat), `ed62029` (duotone animated capability
+icons + **catch-and-release Lifecycle rewrite** + OG card `public/og.png` + branded 404 + docs-header
+mark + preconnects), `b482ecc` (SDK: `InsufficientFundsError` 402, webhooks `remove`/`disable` =
+soft-delete documented, README/CHANGELOG accuracy, lint in `release:check`, 5 new spec files — 55/55).
+
+- **Lifecycle now "catch & release"**: per-stage rows; card pins (`position: sticky`) near viewport
+  centre, description scrolls up the centre thread, and because card+copy share the same fixed
+  `--lc-band` at the row's end the sticky range ends exactly when they align — the pair exits
+  together. Verified in headless Chromium (local playwright + `chromium-1208` binaries) at 1440/390px.
+  **Gotcha**: Vite once served a stale compiled stylesheet after a full-file component rewrite
+  (new markup + old CSS = "broken" screenshot); fix = `astro dev stop`, delete `apps/www/node_modules/.vite`
+  + `.astro`, `start`.
+- **SDK audit verdicts (verified, not yet fixed)**: license contradiction UNLICENSED vs public+provenance
+  publish (needs human license choice); hand-maintained `openapi-definitions.mjs` (drift risk — wants a
+  contracts→OpenAPI generator); SMS read endpoints are camelCase on the wire per `@app/contracts` while
+  email/webhooks are snake_case — normalization = coordinated pre-1.0 breaking change (deferred);
+  CLI beta.1 vs SDK beta.5 skew; playground pins a vendored tgz.
+- Reviewer false positive to remember: "SMS camelCase is a bug" — it matches the real contract
+  (`packages/contracts/src/sms.ts:30-41`, `services/api/src/sms/sms-read.ts:73`).
+
+## Earlier (2026-07-24): apps/www — SDK-only docs + landing redesign (committed, not pushed)
+
+Branch `feature/ops-www-scaffold`, commit **`9c61e91`** (45 files, +2630/−521). All pre-commit guards
+passed (branch-name, file-length, browser-safe, biome, commit-msg). **Nothing pushed** — needs a human
+go for the shared ref. Dev server: `apps/www` runs a **daemonized** `astro dev` on **:3400** —
+`pnpm --filter @app/www start | stop | status | logs` (added this session).
+
+- **Docs (ADR-0009 w-3) — full SDK-first IA, verified against the real SDK surface** (`packages/sdk`):
+  get-started (+ sandbox-and-keys, authentication) · quickstarts (Node/Next/CLI) · messaging (SMS,
+  sender-IDs w/ GH-NG registration, delivery-reports, message-definitions) · email (domains-DNS,
+  templates, deliverability) · webhooks (events, signatures, retries-idempotency) · SDKs & tools
+  (Node, CLI) · guides (OTP, transactional, broadcast, two-way) · account (wallet-billing, rate-limits
+  **120/min key + 600/min tenant, real numbers**, going-live, compliance GH-DPA/NG-NDPR). **SDK-ONLY
+  directive**: removed API-reference / curl / OpenAPI / Postman pages; sidebar restructured. Two
+  read-only recon agents mapped the surface first — facts corrected drift (managed vs SMS delivery
+  states, webhook event names, wallet shape). Honesty holds: inbound/two-way labelled **sandbox-only**
+  (no live MO); no MCP page (none exists); DNS record values marked illustrative.
+- **Landing (`src/pages/index.astro`) — guided product story**, visual language preserved (indigo/gold,
+  Clash Display, dotted canvas, floating cutouts): hero (dispatch illustration as product-hero, floats)
+  → why-Fabric → honest engineering-trust strip (NO fabricated metrics — real guarantees only) →
+  **signature Lifecycle scroll** → developer-experience (live `InteractiveDemo`) → platform capabilities
+  → reliability+security → pricing (wallet flow) → coverage (map + legend) → dashboard preview →
+  business workflows (fintech/ecom/saas + restored `connected-people` webp) → quickstart → FAQ → CTA →
+  expanded footer. Spacing-scale tokens `--section-y`/`--head-gap`/`--card-pad`.
+- **Signature Lifecycle** (`src/components/il/Lifecycle.astro`): native-scroll sticky stage that swaps
+  7 stage cards (code → render → reserve/queue → SMS → email → webhook → analytics) as a **connected
+  progress thread** advances — vertical fill, three-state nodes (done filled / live glowing ring /
+  upcoming muted), and a card→thread connector anchored to the pinned card (dot on the thread).
+  IntersectionObserver-driven, reduced-motion safe, keyboard/SR-friendly.
+- **Illustrations**: user generated transparent raster in ChatGPT GPT-5.6 (dispatch/architecture/
+  coverage/wallet/reliability) — no image-gen tool exists in-session (Canva/Figma/mcp-image all
+  ruled out; mcp-image needs a Gemini/OpenAI key the user lacks). Optimized to webp via `astro:assets`
+  (`src/assets/il/`). Dashboard mock is `src/components/il/Dashboard.astro` (SVG/HTML).
+- **NOT independently reviewed** (codex credits out, gemini dead) — self-reviewed build + visual (Chrome).
+  Remaining keynote chapters deferred: bold trust band, section transitions, richer dashboard, footer
+  ecosystem.
 
 ## Latest (2026-07-21): sandbox program kickoff (SDK-007→008→010) — design only, no code
 

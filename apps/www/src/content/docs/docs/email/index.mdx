@@ -1,0 +1,73 @@
+---
+title: Email
+description: Send transactional text or HTML email from the Fabric SDK and follow the result.
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Send direct email when your server already owns the rendered subject and body. Use a
+[message definition](/docs/email/templates/) when non-developers should change the content without a
+deploy.
+
+## Send
+
+```ts
+const response = await fabric.email.send(
+  {
+    to: "ama@example.com",
+    from: "receipts@your-domain.example",
+    replyTo: "support@your-domain.example",
+    subject: "Receipt for order GH-4821",
+    text: "Thanks Ama. Your payment was received.",
+    html: "<p>Thanks Ama. Your payment was received.</p>",
+  },
+  { idempotencyKey: "receipt:GH-4821" },
+);
+
+console.log(response.data.id, response.data.status);
+```
+
+At least one of `text` or `html` is required. Supplying both gives clients a safe plain-text fallback
+and improves deliverability. An idempotency key is optional but recommended so a retry does not send
+twice.
+
+## Retrieve and list
+
+```ts
+const message = await fabric.email.retrieve(response.data.id);
+console.log(message.data.status, message.data.errorCode);
+
+const page = await fabric.email.list({ limit: 50 });
+console.log(page.data.items.length, page.data.nextCursor);
+
+for await (const recent of fabric.email.iterate()) {
+  console.log(recent.id, recent.status);
+}
+```
+
+`retrieve` returns the `EmailMessage` — `status`, `from`, `subject`, `provider`, and a nullable
+`errorCode`. `list` is cursor-paginated (`limit` 1–100, default 50): each page carries `items` and
+an opaque `nextCursor` (null on the last page). `iterate` follows the cursor for you.
+
+<CardGrid>
+  <LinkCard
+    title="Domains & DNS"
+    description="Configure SPF, DKIM, and DMARC so live mail authenticates and lands."
+    href="/docs/email/domains-dns/"
+  />
+  <LinkCard
+    title="Templates"
+    description="Author email as a managed definition with per-locale variants."
+    href="/docs/email/templates/"
+  />
+  <LinkCard
+    title="Deliverability"
+    description="Practices that keep transactional mail out of spam."
+    href="/docs/email/deliverability/"
+  />
+</CardGrid>
+
+:::caution[Authenticate your domain before going live]
+Sandbox email uses a fake provider and never reaches a real inbox. Do not use a live `from` address
+until its domain is configured and verified — unauthenticated mail is filtered or rejected.
+:::

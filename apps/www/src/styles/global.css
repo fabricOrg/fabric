@@ -1,0 +1,134 @@
+/* Load the brand fonts and bind them to the --font-* vars @app/ui expects (the product apps supply
+ * these via next/font; Astro supplies them here). Clash Display = Fontshare; Inter + JetBrains Mono =
+ * Google. Without this the display/mono vars fall back to system fonts and the site reads generic. */
+@import url("https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@import "@app/ui/theme.css";
+
+:root {
+  --font-clash: "Clash Display";
+  --font-inter: "Inter";
+  --font-jbm: "JetBrains Mono";
+
+  /* Channel + status hues shared by the landing and every SVG illustration.
+   * SMS = brand indigo, Email = teal; ok/warn map to the design-system status tokens. */
+  --sms: var(--primary);
+  --email: #0d9488;
+  --ok: var(--success, #16a34a);
+  --warn: var(--warning, #d97706);
+}
+
+:root[data-theme="dark"] {
+  --email: #2dd4bf;
+}
+
+/* Starlight's palette names describe contrast order, not literal colours:
+ * --sl-color-white is the strongest foreground in both themes and --sl-color-black is the canvas.
+ * Map that contract explicitly. Mapping "white" to --card made dark-mode headings disappear. */
+:root {
+  --sl-font: var(--font-sans);
+  --sl-font-mono: var(--font-mono);
+  --sl-content-width: 48rem;
+  --sl-sidebar-width: 17.5rem;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --sl-color-white: #ecebf3;
+  --sl-color-gray-1: #d7d6e2;
+  --sl-color-gray-2: #a6a4bc;
+  --sl-color-gray-3: #85839e;
+  --sl-color-gray-4: #55546a;
+  --sl-color-gray-5: #2c2c3e;
+  --sl-color-gray-6: #1d1d2b;
+  --sl-color-black: #141420;
+  --sl-color-accent: #8e8fe4;
+  --sl-color-accent-high: #c7c8f2;
+  --sl-color-accent-low: #28294a;
+  --sl-color-text: #c8c7d5;
+  --sl-color-text-accent: #b6b7ef;
+  --sl-color-text-invert: #141420;
+  --sl-color-bg: #141420;
+  --sl-color-bg-nav: #181824;
+  --sl-color-bg-sidebar: #181824;
+  --sl-color-bg-inline-code: #262634;
+  --sl-color-bg-accent: #8e8fe4;
+  --sl-color-hairline-light: #38384a;
+  --sl-color-hairline: #2c2c3e;
+  --sl-color-hairline-shade: #101019;
+}
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --sl-color-white: #1a1b2e;
+  --sl-color-gray-1: #2d2f45;
+  --sl-color-gray-2: #4b4f65;
+  --sl-color-gray-3: #667085;
+  --sl-color-gray-4: #98a0b1;
+  --sl-color-gray-5: #dfe3eb;
+  --sl-color-gray-6: #eef0f5;
+  --sl-color-gray-7: #f7f8fa;
+  --sl-color-black: #ffffff;
+  --sl-color-accent: #383a96;
+  --sl-color-accent-high: #2a2b72;
+  --sl-color-accent-low: #e7e7f4;
+  --sl-color-text: #4b4f65;
+  --sl-color-text-accent: #383a96;
+  --sl-color-text-invert: #ffffff;
+  --sl-color-bg: #fcfcfd;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: #ffffff;
+  --sl-color-bg-inline-code: #eef0f5;
+  --sl-color-bg-accent: #383a96;
+  --sl-color-hairline-light: #dfe3eb;
+  --sl-color-hairline: #dfe3eb;
+  --sl-color-hairline-shade: #cbd1dc;
+}
+
+html {
+  background: var(--sl-color-bg);
+}
+
+body {
+  min-height: 100vh;
+}
+
+.site-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.sl-markdown-content :is(h1, h2, h3) {
+  font-family: var(--font-display);
+  letter-spacing: 0;
+}
+
+.sl-markdown-content a {
+  text-underline-offset: 0.2em;
+}
+
+.sl-markdown-content code {
+  border-radius: 0.2rem;
+}
+
+.sl-markdown-content .card {
+  border-radius: 0.35rem;
+}
+
+/* Starlight rotates card-icon colours per card (amber/violet/green tiles). Pin them all to one
+ * brand-indigo tile so the docs match the landing's disciplined colour system. */
+.sl-markdown-content .card .icon {
+  color: var(--sl-color-accent);
+  background-color: var(--sl-color-accent-low);
+  border-color: color-mix(in oklab, var(--sl-color-accent) 30%, transparent);
+}
+
+.sidebar-content a[aria-current="page"] {
+  font-weight: 600;
+}
+
+:focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 3px;
+}

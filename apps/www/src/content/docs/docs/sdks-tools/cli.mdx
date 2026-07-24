@@ -1,0 +1,57 @@
+---
+title: CLI
+description: Generate and verify a typed catalog of your definition keys with the fabric CLI.
+---
+
+`@fabric-messaging/cli` provides the `fabric` binary. Its job is the typed **definition catalog** —
+it reads your released [message definitions](/docs/messaging/message-definitions/) and produces a
+`FabricCatalog` type the SDK uses to check keys and variables at compile time.
+
+```bash
+npm install --save-dev @fabric-messaging/cli
+```
+
+## Configuration
+
+The CLI reads the same environment as the SDK:
+
+- `FABRIC_API_KEY` — required; must begin `sk_test_` or `sk_live_`. The prefix selects the environment.
+- `FABRIC_BASE_URL` — optional override for loopback/private testing.
+
+It redacts `sk_test_…` / `sk_live_…` patterns from its own error output, but still treat it as a
+secret-bearing tool.
+
+## Commands
+
+Only one resource exists — `definitions` — with two subcommands.
+
+```bash
+# Generate the typed catalog (default output: fabric.generated.ts)
+fabric definitions generate --output fabric.generated.ts
+
+# Verify the committed catalog still matches the released contract
+fabric definitions check
+```
+
+- **`generate`** fetches the released contract for the key's environment and writes the catalog file.
+  It prints `Generated <env> definitions at <output>`.
+- **`check`** regenerates in memory and compares against the committed file. On a mismatch it exits
+  non-zero with "Definition catalog drift detected" — wire it into CI so a definition change that
+  outdates your committed types fails the build.
+
+## Use the generated catalog
+
+```ts
+import { Fabric } from "@fabric-messaging/sdk";
+import type { FabricCatalog } from "./fabric.generated";
+
+const fabric = new Fabric<FabricCatalog>({ apiKey: process.env.FABRIC_API_KEY! });
+```
+
+With the catalog applied, `messages.send` / `preview` autocomplete keys and type-check the `data` you
+pass against each definition's variables.
+
+:::note[Commit the generated file, not the key]
+Commit `fabric.generated.ts` so `check` has a baseline to compare against. Never commit the API key or
+any generated file that would contain a secret.
+:::

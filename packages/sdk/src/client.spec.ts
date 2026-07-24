@@ -63,7 +63,9 @@ describe("Fabric client", () => {
   it("uses the deployed Fabric API without consumer endpoint configuration", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(json({ messages: [], request_id: "req_default" }));
+      .mockResolvedValue(
+        json({ messages: [], next_cursor: null, request_id: "req_default" }),
+      );
     await new Fabric({ apiKey: "sk_test_example", fetch }).sms.list();
     expect(String(fetch.mock.calls[0]?.[0])).toBe(
       "https://d2umm5b2x22zvp.cloudfront.net/v1/messages",
@@ -168,7 +170,9 @@ describe("Fabric client", () => {
       .mockResolvedValueOnce(
         json({ error: { code: "upstream", message: "Unavailable" } }, 503),
       )
-      .mockResolvedValueOnce(json({ messages: [], request_id: "req_ok" }));
+      .mockResolvedValueOnce(
+        json({ messages: [], next_cursor: null, request_id: "req_ok" }),
+      );
     const client = new Fabric({
       apiKey: "sk_test_example",
       fetch,
@@ -182,7 +186,9 @@ describe("Fabric client", () => {
   it("isolates requests from logger failures", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(json({ messages: [], request_id: "req_logger" }));
+      .mockResolvedValue(
+        json({ messages: [], next_cursor: null, request_id: "req_logger" }),
+      );
     const client = new Fabric({
       apiKey: "sk_test_example",
       fetch,

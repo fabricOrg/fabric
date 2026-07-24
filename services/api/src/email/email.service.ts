@@ -9,6 +9,7 @@ import { FakeEmailProvider } from "@app/integrations/testing/email";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, newRequestId } from "../http/api-error.js";
+import type { PageInput } from "../http/cursor.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -23,7 +24,7 @@ import {
   type ManagedEmailAcceptInput,
 } from "./email-managed-accept.js";
 import { reconcileManagedEmailTerminal } from "./email-managed-resolve.js";
-import { getEmail, listEmails } from "./email-reads.js";
+import { type EmailPageResult, getEmail, listEmails } from "./email-reads.js";
 import { EMAIL_SEND_QUEUE, type EmailSendJob } from "./email-send.job.js";
 
 type Row = Record<string, unknown>;
@@ -168,8 +169,12 @@ export class EmailService {
     });
   }
 
-  async list(tenantId: string, environmentId: string): Promise<EmailMessage[]> {
-    return listEmails(this.db, this.vault, tenantId, environmentId);
+  async list(
+    tenantId: string,
+    environmentId: string,
+    page: PageInput,
+  ): Promise<EmailPageResult> {
+    return listEmails(this.db, this.vault, tenantId, environmentId, page);
   }
 
   async get(

@@ -44,3 +44,4 @@ docker-compose.override.yml.disabled
 /learning
 
 .vercel
+.pnpm-store/

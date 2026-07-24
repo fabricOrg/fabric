@@ -44,6 +44,8 @@ export * from "./message-status.js";
 // Money (exact, minor-unit strings) + SMS/wallet response DTOs — consumed by the dashboard/SDK.
 export * from "./money.js";
 export * from "./opt-outs.js";
+// Cursor pagination for public list endpoints (page query + next_cursor token).
+export * from "./pagination.js";
 // Membership permission catalog + baselines + per-user override (admin-managed effective permissions).
 export * from "./permissions.js";
 // Platform plugin registry (control-plane) — provider instances per capability.

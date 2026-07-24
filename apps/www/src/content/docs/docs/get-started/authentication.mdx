@@ -1,0 +1,52 @@
+---
+title: Authentication
+description: How Fabric keys are passed, how the environment is chosen, and why the SDK is server-only.
+---
+
+Fabric authenticates with a single secret key. You pass it once to the SDK; the SDK attaches it to
+every request and picks the right environment from it. There is no separate environment parameter and
+nothing to set per call.
+
+## Give the SDK your key
+
+```ts
+import { Fabric } from "@fabric-messaging/sdk";
+
+const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY! });
+```
+
+The key is read from a server-side environment variable and never appears in your code. A key is
+scoped to one application environment.
+
+## The prefix selects the environment
+
+| Prefix | `fabric.environment` | Behaviour |
+| --- | --- | --- |
+| `sk_test_` | `sandbox` | Virtual delivery, no real charge. |
+| `sk_live_` | `live` | Real provider delivery, funded wallet required. |
+
+The SDK reads the prefix and rejects any other secret-key format with an error **before** it makes a
+network request, so a malformed or mis-pasted key fails fast and locally.
+
+```ts
+const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY! });
+console.log(fabric.environment); // "sandbox" or "live"
+```
+
+## Server-only, by construction
+
+The SDK refuses to run in a browser — constructing it where `window` and `document` exist throws.
+Fabric keys are full-power secrets: never ship one in client JavaScript, a mobile app, a public
+repository, a log line, or a `PUBLIC_`-prefixed environment variable. Call Fabric from a trusted
+server, and if a key may have leaked, revoke it immediately.
+
+## Base URL
+
+The SDK targets the correct Fabric endpoint automatically. The `baseUrl` option is reserved for
+loopback and private testing only — it must be HTTPS unless it points at `localhost`, `127.0.0.1`, or
+`[::1]`. You do not set a base URL for normal use.
+
+:::note[One key, one environment]
+Keep `sk_test_` and `sk_live_` in separate secret-manager entries and give each deployment its own
+key so it can be revoked without disturbing another service.
+:::

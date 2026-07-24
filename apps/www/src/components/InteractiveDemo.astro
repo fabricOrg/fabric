@@ -1,0 +1,246 @@
+---
+const initialCode = `import { Fabric } from "@fabric-messaging/sdk";
+
+const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY });
+
+await fabric.messages.send("order.shipped", {
+  to: "+233201234567",
+  data: { name: "Ama", ref: "GH-4821" },
+  idempotencyKey: "order-4821",
+});`;
+---
+
+<div class="demo reveal" style="--d:.3s">
+  <section class="editor" aria-labelledby="editor-title">
+    <header class="toolbar">
+      <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span id="editor-title" class="filename">send.ts</span>
+      <span class="demo-label">Sandbox demo</span>
+      <button class="replay" type="button" data-replay>Replay</button>
+    </header>
+    <pre aria-label="Fabric SDK request being typed"><code data-code></code><span class="cursor" aria-hidden="true"></span></pre>
+    <output class="result" data-result aria-live="polite">Preparing the request…</output>
+  </section>
+
+  <section class="deliveries" aria-labelledby="deliveries-title">
+    <header class="deliveries-head">
+      <span id="deliveries-title">Live deliveries</span>
+      <span class="stream"><i></i> connected</span>
+    </header>
+    <div class="delivery-list" data-deliveries aria-live="polite">
+      <div class="delivery-row">
+        <span class="channel email">EMAIL</span>
+        <span class="message-key">receipt.paid</span>
+        <span class="status delivered">delivered</span>
+        <span class="cost">GHS 0.01</span>
+      </div>
+      <div class="delivery-row">
+        <span class="channel sms">SMS</span>
+        <span class="message-key">welcome.otp</span>
+        <span class="status delivered">delivered</span>
+        <span class="cost">GHS 0.03</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script is:inline define:vars={{ initialCode }}>
+  const demo = document.querySelector(".demo");
+  const code = demo?.querySelector("[data-code]");
+  const replayButton = demo?.querySelector("[data-replay]");
+  const result = demo?.querySelector("[data-result]");
+  const deliveries = demo?.querySelector("[data-deliveries]");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let sequence = 0;
+
+  const escapeHtml = (value) =>
+    value
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+
+  const highlight = (value) =>
+    escapeHtml(value).replace(
+      /(\/\/[^\n]*|"[^"\n]*"|\b(?:import|from|const|new|await)\b|\b(?:Fabric|messages|send|apiKey|to|data|name|ref|idempotencyKey)\b)/g,
+      (token) => {
+        if (token.startsWith("//")) {
+          return `<span class="syntax-comment">${token}</span>`;
+        }
+        if (token.startsWith('"')) {
+          return `<span class="syntax-string">${token}</span>`;
+        }
+        if (/^(import|from|const|new|await)$/.test(token)) {
+          return `<span class="syntax-keyword">${token}</span>`;
+        }
+        return `<span class="syntax-property">${token}</span>`;
+      },
+    );
+
+  const setCode = (value) => {
+    if (!(code instanceof HTMLElement)) return;
+    code.innerHTML = highlight(value);
+  };
+
+  const setResult = (message, tone = "neutral") => {
+    if (!(result instanceof HTMLOutputElement)) return;
+    result.textContent = message;
+    result.dataset.tone = tone;
+  };
+
+  const sleep = (duration) =>
+    new Promise((resolve) => window.setTimeout(resolve, duration));
+
+  const removeAnimatedDelivery = () => {
+    deliveries?.querySelector("[data-animated-delivery]")?.remove();
+  };
+
+  const addAnimatedDelivery = () => {
+    if (!(deliveries instanceof HTMLElement)) return null;
+    const row = document.createElement("div");
+    row.className = "delivery-row entering";
+    row.dataset.animatedDelivery = "";
+    row.innerHTML = `
+      <span class="channel sms">SMS</span>
+      <span class="message-key">order.shipped</span>
+      <span class="status queued">queued</span>
+      <span class="cost">GHS 0.03</span>
+    `;
+    deliveries.prepend(row);
+    return row.querySelector(".status");
+  };
+
+  const showFinalState = () => {
+    setCode(initialCode);
+    removeAnimatedDelivery();
+    const status = addAnimatedDelivery();
+    if (status instanceof HTMLElement) {
+      status.className = "status delivered";
+      status.textContent = "delivered";
+    }
+    setResult("Delivered order.shipped / GHS 0.03", "success");
+  };
+
+  const play = async () => {
+    const current = ++sequence;
+    removeAnimatedDelivery();
+    setCode("");
+    setResult("Typing a server-side Fabric request…");
+    if (replayButton instanceof HTMLButtonElement) replayButton.disabled = true;
+
+    if (reduceMotion.matches) {
+      showFinalState();
+      if (replayButton instanceof HTMLButtonElement) replayButton.disabled = false;
+      return;
+    }
+
+    for (let index = 1; index <= initialCode.length; index += 1) {
+      if (current !== sequence) return;
+      setCode(initialCode.slice(0, index));
+      await sleep(initialCode[index - 1] === "\n" ? 38 : 11);
+    }
+
+    await sleep(350);
+    if (current !== sequence) return;
+    const status = addAnimatedDelivery();
+    setResult("Queued order.shipped with order-4821.");
+
+    await sleep(700);
+    if (current !== sequence || !(status instanceof HTMLElement)) return;
+    status.className = "status sending";
+    status.textContent = "sending";
+    setResult("Dispatching order.shipped to the virtual phone.");
+
+    await sleep(1100);
+    if (current !== sequence) return;
+    status.className = "status delivered";
+    status.textContent = "delivered";
+    setResult("Delivered order.shipped / GHS 0.03", "success");
+    if (replayButton instanceof HTMLButtonElement) replayButton.disabled = false;
+
+    await sleep(2400);
+    // Loop only while the demo is on screen — an off-screen typing loop just burns CPU.
+    if (current === sequence && !reduceMotion.matches && inView) {
+      void play();
+    }
+  };
+
+  replayButton?.addEventListener("click", play);
+
+  let inView = false;
+  let started = false;
+  const observer = new IntersectionObserver(
+    (entries) => {
+      inView = entries.some((entry) => entry.isIntersecting);
+      if (!inView) return;
+      if (!started) {
+        started = true;
+        void play();
+      } else if (result?.dataset.tone === "success") {
+        void play();
+      }
+    },
+    { threshold: 0.35 },
+  );
+
+  if (demo) observer.observe(demo);
+  reduceMotion.addEventListener("change", () => {
+    sequence += 1;
+    if (reduceMotion.matches) showFinalState();
+    else void play();
+  });
+</script>
+
+<style>
+  .demo { display: grid; gap: 1rem; min-width: 0; }
+  .editor { overflow: hidden; border: 1px solid #2a2b3d; background: #15151f; box-shadow: 0 26px 60px -38px rgba(20,20,32,.6); }
+  .toolbar { display: flex; align-items: center; gap: .55rem; min-height: 2.7rem; padding: .45rem .65rem; border-bottom: 1px solid #2a2b3d; background: #1c1d29; }
+  .window-dots { display: inline-flex; gap: .35rem; }
+  .window-dots i { width: .58rem; height: .58rem; border-radius: 50%; background: #ff5f57; }
+  .window-dots i:nth-child(2) { background: #febc2e; }
+  .window-dots i:nth-child(3) { background: #28c840; }
+  .filename { color: #8d91aa; font-family: var(--font-mono); font-size: .7rem; }
+  .demo-label { margin-left: auto; color: #a6a4bc; font-size: .68rem; }
+  .replay { min-height: 1.9rem; padding-inline: .7rem; border: 1px solid #8e8fe4; background: #383a96; color: #fff; font: 600 .7rem var(--font-sans); cursor: pointer; }
+  .replay:hover { filter: brightness(1.12); }
+  .replay:focus-visible { outline: 2px solid #a9abec; outline-offset: 2px; }
+  .replay:disabled { cursor: wait; opacity: .6; }
+  /* Height fits the finished 10-line snippet (fixed, so the panel never jumps as it types). */
+  pre { position: relative; height: 16.4rem; margin: 0; overflow: auto; padding: 1.1rem 1.2rem; background: #15151f; color: #d7d8e6; font: .78rem/1.8 var(--font-mono); tab-size: 2; white-space: pre; }
+  code { font: inherit; }
+  .cursor { display: inline-block; width: .5rem; height: 1.05rem; margin-left: .1rem; background: #a9abec; vertical-align: -.18rem; animation: blink .8s steps(1) infinite; }
+  code:empty + .cursor { position: absolute; top: 1.35rem; left: 1.2rem; }
+  code :global(.syntax-comment) { color: #737892; font-style: italic; }
+  code :global(.syntax-string) { color: #7ee787; }
+  code :global(.syntax-keyword) { color: #c792ea; }
+  code :global(.syntax-property) { color: #e5c07b; }
+  .result { display: flex; align-items: center; height: 2.7rem; overflow: hidden; padding: .62rem 1rem; border-top: 1px solid #2a2b3d; color: #a6a4bc; background: #1c1d29; font: .7rem/1.4 var(--font-mono); }
+  .result[data-tone="success"] { color: #7fd3a0; }
+  .deliveries { border: 1px solid var(--border); padding: .9rem; background: var(--card); box-shadow: 0 20px 50px -40px rgba(26,27,46,.5); }
+  .deliveries-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .55rem; color: var(--muted-foreground); font-size: .78rem; }
+  .stream { display: inline-flex; align-items: center; gap: .35rem; color: var(--ok); }
+  .stream i { width: .42rem; height: .42rem; border-radius: 50%; background: currentColor; animation: pulse 1.6s ease-in-out infinite; }
+  .delivery-list { display: grid; align-content: start; gap: .5rem; height: 7.9rem; overflow: hidden; }
+  .delivery-list :global(.delivery-row) { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: .55rem; min-height: 2.3rem; padding: .48rem .55rem; border: 1px solid var(--border); background: var(--background); font-size: .76rem; }
+  .delivery-list :global(.delivery-row.entering) { animation: enter .35s ease-out both; }
+  .delivery-list :global(.channel) { padding: .15rem .35rem; color: #fff; font: 700 .58rem var(--font-mono); }
+  .delivery-list :global(.channel.sms) { background: var(--sms); }
+  .delivery-list :global(.channel.email) { background: var(--email); }
+  .delivery-list :global(.message-key) { overflow: hidden; color: var(--foreground); font-family: var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+  .delivery-list :global(.status) { min-width: 4.1rem; padding: .14rem .35rem; color: #fff; font-size: .65rem; font-weight: 600; text-align: center; }
+  .delivery-list :global(.status.queued) { background: var(--muted-foreground); }
+  .delivery-list :global(.status.sending) { background: var(--warn); }
+  .delivery-list :global(.status.delivered) { background: var(--ok); }
+  .delivery-list :global(.cost) { color: var(--muted-foreground); font: .68rem var(--font-mono); white-space: nowrap; }
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+  @keyframes enter { from { opacity: 0; transform: translateY(-.45rem); } }
+  @media (max-width: 32rem) {
+    .demo-label { display: none; }
+    .filename { margin-right: auto; }
+    pre { height: 15.4rem; font-size: .7rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cursor, .stream i, .delivery-list :global(.delivery-row.entering) { animation: none; }
+    .cursor { display: none; }
+  }
+</style>

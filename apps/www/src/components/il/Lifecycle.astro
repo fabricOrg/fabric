@@ -1,0 +1,318 @@
+---
+// Signature scroll — "catch & release". Each lifecycle stage is its own row: the stage card
+// scrolls in and PINS (position: sticky) around viewport centre and waits; the step description
+// scrolls up the centre thread to meet it. Card and copy share the same fixed band (--lc-band)
+// at the row's end, so the instant they align the card's sticky range runs out and the pair
+// travels off together — then the next card arrives and pins. The lock/release is pure CSS
+// sticky geometry over native scroll (no scroll-jacking). JS only tracks the active row for the
+// thread fill and dim states, so no-JS readers get a plain, fully visible sequence.
+---
+
+<section class="lc" aria-label="The lifecycle of a Fabric message">
+  <div class="lc-head">
+    <p class="num">The lifecycle</p>
+    <h2>Watch one message go <span class="hl">the whole way</span>.</h2>
+    <p class="lc-lede">From a single call to a reconciled ledger entry — scroll it end to end.</p>
+  </div>
+
+  <div class="lc-flow" data-flow>
+    <!-- 01 · the call -->
+    <article class="lc-item" data-item="0">
+      <div class="lc-visual" aria-hidden="true">
+        <div class="lc-pin">
+          <span class="lc-link"></span>
+          <div class="lc-code">
+            <div class="ed"><span class="dots"><i></i><i></i><i></i></span><em>send.ts</em></div>
+            <pre><code><span class="k">await</span> fabric.messages.<span class="f">send</span>(<span class="s">"order.shipped"</span>, {'{'}
+  <span class="p">to</span>: <span class="s">"+233201234567"</span>,
+  <span class="p">data</span>: {'{'} <span class="p">ref</span>: <span class="s">"GH-4821"</span> {'}'},
+{'}'});</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="lc-copy">
+        <div class="lc-copy-in">
+          <span class="lc-n">01</span>
+          <h3>Write one call</h3>
+          <p>One typed SDK call, addressed by template key. SMS or email is a setting — not new code.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- 02 · render -->
+    <article class="lc-item" data-item="1">
+      <div class="lc-visual" aria-hidden="true">
+        <div class="lc-pin">
+          <span class="lc-link"></span>
+          <div class="lc-card">
+            <div class="lc-card-head"><span>Rendered message</span><span class="badge sms">SMS</span></div>
+            <div class="bubble"><p>Hi Ama, your order GH-4821 has shipped.</p></div>
+            <div class="meta"><span>1 segment · GSM-7</span><span class="cost">GHS 0.03</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="lc-copy">
+        <div class="lc-copy-in">
+          <span class="lc-n">02</span>
+          <h3>Render the template</h3>
+          <p>Variables fill in and the exact cost is known before anything sends.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- 03 · reserve + queue -->
+    <article class="lc-item" data-item="2">
+      <div class="lc-visual" aria-hidden="true">
+        <div class="lc-pin">
+          <span class="lc-link"></span>
+          <div class="lc-card">
+            <div class="lc-card-head"><span>Reserve &amp; queue</span></div>
+            <div class="row"><span class="tag hold">HOLD</span><span class="rk">wallet · GHS</span><span class="amt">−0.03</span></div>
+            <div class="row"><span class="tag queue">QUEUED</span><span class="rk">order.shipped</span><span class="st sending">queued</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="lc-copy">
+        <div class="lc-copy-in">
+          <span class="lc-n">03</span>
+          <h3>Reserve, then queue</h3>
+          <p>The wallet holds the cost and the message enters the queue. No hold, no send.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- 04 · SMS -->
+    <article class="lc-item" data-item="3">
+      <div class="lc-visual" aria-hidden="true">
+        <div class="lc-pin">
+          <span class="lc-link"></span>
+          <div class="lc-card">
+            <div class="lc-card-head"><span>Delivery</span><span class="badge sms">SMS</span></div>
+            <div class="row"><span class="rk">order.shipped</span><span class="st delivered">delivered</span><span class="amt">GHS 0.03</span></div>
+            <div class="tl"><span>queued</span><span>sent</span><span class="on">delivered</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="lc-copy">
+        <div class="lc-copy-in">
+          <span class="lc-n">04</span>
+          <h3>Deliver over SMS</h3>
+          <p>Sent under your approved sender ID, with DND and quiet hours respected.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- 05 · email -->
+    <article class="lc-item" data-item="4">
+      <div class="lc-visual" aria-hidden="true">
+        <div class="lc-pin">
+          <span class="lc-link"></span>
+          <div class="lc-card">
+            <div class="lc-card-head"><span>Delivery</span><span class="badge email">EMAIL</span></div>
+            <div class="row"><span class="rk">receipt.paid</span><span class="st delivered">delivered</span><span class="amt">GHS 0.01</span></div>
+            <div class="tl"><span>queued</span><span>sent</span><span class="on">delivered</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="lc-copy">
+        <div class="lc-copy-in">
+          <span class="lc-n">05</span>
+          <h3>…or over email</h3>
+          <p>The same call, delivered as email. The definition decides the channel.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- 06 · webhook -->
+    <article class="lc-item" data-item="5">
+      <div class="lc-visual" aria-hidden="true">
+        <div class="lc-pin">
+          <span class="lc-link"></span>
+          <div class="lc-code">
+            <div class="ed"><span class="dots"><i></i><i></i><i></i></span><em>POST /your/webhook</em></div>
+            <pre><code>{'{'}
+  <span class="p">"type"</span>: <span class="s">"message.delivered"</span>,
+  <span class="p">"data"</span>: {'{'} <span class="p">"deliveryId"</span>: <span class="s">"dlv_8f2…"</span> {'}'}
+{'}'}</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="lc-copy">
+        <div class="lc-copy-in">
+          <span class="lc-n">06</span>
+          <h3>The webhook returns</h3>
+          <p>A signed, retried event reports the terminal delivery state to your server.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- 07 · analytics -->
+    <article class="lc-item" data-item="6">
+      <div class="lc-visual" aria-hidden="true">
+        <div class="lc-pin">
+          <span class="lc-link"></span>
+          <div class="lc-card">
+            <div class="lc-card-head"><span>Analytics</span><span class="muted">7 days</span></div>
+            <div class="bars"><span style="--h:40%;--bi:0"></span><span style="--h:55%;--bi:1"></span><span style="--h:48%;--bi:2"></span><span style="--h:66%;--bi:3"></span><span style="--h:72%;--bi:4"></span><span style="--h:61%;--bi:5"></span><span style="--h:88%;--bi:6"></span></div>
+            <div class="an-foot">Sent, delivered, failed, and cost — <strong>reconciled</strong> to the ledger</div>
+          </div>
+        </div>
+      </div>
+      <div class="lc-copy">
+        <div class="lc-copy-in">
+          <span class="lc-n">07</span>
+          <h3>Track &amp; reconcile</h3>
+          <p>Delivery, cost, and analytics land in the dashboard and on the ledger.</p>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<script is:inline>
+  (() => {
+    const section = document.currentScript.previousElementSibling;
+    const flow = section.querySelector("[data-flow]");
+    const items = [...flow.querySelectorAll(".lc-item")];
+    // Dim states only exist once JS is running — no-JS readers see everything at full strength.
+    flow.classList.add("js");
+    const setActive = (i) => {
+      items.forEach((it, n) => {
+        it.classList.toggle("is-active", n === i);
+        it.classList.toggle("is-done", n < i);
+      });
+      const node = items[i].querySelector(".lc-n");
+      if (node) {
+        // rect difference = layout offset, independent of current scroll position
+        const fr = flow.getBoundingClientRect();
+        const nr = node.getBoundingClientRect();
+        flow.style.setProperty("--prog", `${nr.top - fr.top + nr.height / 2}px`);
+      }
+    };
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) setActive(Number(e.target.dataset.item));
+        }
+      },
+      { rootMargin: "-45% 0px -45% 0px", threshold: 0 },
+    );
+    items.forEach((it) => io.observe(it));
+    setActive(0);
+  })();
+</script>
+
+<style>
+  .lc { margin-inline: auto; width: min(100% - 3rem, var(--maxw)); padding-block: var(--section-y); --lc-gap: clamp(4rem, 7vw, 7rem); --lc-band: 17rem; }
+  .lc-head { max-width: 44rem; margin: 0 auto clamp(2rem, 4vw, 3.25rem); text-align: center; }
+  .num { margin: 0; color: var(--gold-ink); font-family: var(--font-mono); font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; }
+  .lc-head h2 { margin: .6rem 0 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.9rem,3.7vw,2.7rem); line-height: 1.05; }
+  .hl { color: var(--primary); }
+  .lc-lede { margin: 1rem auto 0; max-width: 40rem; color: var(--muted-foreground); line-height: 1.6; }
+
+  .lc-flow { position: relative; }
+
+  /* centre thread + progress fill (desktop pairing only) */
+  @media (min-width: 60rem) {
+    .lc-flow::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); background: color-mix(in oklab, var(--foreground) 12%, transparent); }
+    .lc-flow::after { content: ""; position: absolute; left: 50%; top: 0; width: 2px; transform: translateX(-50%); height: var(--prog, 0px); background: var(--primary); transition: height .3s ease; }
+  }
+
+  /* one row per stage — card column left, copy column right */
+  .lc-item { position: relative; display: grid; gap: 1.25rem; }
+  .lc-item + .lc-item { margin-top: 3.5rem; }
+  .lc-pin { position: relative; }
+  @media (min-width: 60rem) {
+    .lc-item { grid-template-columns: 1fr 1fr; column-gap: var(--lc-gap); min-height: 110vh; }
+    .lc-item + .lc-item { margin-top: 0; }
+    /* last pair needs no runway below it */
+    .lc-item:last-child { min-height: calc(var(--lc-band) + 24vh); }
+    /* the catch: the card pins near viewport centre and waits. The release: card and copy both
+     * occupy a --lc-band-tall block at the END of the row, so the sticky range runs out exactly
+     * when the copy reaches the card — from there they scroll off together. */
+    .lc-pin { position: sticky; top: calc(50vh - var(--lc-band) / 2 - 2rem); z-index: 1; min-height: var(--lc-band); display: grid; align-content: center; }
+    .lc-copy { display: flex; flex-direction: column; justify-content: flex-end; }
+    .lc-copy-in { min-height: var(--lc-band); display: grid; align-content: center; }
+  }
+  .lc-copy-in { position: relative; }
+
+  /* step node — travels with the copy along the thread, docks into the card's connector */
+  .lc-n { display: inline-grid; place-items: center; width: 2rem; height: 2rem; margin-bottom: .8rem; border-radius: 50%; background: var(--card); border: 2px solid var(--border); color: var(--muted-foreground); font: 600 .72rem var(--font-mono); transition: border-color .3s, color .3s, background .3s, box-shadow .3s; }
+  @media (min-width: 60rem) {
+    .lc-n { position: absolute; left: calc(-.5 * var(--lc-gap)); top: 50%; transform: translate(-50%, -50%); margin: 0; z-index: 2; }
+  }
+  .lc-item.is-done .lc-n { border-color: var(--primary); background: var(--primary); color: #fff; }
+  .lc-item.is-active .lc-n { border-color: var(--primary); background: color-mix(in oklab, var(--primary) 14%, var(--card)); color: var(--primary); box-shadow: 0 0 0 5px color-mix(in oklab, var(--primary) 14%, transparent); }
+
+  /* dim the rows that aren't the story's current beat (JS-gated) */
+  .lc-flow.js .lc-pin, .lc-flow.js .lc-copy-in { transition: opacity .35s ease; }
+  .lc-flow.js .lc-item:not(.is-active) .lc-pin { opacity: .45; }
+  .lc-flow.js .lc-item:not(.is-active) .lc-copy-in { opacity: .4; }
+
+  /* connector — from the card's edge to the thread, ending in a socket the node docks into */
+  .lc-link { display: none; }
+  @media (min-width: 60rem) {
+    .lc-link { display: block; position: absolute; top: 50%; left: 100%; width: calc(var(--lc-gap) / 2); height: 2px; background: color-mix(in oklab, var(--primary) 45%, transparent); transform: translateY(-50%); }
+    .lc-link::after { content: ""; position: absolute; right: -5px; top: 50%; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--primary); background: var(--background); transform: translateY(-50%); animation: lcPing 2.4s ease-in-out infinite; }
+    @keyframes lcPing {
+      0%, 100% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 12%, transparent); }
+      50% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--primary) 7%, transparent); }
+    }
+  }
+
+  /* copy typography */
+  .lc-copy-in h3 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.5rem,2.8vw,2.1rem); line-height: 1.1; }
+  .lc-copy-in p { margin: .7rem 0 0; max-width: 30rem; color: var(--muted-foreground); font-size: 1.02rem; line-height: 1.55; }
+
+  /* card frame */
+  .lc-card { display: grid; gap: .9rem; padding: 1.4rem; background: var(--card); border: 1px solid var(--border); box-shadow: 0 28px 60px -44px rgba(20,20,32,.5); }
+  .lc-card-head { display: flex; align-items: center; justify-content: space-between; font-family: var(--font-display); font-weight: 600; font-size: .95rem; color: var(--foreground); }
+  .lc-card-head .muted { font-family: var(--font-mono); font-size: .74rem; font-weight: 400; color: var(--muted-foreground); }
+  .badge { padding: .18rem .5rem; font: 700 .6rem var(--font-mono); color: #fff; }
+  .badge.sms { background: var(--sms); } .badge.email { background: var(--email); }
+
+  /* code editor panel */
+  .ed { display: flex; align-items: center; gap: .45rem; padding: .6rem .85rem; background: #1c1d29; border: 1px solid #2a2b3d; border-bottom: 0; }
+  .dots { display: inline-flex; gap: .3rem; } .dots i { width: .58rem; height: .58rem; border-radius: 50%; background: #ff5f57; } .dots i:nth-child(2){ background:#febc2e; } .dots i:nth-child(3){ background:#28c840; }
+  .ed em { margin-left: auto; font-family: var(--font-mono); font-style: normal; font-size: .74rem; color: #6b6f8c; }
+  .lc-code pre { margin: 0; padding: 1.2rem 1.3rem; background: #15151f; border: 1px solid #2a2b3d; overflow-x: auto; }
+  .lc-code code { font-family: var(--font-mono); font-size: .9rem; line-height: 1.8; color: #cdd0e5; white-space: pre; }
+  .lc-code .k { color:#c792ea; } .lc-code .s { color:#7ee787; } .lc-code .f { color:#61afef; } .lc-code .p { color:#e5c07b; }
+
+  /* rendered bubble */
+  .bubble { padding: 1.1rem 1.15rem; background: var(--background); border: 1px solid var(--border); border-left: 3px solid var(--sms); }
+  .bubble p { margin: 0; color: var(--foreground); font-size: .98rem; line-height: 1.5; }
+  .meta { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: .78rem; color: var(--muted-foreground); }
+  .meta .cost { color: var(--foreground); }
+
+  /* rows */
+  .row { display: flex; align-items: center; gap: .7rem; padding: .8rem .9rem; background: var(--background); border: 1px solid var(--border); font-size: .92rem; }
+  .rk { flex: 1; font-family: var(--font-mono); color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag, .st { padding: .16rem .5rem; font: 700 .62rem var(--font-mono); color: #fff; }
+  .tag.hold { background: var(--gold-ink); } .tag.queue { background: var(--muted-foreground); }
+  .st { font-weight: 600; }
+  .st.sending { background: var(--warn); } .st.delivered { background: var(--ok); }
+  .amt { font-family: var(--font-mono); font-size: .82rem; color: var(--foreground); }
+
+  /* delivery timeline */
+  .tl { display: flex; align-items: center; gap: .5rem; font-family: var(--font-mono); font-size: .74rem; color: var(--muted-foreground); }
+  .tl span:not(:last-child)::after { content: "→"; margin-left: .5rem; color: color-mix(in oklab, var(--foreground) 30%, transparent); }
+  .tl .on { color: var(--ok); font-weight: 600; }
+
+  /* analytics */
+  .bars { display: flex; align-items: flex-end; gap: .4rem; height: 6.5rem; padding: .9rem; background: var(--background); border: 1px solid var(--border); }
+  .bars span { flex: 1; height: var(--h); background: color-mix(in oklab, var(--primary) 65%, transparent); border-radius: 2px 2px 0 0; transform-origin: bottom; }
+  .bars span:last-child { background: var(--primary); }
+  /* bars grow each time the analytics stage becomes the active beat */
+  .lc-item.is-active .bars span { animation: lcGrow .6s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--bi) * 55ms); }
+  @keyframes lcGrow { from { transform: scaleY(0); } }
+  .an-foot { font-size: .82rem; color: var(--muted-foreground); } .an-foot strong { color: var(--foreground); font-family: var(--font-mono); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lc-flow::after { transition: none; }
+    .lc-flow.js .lc-pin, .lc-flow.js .lc-copy-in { transition: none; }
+    .lc-link::after { animation: none; }
+    .lc-item.is-active .bars span { animation: none; }
+    .lc-n { transition: none; }
+  }
+</style>

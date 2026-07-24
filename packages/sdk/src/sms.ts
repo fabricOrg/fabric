@@ -2,8 +2,10 @@ import type { Transport } from "./transport.js";
 import type {
   FabricResponse,
   IdempotentWriteOptions,
+  ListParams,
   MessageDetail,
   MessageSummary,
+  Page,
   RequestOptions,
   SendSmsBatchItem,
   SendSmsParams,
@@ -15,7 +17,9 @@ import {
   ApiShapeError,
   booleanField,
   enumField,
+  nullableStringField,
   numberField,
+  pageQueryString,
   record,
   requireE164,
   requireNonEmpty,
@@ -117,19 +121,49 @@ export class SmsResource {
   }
 
   async list(
+    params?: ListParams,
     options?: RequestOptions,
-  ): Promise<FabricResponse<ReadonlyArray<MessageSummary>>> {
+  ): Promise<FabricResponse<Page<MessageSummary>>> {
     const response = await this.transport.request<Record<string, unknown>>({
       method: "GET",
-      path: "/v1/messages",
+      path: `/v1/messages${pageQueryString(params)}`,
       ...(options ? { options } : {}),
     });
     if (!Array.isArray(response.data.messages))
       throw new ApiShapeError("messages");
     return {
       ...response,
-      data: response.data.messages.map((item) => messageSummary(record(item))),
+      data: {
+        items: response.data.messages.map((item) =>
+          messageSummary(record(item)),
+        ),
+        nextCursor: nullableStringField(
+          response.data.next_cursor,
+          "next_cursor",
+        ),
+      },
     };
+  }
+
+  /** Walk the whole message log page by page, following `next_cursor` until it is null. */
+  async *iterate(
+    params?: Pick<ListParams, "limit">,
+    options?: RequestOptions,
+  ): AsyncGenerator<MessageSummary, void, undefined> {
+    let cursor: string | undefined;
+    do {
+      const page = await this.list(
+        {
+          ...(params?.limit ? { limit: params.limit } : {}),
+          ...(cursor ? { cursor } : {}),
+        },
+        options,
+      );
+      yield* page.data.items;
+      const next = page.data.nextCursor ?? undefined;
+      // defensive: a buggy server echoing the same cursor must not hang the client
+      cursor = next === cursor ? undefined : next;
+    } while (cursor);
   }
 }
 
@@ -181,11 +215,11 @@ function messageSummary(data: Record<string, unknown>): MessageSummary {
     to: stringField(data.to, "to"),
     provider: stringField(data.provider, "provider"),
     deliveryMode: enumField(
-      data.deliveryMode ?? "live",
+      data.delivery_mode ?? "live",
       ["live", "virtual"] as const,
-      "deliveryMode",
+      "delivery_mode",
     ),
-    createdAt: stringField(data.createdAt, "createdAt"),
+    createdAt: stringField(data.created_at, "created_at"),
   };
 }
 
@@ -202,12 +236,12 @@ function messageDetail(data: Record<string, unknown>): MessageDetail {
     : [];
   return {
     ...messageSummary(data),
-    senderId: stringField(data.senderId, "senderId"),
+    senderId: stringField(data.sender_id, "sender_id"),
     redacted: booleanField(data.redacted, "redacted"),
     timeline,
     ...(typeof data.body === "string" ? { body: data.body } : {}),
-    ...(typeof data.failureReason === "string"
-      ? { failureReason: data.failureReason }
+    ...(typeof data.failure_reason === "string"
+      ? { failureReason: data.failure_reason }
       : {}),
   };
 }
