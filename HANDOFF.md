@@ -24,11 +24,23 @@ Three more commits on the same branch:
   `examples/sdk-playground/vendor/fabric-messaging-sdk.tgz` (STABLE name; old versioned tgz
   deleted; playground dep updated). ESM-only decision recorded (Node≥22 require(esm); no CJS).
 
-**Gates run**: SDK `release:check` green end-to-end; CLI `release:check` green; API tsc + 161/161
-unit tests; dashboard + contracts tsc clean. **NOT yet done**: independent review of the
-pagination/casing batch (phases A+B+C committed on gates only — run a reviewer next session);
-full `verify:push`; push/PR (needs human go). Earlier batches (www + SDK audit fixes) WERE
-independently reviewed.
+**Reviewed + hardened** (commits `<hotfix>` after the batch): independent reviewer flagged a real
+keyset bug — the cursor round-tripped `created_at` through a JS `Date` (ms) while timestamptz is µs,
+skipping sub-ms rows and breaking the same-transaction id tiebreak (a 100-msg batch shares one
+`now()`). Fixed in two steps: (a) carry the cursor as µs-precise `to_char` TEXT; (b) **compare via
+`::text::timestamptz`, NOT a bare `::timestamptz`** — verified against real Postgres that the
+postgres.js driver binds the ISO string so a direct `::timestamptz` cast RE-TRUNCATES to ms (a SQL
+literal keeps µs; a bound param does not). New `sms-pagination.integration.spec.ts` walks a page
+boundary landing inside a 3-row µs-identical batch and asserts every row once — fails with a bare
+cast. Commits: `1b66e88` (final cast fix + integration guard) on top of the earlier partial fix.
+
+**Driver gotcha to remember**: with postgres.js/drizzle, `${isoString}::timestamptz` truncates to
+millisecond; use `${isoString}::text::timestamptz` when µs matters.
+
+**Gates run**: SDK `release:check` green; CLI `release:check` green; API tsc + 167 unit +
+sms-pagination integration green; dashboard + contracts tsc clean. **NOT yet done**: full
+`verify:push`; push/PR (needs human go). Earlier batches (www + SDK audit fixes) also independently
+reviewed.
 
 **Still parked for human decisions**: SDK+CLI license (UNLICENSED vs public publish — blocker),
 public domain (site/sitemap/canonical/absolute og:image), www deploy to Vercel, legal pages,
