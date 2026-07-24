@@ -1,0 +1,214 @@
+---
+// Signature scroll experience — a pinned "stage" whose visual swaps as the reader scrolls the
+// steps, so they watch ONE message travel the whole lifecycle: call → render → reserve/queue →
+// SMS → email → webhook → analytics. Native scroll + a sticky column + IntersectionObserver
+// (no scroll-jacking). Reuses the site's artifact vocabulary. Reduced-motion safe (panel swaps
+// are instant; the sticky column simply shows the first stage).
+const steps = [
+  { t: "Write one call", d: "One typed SDK call, addressed by template key. SMS or email is a setting — not new code." },
+  { t: "Render the template", d: "Variables fill in and the exact cost is known before anything sends." },
+  { t: "Reserve, then queue", d: "The wallet holds the cost and the message enters the queue. No hold, no send." },
+  { t: "Deliver over SMS", d: "Sent under your approved sender ID, with DND and quiet hours respected." },
+  { t: "…or over email", d: "The same call, delivered as email. The definition decides the channel." },
+  { t: "The webhook returns", d: "A signed, retried event reports the terminal delivery state to your server." },
+  { t: "Track & reconcile", d: "Delivery, cost, and analytics land in the dashboard and on the ledger." },
+];
+---
+
+<section class="lc" aria-label="The lifecycle of a Fabric message">
+  <div class="lc-head">
+    <p class="num">The lifecycle</p>
+    <h2>Watch one message go <span class="hl">the whole way</span>.</h2>
+    <p class="lc-lede">From a single call to a reconciled ledger entry — scroll it end to end.</p>
+  </div>
+
+  <div class="lc-grid">
+    <div class="lc-stage-wrap">
+      <div class="lc-stage" aria-hidden="true" data-stage>
+        <span class="lc-link"></span>
+        <!-- 0 · code -->
+        <div class="lc-panel is-active" data-panel="0">
+          <div class="lc-code">
+            <div class="ed"><span class="dots"><i></i><i></i><i></i></span><em>send.ts</em></div>
+            <pre><code><span class="k">await</span> fabric.messages.<span class="f">send</span>(<span class="s">"order.shipped"</span>, {'{'}
+  <span class="p">to</span>: <span class="s">"+233201234567"</span>,
+  <span class="p">data</span>: {'{'} <span class="p">ref</span>: <span class="s">"GH-4821"</span> {'}'},
+{'}'});</code></pre>
+          </div>
+        </div>
+        <!-- 1 · render -->
+        <div class="lc-panel" data-panel="1">
+          <div class="lc-card">
+            <div class="lc-card-head"><span>Rendered message</span><span class="badge sms">SMS</span></div>
+            <div class="bubble"><p>Hi Ama, your order GH-4821 has shipped.</p></div>
+            <div class="meta"><span>1 segment · GSM-7</span><span class="cost">GHS 0.03</span></div>
+          </div>
+        </div>
+        <!-- 2 · reserve + queue -->
+        <div class="lc-panel" data-panel="2">
+          <div class="lc-card">
+            <div class="lc-card-head"><span>Reserve &amp; queue</span></div>
+            <div class="row"><span class="tag hold">HOLD</span><span class="rk">wallet · GHS</span><span class="amt">−0.03</span></div>
+            <div class="row"><span class="tag queue">QUEUED</span><span class="rk">order.shipped</span><span class="st sending">queued</span></div>
+          </div>
+        </div>
+        <!-- 3 · SMS -->
+        <div class="lc-panel" data-panel="3">
+          <div class="lc-card">
+            <div class="lc-card-head"><span>Delivery</span><span class="badge sms">SMS</span></div>
+            <div class="row"><span class="rk">order.shipped</span><span class="st delivered">delivered</span><span class="amt">GHS 0.03</span></div>
+            <div class="tl"><span>queued</span><span>sent</span><span class="on">delivered</span></div>
+          </div>
+        </div>
+        <!-- 4 · email -->
+        <div class="lc-panel" data-panel="4">
+          <div class="lc-card">
+            <div class="lc-card-head"><span>Delivery</span><span class="badge email">EMAIL</span></div>
+            <div class="row"><span class="rk">receipt.paid</span><span class="st delivered">delivered</span><span class="amt">GHS 0.01</span></div>
+            <div class="tl"><span>queued</span><span>sent</span><span class="on">delivered</span></div>
+          </div>
+        </div>
+        <!-- 5 · webhook -->
+        <div class="lc-panel" data-panel="5">
+          <div class="lc-code">
+            <div class="ed"><span class="dots"><i></i><i></i><i></i></span><em>POST /your/webhook</em></div>
+            <pre><code>{'{'}
+  <span class="p">"type"</span>: <span class="s">"message.delivered"</span>,
+  <span class="p">"data"</span>: {'{'} <span class="p">"deliveryId"</span>: <span class="s">"dlv_8f2…"</span> {'}'}
+{'}'}</code></pre>
+          </div>
+        </div>
+        <!-- 6 · analytics -->
+        <div class="lc-panel" data-panel="6">
+          <div class="lc-card">
+            <div class="lc-card-head"><span>Analytics</span><span class="muted">7 days</span></div>
+            <div class="bars"><span style="--h:40%"></span><span style="--h:55%"></span><span style="--h:48%"></span><span style="--h:66%"></span><span style="--h:72%"></span><span style="--h:61%"></span><span style="--h:88%"></span></div>
+            <div class="an-foot"><strong>99.2%</strong> delivered · reconciled to the ledger</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <ol class="lc-steps" data-steps>
+      {steps.map((s, i) => (
+        <li class={`lc-step${i === 0 ? " is-active" : ""}`} data-step={i}>
+          <span class="lc-n">{`0${i + 1}`}</span>
+          <h3>{s.t}</h3>
+          <p>{s.d}</p>
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>
+
+<script is:inline>
+  (() => {
+    const section = document.currentScript.previousElementSibling;
+    const stage = section.querySelector("[data-stage]");
+    const stepsEl = section.querySelector("[data-steps]");
+    const panels = [...stage.querySelectorAll(".lc-panel")];
+    const steps = [...section.querySelectorAll(".lc-step")];
+    const setActive = (i) => {
+      panels.forEach((p, n) => p.classList.toggle("is-active", n === i));
+      steps.forEach((s, n) => {
+        s.classList.toggle("is-active", n === i);
+        s.classList.toggle("is-done", n < i);
+      });
+      const node = steps[i].querySelector(".lc-n");
+      if (node) stepsEl.style.setProperty("--prog", `${steps[i].offsetTop + node.offsetTop + node.offsetHeight / 2}px`);
+    };
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) setActive(Number(e.target.dataset.step));
+        }
+      },
+      { rootMargin: "-45% 0px -45% 0px", threshold: 0 },
+    );
+    steps.forEach((s) => io.observe(s));
+  })();
+</script>
+
+<style>
+  .lc { margin-inline: auto; width: min(100% - 3rem, var(--maxw)); padding-block: var(--section-y); }
+  .lc-head { max-width: 44rem; margin: 0 auto clamp(1.5rem, 3vw, 2.25rem); text-align: center; }
+  .num { margin: 0; color: var(--gold-ink); font-family: var(--font-mono); font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; }
+  .lc-head h2 { margin: .6rem 0 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.7rem,3.1vw,2.35rem); line-height: 1.05; }
+  .hl { color: var(--primary); }
+  .lc-lede { margin: 1rem auto 0; max-width: 40rem; color: var(--muted-foreground); line-height: 1.6; }
+
+  .lc-grid { display: grid; gap: 2rem; }
+  @media (min-width: 60rem) { .lc-grid { grid-template-columns: 1fr 1fr; gap: 4rem; align-items: start; } }
+
+  /* pinned stage */
+  .lc-stage-wrap { position: sticky; top: clamp(5rem, 13vh, 8rem); height: fit-content; display: grid; place-items: center; }
+  @media (max-width: 60rem) { .lc-stage-wrap { top: 0; height: auto; padding-block: 1.5rem; position: sticky; z-index: 1; background: color-mix(in oklab, var(--background) 92%, transparent); backdrop-filter: blur(3px); } }
+  .lc-stage { position: relative; width: 100%; max-width: 38rem; min-height: 15rem; }
+  .lc-panel { position: absolute; inset: 0; display: grid; align-content: center; gap: .6rem; opacity: 0; transform: translateY(6px); transition: opacity .28s ease, transform .28s ease; pointer-events: none; }
+  /* connector — anchored to the pinned card, runs right to the thread (gap 4rem + thread offset 1.2rem) */
+  .lc-link { display: none; }
+  @media (min-width: 60rem) {
+    .lc-link { display: block; position: absolute; top: 50%; left: 100%; width: calc(4rem + 1.2rem); height: 2px; background: color-mix(in oklab, var(--primary) 45%, transparent); transform: translateY(-50%); z-index: 2; }
+    .lc-link::after { content: ""; position: absolute; right: -4px; top: 50%; width: 9px; height: 9px; border-radius: 50%; background: var(--primary); transform: translateY(-50%); box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 14%, transparent); }
+  }
+  .lc-panel.is-active { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .lc-panel { transition: none; } }
+
+  /* light card frame — gives every non-code stage real presence */
+  .lc-card { display: grid; gap: .9rem; padding: 1.4rem; background: var(--card); border: 1px solid var(--border); box-shadow: 0 28px 60px -44px rgba(20,20,32,.5); }
+  .lc-card-head { display: flex; align-items: center; justify-content: space-between; font-family: var(--font-display); font-weight: 600; font-size: .95rem; color: var(--foreground); }
+  .lc-card-head .muted { font-family: var(--font-mono); font-size: .74rem; font-weight: 400; color: var(--muted-foreground); }
+  .badge { padding: .18rem .5rem; font: 700 .6rem var(--font-mono); color: #fff; }
+  .badge.sms { background: var(--sms); } .badge.email { background: var(--email); }
+
+  /* code editor panel */
+  .ed { display: flex; align-items: center; gap: .45rem; padding: .6rem .85rem; background: #1c1d29; border: 1px solid #2a2b3d; border-bottom: 0; }
+  .dots { display: inline-flex; gap: .3rem; } .dots i { width: .58rem; height: .58rem; border-radius: 50%; background: #ff5f57; } .dots i:nth-child(2){ background:#febc2e; } .dots i:nth-child(3){ background:#28c840; }
+  .ed em { margin-left: auto; font-family: var(--font-mono); font-style: normal; font-size: .74rem; color: #6b6f8c; }
+  .lc-panel pre { margin: 0; padding: 1.2rem 1.3rem; background: #15151f; border: 1px solid #2a2b3d; overflow-x: auto; }
+  .lc-panel code { font-family: var(--font-mono); font-size: .9rem; line-height: 1.8; color: #cdd0e5; white-space: pre; }
+  .lc-panel .k { color:#c792ea; } .lc-panel .s { color:#7ee787; } .lc-panel .f { color:#61afef; } .lc-panel .p { color:#e5c07b; }
+
+  /* rendered bubble */
+  .bubble { padding: 1.1rem 1.15rem; background: var(--background); border: 1px solid var(--border); border-left: 3px solid var(--sms); }
+  .bubble p { margin: 0; color: var(--foreground); font-size: .98rem; line-height: 1.5; }
+  .meta { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: .78rem; color: var(--muted-foreground); }
+  .meta .cost { color: var(--foreground); }
+
+  /* rows */
+  .row { display: flex; align-items: center; gap: .7rem; padding: .8rem .9rem; background: var(--background); border: 1px solid var(--border); font-size: .92rem; }
+  .rk { flex: 1; font-family: var(--font-mono); color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag, .st { padding: .16rem .5rem; font: 700 .62rem var(--font-mono); color: #fff; }
+  .tag.hold { background: var(--gold-ink); } .tag.queue { background: var(--muted-foreground); }
+  .st { font-weight: 600; }
+  .st.sending { background: var(--warn); } .st.delivered { background: var(--ok); }
+  .amt { font-family: var(--font-mono); font-size: .82rem; color: var(--foreground); }
+
+  /* delivery timeline */
+  .tl { display: flex; align-items: center; gap: .5rem; font-family: var(--font-mono); font-size: .74rem; color: var(--muted-foreground); }
+  .tl span:not(:last-child)::after { content: "→"; margin-left: .5rem; color: color-mix(in oklab, var(--foreground) 30%, transparent); }
+  .tl .on { color: var(--ok); font-weight: 600; }
+
+  /* analytics */
+  .bars { display: flex; align-items: flex-end; gap: .4rem; height: 6.5rem; padding: .9rem; background: var(--background); border: 1px solid var(--border); }
+  .bars span { flex: 1; height: var(--h); background: color-mix(in oklab, var(--primary) 65%, transparent); border-radius: 2px 2px 0 0; }
+  .bars span:last-child { background: var(--primary); }
+  .an-foot { font-size: .82rem; color: var(--muted-foreground); } .an-foot strong { color: var(--foreground); font-family: var(--font-mono); }
+
+  /* steps — connected by a vertical thread with a scroll-progress fill */
+  .lc-steps { position: relative; margin: 0; padding: 0; list-style: none; }
+  .lc-steps::before { content: ""; position: absolute; left: 1.2rem; top: 0; bottom: 0; width: 2px; background: color-mix(in oklab, var(--foreground) 12%, transparent); }
+  .lc-steps::after { content: ""; position: absolute; left: 1.2rem; top: 0; width: 2px; height: var(--prog, 0px); background: var(--primary); transition: height .3s ease; }
+  .lc-step { position: relative; min-height: 74vh; display: flex; flex-direction: column; justify-content: flex-start; padding: clamp(2rem, 12vh, 7rem) 0 0 3.6rem; opacity: .4; transition: opacity .35s ease; }
+  .lc-step.is-active { opacity: 1; }
+  @media (max-width: 60rem) { .lc-step { min-height: 56vh; padding-top: 1.5rem; } }
+  @media (prefers-reduced-motion: reduce) { .lc-step { opacity: 1; transition: none; } .lc-steps::after { transition: none; } }
+  .lc-n { position: absolute; left: 1.2rem; top: clamp(2rem, 12vh, 7rem); transform: translate(-50%, -.15rem); display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; background: var(--card); border: 2px solid var(--border); color: var(--muted-foreground); font: 600 .72rem var(--font-mono); z-index: 1; transition: border-color .3s, color .3s, background .3s, box-shadow .3s, transform .3s; }
+  /* completed step */
+  .lc-step.is-done .lc-n { border-color: var(--primary); background: var(--primary); color: #fff; }
+  /* current step */
+  .lc-step.is-active .lc-n { border-color: var(--primary); background: color-mix(in oklab, var(--primary) 14%, var(--card)); color: var(--primary); box-shadow: 0 0 0 5px color-mix(in oklab, var(--primary) 14%, transparent); transform: translate(-50%, -.15rem) scale(1.12); }
+  @media (max-width: 60rem) { .lc-n { top: 1.5rem; } }
+  .lc-step h3 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.5rem,2.8vw,2.1rem); line-height: 1.1; }
+  .lc-step p { margin: .7rem 0 0; max-width: 30rem; color: var(--muted-foreground); font-size: 1.02rem; line-height: 1.55; }
+</style>

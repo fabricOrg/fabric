@@ -1,0 +1,39 @@
+---
+title: Sandbox & test keys
+description: The zero-gate sandbox lets you send a real request before funding or sender approval.
+---
+
+Fabric's sandbox is a full, working environment reachable with an `sk_test_` key. You can send SMS
+and email, preview definitions, receive webhooks, and read the wallet **before** you fund an account,
+register a sender ID, or verify a domain. Nothing you do in sandbox touches a real recipient or spends
+real money.
+
+## What the sandbox does
+
+- **Sends resolve on a virtual path.** SMS goes to a virtual number; email goes to a fake provider.
+  No carrier, no inbox, no cost against real funds.
+- **Everything else is real.** Rendering, variable validation, encoding and segment counting, size
+  tiers, cost calculation, idempotency, delivery states, and webhook signing all behave exactly as
+  they do live.
+- **Delivery is deterministic.** Virtual sends resolve immediately, so you can build and test your
+  webhook consumer without waiting on a network.
+- **Inbound replies can be simulated.** The dashboard's virtual phone can reply to a sandbox message,
+  including the `STOP` / `START` / `HELP` keywords, which exercise consent handling.
+
+## What the sandbox does not do
+
+- It never contacts a real handset or inbox.
+- It does not require a funded wallet or an approved sender ID.
+- It is not a load or latency test of the live carrier route.
+
+## Test keys are still secrets
+
+An `sk_test_` key cannot spend real money, but it can read and mutate everything in your sandbox. Keep
+it server-side, out of client bundles and public repositories, exactly like a live key. Environments
+are isolated: a sandbox key sees only sandbox definitions, activity, and webhook endpoints.
+
+:::tip[Build the whole loop in sandbox]
+Send → follow the webhook to a terminal state → reconcile the cost against the wallet, all with a test
+key. When that loop is solid, [go live](/docs/account/going-live/) by swapping the key and configuring
+the live resources.
+:::

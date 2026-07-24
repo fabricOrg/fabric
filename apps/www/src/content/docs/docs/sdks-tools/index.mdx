@@ -1,49 +1,37 @@
 ---
 title: SDKs & tools
-description: Use Fabric's TypeScript SDK and CLI from trusted development environments.
+description: The official TypeScript SDK and the CLI — the supported way to build on Fabric.
 ---
 
-## TypeScript SDK
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-The official `@fabric-messaging/sdk` package supports Node.js 22 and later. It is server-only and
-provides resources for managed messages, SMS, email, sender names, verification, wallet reads, and
-webhooks.
+You build on Fabric through the official TypeScript SDK. The CLI complements it by generating typed
+keys for your message definitions.
 
-```bash
-npm install @fabric-messaging/sdk
-```
+The TypeScript SDK is the supported client today. SDKs for more languages will follow once the API
+reaches a stable release.
 
-```ts
-import {
-  AuthenticationError,
-  Fabric,
-  RateLimitError,
-} from "@fabric-messaging/sdk";
+<CardGrid>
+  <LinkCard
+    title="Node.js SDK"
+    description="Install, configure, resources, retries, and typed errors."
+    href="/docs/sdks-tools/node/"
+  />
+  <LinkCard
+    title="CLI"
+    description="Generate and check a typed catalog of your definition keys."
+    href="/docs/sdks-tools/cli/"
+  />
+</CardGrid>
 
-const fabric = new Fabric({
-  apiKey: process.env.FABRIC_API_KEY!,
-  timeout: 10_000,
-  maxRetries: 2,
-});
-```
+## At a glance
 
-Catch exported typed errors when your application needs different recovery behavior. Do not branch
-on error-message text.
+| Tool | Package | Use it for |
+| --- | --- | --- |
+| SDK | `@fabric-messaging/sdk` | All server-side integration. Node.js 22+, ESM. |
+| CLI | `@fabric-messaging/cli` | Typed definition catalog, drift checks in CI. |
 
-## CLI
-
-The `@fabric-messaging/cli` validates a local message catalog against the application configured by
-`FABRIC_API_KEY`. It understands `sk_test_` and `sk_live_` environments and can generate the typed
-catalog consumed by the SDK.
-
-```bash
-npx @fabric-messaging/cli check
-```
-
-Run the CLI in a trusted shell or CI job with a scoped key. Never commit the key or generated files
-that contain secret values.
-
-## OpenAPI
-
-The SDK package exports its committed OpenAPI document as
-`@fabric-messaging/sdk/openapi.json` for code generation and inspection.
+:::caution[Both tools are server-side]
+The SDK and the CLI both carry a secret key. Keep them out of browsers, public repositories, and
+logs.
+:::

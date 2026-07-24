@@ -1,12 +1,15 @@
 ---
-title: Account & wallet
-description: Manage applications, environments, keys, wallet funds, and live access.
+title: Account & platform
+description: Applications, keys, wallet and billing, rate limits, going live, and compliance.
 ---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
 ## Applications and environments
 
 Create a separate Fabric application for each independently deployed integration. Sandbox and live
-are isolated inside the application, including API keys, activity, and webhook endpoints.
+are isolated inside the application — API keys, activity, definitions, and webhook endpoints all
+belong to one environment.
 
 ## API keys
 
@@ -15,28 +18,27 @@ are isolated inside the application, including API keys, activity, and webhook e
 - Store keys in a secret manager and show only their prefix in logs or support messages.
 - Rotate immediately after suspected exposure.
 
-## Wallet
+## Explore the platform
 
-Fabric represents money as integer minor units. The SDK returns string values so JavaScript never
-rounds a balance or message cost.
-
-```ts
-const wallet = await fabric.wallet.retrieve();
-const ghs = wallet.data.balances.find(
-  ({ balance }) => balance.currency === "GHS",
-);
-console.log(ghs?.balance.minor, ghs?.balance.currency);
-```
-
-Live message sends fail closed when funds cannot be reserved. Sandbox sends do not consume real
-wallet funds.
-
-## Going live
-
-Before using an `sk_live_` key:
-
-1. Complete the required workspace and sender-name review.
-2. Configure and verify live email domains or SMS sender names.
-3. Fund the correct currency wallet.
-4. Create a live webhook endpoint and store its signing secret.
-5. Run a controlled send to a consenting recipient and reconcile the delivery with its wallet entry.
+<CardGrid>
+  <LinkCard
+    title="Wallet & billing"
+    description="Minor-unit money, balances, the ledger, and fail-closed reservations."
+    href="/docs/account/wallet-billing/"
+  />
+  <LinkCard
+    title="Rate limits"
+    description="The per-key and per-tenant request limits and the 429 response."
+    href="/docs/account/rate-limits/"
+  />
+  <LinkCard
+    title="Going live"
+    description="The checklist for moving from sk_test_ to sk_live_."
+    href="/docs/account/going-live/"
+  />
+  <LinkCard
+    title="Compliance"
+    description="GH/NG consent, quiet hours, DND, and data-protection duties."
+    href="/docs/account/compliance/"
+  />
+</CardGrid>

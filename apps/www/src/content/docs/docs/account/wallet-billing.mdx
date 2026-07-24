@@ -1,0 +1,52 @@
+---
+title: Wallet & billing
+description: How Fabric represents money, reads balances and the ledger, and reserves funds.
+---
+
+Fabric bills from a prepaid wallet. Every message reserves funds before it is sent and settles after,
+so cost is always tied to a delivery you can reconcile.
+
+## Money is minor units, as strings
+
+Fabric represents money as integer **minor units** — pesewas for GHS, kobo for NGN, cents for USD —
+and the SDK returns them as **strings** so JavaScript never rounds a balance or a cost.
+
+```ts
+const money = { minor: "12050", currency: "GHS" }; // GHS 120.50
+```
+
+Never parse a `minor` value into a float for arithmetic. Do integer math on the string, or use a
+decimal library, and format for display only at the edge.
+
+## Read the wallet
+
+```ts
+const wallet = await fabric.wallet.retrieve();
+
+const ghs = wallet.data.balances.find(({ balance }) => balance.currency === "GHS");
+console.log(ghs?.balance.minor, ghs?.balance.currency);
+console.log(ghs?.lowBalanceThreshold?.minor);
+```
+
+`balances` holds one entry per currency, each with a `balance` and an optional `lowBalanceThreshold`.
+`ledger` holds recent movements — each a `type` (`topup` | `sms_charge` | `refund` | `adjustment`), a
+`direction` (`credit` | `debit`), an `amount`, and a `runningBalance`.
+
+## Reservation and settlement
+
+- On send, Fabric **reserves** the message cost against the wallet.
+- On a terminal state it **settles**: a delivered message is charged; a message that fails or expires
+  is **refunded** to the wallet.
+- Each provider attempt records its own `cost` on the delivery's `attempts[]`.
+
+## The money path fails closed
+
+Unlike the control-plane checks that fail open to keep the data plane alive, the wallet path fails
+**closed**: if funds cannot be reserved, the send is refused with `insufficient_funds` (HTTP `402`),
+not sent on credit. Sandbox sends never consume real funds — they exercise the same reservation logic
+against sandbox balances so your cost handling is correct before you fund live.
+
+:::tip[Reconcile cost against the ledger]
+Match each delivery's `cost` to a `sms_charge` (or refund) ledger entry keyed by your reference. That
+three-way agreement — delivery, terminal event, ledger — is your billing audit trail.
+:::

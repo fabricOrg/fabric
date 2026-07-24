@@ -1,41 +1,115 @@
 ---
+import { Image } from "astro:assets";
 import InteractiveDemo from "../components/InteractiveDemo.astro";
+import Dashboard from "../components/il/Dashboard.astro";
+import Lifecycle from "../components/il/Lifecycle.astro";
+import dispatchImg from "../assets/il/dispatch.png";
+import coverageImg from "../assets/il/coverage.png";
+import walletImg from "../assets/il/wallet.png";
+import reliabilityImg from "../assets/il/reliability.png";
 import "../styles/global.css";
 
-// w-2 landing v5 — disciplined colour + plain language + the real Fabric mark.
-// COLOUR SYSTEM (deliberate, not decorative):
-//   • Channel identity — SMS = brand indigo, Email = teal — ONLY in the deliveries log,
-//     the flow diagram, the SMS/Email product tiles and the template badge.
-//   • Status — green = delivered, amber = sending — ONLY inside product artifacts.
-//   • Accent — brand indigo, ONE emphasised word per heading + interactive states.
-//   • Gold — kicker labels only. Editor syntax keeps its own code theme.
-//   Everything else is neutral. Flat (no gradients).
+// Fabric landing — a guided product story: what it is → why it matters → trust → how it works →
+// integrate → platform → production-readiness → price → coverage → the software → your workflows →
+// ship. Visual language is fixed (indigo/gold, Clash Display, flat, dotted canvas, floating cutouts).
+// Copy is outcome-first and honest: SMS + email live; other channels labelled roadmap; no fabricated
+// metrics — the trust band carries only true values, sized so real uptime/volume drop in later.
 const APP_URL = "https://fabric-dashboard-teal.vercel.app";
-const trust = ["Free sandbox", "Node SDK & CLI", "Delivery webhooks"];
-const grid = [
-  { k: "sms", c: "sms", t: "SMS", href: "/docs/messaging", d: "Text messages sent under your own name, with delivery updates and quiet hours built in." },
-  { k: "email", c: "email", t: "Email", href: "/docs/email", d: "Send email from ready-made templates — the setup that keeps it out of spam is handled for you." },
-  { k: "def", c: "brand", t: "Message templates", href: "/docs/messaging", d: "Write a message once, give it a name, and send it from your code. Reword it without a deploy." },
-  { k: "hook", c: "brand", t: "Webhooks", href: "/docs/webhooks", d: "Get told the moment a message is delivered — checked for you and retried if it fails." },
-  { k: "wallet", c: "brand", t: "Wallet", href: "/docs/account", d: "See what every message costs and what you've spent. Every charge is on the record." },
-  { k: "cli", c: "brand", t: "SDK + CLI", href: "/docs/sdks-tools", d: "A typed Node library and a command-line tool, ready to drop into your project." },
-];
-// Editor syntax: k=keyword s=string f=function n=number p=property c=comment
-const qsCode = `<span class="c"># install</span>
-npm i <span class="s">@fabric-messaging/sdk</span>
 
-<span class="c"># send in the sandbox — no money, no waiting</span>
-<span class="k">await</span> fabric.messages.<span class="f">send</span>(<span class="s">"welcome.otp"</span>, {
-  <span class="p">to</span>: <span class="s">"+2348012345678"</span>, <span class="p">data</span>: { <span class="p">code</span>: <span class="s">"401 922"</span> },
-});
-<span class="c">// → { status: <span class="s">"accepted"</span>, cost: { minor: <span class="n">"3"</span>, currency: <span class="s">"GHS"</span> } }</span>`;
-const icon = (k: string): string => ({
-  sms: `<path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/>`,
-  email: `<path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/>`,
-  def: `<path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 12h6M9 15h4"/>`,
-  hook: `<path d="M6 8a4 4 0 1 1 5 3.9V15"/><circle cx="11" cy="18" r="2.4"/><path d="M13.4 18H18a2 2 0 0 0 2-2V9"/>`,
+const heroTrust = ["Free sandbox", "Typed Node SDK", "Signed webhooks"];
+
+const why = [
+  { t: "One integration, not five", d: "SMS and email — soon WhatsApp, push, and voice — behind one API, one SDK, one webhook scheme. Stop maintaining a provider per channel." },
+  { t: "One wallet, one dashboard", d: "One prepaid balance funds every channel. One place to watch deliveries, costs, and events. No reconciling three vendor invoices." },
+  { t: "Built for Ghana & Nigeria", d: "Sender-ID approval help, DND and quiet-hours enforced for you, and honest pricing in GHS and NGN — not a US API with West Africa bolted on." },
+  { t: "Production-ready by default", d: "Idempotent sends, at-least-once signed webhooks, a double-entry wallet, and row-level tenant isolation. The hard parts are already handled." },
+];
+
+// Honest engineering guarantees — verifiable properties of the platform, not fabricated metrics.
+const guarantees = [
+  { k: "Double-entry wallet", d: "every charge balances" },
+  { k: "Row-level isolation", d: "tenants walled off in Postgres" },
+  { k: "Signed, retried webhooks", d: "delivered at least once" },
+  { k: "Idempotent sends", d: "a retry never double-charges" },
+  { k: "Zero-gate sandbox", d: "the real API before you fund" },
+];
+
+const dxSteps = [
+  { t: "One typed SDK", d: "A single server-only package for Node 22+ — not an SDK per channel." },
+  { t: "One call to send", d: "Send by template key. SMS or email is a setting, not new code." },
+  { t: "Preview before you pay", d: "See the exact rendered message and its cost before a cent leaves the wallet." },
+  { t: "Follow the webhook", d: "A signed, retried event reports the terminal delivery state — the source of truth." },
+  { t: "Watch it live", d: "Delivery, cost, and events surface in the dashboard as they happen." },
+  { t: "Flip to live", d: "Swap the test key for a live one — the prefix picks the environment, the code is identical." },
+];
+
+const capabilities = [
+  { t: "Wallet", d: "Prepaid, double-entry, reconcilable — every hold, charge, and refund on the ledger.", k: "wallet" },
+  { t: "Templates", d: "Versioned messages by stable key; change copy or channel without a deploy.", k: "def" },
+  { t: "Delivery reports", d: "Honest states and terminal webhook events for every send.", k: "report" },
+  { t: "Analytics", d: "Sent, delivered, failed, and cost — per app and environment.", k: "chart" },
+  { t: "Sender IDs", d: "Register and track approval for Ghana and Nigeria.", k: "id" },
+  { t: "API keys", d: "Scoped, per-deployment keys you can revoke independently.", k: "key" },
+  { t: "Logs", d: "Every request and delivery, searchable, with masked recipients.", k: "log" },
+  { t: "Organizations", d: "Team roles and per-user permissions on every workspace.", k: "org" },
+];
+
+const prodReady = [
+  { t: "Fails open where it should", d: "A rate-limit or cache outage serves last-known-good — your traffic keeps flowing." },
+  { t: "Fails closed on money", d: "No wallet reserve, no send. You are never charged for a message that couldn't be funded." },
+  { t: "At-least-once webhooks", d: "Delivery events are queued, signed, retried, and replayable until you acknowledge them." },
+  { t: "Isolated by tenant", d: "Postgres row-level security walls every workspace's data off at the database, not just the app." },
+  { t: "Signed & server-only", d: "Verify every webhook's HMAC; the SDK refuses to run in a browser. Keys never reach the client." },
+  { t: "Compliant by default", d: "Consent, DND, and quiet hours for GH/NG are enforced on the send path — not left to you." },
+];
+
+const walletFlow = [
+  { t: "Top up", d: "Fund the wallet in GHS or NGN." },
+  { t: "Hold", d: "The message cost is reserved on send." },
+  { t: "Send", d: "Fabric dispatches over the channel." },
+  { t: "Charge", d: "Delivered → the hold settles to a charge." },
+  { t: "Refund", d: "Failed or expired → the hold returns." },
+  { t: "Ledger", d: "Every movement, reconcilable, on the record." },
+];
+
+const workflows = [
+  { t: "Fintech", steps: ["OTP", "Transaction alert", "Receipt", "Webhook", "Reconcile"] },
+  { t: "E-commerce", steps: ["Order", "Confirmation", "Shipped", "Delivered", "Notify"] },
+  { t: "SaaS", steps: ["Welcome", "Verify email", "Password reset", "Billing reminder"] },
+];
+
+const quickstart = [
+  { n: "1", t: "Install", c: "npm i @fabric-messaging/sdk" },
+  { n: "2", t: "Add your key", c: "FABRIC_API_KEY=sk_test_…" },
+  { n: "3", t: "Send", c: "fabric.messages.send(\"welcome.otp\", { to, data })" },
+  { n: "4", t: "Verify webhooks", c: "fabric.webhooks.verify({ payload, signature, secret })" },
+];
+
+const docs = [
+  { t: "Quickstart", d: "Send a sandbox message with the Node SDK in minutes.", href: "/docs/quickstarts/working-quickstart/" },
+  { t: "Messaging", d: "Definitions, direct SMS, sender IDs, delivery reports.", href: "/docs/messaging/" },
+  { t: "Webhooks", d: "Verify signatures, handle events, replay a dead delivery.", href: "/docs/webhooks/" },
+  { t: "SDK & CLI", d: "Client config, resources, typed errors, typed catalog.", href: "/docs/sdks-tools/node/" },
+];
+
+const faqs = [
+  { q: "Do I need to fund an account to try Fabric?", a: "No. A sandbox key sends SMS and email over a virtual path with no charge and no sender-ID or domain approval. Rendering, cost, delivery states, and webhooks behave exactly like live." },
+  { q: "Can I migrate from Twilio or another provider?", a: "Yes. Point your server at the Fabric SDK, move your templates to definitions, and keep one wallet and one webhook scheme instead of a provider each. Sandbox lets you prove the migration before any live traffic." },
+  { q: "Is Fabric only for SMS?", a: "No. SMS and email ship today from one API. WhatsApp, push, and voice are on the roadmap and reuse the same integration, wallet, and webhooks." },
+  { q: "How does pricing work?", a: "Pay per message from a prepaid wallet, in local currency (GHS/NGN). Email is priced by rendered size. No subscription; live rates are shown in the dashboard." },
+  { q: "How long does sender-ID approval take?", a: "It's a manual carrier/regulator review with no fixed turnaround, so register early. Everything else works in sandbox while approval is pending." },
+  { q: "What happens if a provider goes down?", a: "The data plane never dies because a dependency did. Control-plane checks fail open to last-known-good; only the wallet fails closed, so you're never charged for an unsendable message." },
+];
+
+const capIcon = (k: string): string => ({
   wallet: `<path d="M3 7h15v11H3z"/><path d="M18 11h3v3h-3z"/><path d="M3 7l12-3v3"/>`,
-  cli: `<path d="M3 5h18v14H3z"/><path d="M7 10l3 2-3 2M13 14h4"/>`,
+  def: `<path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 12h6M9 15h4"/>`,
+  report: `<path d="M4 4v16h16"/><path d="M8 14l3-3 3 2 4-5"/>`,
+  chart: `<path d="M5 20V10M12 20V4M19 20v-7"/>`,
+  id: `<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h4M7 14h6"/>`,
+  key: `<circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H21l-2 2 2 2"/>`,
+  log: `<path d="M4 5h16v14H4z"/><path d="M8 9h8M8 12h8M8 15h5"/>`,
+  org: `<circle cx="12" cy="7" r="3"/><path d="M5 20a7 7 0 0 1 14 0"/>`,
 })[k] ?? "";
 ---
 
@@ -43,12 +117,12 @@ const icon = (k: string): string => ({
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Fabric — one API for SMS and email</title>
-    <meta name="description" content="A typed SDK, a sandbox that works before you fund it, and delivery webhooks. Write your message once and send it by name — SMS or email is just a setting." />
+    <title>Fabric — communications infrastructure for developers</title>
+    <meta name="description" content="The messaging layer your product runs on. SMS and email through one API, one SDK, and one wallet — with a zero-gate sandbox, signed webhooks, and honest pricing for Ghana and Nigeria." />
     <meta name="theme-color" content="#383a96" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Fabric — one API for SMS and email" />
-    <meta property="og:description" content="Send SMS and email from one typed API. Test in the sandbox before you fund or go live." />
+    <meta property="og:title" content="Fabric — communications infrastructure for developers" />
+    <meta property="og:description" content="Every message your product sends, on infrastructure you can trust. One integration for SMS and email — WhatsApp, push, and voice next." />
     <meta name="twitter:card" content="summary" />
     <link rel="icon" href={`data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%233f3aa8"/><path d="M18 14h31v9H28v9h18v9H28v15H18z" fill="%23fff"/></svg>')}`} />
   </head>
@@ -64,328 +138,461 @@ const icon = (k: string): string => ({
           <span>Fabric</span>
         </a>
         <nav class="nav" aria-label="Primary">
-          <a href="/docs">Docs</a><a href="#products">Product</a><a href="#coverage">Coverage</a>
+          <a href="#why">Why Fabric</a><a href="#platform">Platform</a><a href="/docs/">Docs</a><a href="#pricing">Pricing</a>
           <a href={`${APP_URL}/signin`}>Sign in</a>
           <a class="btn btn-primary btn-sm" href={`${APP_URL}/signup`}>Start free</a>
         </nav>
         <details class="mobile-nav">
           <summary>Menu</summary>
           <nav aria-label="Mobile primary">
-            <a href="/docs">Docs</a>
-            <a href="#products">Product</a>
-            <a href="#coverage">Coverage</a>
+            <a href="#why">Why Fabric</a>
+            <a href="#platform">Platform</a>
+            <a href="/docs/">Docs</a>
+            <a href="#pricing">Pricing</a>
             <a href={`${APP_URL}/signin`}>Sign in</a>
             <a class="btn btn-primary btn-sm" href={`${APP_URL}/signup`}>Start free</a>
           </nav>
         </details>
       </header>
 
+      <!-- 1 · HERO -->
       <section class="hero">
         <div class="hero-copy">
-          <h1 class="reveal" style="--d:0s">One API for<br/>SMS and Email.</h1>
-          <p class="lede reveal" style="--d:.12s">Write your message once and send it by name. Try everything free in the sandbox before you add money or go live.</p>
+          <p class="kicker reveal" style="--d:0s">Communications infrastructure</p>
+          <h1 class="reveal" style="--d:.06s">The messaging layer your <span class="hl">product runs on</span>.</h1>
+          <p class="lede reveal" style="--d:.12s">Reach every customer over SMS and email from one API — and account for every message. No more stitching providers, wallets, and webhooks together. Ship in the sandbox today, before you fund or go live.</p>
           <div class="actions reveal" style="--d:.18s">
             <a class="btn btn-primary" href={`${APP_URL}/signup`}>Start free</a>
-            <a class="btn btn-line" href="/docs">Read the docs →</a>
+            <a class="btn btn-line" href="/docs/">Read the docs →</a>
           </div>
           <ul class="trust reveal" style="--d:.24s">
-            {trust.map((t) => (<li><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="var(--ok)" stroke-width="2"/></svg>{t}</li>))}
+            {heroTrust.map((t) => (<li><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="var(--ok)" stroke-width="2"/></svg>{t}</li>))}
           </ul>
         </div>
-        <InteractiveDemo />
-      </section>
-
-      <!-- Animated channel-flow illustration -->
-      <section class="flow">
-        <p class="num center">How it works</p>
-        <h2 class="center">One name in. SMS or email out.</h2>
-        <figure class="dispatch-illustration">
-          <img
-            src="/images/fabric-message-dispatch.webp"
-            width="1600"
-            height="640"
-            loading="lazy"
-            decoding="async"
-            alt="A developer sends one request through Fabric, which dispatches an SMS to a phone and an email to a laptop."
-          />
-          <span class="dispatch-packet packet-sms" aria-hidden="true"></span>
-          <span class="dispatch-packet packet-email" aria-hidden="true"></span>
-          <span class="arrival-pulse arrival-sms" aria-hidden="true"></span>
-          <span class="arrival-pulse arrival-email" aria-hidden="true"></span>
+        <figure class="il hero-il reveal" style="--d:.2s">
+          <Image src={dispatchImg} alt="A developer's API request passing through the Fabric hub and out to a phone as SMS and a laptop as email." widths={[408, 544, 612]} sizes="(min-width: 64rem) 34rem, 88vw" format="webp" quality={90} loading="eager" />
         </figure>
       </section>
 
-      <section class="feat">
-        <div class="feat-copy">
-          <p class="num">01 · Templates</p>
-          <h2>Write once. Send by <span class="hl">name</span>.</h2>
-          <p>Create a message with a few blanks to fill in, then send it from your code by its name. Changing the wording — or switching from SMS to email — never touches your code. You see the exact message and price before it goes out.</p>
-          <ul class="pills"><li>Version history</li><li>Preview before send</li><li>Multiple languages</li></ul>
+      <!-- 2 · WHY FABRIC -->
+      <section class="why" id="why">
+        <div class="sec-head center">
+          <p class="num">Why Fabric</p>
+          <h2>Build on a platform, not a <span class="hl">pile of providers</span>.</h2>
+          <p class="section-lede">Messaging is easy to start and painful to run — provider sprawl, split billing, brittle webhooks, compliance you didn't sign up for. Fabric is the layer that makes it one thing.</p>
         </div>
-        <div class="def-card">
-          <div class="def-head"><span class="badge b-sms">SMS</span><span class="log-key">order.shipped</span><span class="chip ok">v3 · live</span></div>
-          <div class="def-body">Hi <span class="tok">{'{{'}name{'}}'}</span>, order <span class="tok">{'{{'}ref{'}}'}</span> shipped.</div>
-          <div class="def-meta"><span>1 text</span><span class="cost">GHS 0.03</span></div>
+        <div class="why-grid">
+          {why.map((w) => (<div class="why-card"><h3>{w.t}</h3><p>{w.d}</p></div>))}
         </div>
       </section>
 
-      <section class="feat rev">
-        <div class="feat-copy">
-          <p class="num">02 · Sandbox</p>
-          <h2>Try it before you <span class="hl">pay</span>.</h2>
-          <p>A test key sends to a safe fake — no balance to top up, no approvals to wait for. Watch messages, costs, and delivery updates show up in your dashboard, then switch to live with the exact same code.</p>
-          <ul class="pills"><li>No money to test</li><li>Test inbox</li><li>Same code live</li></ul>
+      <!-- 3 · TRUST -->
+      <section class="trustbar" aria-label="What Fabric is built on">
+        <p class="tb-lead">Infrastructure you can verify — not claims.</p>
+        <ul class="guarantees">
+          {guarantees.map((g) => (<li><strong>{g.k}</strong><span>{g.d}</span></li>))}
+        </ul>
+      </section>
+
+      <!-- 4 · HOW IT WORKS — signature scroll lifecycle -->
+      <Lifecycle />
+
+      <!-- 5 · DEVELOPER EXPERIENCE -->
+      <section class="dx">
+        <div class="sec-head">
+          <p class="num">Integrate</p>
+          <h2>From <span class="hl">npm install</span> to production, in one sitting.</h2>
+          <p class="section-lede">The whole journey is one typed SDK and one mental model. Watch it end to end.</p>
         </div>
-        <div class="editor demo">
-          <div class="ed-bar"><span class="d r"></span><span class="d y"></span><span class="d g"></span><em>quickstart.sh</em></div>
-          <pre><code class="demo-type" set:html={qsCode} /><span class="cursor" aria-hidden="true"></span></pre>
+        <div class="dx-grid">
+          <ol class="journey">
+            {dxSteps.map((s, i) => (
+              <li><span class="j-n">{i + 1}</span><div><strong>{s.t}</strong><p>{s.d}</p></div></li>
+            ))}
+          </ol>
+          <InteractiveDemo />
         </div>
       </section>
 
-      <section class="feat">
-        <div class="feat-copy">
-          <p class="num">03 · Costs</p>
-          <h2>See what every message <span class="hl">costs</span>.</h2>
-          <p>Each send shows what it set aside and what it finally cost — your balance and every charge, in the dashboard and the API. Nothing hidden, nothing rounded away.</p>
-          <ul class="pills"><li>Held, then charged</li><li>Refunds handled</li><li>Cost per message</li></ul>
+      <!-- 6 · PLATFORM CAPABILITIES -->
+      <section class="platform" id="platform">
+        <div class="sec-head center">
+          <p class="num">The platform</p>
+          <h2>Everything messaging needs, <span class="hl">already built</span>.</h2>
+          <p class="section-lede">One integration gives you the whole toolkit — not just a send endpoint.</p>
         </div>
-        <div class="wallet-card">
-          <div class="wallet-top"><span>Wallet · GHS</span><strong>2,418.50</strong></div>
-          <div class="ledger"><span>hold · order.shipped</span><span class="deb">−0.03</span></div>
-          <div class="ledger"><span>charge · order.shipped</span><span class="deb">−0.03</span></div>
-          <div class="ledger"><span>top-up · card</span><span class="cred">+500.00</span></div>
-        </div>
-      </section>
-
-      <section class="products" id="products">
-        <p class="num center">The platform</p>
-        <h2 class="center">Everything, one contract.</h2>
-        <div class="pgrid">
-          {grid.map((g) => (
-            <a class={`pcard c-${g.c}`} href={g.href}>
-              <span class="pic-wrap"><svg class="pic" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" set:html={icon(g.k)} /></span>
-              <h3>{g.t}<span class="parr" aria-hidden="true">→</span></h3>
-              <p>{g.d}</p>
-            </a>
+        <div class="cap-grid">
+          {capabilities.map((c) => (
+            <div class="cap-card">
+              <span class="cap-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" set:html={capIcon(c.k)} /></span>
+              <h3>{c.t}</h3>
+              <p>{c.d}</p>
+            </div>
           ))}
         </div>
+        <div class="chan-note">
+          <span class="cn-live">SMS · Email live</span>
+          <span class="cn-soon">WhatsApp · Push · Voice · In-app on the roadmap</span>
+        </div>
       </section>
 
+      <!-- 7 · RELIABILITY & SECURITY -->
+      <section class="split">
+        <div class="split-top">
+          <div class="sec-head">
+            <p class="num">Production readiness</p>
+            <h2>Trustworthy when it's <span class="hl">3am and busy</span>.</h2>
+            <p class="section-lede">Reliability and security aren't a page in the docs — they're how the platform is built. The data plane never dies because a dependency did.</p>
+          </div>
+          <figure class="il split-il"><Image src={reliabilityImg} alt="A message queue: packets moving along a pipeline, one looping back as a retry, guarded by a fail-closed shield." widths={[360, 480, 567]} sizes="(min-width: 62rem) 30rem, 80vw" format="webp" quality={88} loading="lazy" /></figure>
+        </div>
+        <div class="cardgrid three">
+          {prodReady.map((r) => (<div class="mini"><h3>{r.t}</h3><p>{r.d}</p></div>))}
+        </div>
+      </section>
+
+      <!-- 8 · PRICING -->
+      <section class="pricing" id="pricing">
+        <div class="sec-head center">
+          <p class="num">Pricing</p>
+          <h2>Pay for messages. <span class="hl">Nothing else.</span></h2>
+          <p class="section-lede">No seats, no monthly minimum. A prepaid wallet, and every movement on the ledger.</p>
+        </div>
+        <div class="wallet-flow">
+          <figure class="il wf-il"><Image src={walletImg} alt="An open double-entry ledger with debits and credits balancing like a set of scales, beside a wallet and a coin." widths={[300, 400, 500]} sizes="(min-width: 62rem) 24rem, 80vw" format="webp" quality={88} loading="lazy" /></figure>
+          <ol class="flow-steps">
+            {walletFlow.map((f, i) => (
+              <li><span class="f-n">{i + 1}</span><div><strong>{f.t}</strong><p>{f.d}</p></div></li>
+            ))}
+          </ol>
+        </div>
+        <p class="price-foot">Prices in <strong>GHS</strong> and <strong>NGN</strong>. Email billed by rendered size. Sandbox is free. Live rates in the dashboard.</p>
+      </section>
+
+      <!-- 9 · COVERAGE -->
       <section class="coverage" id="coverage">
         <div class="cov-copy">
           <p class="num">Coverage</p>
           <h2>Strongest where it's <span class="hl">hardest</span>.</h2>
-          <p>Built for developers everywhere, with real depth where messaging is genuinely hard — Ghana and Nigeria first. Clear help getting your sender name approved, honest pricing in local currency, and straight answers on what "delivered" really means.</p>
-          <div class="actions"><a class="btn btn-line" href="/docs/messaging">Coverage &amp; sender names →</a></div>
+          <p>Ghana and Nigeria are the live corridors — with hands-on sender-ID help, local-currency pricing, and honest delivery semantics. The API works anywhere; depth expands from here.</p>
+          <ul class="cov-legend">
+            <li><span class="dot live"></span>SMS — live in GH & NG</li>
+            <li><span class="dot live"></span>Email — live everywhere</li>
+            <li><span class="dot help"></span>Sender-ID approval — GH & NG</li>
+            <li><span class="dot soon"></span>More regions — coming</li>
+          </ul>
+          <div class="actions"><a class="btn btn-line" href="/docs/messaging/sender-ids/">Sender IDs & registration →</a></div>
         </div>
-        <figure class="coverage-visual">
-          <img
-            src="/images/fabric-connected-people.webp"
-            width="900"
-            height="648"
-            loading="lazy"
-            decoding="async"
-            alt="Three people coordinate through a phone, laptop, and delivered message."
-          />
-          <span class="coverage-signal signal-message" aria-hidden="true"></span>
-          <span class="coverage-signal signal-delivered" aria-hidden="true"></span>
-        </figure>
-        <div class="cov-stats">
-          <div class="stat"><strong>GHS · NGN</strong><span>prices in your currency</span></div>
-          <div class="stat"><strong>&lt; 3 steps</strong><span>from sign-up to first send</span></div>
-          <div class="stat"><strong>GH · NG</strong><span>sender-name help</span></div>
-          <div class="stat"><strong>1 API</strong><span>SMS, email & templates</span></div>
+        <figure class="il cov-visual"><Image src={coverageImg} alt="Ghana (Accra) and Nigeria (Lagos) as the live delivery corridors on a stylised West Africa map, with further regions dimmed." widths={[300, 440, 560]} sizes="(min-width: 62rem) 28rem, 88vw" format="webp" quality={88} loading="lazy" /></figure>
+      </section>
+
+      <!-- 10 · DASHBOARD -->
+      <section class="preview">
+        <div class="sec-head center">
+          <p class="num">The dashboard</p>
+          <h2>Know exactly <span class="hl">where every message went</span>.</h2>
+          <p class="section-lede">The same data the API returns, rendered for your team. Deliveries, wallet, and insights without leaving the page.</p>
+        </div>
+        <div class="preview-frame"><Dashboard /></div>
+      </section>
+
+      <!-- 11 · BUSINESS WORKFLOWS -->
+      <section class="flows">
+        <div class="flows-inner">
+          <div class="flows-copy">
+            <p class="num">Real workflows</p>
+            <h2>You'll recognise your own <span class="hl">product</span>.</h2>
+            <p class="section-lede">Whatever you're building, the messages are the same shape — sent by key, followed by webhook, reconciled on the ledger.</p>
+            <figure class="flows-il">
+              <img src="/images/fabric-connected-people.webp" width="900" height="648" loading="lazy" decoding="async" alt="People coordinating across a phone, a laptop, and a delivered message." />
+            </figure>
+          </div>
+          <div class="flow-cards">
+            {workflows.map((w) => (
+              <div class="flow-card">
+                <h3>{w.t}</h3>
+                <ol class="chips">
+                  {w.steps.map((s) => (<li>{s}</li>))}
+                </ol>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
+      <!-- 12 · DOCS / QUICKSTART -->
+      <section class="docs">
+        <div class="sec-head">
+          <p class="num">Quick start</p>
+          <h2>Your first message, in <span class="hl">four lines</span>.</h2>
+        </div>
+        <div class="qs-grid">
+          <ol class="qs-steps">
+            {quickstart.map((q) => (
+              <li><span class="qs-n">{q.n}</span><div><strong>{q.t}</strong><code>{q.c}</code></div></li>
+            ))}
+          </ol>
+          <div class="docs-cards">
+            {docs.map((d) => (
+              <a class="doc-card" href={d.href}><h3>{d.t}<span class="parr" aria-hidden="true">→</span></h3><p>{d.d}</p></a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <!-- 13 · FAQ -->
+      <section class="faq">
+        <div class="sec-head center">
+          <p class="num">FAQ</p>
+          <h2>Questions, answered <span class="hl">straight</span>.</h2>
+        </div>
+        <div class="faq-list">
+          {faqs.map((f) => (
+            <details class="qa">
+              <summary>{f.q}<span class="q-mark" aria-hidden="true">+</span></summary>
+              <p>{f.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      <!-- 14 · CTA -->
       <section class="cta">
-        <h2>Send your first message today.</h2>
-        <p>Create an account, grab a test key, and send in the sandbox in minutes.</p>
-        <div class="actions"><a class="btn btn-primary" href={`${APP_URL}/signup`}>Start free</a><a class="btn btn-line" href="/docs">Read the docs →</a></div>
+        <h2>Ship your first message today.</h2>
+        <p>Create an account, grab a test key, and send in the sandbox in minutes — no card, no wait.</p>
+        <div class="actions"><a class="btn btn-primary" href={`${APP_URL}/signup`}>Start free</a><a class="btn btn-line" href="/docs/quickstarts/working-quickstart/">Node quickstart →</a></div>
       </section>
 
+      <!-- FOOTER -->
       <footer class="ftr">
-        <span class="brand-sm">Fabric</span>
-        <nav aria-label="Footer"><a href="/docs">Docs</a><a href={`${APP_URL}/signin`}>Sign in</a><a href="/docs/get-started">Quickstart</a></nav>
+        <div class="ftr-top">
+          <div class="ftr-brand">
+            <span class="brand-sm">Fabric</span>
+            <p>Communications infrastructure for developers. SMS and email today; more channels next.</p>
+          </div>
+          <div class="ftr-cols">
+            <div><h4>Product</h4><a href="#why">Why Fabric</a><a href="#platform">Platform</a><a href="#pricing">Pricing</a><a href="#coverage">Coverage</a></div>
+            <div><h4>Developers</h4><a href="/docs/">Docs</a><a href="/docs/quickstarts/working-quickstart/">Quickstart</a><a href="/docs/sdks-tools/node/">SDK & CLI</a><a href="/docs/webhooks/">Webhooks</a></div>
+            <div><h4>Resources</h4><a href="/docs/guides/">Guides</a><a href="/docs/messaging/delivery-reports/">Delivery</a><a href="/docs/account/compliance/">Compliance</a></div>
+            <div><h4>Account</h4><a href={`${APP_URL}/signup`}>Start free</a><a href={`${APP_URL}/signin`}>Sign in</a></div>
+          </div>
+        </div>
+        <div class="ftr-legal"><span>© 2026 Fabric</span><span>Built for Ghana & Nigeria</span></div>
       </footer>
     </main>
 
     <style>
-      /* colour system — two channel hues + status + neutrals. No decorative rainbow. */
-      :root { --sms: var(--primary); --email: #0d9488; --ok: #16a34a; --warn: #d97706; }
+      :root { --maxw: 74rem; --section-y: clamp(4rem, 7.5vw, 7rem); --head-gap: clamp(2.75rem, 4.5vw, 4rem); --card-pad: 1.9rem 1.7rem; }
       body { background: var(--background); }
       .shell { color: var(--foreground); background-image: radial-gradient(color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px); background-size: 26px 26px; background-position: -13px -13px; }
-      .hdr, .hero, .flow, .feat, .products, .coverage, .cta, .ftr { margin-inline: auto; width: min(100% - 2rem, 74rem); }
-      .skip-link { position: fixed; z-index: 100; inset: 0 auto auto 1rem; transform: translateY(-120%); padding: 0.7rem 1rem; background: var(--primary); color: var(--primary-foreground); font-weight: 600; text-decoration: none; }
-      .skip-link:focus { transform: translateY(0.75rem); }
+      .hdr, .hero, .why, .trustbar, .how, .dx, .platform, .split, .pricing, .coverage, .preview, .flows, .docs, .faq, .cta, .ftr { margin-inline: auto; width: min(100% - 3rem, var(--maxw)); }
+      .skip-link { position: fixed; z-index: 100; inset: 0 auto auto 1rem; transform: translateY(-120%); padding: .7rem 1rem; background: var(--primary); color: var(--primary-foreground); font-weight: 600; text-decoration: none; }
+      .skip-link:focus { transform: translateY(.75rem); }
 
       .hdr { position: relative; display: flex; align-items: center; justify-content: space-between; padding-block: 1.3rem; }
-      .brand { display: inline-flex; align-items: center; gap: 0.55rem; color: var(--foreground); font-family: var(--font-display); font-weight: 700; font-size: 1.25rem; letter-spacing: 0; text-decoration: none; }
+      .brand { display: inline-flex; align-items: center; gap: .55rem; color: var(--foreground); font-family: var(--font-display); font-weight: 700; font-size: 1.25rem; text-decoration: none; }
       .nav { display: flex; align-items: center; gap: 1.4rem; }
-      .nav a { color: var(--muted-foreground); font-size: 0.9375rem; text-decoration: none; }
+      .nav a { color: var(--muted-foreground); font-size: .9375rem; text-decoration: none; }
       .nav a:hover { color: var(--foreground); }
       .mobile-nav { display: none; }
-      .mobile-nav summary { cursor: pointer; color: var(--foreground); font-weight: 600; font-size: 0.9rem; list-style: none; }
+      .mobile-nav summary { cursor: pointer; color: var(--foreground); font-weight: 600; font-size: .9rem; list-style: none; }
       .mobile-nav summary::-webkit-details-marker { display: none; }
-      .mobile-nav nav { position: absolute; z-index: 20; inset: calc(100% - 0.6rem) 0 auto; display: grid; padding: 0.6rem; border: 1px solid var(--border); background: var(--card); box-shadow: 0 18px 35px -25px rgba(20,20,32,.5); }
-      .mobile-nav nav a:not(.btn) { padding: 0.8rem; color: var(--foreground); text-decoration: none; }
-      .mobile-nav .btn { margin-top: 0.4rem; }
-      .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 2.85rem; padding-inline: 1.35rem; font-weight: 600; font-size: 0.95rem; text-decoration: none; border: 1px solid transparent; transition: transform .05s, filter .15s, border-color .15s, color .15s; }
+      .mobile-nav nav { position: absolute; z-index: 20; inset: calc(100% - .6rem) 0 auto; display: grid; padding: .6rem; border: 1px solid var(--border); background: var(--card); box-shadow: 0 18px 35px -25px rgba(20,20,32,.5); }
+      .mobile-nav nav a:not(.btn) { padding: .8rem; color: var(--foreground); text-decoration: none; }
+      .mobile-nav .btn { margin-top: .4rem; }
+
+      .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 2.85rem; padding-inline: 1.35rem; font-weight: 600; font-size: .95rem; text-decoration: none; border: 1px solid transparent; transition: transform .05s, filter .15s, border-color .15s, color .15s; }
       .btn:active { transform: translateY(1px); }
-      .btn-sm { min-height: 2.3rem; padding-inline: 1rem; font-size: 0.875rem; }
+      .btn-sm { min-height: 2.3rem; padding-inline: 1rem; font-size: .875rem; }
       .btn-primary { background: var(--primary); color: #fff; }
       .btn-primary:hover { filter: brightness(1.1); }
       .btn-line { background: var(--card); color: var(--foreground); border-color: var(--border); }
       .btn-line:hover { border-color: var(--primary); color: var(--primary); }
 
-      .hero { display: grid; gap: 3rem; align-items: center; padding-block: clamp(3rem,7vh,5.5rem) 3.5rem; }
-      @media (min-width: 64rem) { .hero { grid-template-columns: 1.02fr 0.98fr; } }
-      h1 { margin: 1rem 0 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(2.7rem,6vw,4.8rem); line-height: 0.98; letter-spacing: 0; }
+      /* shared type + section heads */
+      .kicker, .num { margin: 0; color: var(--gold-ink); font-family: var(--font-mono); font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; }
+      h1, h2, h3 { font-family: var(--font-display); font-weight: 700; letter-spacing: 0; }
       .hl { color: var(--primary); }
-      .lede { margin: 1.3rem 0 0; max-width: 32rem; color: var(--muted-foreground); font-size: 1.12rem; line-height: 1.6; }
-      .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2rem; }
+      .sec-head { max-width: 44rem; }
+      .sec-head.center { margin-inline: auto; text-align: center; }
+      .sec-head h2 { margin: .6rem 0 0; font-size: clamp(1.9rem,3.7vw,2.7rem); line-height: 1.05; }
+      .section-lede { margin: 1rem 0 0; color: var(--muted-foreground); line-height: 1.6; }
+      .sec-head.center .section-lede { margin-inline: auto; }
+
+      /* hero */
+      .hero { display: grid; gap: clamp(2.5rem,5vw,4rem); align-items: center; padding-block: clamp(3rem,6vw,6rem) var(--section-y); }
+      @media (min-width: 64rem) { .hero { grid-template-columns: 1.02fr .98fr; } }
+      h1 { margin: .9rem 0 0; font-size: clamp(2.6rem,5.6vw,4.4rem); line-height: .99; }
+      .lede { margin: 1.3rem 0 0; max-width: 34rem; color: var(--muted-foreground); font-size: 1.12rem; line-height: 1.6; }
+      .actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
       .trust { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1.5rem 0 0; padding: 0; list-style: none; }
-      .trust li { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted-foreground); font-size: 0.85rem; }
+      .trust li { display: inline-flex; align-items: center; gap: .4rem; color: var(--muted-foreground); font-size: .85rem; }
+      .hero-il { width: 100%; max-width: 34rem; margin-inline: auto; }
+      .hero-il :global(img) { animation: floaty 6s ease-in-out infinite; }
+      @keyframes floaty { 50% { transform: translateY(-10px); } }
+      @media (prefers-reduced-motion: reduce) { .hero-il :global(img) { animation: none; } }
 
-      /* editor code panels — dark, vibrant syntax (the one place code colour lives) */
-      .editor { background: #15151f; border: 1px solid #2a2b3d; box-shadow: 0 26px 60px -38px rgba(20,20,32,.6); overflow: hidden; }
-      .ed-bar { display: flex; align-items: center; gap: 0.45rem; padding: 0.6rem 0.9rem; background: #1c1d29; border-bottom: 1px solid #2a2b3d; }
-      .ed-bar .d { width: 0.62rem; height: 0.62rem; border-radius: 50%; } .ed-bar .r { background: #ff5f57; } .ed-bar .y { background: #febc2e; } .ed-bar .g { background: #28c840; }
-      .ed-bar em { margin-left: auto; font-family: var(--font-mono); font-style: normal; font-size: 0.72rem; color: #6b6f8c; }
-      .editor pre { margin: 0; padding: 1.05rem 1.2rem; overflow-x: auto; }
-      .editor code { font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.75; color: #cdd0e5; white-space: pre; }
-      /* Looping demo editor: fixed height = the finished 8-line snippet, so typing/clearing never shifts the page. */
-      .editor.demo pre { height: 13.6rem; }
-      .cursor { display: inline-block; width: 0.5rem; height: 1.05rem; margin-left: 0.1rem; background: #a9abec; vertical-align: -0.18rem; opacity: 0; }
-      .cursor.on { opacity: 1; animation: blink 0.8s steps(1) infinite; }
-      @keyframes blink { 50% { opacity: 0; } }
-      @media (prefers-reduced-motion: reduce) { .cursor { display: none; } }
-      /* set:html spans are unscoped — target them globally within the scoped .editor */
-      .editor :global(.k) { color: #c792ea; } .editor :global(.s) { color: #7ee787; } .editor :global(.f) { color: #61afef; } .editor :global(.n) { color: #f0a45d; } .editor :global(.p) { color: #e5c07b; } .editor :global(.c) { color: #6b7089; font-style: italic; }
+      /* why */
+      .why { padding-block: var(--section-y); }
+      .why-grid { display: grid; gap: 1px; margin-top: var(--head-gap); background: var(--border); border: 1px solid var(--border); }
+      @media (min-width: 52rem) { .why-grid { grid-template-columns: repeat(2,1fr); } }
+      @media (min-width: 74rem) { .why-grid { grid-template-columns: repeat(4,1fr); } }
+      .why-card { background: var(--card); padding: var(--card-pad); border-top: 3px solid var(--primary); }
+      .why-card h3 { margin: 0 0 .5rem; font-size: 1.08rem; }
+      .why-card p { margin: 0; color: var(--muted-foreground); font-size: .92rem; line-height: 1.55; }
 
-      .badge { font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.18rem 0.42rem; }
-      .b-sms { color: #fff; background: var(--sms); }
-      .log-key { font-family: var(--font-mono); color: var(--foreground); }
-      .chip { font-size: 0.72rem; padding: 0.15rem 0.45rem; font-weight: 500; }
-      .chip.ok { color: #fff; background: var(--ok); }
-      .cost { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted-foreground); }
+      /* trust strip — engineering guarantees */
+      .trustbar { padding-block: clamp(2.25rem, 3.5vw, 3.25rem); border-block: 1px solid var(--border); }
+      .tb-lead { margin: 0 0 1.4rem; text-align: center; color: var(--muted-foreground); font-size: .95rem; }
+      .guarantees { display: grid; grid-template-columns: repeat(2,1fr); gap: 1.2rem 1.5rem; margin: 0; padding: 0; list-style: none; }
+      @media (min-width: 56rem) { .guarantees { grid-template-columns: repeat(5,1fr); } }
+      .guarantees li { display: grid; gap: .2rem; text-align: center; }
+      .guarantees strong { font-family: var(--font-display); font-size: .95rem; color: var(--foreground); }
+      .guarantees span { font-size: .8rem; color: var(--muted-foreground); }
 
-      /* animated flow illustration */
-      .flow { padding-block: 5rem; }
-      .num { margin: 0; color: var(--gold-ink); font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; }
-      .num.center, h2.center { text-align: center; }
-      .flow h2, .feat-copy h2, .products h2, .coverage h2, .cta h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: 0; }
-      .flow h2 { margin: 0.6rem 0 2rem; font-size: clamp(1.8rem,3.4vw,2.6rem); }
-      .dispatch-illustration { position: relative; margin: 1.5rem 0 0; overflow: hidden; aspect-ratio: 5 / 2; }
-      .dispatch-illustration img { display: block; width: 100%; height: 100%; object-fit: cover; }
-      .dispatch-packet { position: absolute; z-index: 2; left: 51%; width: 0.62rem; height: 0.62rem; border-radius: 50%; opacity: 0; box-shadow: 0 0 0 4px color-mix(in oklab, currentColor 16%, transparent); }
-      .packet-sms { top: 27%; color: var(--sms); background: currentColor; animation: dispatchSms 3.4s ease-in-out infinite; }
-      .packet-email { top: 69%; color: var(--email); background: currentColor; animation: dispatchEmail 3.4s ease-in-out 1.15s infinite; }
-      .arrival-pulse { position: absolute; z-index: 2; left: 76.3%; width: 1.8rem; height: 1.8rem; border: 2px solid var(--ok); border-radius: 50%; opacity: 0; transform: translate(-50%,-50%); }
-      .arrival-sms { top: 27%; animation: arrivalPulse 3.4s ease-out .8s infinite; }
-      .arrival-email { top: 69%; animation: arrivalPulse 3.4s ease-out 1.95s infinite; }
+      /* how */
+      .how { padding-block: var(--section-y); }
+      .il { margin: 0; }
+      .il :global(img) { display: block; width: 100%; height: auto; filter: drop-shadow(0 30px 40px rgba(30,27,75,.16)); }
+      .how-grid { display: grid; gap: clamp(2rem, 5vw, 4rem); align-items: center; }
+      @media (min-width: 62rem) { .how-grid { grid-template-columns: 1fr 1fr; } }
+      .how-il { width: 100%; max-width: 34rem; margin-inline: auto; }
 
-      /* feature rows */
-      .feat { display: grid; gap: 2.5rem; align-items: center; padding-block: 4.75rem; }
-      @media (min-width: 62rem) { .feat { grid-template-columns: 1fr 1fr; } .feat.rev .feat-copy { order: 2; } }
-      .feat-copy h2 { margin: 0.6rem 0 0; font-size: clamp(1.9rem,3.6vw,2.8rem); line-height: 1.05; }
-      .feat-copy > p { margin: 1rem 0 0; color: var(--muted-foreground); line-height: 1.6; }
-      .pills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1.4rem 0 0; padding: 0; list-style: none; }
-      .pills li { font-size: 0.82rem; padding: 0.3rem 0.6rem; border: 1px solid var(--border); background: var(--card); color: var(--muted-foreground); }
-      .def-card, .wallet-card { background: var(--card); border: 1px solid var(--border); padding: 0.9rem; display: grid; gap: 0.55rem; box-shadow: 0 20px 50px -40px rgba(26,27,46,.5); }
-      .def-head { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; }
-      .def-body { padding: 0.8rem 0.7rem; background: var(--background); border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.85rem; }
-      .def-body .tok { color: var(--primary); background: color-mix(in oklab, var(--primary) 10%, transparent); padding: 0 0.15rem; }
-      .def-meta { display: flex; gap: 0.8rem; font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted-foreground); }
-      .wallet-top { display: flex; align-items: baseline; justify-content: space-between; }
-      .wallet-top strong { font-family: var(--font-mono); font-size: 1.4rem; }
-      .ledger { display: flex; justify-content: space-between; padding: 0.5rem 0.6rem; background: var(--background); border: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted-foreground); }
-      .deb { color: var(--foreground); } .cred { color: var(--ok); }
+      /* dx journey */
+      .dx { padding-block: var(--section-y); }
+      .dx-grid { display: grid; gap: 2.5rem; margin-top: var(--head-gap); align-items: center; }
+      @media (min-width: 62rem) { .dx-grid { grid-template-columns: 1fr 1fr; } }
+      .journey { display: grid; gap: 1.4rem; margin: 0; padding: 0; list-style: none; counter-reset: j; }
+      .journey li { display: grid; grid-template-columns: auto 1fr; gap: 1rem; }
+      .j-n { display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: 50%; background: color-mix(in oklab, var(--primary) 12%, transparent); color: var(--primary); font-family: var(--font-mono); font-size: .8rem; font-weight: 600; }
+      .journey strong { font-family: var(--font-display); font-size: 1.02rem; }
+      .journey p { margin: .25rem 0 0; color: var(--muted-foreground); font-size: .9rem; line-height: 1.5; }
+      .dx-il { max-width: 32rem; margin-inline: auto; }
 
+      /* platform capabilities */
+      .platform { padding-block: var(--section-y); }
+      .cap-grid { display: grid; gap: 1px; margin-top: var(--head-gap); background: var(--border); border: 1px solid var(--border); }
+      @media (min-width: 40rem) { .cap-grid { grid-template-columns: repeat(2,1fr); } }
+      @media (min-width: 64rem) { .cap-grid { grid-template-columns: repeat(4,1fr); } }
+      .cap-card { background: var(--card); padding: var(--card-pad); }
+      .cap-ic { display: inline-grid; place-items: center; width: 2.4rem; height: 2.4rem; margin-bottom: .8rem; background: color-mix(in oklab, var(--primary) 10%, transparent); color: var(--primary); }
+      .cap-card h3 { margin: 0 0 .35rem; font-size: 1.05rem; }
+      .cap-card p { margin: 0; color: var(--muted-foreground); font-size: .88rem; line-height: 1.5; }
+      .chan-note { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem 1.2rem; margin-top: 1.8rem; font-size: .85rem; }
+      .cn-live { color: var(--ok); font-weight: 600; }
+      .cn-soon { color: var(--muted-foreground); }
 
-      /* product grid — neutral tiles; SMS/Email carry channel colour, the rest brand indigo */
-      .products { padding-block: 5.25rem; }
-      .products h2 { margin: 0.6rem 0 0; font-size: clamp(1.9rem,3.6vw,2.8rem); }
-      .pgrid { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); margin-top: 2.5rem; }
-      @media (min-width: 40rem) { .pgrid { grid-template-columns: repeat(2,1fr); } }
-      @media (min-width: 60rem) { .pgrid { grid-template-columns: repeat(3,1fr); } }
-      .pcard { display: block; background: var(--card); padding: 1.7rem 1.5rem; color: inherit; text-decoration: none; transition: background .15s; }
-      .pcard:hover { background: color-mix(in oklab, var(--c) 6%, var(--card)); }
-      .pcard:focus-visible { outline: 2px solid var(--c); outline-offset: -2px; }
-      .pic-wrap { display: inline-grid; place-items: center; width: 2.6rem; height: 2.6rem; margin-bottom: 0.9rem; background: color-mix(in oklab, var(--c) 12%, transparent); }
-      .pic { stroke: var(--c); }
-      .c-sms { --c: var(--sms); } .c-email { --c: var(--email); } .c-brand { --c: var(--primary); }
-      .pcard h3 { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.4rem; font-family: var(--font-display); font-size: 1.1rem; } .pcard p { margin: 0; color: var(--muted-foreground); font-size: 0.92rem; line-height: 1.55; }
-      /* arrow appears + slides on hover/focus — the clickable affordance */
-      .parr { color: var(--c); opacity: 0; transform: translateX(-0.25rem); transition: opacity .15s, transform .15s; }
-      .pcard:hover .parr, .pcard:focus-visible .parr { opacity: 1; transform: none; }
+      /* production readiness (merged) */
+      .split { padding-block: var(--section-y); }
+      .split-top { display: grid; gap: 2rem; align-items: center; }
+      @media (min-width: 62rem) { .split-top { grid-template-columns: 1.1fr .9fr; } }
+      .split-il { width: 100%; max-width: 30rem; margin-inline: auto; }
+      .cardgrid { display: grid; gap: 1px; margin-top: var(--head-gap); background: var(--border); border: 1px solid var(--border); }
+      .cardgrid.three { grid-template-columns: 1fr; }
+      @media (min-width: 48rem) { .cardgrid.three { grid-template-columns: 1fr 1fr; } }
+      @media (min-width: 72rem) { .cardgrid.three { grid-template-columns: repeat(3,1fr); } }
+      .mini { background: var(--card); padding: var(--card-pad); }
+      .mini h3 { margin: 0 0 .45rem; font-size: 1.02rem; }
+      .mini p { margin: 0; color: var(--muted-foreground); font-size: .9rem; line-height: 1.5; }
 
-      /* coverage — neutral stat tiles, one brand accent rule */
-      .coverage { display: grid; gap: 2.5rem; align-items: center; padding-block: 5.25rem; }
-      .cov-copy h2 { margin: 0.6rem 0 0; font-size: clamp(1.9rem,3.6vw,2.8rem); } .cov-copy > p { margin: 1rem 0 1.5rem; color: var(--muted-foreground); line-height: 1.6; }
-      .coverage-visual { position: relative; width: min(100%,34rem); margin: 0 auto; }
-      .coverage-visual img { display: block; width: 100%; height: auto; }
-      .coverage-signal { position: absolute; width: 2rem; height: 2rem; border: 2px solid var(--email); border-radius: 50%; opacity: 0; transform: translate(-50%,-50%); animation: arrivalPulse 3.2s ease-out infinite; }
-      .signal-message { left: 31%; top: 18%; }
-      .signal-delivered { left: 63%; top: 18%; border-color: var(--ok); animation-delay: 1.4s; }
-      .cov-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); }
-      .stat { background: var(--card); padding: 1.4rem; border-top: 3px solid var(--primary); }
-      .stat strong { display: block; font-family: var(--font-display); font-size: 1.5rem; letter-spacing: 0; } .stat span { color: var(--muted-foreground); font-size: 0.85rem; }
-      @media (min-width: 62rem) { .coverage { grid-template-columns: .9fr 1.1fr; } .cov-stats { grid-column: 1 / -1; grid-template-columns: repeat(4,1fr); } }
+      /* pricing / wallet flow */
+      .pricing { padding-block: var(--section-y); }
+      .wallet-flow { display: grid; gap: 2.5rem; margin-top: var(--head-gap); align-items: center; }
+      @media (min-width: 62rem) { .wallet-flow { grid-template-columns: .9fr 1.1fr; } }
+      .wf-il { max-width: 24rem; margin-inline: auto; }
+      .flow-steps { display: grid; gap: 1rem; margin: 0; padding: 0; list-style: none; }
+      @media (min-width: 40rem) { .flow-steps { grid-template-columns: 1fr 1fr; } }
+      .flow-steps li { display: grid; grid-template-columns: auto 1fr; gap: .8rem; align-items: start; }
+      .f-n { display: grid; place-items: center; width: 1.6rem; height: 1.6rem; background: color-mix(in oklab, var(--gold) 16%, transparent); color: var(--gold-ink); font-family: var(--font-mono); font-size: .78rem; font-weight: 600; }
+      .flow-steps strong { font-family: var(--font-display); font-size: .98rem; }
+      .flow-steps p { margin: .2rem 0 0; color: var(--muted-foreground); font-size: .85rem; line-height: 1.45; }
+      .price-foot { margin-top: 2rem; text-align: center; color: var(--muted-foreground); font-size: .9rem; }
+      .price-foot strong { color: var(--foreground); }
 
-      .cta { text-align: center; padding-block: 6.5rem; } .cta h2 { margin: 0; font-size: clamp(2.1rem,4.4vw,3.2rem); } .cta p { margin: 0.8rem 0 0; color: var(--muted-foreground); } .cta .actions { justify-content: center; }
-      .ftr { display: flex; align-items: center; justify-content: space-between; padding-block: 2.2rem; border-top: 1px solid var(--border); color: var(--muted-foreground); }
-      .brand-sm { font-family: var(--font-display); font-weight: 700; color: var(--foreground); } .ftr nav { display: flex; gap: 1.3rem; } .ftr a { color: inherit; text-decoration: none; font-size: 0.9rem; } .ftr a:hover { color: var(--foreground); }
+      /* coverage */
+      .coverage { display: grid; gap: 2.5rem; align-items: center; padding-block: var(--section-y); }
+      @media (min-width: 62rem) { .coverage { grid-template-columns: 1.05fr .95fr; } }
+      .cov-copy h2 { margin: .6rem 0 0; font-size: clamp(1.9rem,3.6vw,2.7rem); }
+      .cov-copy > p { margin: 1rem 0 1.4rem; color: var(--muted-foreground); line-height: 1.6; }
+      .cov-legend { display: grid; gap: .6rem; margin: 0 0 1.6rem; padding: 0; list-style: none; }
+      .cov-legend li { display: flex; align-items: center; gap: .6rem; font-size: .9rem; color: var(--foreground); }
+      .cov-legend .dot { width: .7rem; height: .7rem; border-radius: 50%; }
+      .cov-legend .dot.live { background: var(--ok); }
+      .cov-legend .dot.help { background: var(--gold); }
+      .cov-legend .dot.soon { background: color-mix(in oklab, var(--foreground) 25%, transparent); }
+      .cov-visual { width: min(100%, 28rem); margin: 0 auto; }
+
+      /* dashboard preview */
+      .preview { padding-block: var(--section-y); }
+      .preview-frame { max-width: 60rem; margin: 2.5rem auto 0; }
+
+      /* business workflows */
+      .flows { padding-block: var(--section-y); }
+      .flows-inner { display: grid; gap: 2.5rem; }
+      @media (min-width: 64rem) { .flows-inner { grid-template-columns: 1fr 1fr; align-items: center; } }
+      .flows-copy h2 { margin: .6rem 0 0; font-size: clamp(1.9rem,3.6vw,2.6rem); }
+      .flows-il { margin: 1.8rem 0 0; }
+      .flows-il img { display: block; width: 100%; height: auto; max-width: 30rem; }
+      .flow-cards { display: grid; gap: 1rem; }
+      .flow-card { background: var(--card); border: 1px solid var(--border); padding: var(--card-pad); }
+      .flow-card h3 { margin: 0 0 .8rem; font-size: 1.05rem; }
+      .chips { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: 0; padding: 0; list-style: none; counter-reset: c; }
+      .chips li { display: inline-flex; align-items: center; padding: .3rem .6rem; background: var(--background); border: 1px solid var(--border); font-family: var(--font-mono); font-size: .74rem; color: var(--foreground); }
+      .chips li:not(:last-child)::after { content: "→"; margin-left: .55rem; color: var(--primary); }
+
+      /* docs / quickstart */
+      .docs { padding-block: var(--section-y); }
+      .qs-grid { display: grid; gap: 2.5rem; margin-top: var(--head-gap); }
+      @media (min-width: 62rem) { .qs-grid { grid-template-columns: 1fr 1fr; } }
+      .qs-steps { display: grid; gap: 1rem; margin: 0; padding: 0; list-style: none; }
+      .qs-steps li { display: grid; grid-template-columns: auto 1fr; gap: .9rem; align-items: start; }
+      .qs-n { display: grid; place-items: center; width: 1.6rem; height: 1.6rem; background: var(--primary); color: #fff; font-family: var(--font-mono); font-size: .78rem; font-weight: 600; }
+      .qs-steps strong { display: block; font-family: var(--font-display); font-size: .98rem; margin-bottom: .3rem; }
+      .qs-steps code { display: block; overflow-x: auto; padding: .5rem .6rem; background: #15151f; color: #c7c9e0; border: 1px solid #2a2b3d; font-family: var(--font-mono); font-size: .76rem; }
+      .docs-cards { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); align-content: start; }
+      @media (min-width: 32rem) { .docs-cards { grid-template-columns: 1fr 1fr; } }
+      .doc-card { display: block; background: var(--card); padding: var(--card-pad); color: inherit; text-decoration: none; transition: background .15s; }
+      .doc-card:hover { background: color-mix(in oklab, var(--primary) 5%, var(--card)); }
+      .doc-card h3 { display: flex; align-items: center; gap: .4rem; margin: 0 0 .35rem; font-size: 1rem; }
+      .doc-card p { margin: 0; color: var(--muted-foreground); font-size: .86rem; line-height: 1.45; }
+      .parr { color: var(--primary); opacity: 0; transform: translateX(-.25rem); transition: opacity .15s, transform .15s; }
+      .doc-card:hover .parr, .doc-card:focus-visible .parr { opacity: 1; transform: none; }
+
+      /* faq */
+      .faq { padding-block: var(--section-y); }
+      .faq-list { max-width: 48rem; margin: 2.5rem auto 0; border-top: 1px solid var(--border); }
+      .qa { border-bottom: 1px solid var(--border); }
+      .qa summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.2rem .2rem; cursor: pointer; list-style: none; font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; color: var(--foreground); }
+      .qa summary::-webkit-details-marker { display: none; }
+      .q-mark { color: var(--primary); font-family: var(--font-mono); font-size: 1.3rem; transition: transform .2s; }
+      .qa[open] .q-mark { transform: rotate(45deg); }
+      .qa p { margin: 0 0 1.2rem; max-width: 44rem; color: var(--muted-foreground); line-height: 1.6; }
+
+      /* cta */
+      .cta { text-align: center; padding-block: calc(var(--section-y) * 1.5); }
+      .cta h2 { margin: 0; font-size: clamp(2.1rem,4.4vw,3.2rem); }
+      .cta p { margin: .8rem auto 0; max-width: 36rem; color: var(--muted-foreground); }
+      .cta .actions { justify-content: center; }
+
+      /* footer */
+      .ftr { padding-block: 3rem 2.2rem; border-top: 1px solid var(--border); }
+      .ftr-top { display: grid; gap: 2.5rem; }
+      @media (min-width: 52rem) { .ftr-top { grid-template-columns: 1.1fr 2fr; } }
+      .ftr-brand .brand-sm { font-family: var(--font-display); font-weight: 700; font-size: 1.2rem; color: var(--foreground); }
+      .ftr-brand p { margin: .6rem 0 0; max-width: 22rem; color: var(--muted-foreground); font-size: .9rem; line-height: 1.5; }
+      .ftr-cols { display: grid; grid-template-columns: repeat(2,1fr); gap: 1.5rem; }
+      @media (min-width: 44rem) { .ftr-cols { grid-template-columns: repeat(4,1fr); } }
+      .ftr-cols h4 { margin: 0 0 .8rem; font-family: var(--font-mono); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted-foreground); font-weight: 500; }
+      .ftr-cols a { display: block; padding: .3rem 0; color: var(--foreground); text-decoration: none; font-size: .9rem; }
+      .ftr-cols a:hover { color: var(--primary); }
+      .ftr-legal { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; margin-top: var(--head-gap); padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: .82rem; }
 
       /* motion */
       .reveal { opacity: 0; transform: translateY(14px); animation: fadeUp .7s cubic-bezier(.2,.7,.2,1) forwards; animation-delay: var(--d,0s); }
       @keyframes fadeUp { to { opacity: 1; transform: none; } }
-      @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
-      @keyframes dispatchSms { 0%,8% { left: 51%; opacity: 0; } 16% { opacity: 1; } 68% { left: 76%; opacity: 1; } 78%,100% { left: 78%; opacity: 0; } }
-      @keyframes dispatchEmail { 0%,8% { left: 51%; opacity: 0; } 16% { opacity: 1; } 68% { left: 75%; opacity: 1; } 78%,100% { left: 77%; opacity: 0; } }
-      @keyframes arrivalPulse { 0%,60% { opacity: 0; transform: translate(-50%,-50%) scale(.4); } 68% { opacity: .8; } 90%,100% { opacity: 0; transform: translate(-50%,-50%) scale(1.55); } }
-      @keyframes storyPan { 0%,15% { object-position: left center; } 45%,60% { object-position: center; } 85%,100% { object-position: right center; } }
       @media (max-width: 48rem) { .nav { display: none; } .mobile-nav { display: block; } }
-      @media (max-width: 42rem) { .dispatch-illustration { aspect-ratio: 4 / 3; } .dispatch-illustration img { object-position: left center; animation: storyPan 9s ease-in-out infinite alternate; } .dispatch-packet, .arrival-pulse { display: none; } .cov-stats { grid-template-columns: 1fr; } .ftr { align-items: flex-start; gap: 1rem; } .ftr nav { flex-wrap: wrap; justify-content: flex-end; } }
-      @media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } .dispatch-packet, .arrival-pulse, .coverage-signal, .dispatch-illustration img { animation: none; } .dispatch-packet, .arrival-pulse, .coverage-signal { display: none; } }
-      :is(a, summary):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+      @media (prefers-reduced-motion: reduce) { .reveal { animation: none; opacity: 1; transform: none; } }
+      :is(a, summary, details):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
     </style>
-
-    <script>
-      // Looping typewriter for the quickstart editor — types the snippet, snaps to the highlighted
-      // markup, holds, then retypes forever. The pre has a fixed height, so nothing reflows.
-      const demoCode = document.querySelector(".editor.demo pre code.demo-type");
-      if (demoCode && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        const rich = demoCode.innerHTML;
-        const raw = demoCode.textContent ?? "";
-        const cursor = demoCode.parentElement?.querySelector(".cursor");
-        const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
-        let running = false;
-        const loop = async () => {
-          if (running) return;
-          running = true;
-          // Loop forever; background tabs are throttled by the browser so this stays cheap.
-          for (;;) {
-            demoCode.textContent = "";
-            cursor?.classList.add("on");
-            for (let i = 1; i <= raw.length; i += 1) {
-              demoCode.textContent = raw.slice(0, i);
-              await sleep(raw[i - 1] === "\n" ? 24 : 8);
-            }
-            demoCode.innerHTML = rich;
-            cursor?.classList.remove("on");
-            await sleep(2600);
-          }
-        };
-        const io = new IntersectionObserver(
-          (entries) => {
-            if (entries.some((e) => e.isIntersecting)) void loop();
-          },
-          { threshold: 0.3 },
-        );
-        // Observe the sized editor, not the zero-width <code>.
-        io.observe(demoCode.closest(".editor") ?? demoCode);
-      }
-    </script>
   </body>
 </html>

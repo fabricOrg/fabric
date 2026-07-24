@@ -9,6 +9,17 @@
   --font-clash: "Clash Display";
   --font-inter: "Inter";
   --font-jbm: "JetBrains Mono";
+
+  /* Channel + status hues shared by the landing and every SVG illustration.
+   * SMS = brand indigo, Email = teal; ok/warn map to the design-system status tokens. */
+  --sms: var(--primary);
+  --email: #0d9488;
+  --ok: var(--success, #16a34a);
+  --warn: var(--warning, #d97706);
+}
+
+:root[data-theme="dark"] {
+  --email: #2dd4bf;
 }
 
 /* Starlight's palette names describe contrast order, not literal colours:

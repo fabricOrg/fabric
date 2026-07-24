@@ -1,0 +1,98 @@
+---
+title: Direct SMS
+description: Send single or batched SMS with explicit body and sender, and read encoding, segments, and cost.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Direct SMS puts the rendered content in the request. Reach for it when your application already owns
+the copy; reach for [message definitions](/docs/messaging/message-definitions/) when non-developers
+should change copy without a deploy.
+
+## Send one message
+
+```ts
+const response = await fabric.sms.send(
+  {
+    to: "+233201234567",
+    senderId: "FABRIC",
+    body: "Your order GH-4821 has shipped.",
+    currency: "GHS",
+    class: "transactional",
+  },
+  { idempotencyKey: "order-shipped:GH-4821" },
+);
+
+const sms = response.data; // { id, status, encoding, segments, cost }
+```
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `to` | yes | E.164 (`+233…`). Rejected client-side if malformed. |
+| `senderId` | yes | An active sender name for the recipient's country on live. |
+| `body` | yes | The message text. |
+| `currency` | no | Defaults to `GHS`. One of `GHS`, `NGN`, `USD`. |
+| `class` | no | `transactional` (default) or `promotional`. |
+
+An idempotency key is optional on a single send but strongly recommended — without one, a retried
+request is **not** replayed and may send twice.
+
+## Encoding and segments
+
+Fabric reports how it encoded your text and how many segments it billed.
+
+- `gsm7` — the standard 7-bit alphabet. 160 characters per single segment.
+- `ucs2` — used when the body contains any character outside GSM-7 (many emoji, some accented
+  characters). This drops the single-segment limit to 70 characters.
+
+A long message is split into multiple billed segments. `response.data.segments` is the count you are
+charged for, and `response.data.cost` is the total for the send. Keep transactional copy inside one
+GSM-7 segment when cost matters.
+
+:::tip[Avoid accidental UCS-2]
+A single smart quote or emoji flips the whole message to `ucs2` and roughly halves the per-segment
+character budget. Preview the definition or inspect `encoding`/`segments` on the response before you
+assume a one-segment cost.
+:::
+
+## Send a batch
+
+Submit 1–100 items in one request. Each item carries its own `clientReference`, and the batch
+requires an idempotency key.
+
+```ts
+const batch = await fabric.sms.sendBatch(
+  [
+    { clientReference: "row-1", to: "+233201234567", senderId: "FABRIC", body: "Hi Ama" },
+    { clientReference: "row-2", to: "+2348012345678", senderId: "FABRIC", body: "Hi Kwame" },
+  ],
+  { idempotencyKey: "welcome-blast:2026-07-23" },
+);
+
+for (const item of batch.data.items) {
+  console.log(item.clientReference, item.status, item.messageId, item.errorCode);
+}
+```
+
+The batch resource reports `status` (`processing` | `completed`), `totalCount`, `acceptedCount`,
+`failedCount`, and a per-item `items[]` array. One bad item does not fail the batch — check each
+item's `status` and `errorCode`. Retrieve it again later with `fabric.sms.retrieveBatch(id)`.
+
+## Retrieve and list
+
+```ts
+const detail = await fabric.sms.retrieve(sms.id);
+console.log(detail.data.status, detail.data.timeline, detail.data.failureReason);
+
+const recent = await fabric.sms.list();
+```
+
+`retrieve` returns a `MessageDetail` with the delivery `timeline`, `senderId`, and — unless the
+record is `redacted` — the `body`. `list` returns recent `MessageSummary` rows, each tagged with its
+`deliveryMode` (`virtual` in sandbox, `live` in production).
+
+<Steps>
+1. Send with an idempotency key.
+2. Follow the terminal state through a [webhook](/docs/webhooks/), not the send response.
+3. Reconcile `cost` against your [wallet](/docs/account/wallet-billing/).
+</Steps>

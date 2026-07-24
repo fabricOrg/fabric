@@ -46,7 +46,7 @@ server because the SDK contains your secret API key.
      idempotencyKey: "otp:customer-4821:attempt-1",
    });
 
-   console.log(response.data.id, response.data.status, response.data.cost);
+   console.log(response.data.id, response.data.status, response.data.cost.minor);
    ```
 
 4. **Run it**

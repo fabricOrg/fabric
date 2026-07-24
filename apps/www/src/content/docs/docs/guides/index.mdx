@@ -3,25 +3,31 @@ title: Guides
 description: Production patterns for verification, retries, delivery, and reconciliation.
 ---
 
-import { Card, CardGrid } from "@astrojs/starlight/components";
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Task-oriented recipes for the patterns most integrations need.
 
 <CardGrid>
-  <Card title="One-time verification" icon="lock">
-    Start a verification with `fabric.verify.start()`, then check the submitted code with
-    `fabric.verify.check()`. Limit attempts and avoid revealing whether an account exists.
-  </Card>
-  <Card title="Transactional delivery" icon="send">
-    Use a definition key, a business reference, and a stable idempotency key. Advance your workflow
-    from verified webhook events.
-  </Card>
-  <Card title="Batch SMS" icon="list-format">
-    Submit 1–100 items with unique client references and an idempotency key, then retrieve the batch
-    result for per-item outcomes.
-  </Card>
-  <Card title="Reconciliation" icon="chart">
-    Compare your business reference, Fabric delivery id, terminal event, and wallet entry rather than
-    relying on one system in isolation.
-  </Card>
+  <LinkCard
+    title="One-time verification (OTP)"
+    description="Start and check a code, cap attempts, and avoid account enumeration."
+    href="/docs/guides/otp/"
+  />
+  <LinkCard
+    title="Transactional delivery"
+    description="Send by key, follow the webhook, and reconcile against the wallet."
+    href="/docs/guides/transactional/"
+  />
+  <LinkCard
+    title="Broadcast with batches"
+    description="Submit 1–100 SMS items and handle per-item outcomes."
+    href="/docs/guides/broadcast/"
+  />
+  <LinkCard
+    title="Two-way & keywords"
+    description="Receive replies and STOP/START/HELP — a sandbox capability today."
+    href="/docs/guides/two-way/"
+  />
 </CardGrid>
 
 ## Production checklist

@@ -1,0 +1,70 @@
+---
+title: Webhook events
+description: The Fabric webhook event catalog and the payload each type carries.
+---
+
+Every event has a `type`, an `id`, a `createdAt`, and a `data` object. Branch on `type`; the SDK
+narrows `data` for you.
+
+## Event types
+
+| Type | Meaning |
+| --- | --- |
+| `message.accepted` | Fabric accepted the send and reserved wallet funds. |
+| `message.sent` | The provider accepted the message (in-flight, not yet confirmed). |
+| `message.delivered` | The network confirmed handset or inbox delivery. Terminal. |
+| `message.undelivered` | The network reported the message did not arrive. Terminal. |
+| `message.failed` | The send failed. `data.errorCode` explains why. Terminal. |
+| `message.inbound` | An inbound reply on a virtual number (sandbox — see below). |
+
+New event types can appear over time. The SDK returns any type it does not recognise as
+`{ type: "unknown", originalType, data }` so an older SDK keeps working — always include a default
+branch.
+
+## Message event payload
+
+For every `message.*` type except `inbound`, `data` is a `MessageWebhookData`:
+
+```ts
+{
+  messageId: string;
+  deliveryId?: string;       // present for managed deliveries
+  key?: string;              // the definition key, for managed sends
+  versionId?: string;
+  resourceVersion?: number;
+  channel?: "sms" | "email";
+  status?: MessageStatus;
+  previousStatus?: MessageStatus;
+  errorCode?: string;        // set on failure
+}
+```
+
+Use `deliveryId` to correlate with `fabric.messages.retrieveDelivery(id)` and `key` to route by
+message type.
+
+## Handling in TypeScript
+
+```ts
+switch (event.type) {
+  case "message.delivered":
+    await markDelivered(event.data.messageId);
+    break;
+  case "message.failed":
+  case "message.undelivered":
+    await markProblem(event.data.messageId, event.data.errorCode);
+    break;
+  case "message.inbound":
+    await handleReply(event.data.messageId);
+    break;
+  default:
+    // unknown / future event type — record and move on
+    break;
+}
+```
+
+## Inbound events are sandbox-only today
+
+`message.inbound` fires when a reply arrives on a **virtual** number in the sandbox — including the
+`STOP` / `START` / `HELP` opt-out keywords, which update consent automatically. There is no live
+carrier inbound (mobile-originated) ingestion or number provisioning yet; treat inbound as a sandbox
+capability you can build against, not a live feature. Its `data` is `{ messageId, channel }`.

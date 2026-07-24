@@ -1,0 +1,74 @@
+---
+title: Webhook signatures
+description: The Fabric signing scheme, timestamp tolerance, and every verification failure code.
+---
+
+Fabric signs each webhook with an HMAC over the raw body and a timestamp. The SDK verifies it for you;
+this page documents the scheme so you can verify in any language.
+
+## The signature header
+
+Fabric sends a `fabric-signature` header in this format:
+
+```
+fabric-signature: t=<unix_seconds>,v1=<64 hex chars>
+```
+
+`t` is the send time in Unix seconds. `v1` is the hex HMAC-SHA256 of the string
+`` `${t}.${rawBody}` `` keyed with your endpoint's signing secret.
+
+## Verify manually
+
+```ts
+import crypto from "node:crypto";
+
+function verify(rawBody: string, header: string, secret: string, toleranceSeconds = 300) {
+  const parts = Object.fromEntries(header.split(",").map((p) => p.split("=")));
+  const timestamp = Number(parts.t);
+  if (Math.abs(Date.now() / 1000 - timestamp) > toleranceSeconds) {
+    throw new Error("stale_webhook");
+  }
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(`${timestamp}.${rawBody}`)
+    .digest("hex");
+  const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(parts.v1));
+  if (!ok) throw new Error("invalid_signature");
+}
+```
+
+Compare with a constant-time function (`crypto.timingSafeEqual`), never `===`. The default tolerance
+is **300 seconds**; the SDK exposes `tolerance` (and an injectable `now`) if you need to change it.
+
+## Use the SDK helper instead
+
+`fabric.webhooks.verify` does all of the above and returns a typed event:
+
+```ts
+const event = fabric.webhooks.verify({
+  payload,                                   // raw string or Uint8Array — never re-serialised
+  signature: request.headers.get("fabric-signature") ?? undefined,
+  secret: process.env.FABRIC_WEBHOOK_SECRET!,
+  // tolerance: 300,  // optional override, in seconds
+});
+```
+
+## Failure codes
+
+On a bad request `verify` throws `WebhookVerificationError` with a stable `code`:
+
+| Code | Cause |
+| --- | --- |
+| `missing_signature` | No `fabric-signature` header was supplied. |
+| `missing_secret` | No signing secret was supplied. |
+| `invalid_signature_format` | The header did not match `t=…,v1=…`. |
+| `invalid_tolerance` | A non-positive tolerance was passed. |
+| `stale_webhook` | The timestamp is outside the tolerance window. |
+| `invalid_signature` | The HMAC did not match — reject the request. |
+| `invalid_payload` | The verified body was not valid JSON. |
+| `invalid_event_payload` | The JSON did not match a known event shape. |
+
+:::danger[Reject, do not retry, on a signature failure]
+An `invalid_signature` means the request was not signed by Fabric. Return a `4xx` and drop it — do
+not process it and do not ask Fabric to retry.
+:::

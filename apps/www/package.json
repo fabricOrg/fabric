@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev --port 3400",
+    "start": "astro dev --port 3400",
+    "stop": "astro dev stop",
+    "status": "astro dev status",
+    "logs": "astro dev logs",
     "build": "astro build",
     "typecheck": "astro check",
     "test": "vitest run --passWithNoTests"

@@ -1,0 +1,54 @@
+---
+title: Delivery reports
+description: Read Fabric delivery states honestly, understand DLR limits, and follow terminal events.
+---
+
+An accepted API response means Fabric owns the work — not that the handset received the message.
+Delivery is asynchronous and reported after the request returns, through
+[webhooks](/docs/webhooks/) and the retrieve endpoints.
+
+## Direct SMS lifecycle
+
+A direct SMS moves through the message pipeline:
+
+`accepted` → `queued` → `sending` → `sent` → `delivered`
+
+It can instead reach a terminal `undelivered`, `failed`, or `expired`. `sent` means the carrier
+accepted it; `delivered` means the network confirmed handset receipt.
+
+## Managed delivery lifecycle
+
+A managed delivery has no pre-dispatch queue states — its lifecycle is:
+
+`accepted` → `processing` → `sent` → `delivered`
+
+with terminal `undelivered`, `failed`, or `expired`. Each provider attempt is recorded in the
+delivery's `attempts[]` timeline with its own `status`, `cost`, and `errorCode`.
+
+## What a delivery report can and cannot tell you
+
+Delivery receipts (DLRs) come from mobile networks, and their honesty varies by operator and route.
+
+- **`sent` is not `delivered`.** Treat carrier acceptance as in-flight, not done.
+- **Some routes never confirm.** On a few networks a message that truly arrived may sit at `sent`
+  because the operator returns no positive DLR. Do not treat the absence of `delivered` as failure.
+- **Reports can arrive late or out of order.** Design consumers so a later event never regresses a
+  terminal state, and so a duplicate is a no-op.
+- **`failed` carries an `errorCode`.** Branch on the stable code, not the human message.
+
+:::tip[Sandbox is deterministic]
+Sandbox uses the virtual delivery path, so states resolve immediately and predictably — ideal for
+wiring up your webhook consumer before you touch a live route.
+:::
+
+## Follow the terminal state
+
+```ts
+const delivery = await fabric.messages.retrieveDelivery(id);
+if (delivery.data.status === "delivered") {
+  // safe to mark your workflow complete
+}
+```
+
+Retrieve is a snapshot; webhooks are the push. In production, advance your workflow from the signed
+terminal [webhook event](/docs/webhooks/events/) and use retrieve for reconciliation and support.

@@ -1,0 +1,60 @@
+---
+title: Broadcast with batches
+description: Send 1–100 SMS in one request and handle per-item outcomes and consent.
+---
+
+Use an SMS batch to send many messages in one call. A batch is best for a bounded set (1–100 items);
+for a very large audience, chunk it into batches and pace them.
+
+## Submit a batch
+
+```ts
+const batch = await fabric.sms.sendBatch(
+  recipients.map((r) => ({
+    clientReference: r.id,        // your id for this row — echoed back per item
+    to: r.phone,                  // E.164
+    senderId: "FABRIC",
+    body: `Hi ${r.name}, our shop reopens Monday.`,
+    class: "promotional",
+  })),
+  { idempotencyKey: `reopen-announce:2026-07-23` },
+);
+```
+
+The whole batch is idempotent on its key: resubmitting the same key returns the original batch rather
+than sending again.
+
+## Handle per-item results
+
+One bad item does not fail the batch. Inspect each item:
+
+```ts
+for (const item of batch.data.items) {
+  if (item.status === "failed") {
+    await recordFailure(item.clientReference, item.errorCode);
+  } else {
+    await recordAccepted(item.clientReference, item.messageId);
+  }
+}
+
+console.log(batch.data.acceptedCount, batch.data.failedCount, batch.data.totalCount);
+```
+
+Follow each accepted item to its terminal state through [webhooks](/docs/webhooks/) exactly as you
+would a single send. Retrieve the batch again later with `fabric.sms.retrieveBatch(batch.data.id)`.
+
+## Broadcast responsibly
+
+A broadcast is almost always **promotional**, which means:
+
+- **Consent is enforced.** Recipients who opted out (including via `STOP`) are suppressed. Send only
+  to an audience that agreed to hear from you.
+- **Quiet hours apply.** Promotional SMS is delivered only inside the per-country window — see
+  [compliance](/docs/account/compliance/). A send outside the window is blocked with
+  `promo_quiet_hours`.
+- **Sender ID must be live-registered.** On live, an unregistered sender is rejected by the carrier.
+
+:::tip[Chunk and pace large sends]
+Split a large audience into batches of up to 100 and space them out. This keeps you within
+[rate limits](/docs/account/rate-limits/) and makes partial failures easy to retry.
+:::

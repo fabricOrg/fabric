@@ -3,7 +3,7 @@ title: Get started
 description: Understand keys, environments, message definitions, and delivery before you integrate.
 ---
 
-import { Card, CardGrid, Steps } from "@astrojs/starlight/components";
+import { Card, CardGrid, LinkCard, Steps } from "@astrojs/starlight/components";
 
 Fabric is a server-side communications API for SMS and email. The fastest path is to create an
 application, use its sandbox key, and send a published message definition by key.
@@ -52,3 +52,18 @@ making a network request.
 Definitions, keys, webhook endpoints, and activity belong to an environment. Test with `sk_test_`
 and deliberately configure the corresponding live resources before switching keys.
 :::
+
+## Keep reading
+
+<CardGrid>
+  <LinkCard
+    title="Sandbox & test keys"
+    description="What the zero-gate sandbox does and does not simulate."
+    href="/docs/get-started/sandbox-and-keys/"
+  />
+  <LinkCard
+    title="Authentication"
+    description="How keys are passed, how the environment is chosen, and the server-only rule."
+    href="/docs/get-started/authentication/"
+  />
+</CardGrid>

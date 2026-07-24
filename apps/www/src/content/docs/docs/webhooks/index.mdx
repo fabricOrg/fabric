@@ -1,10 +1,13 @@
 ---
 title: Webhooks
-description: Receive delivery events and verify every Fabric signature.
+description: Receive delivery events, verify every signature, and process at-least-once safely.
 ---
 
-Fabric delivers webhook events at least once. Your endpoint must verify the signature against the raw
-request body, return a successful response quickly, and process each event idempotently.
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+An accepted send only means Fabric owns the work. The terminal outcome — delivered, undelivered,
+failed — arrives later as a signed webhook event. Fabric delivers **at least once**, so your endpoint
+must verify the signature against the raw body, respond quickly, and treat each event idempotently.
 
 ## Verify with the SDK
 
@@ -15,6 +18,7 @@ const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY! });
 
 export async function POST(request: Request) {
   const payload = await request.text();
+
   const event = fabric.webhooks.verify({
     payload,
     signature: request.headers.get("fabric-signature") ?? undefined,
@@ -26,22 +30,28 @@ export async function POST(request: Request) {
 }
 ```
 
-Do not parse and re-serialize JSON before verification. Any byte change invalidates the HMAC. The SDK
-also rejects malformed signatures and timestamps outside the default five-minute tolerance.
+Pass the **raw** request text — never a parsed-and-reserialised object. Any byte change invalidates
+the HMAC. `verify` returns a typed `WebhookEvent` or throws `WebhookVerificationError`.
 
-## Event handling
-
-Known message events include `message.accepted`, `message.delivered`, and terminal failure events.
-Branch on `event.type`, persist the event id before performing side effects, and make repeated
-delivery of the same event a no-op.
-
-## Retries
-
-Return a `2xx` response only after the event is durably accepted. Fabric retries failed deliveries.
-Use the dashboard or SDK delivery list to inspect attempts and replay a dead delivery after fixing
-your endpoint.
+<CardGrid>
+  <LinkCard
+    title="Events"
+    description="The event catalog and the payload shape for each type."
+    href="/docs/webhooks/events/"
+  />
+  <LinkCard
+    title="Signatures"
+    description="The signing scheme, tolerance, and every verification failure code."
+    href="/docs/webhooks/signatures/"
+  />
+  <LinkCard
+    title="Retries & idempotency"
+    description="Delivery states, replay of a dead delivery, and safe consumers."
+    href="/docs/webhooks/retries-idempotency/"
+  />
+</CardGrid>
 
 :::danger[Secret handling]
-The signing secret is shown when the endpoint is created. Store it in a secret manager, never log it,
-and rotate it if it may have been exposed.
+The signing secret is shown once, when the endpoint is created. Store it in a secret manager, never
+log it, and rotate it if it may have been exposed.
 :::
