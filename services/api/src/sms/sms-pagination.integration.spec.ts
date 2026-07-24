@@ -25,8 +25,9 @@ let envId = "";
 
 // Six rows: THREE share one microsecond-identical created_at (a batch — exercises the id
 // tiebreak), one lands sub-millisecond away inside the same ms, two are earlier. Ids are UUIDs;
-// the canonical lowercase text form sorts identically to Postgres's uuid ordering, so the
-// expected walk is computed by the same (created_at DESC, id DESC) key the query uses.
+// the paged walk is asserted against Postgres's OWN ordering (a single unpaged query), never a
+// JS re-derivation of the sort — re-implementing (created_at DESC, id DESC) in JS is fragile
+// (uuid byte order vs string codepoint, timestamptz vs ISO string) and drifts from the DB.
 const BASE = "2026-07-24T10:00:00";
 const seedRows = [
   { id: randomUUID(), createdAt: `${BASE}.600789Z` },
@@ -36,17 +37,6 @@ const seedRows = [
   { id: randomUUID(), createdAt: `${BASE}.599999Z` },
   { id: randomUUID(), createdAt: `${BASE}.500000Z` },
 ];
-// Codepoint comparison (NOT localeCompare) — Postgres orders timestamptz chronologically and uuid
-// by byte value; for canonical lowercase uuids and fixed-width ISO strings, codepoint order matches
-// both, whereas locale collation does not.
-const desc = (a: string, b: string): number => (a < b ? 1 : a > b ? -1 : 0);
-const expectedOrder = [...seedRows]
-  .sort((a, b) =>
-    a.createdAt !== b.createdAt
-      ? desc(a.createdAt, b.createdAt)
-      : desc(a.id, b.id),
-  )
-  .map((r) => r.id);
 
 describeDb("SMS list cursor pagination (microsecond keyset)", () => {
   beforeAll(async () => {
@@ -85,6 +75,14 @@ describeDb("SMS list cursor pagination (microsecond keyset)", () => {
   });
 
   it("walks every row exactly once across ms-colliding pages", async () => {
+    // Canonical order = one unpaged query through the same read path. The paged walk must
+    // reproduce it exactly: any skip, duplicate, or cross-page reorder from a truncated cursor
+    // shows up as a divergence here.
+    const full = await listMessages(appDb, TENANT, envId, { limit: 1000 });
+    const canonical = full.messages.map((m) => m.id);
+    expect(canonical).toHaveLength(seedRows.length);
+    expect(new Set(canonical).size).toBe(seedRows.length);
+
     const seen: string[] = [];
     let cursor: string | undefined;
     // limit 2 forces a page boundary inside the three-row microsecond collision.
@@ -97,7 +95,6 @@ describeDb("SMS list cursor pagination (microsecond keyset)", () => {
       if (!page.next_cursor) break;
       cursor = page.next_cursor;
     }
-    expect(seen).toEqual(expectedOrder);
-    expect(new Set(seen).size).toBe(expectedOrder.length);
+    expect(seen).toEqual(canonical);
   });
 });
