@@ -50,9 +50,10 @@
     "openapi:generate": "node scripts/openapi.mjs",
     "openapi:check": "node scripts/openapi.mjs --check",
     "typecheck": "tsc --noEmit",
+    "lint": "biome check src scripts",
     "test": "vitest run",
     "pack:check": "pnpm pack --dry-run",
-    "release:check": "pnpm openapi:check && pnpm typecheck && pnpm examples:typecheck && pnpm test && pnpm build && pnpm pack:check && pnpm artifact:check"
+    "release:check": "pnpm openapi:check && pnpm lint && pnpm typecheck && pnpm examples:typecheck && pnpm test && pnpm build && pnpm pack:check && pnpm artifact:check"
   },
   "devDependencies": {
     "@app/contracts": "workspace:*",

@@ -86,6 +86,10 @@ export class WebhooksResource {
     };
   }
 
+  /**
+   * Take an endpoint out of service. The Fabric API soft-deletes: the endpoint is marked
+   * `disabled` and its delivery history is retained for inspection and replay.
+   */
   async remove(
     id: string,
     options?: WriteOptions,
@@ -98,7 +102,7 @@ export class WebhooksResource {
     });
   }
 
-  /** Disable an endpoint without deleting its delivery history. */
+  /** Alias of {@link remove} — the API disables rather than hard-deletes, so both are the same call. */
   async disable(
     id: string,
     options?: WriteOptions,

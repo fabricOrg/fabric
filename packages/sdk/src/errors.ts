@@ -42,6 +42,8 @@ export class RateLimitError extends ApiError {
 }
 export class ConflictError extends ApiError {}
 export class NotFoundError extends ApiError {}
+/** 402 — the wallet could not reserve the message cost; the send was refused, nothing was charged. */
+export class InsufficientFundsError extends ApiError {}
 export class TimeoutError extends FabricError {}
 export class ConnectionError extends FabricError {}
 export class UserAbortedError extends FabricError {}
@@ -57,6 +59,7 @@ export function errorForStatus(
   if (statusCode === 403) return new AuthorizationError(message, options);
   if (statusCode === 400 || statusCode === 422)
     return new ValidationError(message, options);
+  if (statusCode === 402) return new InsufficientFundsError(message, options);
   if (statusCode === 404) return new NotFoundError(message, options);
   if (statusCode === 409) return new ConflictError(message, options);
   if (statusCode === 429) return new RateLimitError(message, options);

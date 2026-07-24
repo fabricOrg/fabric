@@ -2,8 +2,7 @@
 
 The official server-side TypeScript client for sending and inspecting messages with Fabric.
 
-> Public prerelease: `0.1.0-beta.4`. Batch messaging remains unavailable until its public contract
-> ships. Install the explicit `beta` channel until 1.0 is ready.
+> Public prerelease: `0.1.0-beta.5`. Install the explicit `beta` channel until 1.0 is ready.
 
 ## Install
 
@@ -89,8 +88,9 @@ if (event.type === "unknown") {
 
 Verification uses HMAC-SHA256, constant-time comparison, and a five-minute timestamp tolerance by
 default. Invalid, malformed, or stale events throw `WebhookVerificationError`. Known direct-message
-events are `message.sent`, `message.delivered`, `message.undelivered`, `message.failed`, and
-`message.inbound`; a correctly signed newer event returns the explicit `unknown` variant.
+events are `message.accepted`, `message.sent`, `message.delivered`, `message.undelivered`,
+`message.failed`, and `message.inbound`; a correctly signed newer event returns the explicit
+`unknown` variant.
 
 Inspect and replay a dead endpoint-specific delivery without changing its event ID:
 
@@ -132,24 +132,28 @@ No separate environment setting can conflict with the key. Moving to live delive
 `FABRIC_API_KEY`, but requires an approved sender ID, billing, provider configuration, and applicable
 Ghana/Nigeria compliance approval.
 
-Sandbox sends appear on the workspace’s two-way Virtual Phone and never contact a carrier. See the
-[sandbox guide](../../docs/sdk/sandbox.md) for the stable virtual number, STOP/START replies, and
-deterministic test recipients.
+Sandbox sends appear on the workspace’s two-way Virtual Phone and never contact a carrier. The
+sandbox guide on the Fabric docs site (`/docs/get-started/sandbox-and-keys`) covers the stable
+virtual number, STOP/START replies, and deterministic test recipients.
 
 This package is for trusted server runtimes only. Never import it into browser code or expose secret
 keys in client bundles, logs, commits, screenshots, or support tickets.
 
 ## Supported resources
 
+- `fabric.messages.send`, `preview`, `retrieveDelivery` (managed, template-key messages)
 - `fabric.sms.send`, `retrieve`, `list`
 - `fabric.sms.sendBatch`, `retrieveBatch`
 - `fabric.email.send`, `retrieve`, `list`
 - `fabric.senderIds.create`, `list`
 - `fabric.verify.start`, `check`
 - `fabric.wallet.retrieve`
-- `fabric.webhooks.create`, `list`, `disable`, `listDeliveries`, `replayDelivery`, `verify`
+- `fabric.webhooks.create`, `list`, `remove`/`disable`, `listDeliveries`, `replayDelivery`, `verify`
 
-See [the SDK guides](../../docs/sdk/README.md) and bundled [OpenAPI reference](./openapi.json)
+`webhooks.remove` and `webhooks.disable` are the same call: the API soft-deletes, marking the
+endpoint `disabled` while retaining its delivery history.
+
+See the Fabric docs site (`/docs/sdks-tools/node`) and the bundled [OpenAPI reference](./openapi.json)
 for retries, security, framework patterns, versioning, and the public wire contract. Report SDK issues through the repository issue tracker and
 include the request ID—but never credentials or message content.
 

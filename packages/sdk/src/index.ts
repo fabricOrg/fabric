@@ -13,6 +13,7 @@ export {
   ConflictError,
   ConnectionError,
   FabricError,
+  InsufficientFundsError,
   NotFoundError,
   RateLimitError,
   ResponseValidationError,

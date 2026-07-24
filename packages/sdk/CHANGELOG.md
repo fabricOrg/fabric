@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Added `InsufficientFundsError` — a 402 now surfaces as a dedicated typed error instead of the
+  base `ApiError`, matching the documented `insufficient_funds` failure.
+- Documented that `webhooks.remove`/`webhooks.disable` are the same soft-delete call (the API
+  marks the endpoint `disabled` and keeps delivery history).
+- Added test coverage for email send/list, sender ID create, webhook create/remove, SMS detail
+  retrieval, and the browser/base-URL/config guards.
+- Added a lint step to `release:check`.
+
 ## 0.1.0-beta.5
 
 - Normalized public environments to `sandbox | live` while retaining `sk_test_` and `sk_live_` key
@@ -38,4 +48,5 @@
 `fabric-messaging@0.1.0-beta.1` and `0.1.0-beta.2` are deprecated. Install
 `@fabric-messaging/sdk@beta` instead.
 
-Email, batch sending, cursor pagination, and CommonJS are intentionally not included in this beta.
+Cursor pagination and CommonJS are intentionally not included in this beta. (Email and batch
+sending shipped in beta.4/beta.5 — earlier copies of this note predate them.)
