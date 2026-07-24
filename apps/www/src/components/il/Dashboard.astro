@@ -41,7 +41,7 @@ const rows = [
         <div class="panel chart">
           <header>Sent · 7 days</header>
           <div class="bars">
-            {bars.map((h) => (<span style={`--h:${h}%`}></span>))}
+            {bars.map((h, i) => (<span style={`--h:${h}%;--b:${i}`}></span>))}
           </div>
         </div>
       </div>
@@ -81,8 +81,11 @@ const rows = [
   .wallet .hint { font-family: var(--font-mono); font-size: .62rem; color: var(--muted-foreground); }
 
   .bars { display: flex; align-items: flex-end; gap: .3rem; height: 3.6rem; }
-  .bars span { flex: 1; height: var(--h); background: color-mix(in oklab, var(--primary) 70%, transparent); border-radius: 2px 2px 0 0; animation: grow .9s cubic-bezier(.2,.7,.2,1) both; }
+  .bars span { flex: 1; height: var(--h); background: color-mix(in oklab, var(--primary) 70%, transparent); border-radius: 2px 2px 0 0; transform-origin: bottom; }
   .bars span:last-child { background: var(--primary); }
-  @keyframes grow { from { transform: scaleY(0); transform-origin: bottom; } }
-  @media (prefers-reduced-motion: reduce) { .bars span { animation: none; } }
+  /* grow only when the landing's reveal observer marks the frame seen — a page-load animation
+   * would have finished long before the reader scrolls this far. Without JS, bars render full. */
+  :global(.preview-frame.in) .bars span { animation: grow .9s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--b) * 60ms); }
+  @keyframes grow { from { transform: scaleY(0); } }
+  @media (prefers-reduced-motion: reduce) { :global(.preview-frame.in) .bars span { animation: none; } }
 </style>
