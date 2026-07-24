@@ -53,21 +53,24 @@ describe("webhook HTTP safety and outcomes", () => {
     ["server", "http_5xx", 500, 2_000],
     ["reset", "network", null, 2_000],
     ["slow", "timeout", null, 50],
-  ])("classifies %s failures safely", async (path, category, status, timeoutMs) => {
-    await expect(
-      postWebhook({
-        url: `http://127.0.0.1:${port}/${path}`,
-        secret: "whsec_test",
-        event,
-        timeoutMs,
-        allowPrivateNetworks: true,
-      }),
-    ).resolves.toEqual({
-      ok: false,
-      httpStatus: status,
-      errorCategory: category,
-    });
-  });
+  ])(
+    "classifies %s failures safely",
+    async (path, category, status, timeoutMs) => {
+      await expect(
+        postWebhook({
+          url: `http://127.0.0.1:${port}/${path}`,
+          secret: "whsec_test",
+          event,
+          timeoutMs,
+          allowPrivateNetworks: true,
+        }),
+      ).resolves.toEqual({
+        ok: false,
+        httpStatus: status,
+        errorCategory: category,
+      });
+    },
+  );
 
   it("recognizes private, link-local, loopback, and public addresses", () => {
     expect(isPrivateAddress("10.0.0.1")).toBe(true);

@@ -46,16 +46,15 @@ describe.each([
     ).toBe(true);
   });
 
-  it.each([
-    undefined,
-    "",
-    "wrong-secret",
-  ])("rejects a missing or invalid token", (candidate) => {
-    const guard = create(configWith({ [env]: "expected-secret" }));
-    expect(() =>
-      guard.canActivate(contextWith({ [header]: candidate })),
-    ).toThrowError(expect.objectContaining({ status: 401 }));
-  });
+  it.each([undefined, "", "wrong-secret"])(
+    "rejects a missing or invalid token",
+    (candidate) => {
+      const guard = create(configWith({ [env]: "expected-secret" }));
+      expect(() =>
+        guard.canActivate(contextWith({ [header]: candidate })),
+      ).toThrowError(expect.objectContaining({ status: 401 }));
+    },
+  );
 
   it("fails closed when the server secret is not configured", () => {
     const guard = create(configWith({}));
