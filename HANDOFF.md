@@ -3,7 +3,25 @@
 _Snapshot: 2026-07-25. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-25): ADR-0010 pricing build — Phase 1 slices 1+2+3 (branch `feature/ops-pricing-rate-books`, committed, NOT pushed)
+## Latest (2026-07-25, later): Phase 1 MERGED to `dev` (#172) + Phase 2 token review drafted
+
+Phase 1 price books **squash-merged to `dev`** as `87d0ff7` (PR #172, `verify` CI green 4m53s) — the
+`feature/ops-pricing-rate-books` branch is deleted. Pre-merge tech-debt/quality sweep: **clean** — no
+`any`/mock/TODO/dead control; money-correct (preview cost == send cost per account); BFF secured
+(`staff:write` + trusted origin, actor from session, contracts parsed both sides); fail-open resolver
++ fail-closed wallet. (codex capped till 07-28, gemini dead — reviewed the money path myself.)
+
+**Phase 2 (tokens) gate started, NOT built.** The ADR requires a wallet+security review before token
+code. Drafted `docs/decisions/0010-token-subsystem-wallet-security-review.md` (**DRAFT, needs human
+sign-off**). Core recommendation: **do NOT build parallel double-entry in count space** — keep money
+in the one ledger (purchase = `debit gateway_clearing / credit token_deferred_revenue`; consumption =
+`debit token_deferred_revenue / credit revenue` at the lot's locked price; new `ledger_account_kind`
+`token_deferred_revenue` + `token_*` reasons). A separate count layer (lots/holds, FOR UPDATE counter,
+B6-style commit-XOR-return backstop, idempotent Paystack-grant) tracks entitlement only and
+structurally can't move cash. Six open questions flagged (mostly finance/product; **only counter
+granularity (§6.3) blocks schema**). **No token code until §2/§6 are signed off.**
+
+## Latest (2026-07-25): ADR-0010 pricing build — Phase 1 slices 1+2+3 (MERGED #172; was `feature/ops-pricing-rate-books`)
 
 Replaced the hardcoded rate constants with **staff-configurable price books** resolved per account,
 flattened email pricing to **flat per send**, and shipped the admin-console pricing config + per-account
