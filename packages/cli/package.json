@@ -17,6 +17,15 @@
   "engines": {
     "node": ">=22"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fabricOrg/fabric.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/fabricOrg/fabric/tree/dev/packages/cli#readme",
+  "bugs": {
+    "url": "https://github.com/fabricOrg/fabric/issues"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
