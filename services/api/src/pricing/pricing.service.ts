@@ -210,6 +210,11 @@ export class PricingService implements OnModuleInit {
     this.cache.delete(accountId);
   }
 
+  /** Drop the whole cache — after a book's rates change, any account resolving to it must re-read. */
+  clearCache(): void {
+    this.cache.clear();
+  }
+
   /** Evict entries past the TTL — bounds cache growth on a many-tenant platform (see CACHE_MAX_ENTRIES). */
   private pruneExpired(): void {
     const now = Date.now();

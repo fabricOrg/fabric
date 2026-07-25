@@ -3,12 +3,22 @@
 _Snapshot: 2026-07-25. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-25): ADR-0010 pricing build — Phase 1 slices 1+2 (branch `feature/ops-pricing-rate-books`, committed, NOT pushed)
+## Latest (2026-07-25): ADR-0010 pricing build — Phase 1 slices 1+2+3 (branch `feature/ops-pricing-rate-books`, committed, NOT pushed)
 
 Replaced the hardcoded rate constants with **staff-configurable price books** resolved per account,
-and flattened email pricing to **flat per send**. Phase 1 slices 1+2 (money-correctness core); slice 3
-(admin-console pricing UI + per-account assignment) deferred; Phase 2 (tokens) still gated on a
-wallet/security review. **Zero price change on launch** — the seeded default book == old rates.
+flattened email pricing to **flat per send**, and shipped the admin-console pricing config + per-account
+assignment. Phase 1 complete (slices 1–3); Phase 2 (tokens) still gated on a wallet/security review.
+**Zero price change on launch** — the seeded default book == old rates.
+
+- **Slice 3 — admin config + assignment.** `PriceBookAdminService` (list/create/update/assign, audited;
+  clears the resolver cache on a price edit, invalidates the account on assign) behind
+  `PricingController` (`/internal/admin/price-books`, BffToken-guarded) + transactional `price-book-writes.ts`.
+  Admin-console `/pricing` page (Operations nav) — book cards + a create/edit dialog with a dynamic
+  per-channel/currency rate table; the tenant detail page gains a Pricing card + book-assignment picker.
+  BFF routes gate `staff:write` + trusted origin. `tenant_summary` DTO gains `price_book_id`. Mode is
+  fixed to `subscription` in the UI (token books do nothing until Phase 2 — no dead control ships).
+  5 real-Postgres admin tests (create/list, assign→resolver reprice, one-default-per-mode, the DB `> 0`
+  floor, unknown id/account).
 
 - **Slice 1 — data model + resolution.** New control-plane tables `price_books` + `price_book_rates`
   (no RLS, like `kill_switches`; default privileges cover provisioner grants) + nullable
@@ -32,9 +42,10 @@ wallet/security review. **Zero price change on launch** — the seeded default b
   biome clean; migration proven-applies. **Independent review** (Opus subagent — codex hit its usage
   cap until 2026-07-28, gemini dead): _approve with changes_, no critical/tenancy defect; 3 findings
   dispositioned — **DB `> 0` price CHECK added**, cache bounded, seed existence-gated + comment fixed.
-- **Next**: slice 3 (admin pricing UI + account assignment; the upsert/assign contracts already
-  exist), then Phase 2 tokens (after the wallet/security review). **Redlines hold** — nothing pushed;
-  `dev` advances only by squash-merge on a human go.
+- **Next**: Phase 2 tokens (count-based per-channel entitlements, Paystack-backed purchase, tokens-first
+  send-path consumption) — gated on a wallet/security review per the ADR; then Phase 4 spend-based
+  loyalty auto-upgrade + Phase 5 SES adapter. **Redlines hold** — nothing pushed; `dev` advances only by
+  squash-merge on a human go.
 
 ## Latest (2026-07-24, late): testing deploy live + publish pipeline + ADR 0010 ratified
 
