@@ -18,7 +18,9 @@ export type AccountKind =
   | "reserved_clearing"
   | "revenue"
   | "gateway_clearing"
-  | "writeoff";
+  | "writeoff"
+  // ADR-0010 Phase 2: the liability contra holding cash taken for tokens not yet sent.
+  | "token_deferred_revenue";
 
 /** A stable per-request body fingerprint (all string values) stored in ledger_transactions.metadata. */
 export type Fingerprint = Record<string, string>;
@@ -58,7 +60,12 @@ export async function accountId(
   return String(rows[0]?.id);
 }
 
-/** Post the two balanced legs of a movement (magnitudes; direction carries the sign). */
+/**
+ * Post the two balanced legs of a movement (magnitudes; direction carries the sign).
+ *
+ * `referenceType` defaults to the historical `'message'`-when-referenced behaviour; a token purchase
+ * (ADR-0010) passes `'token_purchase'` because its reference is a purchase, not a message.
+ */
 export async function postLegs(
   tx: TenantTx,
   txnId: string,
@@ -66,10 +73,11 @@ export async function postLegs(
   reason: string,
   amountMinor: bigint,
   legs: { debit: string; credit: string },
+  referenceType?: string,
 ): Promise<void> {
   // amounts as string + ::bigint cast — postgres.js tagged-template params don't type bigint directly.
   const amt = amountMinor.toString();
-  const refType = referenceId ? "message" : null;
+  const refType = referenceType ?? (referenceId ? "message" : null);
   await tx`
     INSERT INTO ledger_entries (tenant_id, txn_id, account_id, direction, amount_minor, reason, reference_type, reference_id)
     VALUES
@@ -86,15 +94,17 @@ export async function postLegs(
 export async function openIdempotentTxn(
   tx: TenantTx,
   args: {
-    type: "topup" | "sms_charge";
+    type: "topup" | "sms_charge" | "token_purchase";
     status: "pending" | "committed" | "refunded";
     idempotencyKey: string;
     referenceId: string | null;
     fingerprint: Fingerprint;
+    /** Defaults to the historical `'message'`-when-referenced behaviour (see postLegs). */
+    referenceType?: string;
   },
 ): Promise<TxnHandle> {
   const fp = JSON.stringify(args.fingerprint);
-  const refType = args.referenceId ? "message" : null;
+  const refType = args.referenceType ?? (args.referenceId ? "message" : null);
   const rows = (await tx`
     INSERT INTO ledger_transactions (tenant_id, type, status, idempotency_key, reference_type, reference_id, metadata)
     VALUES (current_setting('app.tenant_id')::uuid, ${args.type}, ${args.status}, ${args.idempotencyKey}, ${refType}, ${args.referenceId}, ${fp}::jsonb)
