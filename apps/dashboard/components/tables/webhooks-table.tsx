@@ -135,16 +135,23 @@ export function WebhooksTable({
     {
       id: "actions",
       header: () => null,
-      cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive"
-          onClick={() => setDeleteTarget(row.original)}
-        >
-          Disable
-        </Button>
-      ),
+      // Only an ACTIVE endpoint can be disabled. The action used to render unconditionally, so a
+      // disabled endpoint still offered "Disable" — which re-ran the mutation and re-marked its
+      // in-flight deliveries dead. There is deliberately no "Enable" here: the API exposes no
+      // reactivate path (create / disable / replay only), and a control that cannot work must not ship.
+      cell: ({ row }) => {
+        if (row.original.status !== "active") return null;
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive"
+            onClick={() => setDeleteTarget(row.original)}
+          >
+            Disable
+          </Button>
+        );
+      },
     },
   ];
 
@@ -171,8 +178,8 @@ export function WebhooksTable({
             <DialogTitle>Disable this endpoint?</DialogTitle>
             <DialogDescription>
               Fabric will stop delivering events to{" "}
-              <span className="font-mono">{deleteTarget?.url}</span>. This
-              Delivery history will remain available.
+              <span className="font-mono">{deleteTarget?.url}</span>. Delivery
+              history will remain available.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
