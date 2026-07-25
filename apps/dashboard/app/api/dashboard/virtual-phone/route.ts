@@ -11,6 +11,26 @@ import {
   sendVirtualPhoneReply,
 } from "@/lib/server/virtual-phone-client";
 
+/**
+ * Forward an upstream failure, guaranteeing the `{ error: { message } }` envelope the client reads.
+ * An api error that escaped unstructured (a bare throw → Nest's `{statusCode, message}`) used to be
+ * proxied verbatim, so the dashboard found no message and fell back to a generic one — which is how a
+ * failed reply came to report "Virtual phone data could not be loaded."
+ */
+function failure(error: unknown, fallback: string) {
+  if (error instanceof BffError) {
+    const payload = error.payload as { error?: { message?: unknown } } | null;
+    if (typeof payload?.error?.message === "string") {
+      return NextResponse.json(payload, { status: error.status });
+    }
+    return NextResponse.json(
+      { error: { message: fallback } },
+      { status: error.status },
+    );
+  }
+  return NextResponse.json({ error: { message: fallback } }, { status: 500 });
+}
+
 export async function GET(request: NextRequest) {
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
@@ -36,12 +56,7 @@ export async function GET(request: NextRequest) {
       can_clear: session.role === "owner" || session.role === "admin",
     });
   } catch (error) {
-    return error instanceof BffError
-      ? NextResponse.json(error.payload, { status: error.status })
-      : NextResponse.json(
-          { error: { message: "Request failed." } },
-          { status: 500 },
-        );
+    return failure(error, "Virtual phone data could not be loaded.");
   }
 }
 
@@ -67,12 +82,7 @@ export async function DELETE() {
       ),
     });
   } catch (error) {
-    return error instanceof BffError
-      ? NextResponse.json(error.payload, { status: error.status })
-      : NextResponse.json(
-          { error: { message: "Request failed." } },
-          { status: 500 },
-        );
+    return failure(error, "The inbox could not be cleared.");
   }
 }
 
@@ -104,11 +114,6 @@ export async function POST(request: NextRequest) {
       await sendVirtualPhoneReply(session.orgId, parsed.data),
     );
   } catch (error) {
-    return error instanceof BffError
-      ? NextResponse.json(error.payload, { status: error.status })
-      : NextResponse.json(
-          { error: { message: "Request failed." } },
-          { status: 500 },
-        );
+    return failure(error, "The reply could not be sent.");
   }
 }
