@@ -7,13 +7,7 @@ import {
   TOKEN,
   validatePayload,
 } from "./message-render.js";
-import {
-  EMAIL_MAX_BYTES,
-  type EmailSizeTier,
-  emailSizeTier,
-  type RateTable,
-  rateEmailBySize,
-} from "./rating.js";
+import { EMAIL_MAX_BYTES, type RateTable, rateEmailFlat } from "./rating.js";
 
 /**
  * Server-side EMAIL rendering + preview core (SDK-007 slice 2). PURE, like previewSms — the single
@@ -31,7 +25,6 @@ export interface EmailPreview {
   readonly text: string | null;
   readonly html: string | null;
   readonly size_bytes: number;
-  readonly tier: EmailSizeTier;
   readonly cost_minor: string;
   readonly currency: string;
 }
@@ -118,15 +111,15 @@ export function previewEmail(input: {
   const size = new TextEncoder().encode(
     subject + (text ?? "") + (html ?? ""),
   ).length;
-  const tier = emailSizeTier(size);
-  if (size > EMAIL_MAX_BYTES || tier === null) {
+  if (size > EMAIL_MAX_BYTES) {
     return {
       blockers: [{ path: "", code: "email_payload_too_large" }],
       preview: null,
     };
   }
 
-  const cost = rateEmailBySize(size, input.currency, input.rates);
+  // Flat per-send price (ADR-0010) — size measured only to enforce the ceiling above.
+  const cost = rateEmailFlat(input.currency, input.rates);
   return {
     blockers: [],
     preview: {
@@ -134,7 +127,6 @@ export function previewEmail(input: {
       text,
       html,
       size_bytes: size,
-      tier,
       cost_minor: cost.toString(),
       currency: input.currency,
     },

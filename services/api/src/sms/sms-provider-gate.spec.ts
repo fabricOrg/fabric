@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import type { PricingService } from "../pricing/pricing.service.js";
 import type { PiiVaultService } from "../privacy/pii-vault.service.js";
 import type { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
@@ -45,6 +46,10 @@ const virtualPhoneStub = {
 const vaultStub = {
   subjectForPhone: async () => randomUUID(),
 } as unknown as PiiVaultService;
+// These gate tests reject before the send path reaches pricing; the stub is never consulted.
+const pricingStub = {
+  resolveRates: async () => ({ sms: {}, email: {} }),
+} as unknown as PricingService;
 
 function serviceWithSwitch(paused: Record<string, boolean>): {
   svc: SmsService;
@@ -63,6 +68,7 @@ function serviceWithSwitch(paused: Record<string, boolean>): {
       consentStub,
       virtualPhoneStub,
       vaultStub,
+      pricingStub,
     ),
     isPaused,
   };
@@ -117,6 +123,7 @@ describe("SmsService provider kill-switch gate", () => {
       consentStub,
       virtualPhoneStub,
       { subjectForPhone } as unknown as PiiVaultService,
+      pricingStub,
     );
 
     await expect(svc.send(input)).rejects.toSatisfy(

@@ -1,4 +1,4 @@
-import type { MemberDto } from "@app/contracts";
+import type { MemberDto, PriceBookDto } from "@app/contracts";
 import { Avatar, AvatarFallback } from "@app/ui/components/ui/avatar";
 import { Badge } from "@app/ui/components/ui/badge";
 import {
@@ -18,11 +18,13 @@ import {
   TableRow,
 } from "@app/ui/components/ui/table";
 import { notFound } from "next/navigation";
+import { AccountPriceBookAssign } from "@/components/account-price-book-assign";
 import { SetBreadcrumbTitle } from "@/components/breadcrumb-title";
 import { InviteTenantMemberDialog } from "@/components/forms/invite-tenant-member-dialog";
 import { TenantMemberRowActions } from "@/components/tenant-member-row-actions";
 import { TenantStatusActions } from "@/components/tenant-status-actions";
 import { requireAdminSession } from "@/lib/server/auth";
+import { listPriceBooks } from "@/lib/server/price-book-client";
 import {
   listTenantMembers,
   TenantMemberApiError,
@@ -74,6 +76,17 @@ export default async function TenantDetailPage({
     loadError = error instanceof TenantMemberApiError || error instanceof Error;
   }
 
+  // Price books drive the assignment control below; a failure just hides the picker (non-critical).
+  let books: PriceBookDto[] = [];
+  try {
+    books = (await listPriceBooks()).books;
+  } catch {
+    books = [];
+  }
+  const assignedBook =
+    books.find((b) => b.id === tenant.price_book_id)?.name ??
+    "Default (by mode)";
+
   return (
     <div className="flex w-full flex-col gap-6">
       {/* The breadcrumb (Admin › <tenant>) is the way back to the list, so no separate back button. */}
@@ -100,6 +113,28 @@ export default async function TenantDetailPage({
           ) : null}
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pricing</CardTitle>
+          <CardDescription>
+            The rate plan this tenant is billed against. Default resolves by
+            mode. Changes are audited.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm">
+            Current: <span className="font-medium">{assignedBook}</span>
+          </span>
+          {canManage && books.length > 0 ? (
+            <AccountPriceBookAssign
+              accountId={tenant.tenant_id}
+              currentBookId={tenant.price_book_id}
+              books={books}
+            />
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

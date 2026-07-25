@@ -43,6 +43,8 @@ export const tenantSummaryDtoSchema = z.object({
   status: z.enum(["active", "suspended", "closed"]),
   data_region: z.string(),
   workos_organization_id: z.string().nullable(),
+  // Assigned price book (ADR-0010); null → the account resolves to the mode default.
+  price_book_id: z.string().nullable(),
   created_at: z.string(),
 });
 export type TenantSummaryDto = z.infer<typeof tenantSummaryDtoSchema>;

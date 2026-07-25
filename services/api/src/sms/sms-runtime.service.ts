@@ -1,5 +1,6 @@
 import type { DeliveryMode } from "@app/contracts";
 import type { AppDb } from "@app/db";
+import type { RateTable } from "@app/domain";
 import type {
   Creds,
   SmsSenderPlugin,
@@ -44,15 +45,21 @@ export class SmsRuntimeService {
     this.liveReadinessReason = wired.liveReadinessReason;
   }
 
-  deps(deliveryMode: DeliveryMode = "live") {
-    if (deliveryMode === "virtual") {
-      return { db: this.db, provider: this.virtualProvider };
-    }
-    return {
-      db: this.db,
-      provider: this.provider,
-      ...(this.creds ? { creds: this.creds } : {}),
-    };
+  /**
+   * Engine deps for a delivery mode. `rates` (the account's resolved SMS price book) is only consumed
+   * by prepareSend's rateSegments — dispatch/DLR/sweep never reprice (they recover cost from the
+   * reservation), so callers pass it only at prepare time. Omitted → the engine's compiled default.
+   */
+  deps(deliveryMode: DeliveryMode = "live", rates?: RateTable) {
+    const base =
+      deliveryMode === "virtual"
+        ? { db: this.db, provider: this.virtualProvider }
+        : {
+            db: this.db,
+            provider: this.provider,
+            ...(this.creds ? { creds: this.creds } : {}),
+          };
+    return rates ? { ...base, rates } : base;
   }
 
   async dispatch(

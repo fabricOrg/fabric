@@ -4,10 +4,7 @@ import { previewEmail } from "../src/email-render.js";
 import { previewMessage } from "../src/message-preview.js";
 import {
   DEFAULT_EMAIL_BASE_RATES,
-  EMAIL_MAX_BYTES,
-  EmailPayloadTooLargeError,
-  emailSizeTier,
-  rateEmailBySize,
+  rateEmailFlat,
   UnknownCurrencyError,
 } from "../src/rating.js";
 
@@ -18,37 +15,28 @@ const schema: VariableSchema = {
   additionalProperties: false,
 };
 
-describe("rateEmailBySize (size-tiered, ADR-0005 Amendment A1)", () => {
-  it("prices each tier as base × multiplier (GHS base 5)", () => {
-    expect(rateEmailBySize(10, "GHS")).toBe(5n); // standard ×1
-    expect(rateEmailBySize(51_200, "GHS")).toBe(5n); // boundary: still standard
-    expect(rateEmailBySize(51_201, "GHS")).toBe(15n); // large ×3
-    expect(rateEmailBySize(153_600, "GHS")).toBe(15n); // boundary: still large
-    expect(rateEmailBySize(153_601, "GHS")).toBe(30n); // xlarge ×6
-    expect(rateEmailBySize(262_144, "GHS")).toBe(30n); // boundary: hard ceiling
+describe("rateEmailFlat (ADR-0010 — flat per send)", () => {
+  it("prices flat per send regardless of size", () => {
+    expect(rateEmailFlat("GHS")).toBe(5n);
+    expect(rateEmailFlat("NGN")).toBe(500n);
+    expect(rateEmailFlat("USD")).toBe(2n);
   });
 
-  it("names the tier for a size, or null over the ceiling", () => {
-    expect(emailSizeTier(10)).toBe("standard");
-    expect(emailSizeTier(100_000)).toBe("large");
-    expect(emailSizeTier(200_000)).toBe("xlarge");
-    expect(emailSizeTier(EMAIL_MAX_BYTES + 1)).toBeNull();
+  it("prices against a passed rate table (the account's price book)", () => {
+    expect(rateEmailFlat("GHS", { GHS: 9n })).toBe(9n);
   });
 
-  it("throws over the hard ceiling and on an unpriced currency (never silently priced)", () => {
-    expect(() => rateEmailBySize(EMAIL_MAX_BYTES + 1, "GHS")).toThrow(
-      EmailPayloadTooLargeError,
-    );
-    expect(() => rateEmailBySize(10, "ZZZ")).toThrow(UnknownCurrencyError);
+  it("throws on an unpriced currency (never silently priced)", () => {
+    expect(() => rateEmailFlat("ZZZ")).toThrow(UnknownCurrencyError);
   });
 
-  it("exposes a base rate table for the supported currencies", () => {
+  it("exposes a default flat rate table for the supported currencies", () => {
     expect(DEFAULT_EMAIL_BASE_RATES.GHS).toBe(5n);
   });
 });
 
 describe("previewEmail (SDK-007 slice 2)", () => {
-  it("renders subject/text/html and prices the standard tier", () => {
+  it("renders subject/text/html and prices flat per send", () => {
     const out = previewEmail({
       subject: "Order for {{name}}",
       text: "Hi {{name}}, code {{code}}",
@@ -62,7 +50,6 @@ describe("previewEmail (SDK-007 slice 2)", () => {
       subject: "Order for Ada",
       text: "Hi Ada, code A1",
       html: "<p>Hi Ada</p>",
-      tier: "standard",
       cost_minor: "5",
       currency: "GHS",
     });
@@ -165,7 +152,7 @@ describe("previewEmail (SDK-007 slice 2)", () => {
     });
   });
 
-  it("prices a large body in the large tier", () => {
+  it("prices a large body flat — size does not change the price (ADR-0010)", () => {
     const out = previewEmail({
       subject: "s",
       html: `<p>{{name}}</p>`,
@@ -173,8 +160,7 @@ describe("previewEmail (SDK-007 slice 2)", () => {
       data: { name: "x".repeat(60_000) },
       currency: "GHS",
     });
-    expect(out.preview?.tier).toBe("large");
-    expect(out.preview?.cost_minor).toBe("15");
+    expect(out.preview?.cost_minor).toBe("5"); // flat, not size-scaled
     expect(out.preview?.size_bytes).toBeGreaterThan(51_200);
   });
 
@@ -216,7 +202,7 @@ describe("previewMessage dispatch", () => {
       currency: "GHS",
     });
     expect(out.channel).toBe("email");
-    expect(out.preview).toMatchObject({ subject: "hi Ada", tier: "standard" });
+    expect(out.preview).toMatchObject({ subject: "hi Ada", cost_minor: "5" });
   });
 
   it("routes an sms input to previewSms and tags the channel", () => {

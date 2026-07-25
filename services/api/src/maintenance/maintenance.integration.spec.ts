@@ -14,6 +14,7 @@ import type { ConsentService } from "../consent/consent.service.js";
 import type { EmailService } from "../email/email.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
@@ -79,6 +80,7 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
     consentAllowAll,
     liveMode,
     vault,
+    new PricingService(provisioning),
   );
   const maintenance = new MaintenanceService(
     provisioning,

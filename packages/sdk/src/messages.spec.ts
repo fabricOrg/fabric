@@ -121,7 +121,6 @@ describe("MessagesResource", () => {
         text: "Hi Ada, it shipped.",
         html: null,
         size_bytes: 34,
-        tier: "standard",
         cost_minor: "5",
         currency: "GHS",
       },
@@ -140,7 +139,6 @@ describe("MessagesResource", () => {
       text: "Hi Ada, it shipped.",
       html: null,
       sizeBytes: 34,
-      tier: "standard",
       costMinor: "5",
       currency: "GHS",
     });

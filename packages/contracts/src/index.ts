@@ -50,6 +50,8 @@ export * from "./pagination.js";
 export * from "./permissions.js";
 // Platform plugin registry (control-plane) — provider instances per capability.
 export * from "./plugins.js";
+// Price books (ADR-0010) — staff-configurable per-channel/per-currency rate plans, assigned per account.
+export * from "./price-books.js";
 export * from "./privacy.js";
 // Maker-checker — two-person control for consequential tenant changes.
 export * from "./proposals.js";

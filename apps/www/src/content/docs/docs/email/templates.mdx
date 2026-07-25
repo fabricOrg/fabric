@@ -1,6 +1,6 @@
 ---
 title: Email templates
-description: Author email as a managed definition with a from address, per-locale variants, and size tiers.
+description: Author email as a managed definition with a from address and per-locale variants.
 ---
 
 An email [message definition](/docs/messaging/message-definitions/) lets non-developers own the
@@ -31,13 +31,12 @@ const preview = await fabric.messages.preview("receipt.paid", {
 });
 
 const email = preview.data.emailPreview; // null unless the definition is an email channel
-console.log(email?.subject, email?.sizeBytes, email?.tier, email?.costMinor);
+console.log(email?.subject, email?.sizeBytes, email?.costMinor);
 ```
 
-Email is priced by rendered size, not segments. `emailPreview.tier` is one of `standard`, `large`,
-or `xlarge`, and a message over the hard ceiling is refused before it is priced — a `blocker`, not a
-silent truncation. Preview and send render byte-for-byte identically, so the previewed cost is the
-cost you pay.
+Email is priced **flat per send** (not by size or segments). A message over the hard size ceiling is
+refused before it is priced — a `blocker`, not a silent truncation. Preview and send render
+byte-for-byte identically, so the previewed cost is the cost you pay.
 
 ## Send by key
 
