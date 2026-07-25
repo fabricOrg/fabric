@@ -1,7 +1,40 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-07-24. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-07-25. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
+
+## Latest (2026-07-25): ADR-0010 pricing build — Phase 1 slices 1+2 (branch `feature/ops-pricing-rate-books`, committed, NOT pushed)
+
+Replaced the hardcoded rate constants with **staff-configurable price books** resolved per account,
+and flattened email pricing to **flat per send**. Phase 1 slices 1+2 (money-correctness core); slice 3
+(admin-console pricing UI + per-account assignment) deferred; Phase 2 (tokens) still gated on a
+wallet/security review. **Zero price change on launch** — the seeded default book == old rates.
+
+- **Slice 1 — data model + resolution.** New control-plane tables `price_books` + `price_book_rates`
+  (no RLS, like `kill_switches`; default privileges cover provisioner grants) + nullable
+  `accounts.price_book_id` FK (`ON DELETE SET NULL`). Migration **`0087_slippery_morgan_stark`**
+  (tables + FKs + `mode`/`channel` CHECKs + `unit_price_minor > 0` CHECK + partial-unique
+  `uniq_default_price_book_per_mode`). `PricingService.resolveRates(accountId)`
+  (`services/api/src/pricing/`) mirrors `KillSwitchService`: 30s TTL cache (bounded prune), **fails
+  OPEN to last-known-good → compiled default** on a store read failure; the wallet reserve still
+  **fails CLOSED** downstream. Per-channel guard: an empty book falls to compiled default, never
+  reprices to zero; an unpriced currency still rejects (`UnknownCurrencyError`). Seeds the default
+  "Subscription — Standard" book (existence-gated) at boot. Contracts in `@app/contracts/price-books`
+  (read + upsert/assign DTOs, ready for slice 3). 5 real-Postgres tests.
+- **Slice 2 — wiring + email flatten.** Resolved SMS rates injected into `EngineDeps.rates` at the
+  `prepareSend` choke point (`sms-runtime.service.ts deps(mode, rates?)` ← `sms.service.ts`); the
+  preview service prices SMS+email against the book (preview cost == send cost per account — email
+  parity is structural: managed accept reuses the preview `costMinor`). **Email flattened**:
+  `rateEmailBySize`→`rateEmailFlat` in `@app/domain/rating`, `EmailPreview.tier` dropped across
+  domain/contracts/SDK/dashboard/docs, 256 KiB ceiling kept as a blocker, dead
+  `EmailPayloadTooLargeError` removed.
+- **Gates**: all packages typecheck; domain 90 / SDK 56 / API-unit 167 / **API integration 214**;
+  biome clean; migration proven-applies. **Independent review** (Opus subagent — codex hit its usage
+  cap until 2026-07-28, gemini dead): _approve with changes_, no critical/tenancy defect; 3 findings
+  dispositioned — **DB `> 0` price CHECK added**, cache bounded, seed existence-gated + comment fixed.
+- **Next**: slice 3 (admin pricing UI + account assignment; the upsert/assign contracts already
+  exist), then Phase 2 tokens (after the wallet/security review). **Redlines hold** — nothing pushed;
+  `dev` advances only by squash-merge on a human go.
 
 ## Latest (2026-07-24, late): testing deploy live + publish pipeline + ADR 0010 ratified
 

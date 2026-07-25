@@ -44,16 +44,15 @@ export const smsPreviewResult = z.object({
 });
 export type SmsPreviewResult = z.infer<typeof smsPreviewResult>;
 
-// Email preview result (SDK-007 slice 3). Rendered subject/text/html, the rendered UTF-8 byte size, its
-// size tier, and the exact tier price. Parallel to smsPreviewResult; the two are carried in separate
-// nullable fields (`preview` / `email_preview`) discriminated by `channel` so an SMS consumer that only
-// reads `preview` is unaffected.
+// Email preview result (SDK-007 slice 3). Rendered subject/text/html, the rendered UTF-8 byte size, and
+// the exact FLAT per-send price (ADR-0010 — the size tier is retired). Parallel to smsPreviewResult; the
+// two are carried in separate nullable fields (`preview` / `email_preview`) discriminated by `channel`
+// so an SMS consumer that only reads `preview` is unaffected.
 export const emailPreviewResult = z.object({
   subject: z.string(),
   text: z.string().nullable(),
   html: z.string().nullable(),
   size_bytes: z.number().int(),
-  tier: z.enum(["standard", "large", "xlarge"]),
   cost_minor: z.string(),
   currency: z.string(),
 });

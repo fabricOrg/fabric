@@ -110,7 +110,7 @@ export class EmailService {
   }
 
   /**
-   * Accept a managed Email delivery: reserve the wallet by the size-tier price and persist the
+   * Accept a managed Email delivery: reserve the wallet by the flat per-send price and persist the
    * delivery/attempt/email_message/outbox rows in one tenant tx, keyed on the delivery id so a replay
    * is a no-op (no double-reserve). ACCEPT ONLY — dispatch/settle happens on the queued worker via
    * process()/resolve(). The kill-switch check here fails closed before any reserve. Core lives in

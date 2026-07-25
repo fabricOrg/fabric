@@ -42,7 +42,7 @@ const p = preview.data;
 console.log(p.eligible, p.channel, p.resolvedLocale);
 console.log(p.blockers);           // path-coded reasons a send would be refused
 console.log(p.preview);            // SmsPreview | null (body, encoding, segments, cost)
-console.log(p.emailPreview);       // EmailPreview | null (subject, text, html, size tier, cost)
+console.log(p.emailPreview);       // EmailPreview | null (subject, text, html, size, cost)
 ```
 
 `blockers` never echoes the variable values you supplied — it reports a `path` and a stable `code`

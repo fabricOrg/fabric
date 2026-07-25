@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import type { SendersService } from "../senders/senders.service.js";
 import { SmsService } from "../sms/sms.service.js";
@@ -84,6 +85,7 @@ describeDb("queued send pipeline (BullMQ)", () => {
     consentAllowAll,
     liveMode,
     vault,
+    new PricingService(provisioning),
   );
   const smsInline = new SmsService(
     appDb,
@@ -95,6 +97,7 @@ describeDb("queued send pipeline (BullMQ)", () => {
     consentAllowAll,
     liveMode,
     vault,
+    new PricingService(provisioning),
   );
 
   const tenantId = randomUUID() as TenantId;

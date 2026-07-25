@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
 import { ConsentModule } from "../consent/consent.module.js";
 import { EmailModule } from "../email/email.module.js";
+import { PricingModule } from "../pricing/pricing.module.js";
 import { SendersModule } from "../senders/senders.module.js";
 import { SmsModule } from "../sms/sms.module.js";
 import { ManagedMessagesController } from "./managed-messages.controller.js";
@@ -18,6 +19,8 @@ import { MessagesController } from "./messages.controller.js";
     ApiKeysModule,
     ConsentModule,
     EmailModule,
+    // ADR-0010: preview prices against the account's resolved price book.
+    PricingModule,
     SendersModule,
     SmsModule,
   ],

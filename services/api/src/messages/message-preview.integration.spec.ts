@@ -9,12 +9,14 @@
 import { randomUUID } from "node:crypto";
 import type { VariableSchema } from "@app/contracts";
 import { createAppDb } from "@app/db";
+import { DEFAULT_EMAIL_BASE_RATES, DEFAULT_RATES } from "@app/domain";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ApplicationsService } from "../applications/applications.service.js";
 import type { AuditService } from "../audit/audit.service.js";
 import type { ConsentService } from "../consent/consent.service.js";
 import { MessageDefinitionsService } from "../message-definitions/message-definitions.service.js";
+import type { PricingService } from "../pricing/pricing.service.js";
 import type { SendersService } from "../senders/senders.service.js";
 import { MessagePreviewService } from "./message-preview.service.js";
 
@@ -33,7 +35,14 @@ const senders = {
 const consent = {
   isSuppressed: async () => false,
 } as unknown as ConsentService;
-const preview = new MessagePreviewService(db, senders, consent);
+// Default price book (matches the seeded book) so preview cost equals a subsequent managed send.
+const pricing = {
+  resolveRates: async () => ({
+    sms: DEFAULT_RATES,
+    email: DEFAULT_EMAIL_BASE_RATES,
+  }),
+} as unknown as PricingService;
+const preview = new MessagePreviewService(db, senders, consent, pricing);
 
 const TENANT = randomUUID();
 let sandboxEnvId = "";
@@ -245,7 +254,7 @@ describeDb("SDK-003 MessagePreviewService (no side effects)", () => {
     expect(await sideEffectCounts()).toEqual(before);
   });
 
-  it("renders a released EMAIL definition — subject/text/html, size tier, exact price; no writes", async () => {
+  it("renders a released EMAIL definition — subject/text/html, flat price; no writes", async () => {
     const before = await sideEffectCounts();
     const out = await preview.preview(
       TENANT,
@@ -262,7 +271,6 @@ describeDb("SDK-003 MessagePreviewService (no side effects)", () => {
       subject: "Order Ada",
       text: "Hi Ada, 2 orders",
       html: "<p>Hi Ada</p>",
-      tier: "standard",
       cost_minor: "5",
       currency: "GHS",
     });
