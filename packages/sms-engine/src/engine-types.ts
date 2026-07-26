@@ -1,13 +1,41 @@
-import type { AppDb } from "@app/db";
+import type { AppDb, TenantTx } from "@app/db";
 import type { RateTable } from "@app/domain";
 import type { Creds, MessageStatus, SmsSenderPlugin } from "@app/integrations";
 import type { ManagedSendContext } from "./managed-send.js";
+
+/**
+ * The token entitlement backend (ADR-0010 Phase 2). INJECTED rather than imported, exactly as
+ * `rates` is: the count layer lives in the api service, and the engine must not depend on it. Absent
+ * = tokens are not wired, and every send is wallet-backed as before.
+ */
+export interface TokenBackend {
+  /**
+   * Claim `quantity` tokens (the SEGMENT count for SMS) for this message. `held: false` means the
+   * caller falls through to the wallet — never a partial claim.
+   */
+  hold(
+    tx: TenantTx,
+    p: {
+      channel: "sms";
+      currency: string;
+      quantity: bigint;
+      referenceId: string;
+    },
+  ): Promise<{ held: boolean }>;
+  /** Spend (`committed`) or give back (`returned`) the holds for a message. Idempotent. */
+  resolve(
+    tx: TenantTx,
+    referenceId: string,
+    outcome: "committed" | "returned",
+  ): Promise<unknown>;
+}
 
 export interface EngineDeps {
   db: AppDb;
   provider: SmsSenderPlugin;
   creds?: Creds;
   rates?: RateTable;
+  tokens?: TokenBackend;
 }
 
 export interface SendInput {

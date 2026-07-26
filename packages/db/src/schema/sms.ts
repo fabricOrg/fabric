@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   char,
+  check,
   foreignKey,
   index,
   integer,
@@ -78,6 +79,11 @@ export const messages = pgTable(
     // reserved/charged cost (minor units) — the amount reserve/commit/refund move.
     costMinor: moneyMinor("cost_minor").notNull(),
     currency: char("currency", { length: 3 }).notNull(),
+    // What paid for this send (ADR-0010 Phase 2). 'wallet' = money reserved in the ledger;
+    // 'tokens' = a count-based entitlement held in token_holds. Resolution MUST branch on this so a
+    // token-backed send settles tokens and a wallet-backed one settles money — never both. Defaults
+    // to 'wallet', which is correct for every row that existed before tokens.
+    backing: text("backing").notNull().default("wallet"),
     deliveryMode: text("delivery_mode").notNull().default("live"),
     providerSlug: text("provider_slug"),
     // provider's message id — set once the provider acknowledges (accepted); the DLR correlation key.
@@ -88,6 +94,7 @@ export const messages = pgTable(
   // drizzle 0.45: the 3rd pgTable arg returns an ARRAY (the object form is deprecated).
   (t) => [
     index("idx_messages_tenant_created").on(t.tenantId, t.createdAt),
+    check("messages_backing_chk", sql`${t.backing} in ('wallet', 'tokens')`),
     // provider_ref must be unique per provider so a DLR maps to exactly one message (dedup + B2).
     // Partial (provider_ref set only once acknowledged) — also serves the reconcile lookup.
     uniqueIndex("uniq_messages_provider_ref")
