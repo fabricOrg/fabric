@@ -3,7 +3,47 @@
 _Snapshot: 2026-07-25. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-25, later): Phase 1 MERGED to `dev` (#172) + Phase 2 token review drafted
+## Latest (2026-07-26): token slice 2a MERGED (#175) + two live-use bug fixes (#174)
+
+`dev` at `9943446`. Phase 2 is under way; the review (#173) was signed off on §2 (one-ledger) and
+§6.3 (counter granularity).
+
+- **Slice 2a MERGED (#175)** — count layer + idempotent grant. `token_purchases` (intent,
+  platform-level like `payments`; CHECK ties `amount_minor = quantity × locked price`),
+  `token_lots` (append-only, price-locked, `UNIQUE(tenant_id, purchase_reference)` = grant-once),
+  `token_counters` (spendable projection per **(tenant, channel, currency)**, `CHECK available >= 0`).
+  Migrations **0088** (tables + ledger enum adds) + **0089** (FORCE RLS + policies + grants; the
+  purchase intent is provisioner-only). New ledger vocabulary: account kind `token_deferred_revenue`,
+  reasons `token_purchase|token_consume|token_breakage`, txn type `token_purchase`.
+  **Money stays in the ONE ledger**: purchase = `debit gateway_clearing / credit token_deferred_revenue`
+  (a liability — we owe N sends); revenue is recognized only on consumption (2c). Count tables carry
+  no money column, so a count-layer bug cannot mint or lose cash. `grantTokensForPurchase` reads the
+  stored intent ITSELF (a forged webhook cannot inflate a grant) and raises the counter only when the
+  lot row was genuinely inserted (replay = no-op). **Feature invisible — no purchase endpoint until
+  tokens are spendable (2b).** 8 real-Postgres tests + 47 existing money specs green (shipped
+  reserve→commit/refund provably unchanged) + `db:assert:drift`.
+- **Bug fixes MERGED (#174)**, both found from live use:
+  - webhooks table rendered **Disable on an already-disabled endpoint** (re-ran the mutation,
+    re-marking pending deliveries dead). Guarded on `status === "active"`, matching api-keys-table.
+    No "Enable" — the api has create/disable/replay only, so it would be a dead control.
+  - a failed **virtual-phone reply** reported "Virtual phone data could not be loaded." Three
+    defects: `recordVirtualReply` threw **bare Errors** across the boundary (→ Nest's generic 500),
+    the BFF forwarded that unstructured payload verbatim, and the page used one load-shaped fallback
+    for every action. Now structured codes (`sandbox_environment_missing`,
+    `virtual_reply_not_recorded`), a guaranteed `{error:{message}}` envelope, per-action fallbacks.
+    **NOT reproduced on the reporter's env** (deployed testing stack); the local DB has no virtual
+    messages. `sandbox_environment_missing` is the likely cause — the query needs an app slugged
+    `default` with a sandbox env, and accounts without one exist locally.
+- **Review §6.2 (cross-lot consumption order) resolved by ASSUMPTION, not sign-off** — a hold draws
+  from lots **expiry-soonest, then oldest (FIFO)**, so that is the locked price recognized. Rationale:
+  no expiry exists yet (ADR #7), which makes the expiry clause inert and the policy identical to plain
+  FIFO today; FIFO is the standard for releasing deferred revenue; and it is a one-line `ORDER BY` to
+  change. It only becomes visible once a tenant holds lots bought at DIFFERENT prices. **Flag to the
+  product owner if a different recognition order is wanted.**
+- **Note for 2b**: SMS is priced **per segment**, so a hold quantity is the segment count, NOT 1.
+  Email is 1 per send.
+
+## Earlier (2026-07-25, later): Phase 1 MERGED to `dev` (#172) + Phase 2 token review drafted
 
 Phase 1 price books **squash-merged to `dev`** as `87d0ff7` (PR #172, `verify` CI green 4m53s) — the
 `feature/ops-pricing-rate-books` branch is deleted. Pre-merge tech-debt/quality sweep: **clean** — no
