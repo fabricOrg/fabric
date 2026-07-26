@@ -26,7 +26,8 @@ export default async function PricingPage() {
         </h1>
         <p className="text-sm text-muted-foreground">
           Rate plans priced per channel and currency. Accounts resolve to their
-          assigned book, or the mode default. Every edit is audited.
+          assigned book, or the mode default. One book may be published to
+          public pricing surfaces. Every edit is audited.
         </p>
       </div>
 

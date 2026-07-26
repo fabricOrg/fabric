@@ -8,6 +8,7 @@ describe("upsertPriceBookRequestSchema", () => {
     mode: "subscription" as const,
     description: "",
     is_default: false,
+    is_public: false,
   };
 
   it("accepts a valid book", () => {
@@ -52,6 +53,40 @@ describe("upsertPriceBookRequestSchema", () => {
     const result = upsertPriceBookRequestSchema.safeParse({
       ...base,
       rates: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("requires complete channel pairs for every published currency", () => {
+    const result = upsertPriceBookRequestSchema.safeParse({
+      ...base,
+      is_public: true,
+      rates: [{ channel: "sms", currency: "GHS", unit_price_minor: "3" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a complete published subscription book", () => {
+    const result = upsertPriceBookRequestSchema.safeParse({
+      ...base,
+      is_public: true,
+      rates: [
+        { channel: "sms", currency: "GHS", unit_price_minor: "3" },
+        { channel: "email", currency: "GHS", unit_price_minor: "5" },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("does not allow token pricing to be published publicly", () => {
+    const result = upsertPriceBookRequestSchema.safeParse({
+      ...base,
+      mode: "token",
+      is_public: true,
+      rates: [
+        { channel: "sms", currency: "GHS", unit_price_minor: "3" },
+        { channel: "email", currency: "GHS", unit_price_minor: "5" },
+      ],
     });
     expect(result.success).toBe(false);
   });

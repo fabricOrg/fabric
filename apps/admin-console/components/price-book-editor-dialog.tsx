@@ -71,6 +71,7 @@ export function PriceBookEditorDialog({
   const [name, setName] = useState(book?.name ?? "");
   const [description, setDescription] = useState(book?.description ?? "");
   const [isDefault, setIsDefault] = useState(book?.is_default ?? false);
+  const [isPublic, setIsPublic] = useState(book?.is_public ?? false);
   const [rows, setRows] = useState<RateRow[]>(() => initialRows(book));
   const [busy, setBusy] = useState(false);
 
@@ -99,6 +100,7 @@ export function PriceBookEditorDialog({
         mode: "subscription" as const,
         description: description.trim(),
         is_default: isDefault,
+        is_public: isPublic,
         rates: rows.map((r) => ({
           channel: r.channel,
           currency: r.currency.toUpperCase(),
@@ -173,6 +175,16 @@ export function PriceBookEditorDialog({
               </span>
             </div>
             <Switch checked={isDefault} onCheckedChange={setIsDefault} />
+          </div>
+          <div className="flex items-center justify-between rounded-md border p-3">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">Published publicly</span>
+              <span className="text-xs text-muted-foreground">
+                Show this book&apos;s sanitized rates on public pricing
+                surfaces.
+              </span>
+            </div>
+            <Switch checked={isPublic} onCheckedChange={setIsPublic} />
           </div>
 
           <div className="flex flex-col gap-2">

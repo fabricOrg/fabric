@@ -16,30 +16,6 @@ export default defineConfig({
       logo: { src: "./src/assets/fabric-mark.svg", alt: "" },
       head: [
         {
-          tag: "link",
-          attrs: { rel: "preconnect", href: "https://api.fontshare.com" },
-        },
-        {
-          tag: "link",
-          attrs: {
-            rel: "preconnect",
-            href: "https://cdn.fontshare.com",
-            crossorigin: true,
-          },
-        },
-        {
-          tag: "link",
-          attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" },
-        },
-        {
-          tag: "link",
-          attrs: {
-            rel: "preconnect",
-            href: "https://fonts.gstatic.com",
-            crossorigin: true,
-          },
-        },
-        {
           tag: "script",
           content: `const syncFabricTheme=()=>{document.documentElement.classList.toggle("dark",document.documentElement.dataset.theme==="dark")};syncFabricTheme();new MutationObserver(syncFabricTheme).observe(document.documentElement,{attributeFilter:["data-theme"]});`,
         },
