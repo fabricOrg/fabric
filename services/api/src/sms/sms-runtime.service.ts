@@ -16,10 +16,20 @@ import {
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { APP_DB } from "../db/db.module.js";
+import { holdTokens, resolveTokenHolds } from "../tokens/token-holds.js";
 import { dispatchSend as dispatchProviderSend } from "./sms-dispatch.js";
 import { buildSmsProviders } from "./sms-providers.js";
 import { VirtualPhoneService } from "./virtual-phone.service.js";
 import { maybeAutoStop } from "./virtual-phone-auto-stop.js";
+
+/**
+ * The engine's view of the token entitlement layer (ADR-0010 Phase 2). Stateless, so one shared
+ * object rather than a per-call closure; the engine holds no dependency on the api service.
+ */
+const TOKEN_BACKEND = {
+  hold: holdTokens,
+  resolve: resolveTokenHolds,
+};
 
 @Injectable()
 export class SmsRuntimeService {
@@ -59,7 +69,10 @@ export class SmsRuntimeService {
             provider: this.provider,
             ...(this.creds ? { creds: this.creds } : {}),
           };
-    return rates ? { ...base, rates } : base;
+    // The token backend is injected on EVERY deps() — unlike `rates`, resolution (DLR, sweeper)
+    // must also settle token holds, and those paths don't pass rates.
+    const withTokens = { ...base, tokens: TOKEN_BACKEND };
+    return rates ? { ...withTokens, rates } : withTokens;
   }
 
   async dispatch(

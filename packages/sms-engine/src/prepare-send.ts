@@ -1,3 +1,4 @@
+import type { TenantTx } from "@app/db";
 import { encodeAndSegment, rateSegments } from "@app/domain";
 import { STATUS_RANK } from "@app/integrations";
 import { reserve } from "@app/wallet";
@@ -9,6 +10,40 @@ import {
 } from "./managed-send.js";
 
 type Row = Record<string, unknown>;
+
+type Backing = "wallet" | "tokens";
+
+/**
+ * Try tokens for a NEWLY created message; fall back to the wallet. A held claim flips the row to
+ * `backing = 'tokens'` in the same transaction, so the resolution path settles tokens instead of
+ * money. Tokens unwired (no deps.tokens) keeps every send wallet-backed, exactly as before.
+ */
+async function chooseBacking(
+  deps: EngineDeps,
+  tx: TenantTx,
+  p: { messageId: string; currency: string; segments: number },
+): Promise<Backing> {
+  if (!deps.tokens) return "wallet";
+  // SMS is priced PER SEGMENT (ADR-0010 §5), so a 3-segment message claims 3 tokens, not 1.
+  const outcome = await deps.tokens.hold(tx, {
+    channel: "sms",
+    currency: p.currency,
+    quantity: BigInt(p.segments),
+    referenceId: p.messageId,
+  });
+  if (!outcome.held) return "wallet";
+  await tx`UPDATE messages SET backing = 'tokens' WHERE id = ${p.messageId}`;
+  return "tokens";
+}
+
+/** The backing an already-persisted message was accepted under (retry path). */
+async function readBacking(tx: TenantTx, messageId: string): Promise<Backing> {
+  const rows = (await tx`
+    SELECT backing FROM messages WHERE id = ${messageId} LIMIT 1`) as Row[];
+  return String(rows[0]?.backing ?? "wallet") === "tokens"
+    ? "tokens"
+    : "wallet";
+}
 
 /** Persist the message, reserve funds, and create its recoverable dispatch intent atomically. */
 export async function prepareSend(
@@ -60,12 +95,28 @@ export async function prepareSend(
     const resolvedId = createdId ?? existing;
     if (!resolvedId) throw new Error("Could not persist the prepared message.");
     const messageId = String(resolvedId);
-    await reserve(tx, {
-      currency: input.currency,
-      amountMinor: cost,
-      idempotencyKey: `reserve:${messageId}`,
-      referenceId: messageId,
-    });
+    // ADR-0010 §8 resolution order: price book (already applied via deps.rates) → TOKENS first →
+    // wallet money → reject. The wallet reserve below still fails closed; only the token attempt is
+    // allowed to come up empty and fall through.
+    //
+    // The backing is decided ONCE, when the row is first created. On a retry of an existing message
+    // we read what it already is: re-deciding could hand a message that already reserved money a
+    // token hold as well (or vice versa) and charge for the same send twice.
+    const backing = createdId
+      ? await chooseBacking(deps, tx, {
+          messageId,
+          currency: input.currency,
+          segments: seg.segments,
+        })
+      : await readBacking(tx, messageId);
+    if (backing === "wallet") {
+      await reserve(tx, {
+        currency: input.currency,
+        amountMinor: cost,
+        idempotencyKey: `reserve:${messageId}`,
+        referenceId: messageId,
+      });
+    }
     await tx`
       INSERT INTO message_dispatches (message_id, tenant_id)
       VALUES (${messageId}, current_setting('app.tenant_id')::uuid)

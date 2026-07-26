@@ -36,9 +36,10 @@ async function resolveMessage(
   } = {},
 ): Promise<MessageStatus> {
   const rows = (await tx`
-    SELECT status, application_id, environment_id
+    SELECT status, application_id, environment_id, backing
     FROM messages WHERE id = ${messageId} FOR UPDATE`) as Row[];
   const prior = String(rows[0]?.status) as MessageStatus;
+  const tokenBacked = String(rows[0]?.backing ?? "wallet") === "tokens";
   // Terminal-freeze + monotonicity: never regress a recorded status or overwrite a terminal one.
   if (isTerminalMessageStatus(prior)) return prior;
   if (STATUS_RANK[newStatus] < STATUS_RANK[prior]) return prior;
@@ -53,16 +54,27 @@ async function resolveMessage(
     platformFaultExemptions: deps.provider.platformFaultExemptions,
     faultCause: opts.faultCause,
   });
+  // The DECISION is channel- and backing-neutral (@app/domain owns it); only the EFFECTOR differs.
+  // A token-backed send settles its holds and must never touch the ledger — it never reserved money,
+  // so a commit/refund here would throw NoReservationError at best and mis-state revenue at worst.
   if (decision === "commit") {
-    await commit(tx, {
-      referenceId: messageId,
-      idempotencyKey: `commit:${messageId}`,
-    });
+    if (tokenBacked) {
+      await deps.tokens?.resolve(tx, messageId, "committed");
+    } else {
+      await commit(tx, {
+        referenceId: messageId,
+        idempotencyKey: `commit:${messageId}`,
+      });
+    }
   } else if (decision === "refund") {
-    await refund(tx, {
-      referenceId: messageId,
-      idempotencyKey: `refund:${messageId}`,
-    });
+    if (tokenBacked) {
+      await deps.tokens?.resolve(tx, messageId, "returned");
+    } else {
+      await refund(tx, {
+        referenceId: messageId,
+        idempotencyKey: `refund:${messageId}`,
+      });
+    }
   }
   await tx`
     UPDATE messages SET

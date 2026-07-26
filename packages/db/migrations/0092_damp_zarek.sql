@@ -1,0 +1,2 @@
+ALTER TABLE "messages" ADD COLUMN "backing" text DEFAULT 'wallet' NOT NULL;--> statement-breakpoint
+ALTER TABLE "messages" ADD CONSTRAINT "messages_backing_chk" CHECK ("messages"."backing" in ('wallet', 'tokens'));
