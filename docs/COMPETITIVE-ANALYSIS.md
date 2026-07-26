@@ -1,5 +1,11 @@
 # Fabric — Competitive Analysis & Feature Roadmap
 
+> **Historical research notice (2026-07-26):** competitor observations remain useful, but the
+> product baseline and strategic recommendations in this document predate direct email, managed
+> SMS/email definitions, application environments, and the public SDK. Use
+> [`POSITIONING.md`](./POSITIONING.md) for current product strategy and verify competitor claims
+> again before making a new investment decision.
+
 > **Date:** 2026-07-04 · **Author:** Product (fifi) · **Status:** research-backed, for prioritization
 > **Method:** multi-agent deep-research fan-out — 6 search angles, 25 sources fetched, 122 claims extracted, top 25 adversarially verified (3-vote, need 2/3 to kill). **24 confirmed, 1 refuted, 0 unverified.** Full source list at the end. Claims tagged with their verification vote (e.g. `3-0`).
 > **Caveat up front:** pricing/feature claims are current as of mid-2026 but move fast; the Nigerian A2P licence framework (§C-1) is a **July-2025 draft** ("proposed"), not gazetted law — track it before betting GTM on the numbers.

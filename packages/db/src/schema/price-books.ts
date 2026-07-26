@@ -29,14 +29,23 @@ export const priceBooks = pgTable(
     description: text("description").notNull().default(""),
     // The book new/unassigned accounts of this mode resolve to. At most one default per mode.
     isDefault: boolean("is_default").notNull().default(false),
+    // The single staff-approved rate book whose sanitized rates may be shown on public surfaces.
+    isPublic: boolean("is_public").notNull().default(false),
     ...timestamps,
   },
   (t) => [
     check("price_books_mode_chk", sql`${t.mode} in ('subscription', 'token')`),
+    check(
+      "price_books_public_subscription_chk",
+      sql`not ${t.isPublic} or ${t.mode} = 'subscription'`,
+    ),
     // Resolution must be unambiguous: only one default book per purchase mode.
     uniqueIndex("uniq_default_price_book_per_mode")
       .on(t.mode)
       .where(sql`${t.isDefault}`),
+    uniqueIndex("uniq_public_price_book")
+      .on(t.isPublic)
+      .where(sql`${t.isPublic}`),
   ],
 );
 

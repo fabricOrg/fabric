@@ -1,8 +1,13 @@
 # PI-4 Repositioning Proposal — Verify-First, Open Front Door
 
+> **Superseded strategy (2026-07-26):** this proposal records the July 10 PI-4 planning context. Its
+> open-front-door work informed the current product, but Verify-first positioning no longer governs
+> Fabric. Direct SMS, direct email, and managed messaging are now shipped product surfaces. Use
+> [`../POSITIONING.md`](../POSITIONING.md) for current strategy.
+>
 > **Date:** 2026-07-10 · **Owner:** Product · **Status:** proposal — re-sequences
 > [`BACKLOG.md`](./BACKLOG.md); pending fifi ratification at grooming.
-> Strategy: [`../POSITIONING.md`](../POSITIONING.md) (v2) · Onboarding decision:
+> Historical strategy snapshot: POSITIONING v2 · Onboarding decision:
 > [`../decisions/0002-self-serve-sandbox-onboarding.md`](../decisions/0002-self-serve-sandbox-onboarding.md)
 > Size: **S** ≤1d · **M** ~2–3d · **L** ~1wk+ (matches BACKLOG.md scale).
 

@@ -61,6 +61,11 @@ export function PriceBookManager({
                     Default
                   </Badge>
                 ) : null}
+                {book.is_public ? (
+                  <Badge className="border-transparent bg-primary/12 text-primary">
+                    Public
+                  </Badge>
+                ) : null}
               </CardTitle>
               {book.description ? (
                 <CardDescription>{book.description}</CardDescription>

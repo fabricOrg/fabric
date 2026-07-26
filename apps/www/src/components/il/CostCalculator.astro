@@ -1,0 +1,256 @@
+---
+import {
+  DEFAULT_EMAIL_BASE_RATES,
+  DEFAULT_RATES,
+} from "@app/domain";
+
+// "What will this cost ME?" — the question that decides the evaluation in this market, answered
+// before signup instead of behind it. The section used to say "live rates in the dashboard", which
+// means creating an account just to learn the price.
+//
+// These rates are the compiled fallback when no staff-published snapshot is reachable:
+// SMS 3 pesewas / 400 kobo per SEGMENT, email 5 pesewas / 500 kobo per SEND
+// (packages/domain/src/rating.ts — DEFAULT_RATES / DEFAULT_EMAIL_BASE_RATES). Accounts can be moved
+// onto a different book by staff, so the copy says "default rates" and points at the dashboard for
+// an account's own — honest either way, and never a rate we don't actually charge.
+interface Props {
+  pricingUrl: string;
+}
+
+const { pricingUrl } = Astro.props;
+const fallbackRates = Object.fromEntries(
+  ["GHS", "NGN"].map((currency) => [
+    currency,
+    {
+      sms: Number(DEFAULT_RATES[currency]),
+      email: Number(DEFAULT_EMAIL_BASE_RATES[currency]),
+    },
+  ]),
+);
+---
+
+<div
+  class="calc"
+  data-calc
+  data-fallback-rates={JSON.stringify(fallbackRates)}
+  data-pricing-url={pricingUrl}
+>
+  <div class="calc-head">
+    <h3>What it costs at your volume</h3>
+    <div class="calc-cur" role="group" aria-label="Currency">
+      <button type="button" class="cur is-on" data-cur="GHS" aria-pressed="true">GHS</button>
+      <button type="button" class="cur" data-cur="NGN" aria-pressed="false">NGN</button>
+    </div>
+  </div>
+
+  <div class="calc-grid">
+    <label class="cf">
+      <span>SMS / month</span>
+      <input id="calc-sms" name="monthly-sms" type="number" min="0" step="500" value="10000" inputmode="numeric" autocomplete="off" />
+    </label>
+    <label class="cf">
+      <span>Average SMS length</span>
+      <select id="calc-len" name="sms-segments" autocomplete="off">
+        <option value="1">Short — 1 segment</option>
+        <option value="2">Medium — 2 segments</option>
+        <option value="3">Long — 3 segments</option>
+      </select>
+    </label>
+    <label class="cf">
+      <span>Emails / month</span>
+      <input id="calc-email" name="monthly-email" type="number" min="0" step="500" value="20000" inputmode="numeric" autocomplete="off" />
+    </label>
+  </div>
+
+  <div class="calc-out" role="status" aria-live="polite" aria-atomic="true">
+    <div class="calc-lines">
+      <div class="cl"><span data-out="smsLabel">10,000 SMS × 1 segment</span><b data-out="smsCost">GHS 300.00</b></div>
+      <div class="cl"><span data-out="emailLabel">20,000 emails</span><b data-out="emailCost">GHS 1,000.00</b></div>
+    </div>
+    <div class="calc-total">
+      <span>Estimated monthly</span>
+      <strong data-out="total">GHS 1,300.00</strong>
+    </div>
+  </div>
+
+  <p class="calc-note">
+    <span data-rate-source>Standard fallback rates</span> —
+    <span data-out="unit">SMS GHS 0.03 / segment · email GHS 0.05 / send</span>.
+    Fabric reserves before dispatch, settles delivered messages, and returns failed or expired
+    reservations.
+  </p>
+</div>
+
+<script>
+  type CalculatorRate = { sms: number; email: number };
+  type CalculatorRates = Record<string, CalculatorRate>;
+  type PublishedRate = {
+    channel: "sms" | "email";
+    currency: string;
+    unit_price_minor: string;
+    unit_basis: "segment" | "send";
+  };
+
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
+  const isPublishedRate = (value: unknown): value is PublishedRate => {
+    if (!isRecord(value)) return false;
+    const channel = value.channel;
+    const expectedBasis =
+      channel === "sms" ? "segment" : channel === "email" ? "send" : null;
+    return (
+      expectedBasis !== null &&
+      value.unit_basis === expectedBasis &&
+      typeof value.currency === "string" &&
+      typeof value.unit_price_minor === "string"
+    );
+  };
+
+  for (const root of document.querySelectorAll<HTMLElement>("[data-calc]")) {
+    const fallbackRates = JSON.parse(
+      root.dataset.fallbackRates ?? "{}",
+    ) as CalculatorRates;
+    let rates: CalculatorRates = fallbackRates;
+    const sms = root.querySelector<HTMLInputElement>("#calc-sms");
+    const len = root.querySelector<HTMLSelectElement>("#calc-len");
+    const email = root.querySelector<HTMLInputElement>("#calc-email");
+    let curBtns = [...root.querySelectorAll<HTMLButtonElement>(".cur")];
+    let cur = "GHS";
+
+    const num = (el: HTMLInputElement | HTMLSelectElement) =>
+      Math.max(0, Math.floor(Number(el.value) || 0));
+    const fmt = (minor: number) =>
+      `${cur} ${(minor / 100).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const set = (k: string, v: string) => {
+      const el = root.querySelector(`[data-out="${k}"]`);
+      if (el) el.textContent = v;
+    };
+
+    const recalc = () => {
+      const r = rates[cur];
+      if (!r || !sms || !len || !email) return;
+      const n = num(sms), segs = Number(len.value), e = num(email);
+      // per SEGMENT for sms, per SEND for email — the same basis the send path bills on
+      const smsCost = n * segs * r.sms;
+      const emailCost = e * r.email;
+      set("smsLabel", `${n.toLocaleString("en")} SMS × ${segs} segment${segs === 1 ? "" : "s"}`);
+      set("emailLabel", `${e.toLocaleString("en")} email${e === 1 ? "" : "s"}`);
+      set("smsCost", fmt(smsCost));
+      set("emailCost", fmt(emailCost));
+      set("total", fmt(smsCost + emailCost));
+      set("unit", `SMS ${cur} ${(r.sms / 100).toFixed(2)} / segment · email ${cur} ${(r.email / 100).toFixed(2)} / send`);
+    };
+
+    const bindCurrencyButtons = () => {
+      curBtns.forEach((button) =>
+        button.addEventListener("click", () => {
+          cur = button.dataset.cur ?? cur;
+          curBtns.forEach((candidate) => {
+            const selected = candidate === button;
+            candidate.classList.toggle("is-on", selected);
+            candidate.setAttribute("aria-pressed", String(selected));
+          });
+          recalc();
+        }),
+      );
+    };
+
+    const syncCurrencies = () => {
+      curBtns.forEach((button) => {
+        button.hidden = !(button.dataset.cur && button.dataset.cur in rates);
+      });
+      if (!(cur in rates)) {
+        cur = curBtns.find((button) => !button.hidden)?.dataset.cur ?? "GHS";
+      }
+      curBtns.forEach((button) => {
+        const selected = button.dataset.cur === cur;
+        button.classList.toggle("is-on", selected);
+        button.setAttribute("aria-pressed", String(selected));
+      });
+    };
+
+    const publishedRates = (payload: unknown): CalculatorRates | null => {
+      if (!isRecord(payload) || !Array.isArray(payload.rates)) return null;
+      const next: Record<string, { sms?: number; email?: number }> = {};
+      for (const rate of payload.rates) {
+        if (!isPublishedRate(rate)) return null;
+        if (rate.currency !== "GHS" && rate.currency !== "NGN") continue;
+        const value = Number(rate.unit_price_minor);
+        if (!Number.isSafeInteger(value) || value <= 0) continue;
+        const currency = (next[rate.currency] ??= {});
+        currency[rate.channel] = value;
+      }
+      const complete: CalculatorRates = {};
+      for (const [currency, rate] of Object.entries(next)) {
+        if (rate.sms === undefined || rate.email === undefined) continue;
+        complete[currency] = { sms: rate.sms, email: rate.email };
+      }
+      return Object.keys(complete).length > 0 ? complete : null;
+    };
+
+    for (const el of [sms, len, email]) {
+      el?.addEventListener("input", recalc);
+    }
+    bindCurrencyButtons();
+    recalc();
+
+    const pricingUrl = root.dataset.pricingUrl;
+    if (pricingUrl) {
+      void fetch(pricingUrl, {
+        credentials: "omit",
+        mode: "cors",
+        referrerPolicy: "no-referrer",
+      })
+        .then(async (response) => {
+          if (!response.ok) return null;
+          return publishedRates(await response.json());
+        })
+        .then((published) => {
+          if (!published) return;
+          rates = published;
+          const source = root.querySelector("[data-rate-source]");
+          if (source) source.textContent = "Published standard rates";
+          syncCurrencies();
+          recalc();
+        })
+        .catch(() => {
+          // Public pricing is an enhancement. The clearly-labelled fallback remains usable offline.
+        });
+    }
+  }
+</script>
+
+<style>
+  .calc { margin-top: clamp(2rem, 4vw, 3rem); padding: clamp(1.25rem, 2.5vw, 1.9rem); background: var(--card); border: 1px solid var(--border); box-shadow: 0 28px 60px -46px rgba(20,20,32,.45); }
+  .calc-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+  .calc-head h3 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.15rem, 2vw, 1.4rem); }
+  .calc-cur { display: inline-flex; border: 1px solid var(--border); }
+  .cur { padding: .35rem .8rem; background: transparent; border: 0; cursor: pointer; font: 600 .76rem var(--font-mono); color: var(--muted-foreground); }
+  .cur.is-on { background: var(--primary); color: #fff; }
+  .cur:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  .calc-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; margin-top: 1.25rem; }
+  @media (max-width: 46rem) { .calc-grid { grid-template-columns: minmax(0, 1fr); } }
+  .cf { display: grid; gap: .35rem; min-width: 0; }
+  .cf > span { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-foreground); }
+  .cf input, .cf select { width: 100%; padding: .6rem .7rem; background: var(--background); color: var(--foreground); border: 1px solid var(--border); border-radius: 0; font-family: var(--font-mono); font-size: .9rem; }
+  .cf input:focus-visible, .cf select:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; border-color: var(--primary); }
+
+  .calc-out { margin-top: 1.25rem; border: 1px solid var(--border); }
+  .cl { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: .7rem .9rem; border-bottom: 1px solid var(--border); font-size: .92rem; }
+  .cl span { color: var(--muted-foreground); font-family: var(--font-mono); font-size: .82rem; }
+  .cl b { font-family: var(--font-mono); font-weight: 600; color: var(--foreground); }
+  .calc-total { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: .9rem; background: color-mix(in oklab, var(--primary) 7%, var(--card)); }
+  .calc-total span { font-family: var(--font-mono); font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-foreground); }
+  .calc-total strong { font-family: var(--font-display); font-size: clamp(1.3rem, 2.6vw, 1.75rem); color: var(--primary); }
+
+  .calc-note { margin: .95rem 0 0; font-size: .82rem; line-height: 1.6; color: var(--muted-foreground); }
+  .calc-note span { font-family: var(--font-mono); color: var(--foreground); }
+  @media (max-width: 32rem) {
+    .calc { padding: 1rem; }
+    .calc-head { align-items: flex-start; }
+    .cl, .calc-total { display: grid; gap: .35rem; }
+    .cl b, .calc-total strong { justify-self: start; }
+  }
+</style>

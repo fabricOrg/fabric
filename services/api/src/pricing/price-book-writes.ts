@@ -1,4 +1,8 @@
-import type { PriceBookDto, UpsertPriceBookRequest } from "@app/contracts";
+import type {
+  PriceBookDto,
+  PublicPricingResponse,
+  UpsertPriceBookRequest,
+} from "@app/contracts";
 import {
   type MinorUnits,
   type PriceBook,
@@ -36,6 +40,17 @@ export async function upsertPriceBook(
   req: UpsertPriceBookRequest,
 ): Promise<PriceBookDto | null> {
   return db.transaction(async (tx) => {
+    // Validate an update target before changing either singleton flag. A stale or forged id must not
+    // clear the current default/public book when the requested update ultimately returns not found.
+    if (id) {
+      const [existing] = await tx
+        .select({ id: priceBooks.id })
+        .from(priceBooks)
+        .where(eq(priceBooks.id, id))
+        .limit(1);
+      if (!existing) return null;
+    }
+
     // Clear the mode's existing default BEFORE this book claims it — avoids a partial-index collision.
     if (req.is_default) {
       await tx
@@ -44,6 +59,13 @@ export async function upsertPriceBook(
         .where(
           and(eq(priceBooks.mode, req.mode), eq(priceBooks.isDefault, true)),
         );
+    }
+    // Public publication is independent of tenant defaulting and globally singular.
+    if (req.is_public) {
+      await tx
+        .update(priceBooks)
+        .set({ isPublic: false, updatedAt: new Date() })
+        .where(eq(priceBooks.isPublic, true));
     }
 
     let bookId = id;
@@ -55,6 +77,7 @@ export async function upsertPriceBook(
           mode: req.mode,
           description: req.description,
           isDefault: req.is_default,
+          isPublic: req.is_public,
           updatedAt: new Date(),
         })
         .where(eq(priceBooks.id, id))
@@ -68,6 +91,7 @@ export async function upsertPriceBook(
           mode: req.mode,
           description: req.description,
           isDefault: req.is_default,
+          isPublic: req.is_public,
         })
         .returning({ id: priceBooks.id });
       bookId = inserted?.id ?? null;
@@ -89,6 +113,39 @@ export async function upsertPriceBook(
 
     return readBook(tx, bookId);
   });
+}
+
+/** Read the one staff-published price snapshot without leaking book or tenant metadata. */
+export async function readPublicPricing(
+  db: Db,
+): Promise<PublicPricingResponse | null> {
+  const [book] = await db
+    .select({
+      id: priceBooks.id,
+      updatedAt: priceBooks.updatedAt,
+    })
+    .from(priceBooks)
+    .where(eq(priceBooks.isPublic, true))
+    .limit(1);
+  if (!book) return null;
+  const rates = await db
+    .select({
+      channel: priceBookRates.channel,
+      currency: priceBookRates.currency,
+      unitPriceMinor: priceBookRates.unitPriceMinor,
+    })
+    .from(priceBookRates)
+    .where(eq(priceBookRates.priceBookId, book.id))
+    .orderBy(priceBookRates.currency, priceBookRates.channel);
+  return {
+    rates: rates.map((rate) => ({
+      channel: rate.channel as "sms" | "email",
+      currency: rate.currency,
+      unit_price_minor: rate.unitPriceMinor.toString(),
+      unit_basis: rate.channel === "sms" ? "segment" : "send",
+    })),
+    effective_at: book.updatedAt.toISOString(),
+  };
 }
 
 /** Read one book + its rates as a DTO (post-write echo). Runs inside the upsert transaction. */
@@ -116,6 +173,7 @@ function toDto(
     mode: book.mode as PriceBookDto["mode"],
     description: book.description,
     is_default: book.isDefault,
+    is_public: book.isPublic,
     rates: allRates
       .filter((r) => r.priceBookId === book.id)
       .map((r) => ({

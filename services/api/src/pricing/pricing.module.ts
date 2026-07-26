@@ -5,6 +5,7 @@ import { ProvisioningDbModule } from "../identity/provisioning-db.module.js";
 import { PriceBookAdminService } from "./price-book-admin.service.js";
 import { PricingController } from "./pricing.controller.js";
 import { PricingService } from "./pricing.service.js";
+import { PublicPricingController } from "./public-pricing.controller.js";
 
 /**
  * Pricing (ADR-0010) — resolves per-account rate tables for the send path AND serves the admin-console
@@ -14,7 +15,7 @@ import { PricingService } from "./pricing.service.js";
  */
 @Module({
   imports: [ProvisioningDbModule, AuditModule],
-  controllers: [PricingController],
+  controllers: [PricingController, PublicPricingController],
   providers: [PricingService, PriceBookAdminService, BffTokenGuard],
   exports: [PricingService],
 })

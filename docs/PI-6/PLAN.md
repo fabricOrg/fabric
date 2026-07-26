@@ -1,12 +1,18 @@
 # PI-6 — Self-Service Developer Platform
 
-Status: proposed 2026-07-12 (product owner). fifi to ratify sequencing before merge to `dev`.
+> **Historical delivery plan (2026-07-26):** this plan predates the shipped direct email and managed
+> SMS/email surfaces. Its self-service platform and application/environment decisions remain useful,
+> but its channel baseline and sequencing are no longer current. Use
+> [`../POSITIONING.md`](../POSITIONING.md) and the implementation for present product scope.
+
+Status: superseded delivery plan; originally proposed 2026-07-12 (product owner).
 Depends on: E13 (virtual-phone test mode + PII vault/DSR) landing in `dev` first — this PI branches
 off the E13 tip and reworks its sandbox model per ADR-0004.
 
 ## Mission
 
-Turn Fabric into a self-service developer platform for messaging (SMS now; Email + AI deferred),
+Turn Fabric into a self-service developer platform for messaging (the original baseline was SMS;
+email and managed messaging have since shipped),
 comparable to Stripe / Twilio / Resend. A developer discovers the platform, signs up, gets a fully
 provisioned sandbox, integrates an SDK, sends a first message, invites teammates, and requests
 production — with minimal friction. Self-service is the **primary** path; ops-provisioning is an
@@ -25,7 +31,7 @@ production — with minimal friction. Self-service is the **primary** path; ops-
 
 ## Baseline: ~60-70% already exists
 
-The repo is mid-flight on this trajectory (PI-4 verify-first + ADR-0002/0003). Already real: self-
+At the time of this plan, the repo was mid-flight on this trajectory. Already real then: self-
 serve auto-provision (gated by the `platform.signup` kill-switch, seeded OFF), sandbox + virtual-phone sink, go-live
 maker-checker (= production request), sender-ID review, API keys (real API), kill-switches, audit,
 outbox+webhook delivery, privacy/DSR, team invite + roles. Gaps: landing surface, the App/Env

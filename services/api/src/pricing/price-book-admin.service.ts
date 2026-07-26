@@ -1,4 +1,8 @@
-import type { PriceBookDto, UpsertPriceBookRequest } from "@app/contracts";
+import type {
+  PriceBookDto,
+  PublicPricingResponse,
+  UpsertPriceBookRequest,
+} from "@app/contracts";
 import {
   accounts,
   type ProvisioningDb,
@@ -9,7 +13,11 @@ import { Inject, Injectable } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
-import { listPriceBooks, upsertPriceBook } from "./price-book-writes.js";
+import {
+  listPriceBooks,
+  readPublicPricing,
+  upsertPriceBook,
+} from "./price-book-writes.js";
 import { PricingService } from "./pricing.service.js";
 
 /** The staff actor attributed to an audited price change (from the BFF x-actor-* headers). */
@@ -38,6 +46,10 @@ export class PriceBookAdminService {
     return listPriceBooks(this.provisioning.db);
   }
 
+  async publicPricing(): Promise<PublicPricingResponse | null> {
+    return readPublicPricing(this.provisioning.db);
+  }
+
   /**
    * Create (id null) or update a book + its full rate set. A rate change can move ANY account priced
    * on this book, so the whole resolver cache is cleared (books are few). Returns null on unknown id.
@@ -60,6 +72,7 @@ export class PriceBookAdminService {
       metadata: {
         mode: dto.mode,
         is_default: dto.is_default,
+        is_public: dto.is_public,
         rate_count: dto.rates.length,
       },
     });
