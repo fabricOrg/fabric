@@ -461,14 +461,37 @@ const capIcon = (k: string): string => (({
       .sec-head.center .section-lede { margin-inline: auto; }
 
       /* hero */
-      .hero { display: grid; gap: clamp(2.5rem,5vw,4rem); align-items: center; padding-block: clamp(3rem,6vw,6rem) var(--section-y); }
-      @media (min-width: 64rem) { .hero { grid-template-columns: 1.02fr .98fr; } }
+      /* NOT a 50/50 split. The illustration bleeds off the right edge of the VIEWPORT and sits
+       * behind an oversized headline, so the two layers overlap instead of sitting in tidy columns.
+       * Depth and bleed are what stop this reading as the default SaaS hero. */
+      /* overflow-x: clip (not hidden) contains the bleed WITHOUT creating a scroll container —
+       * hidden would also break position:sticky for any descendant. The hero has none, but clip is
+       * the correct tool and keeps that true if one is added later. */
+      .hero { position: relative; overflow-x: clip; display: grid; gap: clamp(2.5rem,5vw,4rem); padding-block: clamp(3rem,6vw,6rem) var(--section-y); }
       h1 { margin: .9rem 0 0; font-size: clamp(2.6rem,5.6vw,4.4rem); line-height: .99; }
       .lede { margin: 1.3rem 0 0; max-width: 34rem; color: var(--muted-foreground); font-size: 1.12rem; line-height: 1.6; }
       .actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
       .trust { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1.5rem 0 0; padding: 0; list-style: none; }
       .trust li { display: inline-flex; align-items: center; gap: .4rem; color: var(--muted-foreground); font-size: .85rem; }
       .hero-il { width: 100%; max-width: 34rem; margin-inline: auto; }
+      @media (min-width: 64rem) {
+        .hero { min-height: clamp(34rem, 46vw, 44rem); align-content: center; }
+        .hero-copy { position: relative; z-index: 2; max-width: min(46rem, 62%); }
+        /* right: calc(50% - 50vw) walks out of the centred container to the true viewport edge */
+        /* pushed further right so it runs OFF the viewport edge, and widened so its left side
+         * reaches back under the headline — the layers genuinely interleave rather than sitting
+         * side by side. The mask keeps only the quietest part of the art beneath the type. */
+        .hero-il { position: absolute; z-index: 1; top: 52%; right: calc(50% - 56vw);
+          width: min(58rem, 74vw); max-width: none; margin: 0; transform: translateY(-50%) rotate(-3deg);
+          -webkit-mask-image: linear-gradient(102deg, transparent 2%, rgba(0,0,0,.35) 18%, #000 40%);
+          mask-image: linear-gradient(102deg, transparent 2%, rgba(0,0,0,.35) 18%, #000 40%);
+          pointer-events: none; }
+        /* the headline crosses in front of the art, so give it a whisper of a scrim */
+        .hero-copy::before { content: ""; position: absolute; inset: -3rem -6rem -2rem -3rem; z-index: -1;
+          background: radial-gradient(60% 70% at 28% 45%, var(--background) 58%, transparent 100%); }
+        .hero h1 { font-size: clamp(3rem, 6.4vw, 5.1rem); letter-spacing: -.03em; }
+        .hero .lede { max-width: 34rem; }
+      }
       .hero-il :global(img) { animation: floaty 6s ease-in-out infinite; }
       @keyframes floaty { 50% { transform: translateY(-10px); } }
       @media (prefers-reduced-motion: reduce) { .hero-il :global(img) { animation: none; } }
