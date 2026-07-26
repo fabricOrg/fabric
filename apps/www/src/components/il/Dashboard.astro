@@ -4,8 +4,8 @@
 // customer. HTML/CSS for crisp UI; themed by @app/ui tokens.
 const bars = [38, 52, 44, 61, 73, 58, 80];
 const rows = [
-  { ch: "sms", key: "welcome.otp", st: "delivered", cost: "0.03" },
-  { ch: "email", key: "receipt.paid", st: "delivered", cost: "0.01" },
+  { ch: "sms", key: "account.alert", st: "delivered", cost: "0.03" },
+  { ch: "email", key: "receipt.paid", st: "delivered", cost: "0.05" },
   { ch: "sms", key: "order.shipped", st: "sending", cost: "0.03" },
 ];
 ---
@@ -13,7 +13,7 @@ const rows = [
 <div class="dash" role="img" aria-label="Fabric dashboard preview: a deliveries log, wallet balance, and a weekly volume chart.">
   <div class="chrome" aria-hidden="true">
     <span class="dots"><i></i><i></i><i></i></span>
-    <span class="url">app.fabric.dev / deliveries</span>
+    <span class="url">Fabric dashboard / deliveries</span>
   </div>
   <div class="body">
     <aside class="rail" aria-hidden="true">
@@ -62,7 +62,7 @@ const rows = [
   .rail .navi { width: 1.15rem; height: .5rem; border-radius: 3px; background: color-mix(in oklab, var(--foreground) 12%, transparent); }
   .rail .navi.on { background: color-mix(in oklab, var(--primary) 55%, transparent); }
 
-  .main { display: grid; gap: .8rem; grid-template-columns: 1.4fr 1fr; padding: .9rem; }
+  .main { display: grid; gap: .8rem; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); min-width: 0; padding: .9rem; }
   @media (max-width: 34rem) { .main { grid-template-columns: 1fr; } }
   .panel { border: 1px solid var(--border); background: var(--background); padding: .7rem .75rem; }
   .panel header { font-family: var(--font-display); font-weight: 600; font-size: .82rem; color: var(--foreground); margin-bottom: .6rem; }
@@ -77,7 +77,7 @@ const rows = [
   .st.delivered { background: var(--ok); } .st.sending { background: var(--warn); }
   .c { font-family: var(--font-mono); font-size: .64rem; color: var(--muted-foreground); }
 
-  .wallet strong { display: block; font-family: var(--font-mono); font-size: 1.5rem; color: var(--foreground); letter-spacing: -.02em; }
+  .wallet strong { display: block; font-family: var(--font-mono); font-size: 1.5rem; color: var(--foreground); letter-spacing: 0; }
   .wallet .hint { font-family: var(--font-mono); font-size: .62rem; color: var(--muted-foreground); }
 
   .bars { display: flex; align-items: flex-end; gap: .3rem; height: 3.6rem; }
@@ -87,5 +87,20 @@ const rows = [
    * would have finished long before the reader scrolls this far. Without JS, bars render full. */
   :global(.preview-frame.in) .bars span { animation: grow .9s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--b) * 60ms); }
   @keyframes grow { from { transform: scaleY(0); } }
+  @media (max-width: 27rem) {
+    .body { grid-template-columns: 2.25rem minmax(0, 1fr); }
+    .main { padding: .65rem; }
+    .row {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "channel key status"
+        ". cost cost";
+      gap: .3rem .4rem;
+    }
+    .ch { grid-area: channel; }
+    .key { grid-area: key; }
+    .st { grid-area: status; }
+    .c { grid-area: cost; justify-self: end; }
+  }
   @media (prefers-reduced-motion: reduce) { :global(.preview-frame.in) .bars span { animation: none; } }
 </style>

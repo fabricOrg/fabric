@@ -1,52 +1,79 @@
 ---
 title: Build with Fabric
-description: Send SMS and email, test safely in the sandbox, and react to delivery events.
+description: Send direct SMS and email or publish managed messages, then follow delivery and cost.
 ---
 
-import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+import { Card, CardGrid, LinkButton, LinkCard, Steps } from "@astrojs/starlight/components";
 
-Fabric gives your server one typed interface for transactional SMS and email. Start with a
-`sk_test_` key, inspect the result in the dashboard, then move the same integration to live when
-your sender and funding are ready.
+<p class="docs-home-kicker">SMS + email / direct + managed</p>
 
-<CardGrid>
-  <Card title="Sandbox first" icon="rocket">
-    Test sends, costs, and delivery events without using wallet funds or contacting a real recipient.
-  </Card>
-  <Card title="Predictable writes" icon="approve-check">
-    Idempotency keys make retries safe when your application or the network fails halfway through.
-  </Card>
-  <Card title="Delivery you can follow" icon="rss">
-    Signed webhooks report acceptance and terminal delivery states outside the request cycle.
-  </Card>
-</CardGrid>
+Fabric gives your server one typed SDK for direct SMS, direct email, and versioned managed messages.
+Start with a test key, send through the virtual delivery path, and inspect the result before you
+configure live routes.
 
-## Make your first request
+<div class="docs-home-actions">
+  <LinkButton href="/docs/quickstarts/working-quickstart/" icon="right-arrow">
+    Send your first message
+  </LinkButton>
+  <LinkButton href="/docs/get-started/" variant="secondary">
+    Understand the platform
+  </LinkButton>
+</div>
 
-<LinkCard
-  title="Node.js quickstart"
-  description="Install the TypeScript SDK and send a sandbox message."
-  href="/docs/quickstarts/working-quickstart/"
-/>
-
-## Choose what to build
+## Choose how to send
 
 <CardGrid>
-  <Card title="Managed messages" icon="document">
-    Publish a versioned message definition, then send it by a stable key such as
-    `order.shipped`. [Learn about messaging](/docs/messaging/).
+  <Card title="Direct SMS" icon="comment">
+    Put the final body and sender in the request. Send one message or a batch of up to 100.
+    [Open the SMS guide](/docs/messaging/sms/).
   </Card>
   <Card title="Direct email" icon="email">
-    Send text or HTML email from your server and retrieve the resulting delivery.
-    [Read the email guide](/docs/email/).
+    Send text or HTML from a verified domain, then retrieve and list the resulting messages.
+    [Open the email guide](/docs/email/).
   </Card>
-  <Card title="Webhooks" icon="rss">
-    Verify signatures against the raw request body before processing an event.
-    [Secure your handler](/docs/webhooks/).
+  <Card title="Managed messages" icon="document">
+    Publish versioned SMS or email content and send it from your application by a stable key.
+    [Open message definitions](/docs/messaging/message-definitions/).
   </Card>
 </CardGrid>
+
+## Start in sandbox
+
+<Steps>
+1. **Create an application.** It owns the keys, environments, messages, webhooks, and activity for
+   one integration.
+2. **Create a test key.** Store the `sk_test_` key in your server-side secret manager as
+   `FABRIC_API_KEY`.
+3. **Send from your server.** Use direct content or address a published managed message by key.
+4. **Follow the outcome.** Read the delivery or process its signed webhook event.
+</Steps>
 
 :::caution[Server-side only]
 Fabric secret keys must never be exposed in browser code, mobile apps, public repositories, logs,
 or client-visible environment variables. Call Fabric from a trusted server.
 :::
+
+## Build for production
+
+<CardGrid>
+  <LinkCard
+    title="Delivery and webhooks"
+    description="Understand delivery states, verify signatures, and handle retries safely."
+    href="/docs/webhooks/"
+  />
+  <LinkCard
+    title="Wallet and billing"
+    description="Read balances, trace ledger movements, and understand cost reservations."
+    href="/docs/account/wallet-billing/"
+  />
+  <LinkCard
+    title="Sender IDs"
+    description="Register the names recipients see on live SMS in Ghana and Nigeria."
+    href="/docs/messaging/sender-ids/"
+  />
+  <LinkCard
+    title="Going live"
+    description="Prepare live keys, routes, funding, domains, consent, and webhooks."
+    href="/docs/account/going-live/"
+  />
+</CardGrid>

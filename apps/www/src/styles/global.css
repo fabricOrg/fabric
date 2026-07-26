@@ -116,6 +116,31 @@ body {
   border-radius: 0.35rem;
 }
 
+.sl-markdown-content .docs-home-kicker {
+  margin-block: 0 0.75rem;
+  color: var(--gold-ink);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sl-markdown-content .docs-home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block: 1.5rem 2.75rem;
+}
+
+.sl-markdown-content .docs-home-actions .sl-link-button {
+  margin: 0;
+  border-radius: 0;
+}
+
+.sl-markdown-content .docs-home-actions .sl-link-button.secondary {
+  background: var(--sl-color-bg);
+}
+
 /* Starlight rotates card-icon colours per card (amber/violet/green tiles). Pin them all to one
  * brand-indigo tile so the docs match the landing's disciplined colour system. */
 .sl-markdown-content .card .icon {

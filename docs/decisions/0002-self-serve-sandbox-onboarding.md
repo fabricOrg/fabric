@@ -4,6 +4,11 @@ Status: accepted 2026-07-10 (product owner; fifi to ratify sequencing at PI-4 gr
 Supersedes: the customer half of `IDENTITY-SSO.md` §12.5 (invite-only as-built). Staff
 onboarding (allowlist + org-less invitation, admin-console) is untouched by this ADR.
 
+> **Current scope note (2026-07-26):** the self-service decision still stands. ADR-0004 supersedes
+> the flat tenant-level sandbox model with workspace → application → environment. The
+> verification-led rationale below is historical; current product positioning is direct SMS,
+> direct email, and managed messaging through one platform.
+
 ## Context
 
 Fabric shipped invite-only customer onboarding: staff provision a tenant in the admin console
@@ -11,9 +16,8 @@ before anyone can log in. Every direct competitor (Africa's Talking, Termii, Ark
 Twilio) offers self-serve sign-up landing in a sandbox within minutes; Twilio attributes
 material activation gains to a no-wait sandbox (`COMPETITIVE-ANALYSIS.md` A-5/A-6). The
 original identity design (`IDENTITY-SSO.md` §11, 2026-05-31) already chose self-serve; the
-invite-only posture was a later hardening drift. Meanwhile the repositioning to a
-verification-led product (`POSITIONING.md` v2) targets developer-led buyers whose first
-touchpoint must be "try it now."
+invite-only posture was a later hardening drift. The current self-service developer platform
+targets buyers whose first touchpoint must be "try it now."
 
 The genuine reason for the invite gate is compliance: live SMS requires registered sender IDs
 (NCC hard gate) and vetted customers. That gates **live traffic**, not **sign-up**.
