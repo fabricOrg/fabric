@@ -9,6 +9,7 @@
     "stop": "astro dev stop",
     "status": "astro dev status",
     "logs": "astro dev logs",
+    "prebuild": "pnpm --filter @app/contracts --filter @app/domain build",
     "build": "astro build",
     "audit:performance": "pnpm build && lhci autorun",
     "typecheck": "astro check",
