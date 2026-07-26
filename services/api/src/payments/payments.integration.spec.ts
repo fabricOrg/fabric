@@ -11,6 +11,7 @@ import { and, eq } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
+import { TokenPurchaseService } from "../tokens/token-purchase.service.js";
 import { AutoTopupService } from "./auto-topup.service.js";
 import { PaymentsService } from "./payments.service.js";
 
@@ -41,7 +42,13 @@ describeDb("wallet top-up (Paystack)", () => {
   const killSwitch = {
     isPaused: async () => false,
   } as unknown as KillSwitchService;
-  const service = new PaymentsService(provisioning, appDb, config, killSwitch);
+  const service = new PaymentsService(
+    provisioning,
+    appDb,
+    config,
+    killSwitch,
+    new TokenPurchaseService(provisioning, appDb, config, killSwitch),
+  );
   const autoTopupService = new AutoTopupService(
     provisioning,
     appDb,

@@ -83,6 +83,43 @@ export type UpsertPriceBookRequest = z.infer<
   typeof upsertPriceBookRequestSchema
 >;
 
+/**
+ * Buy a fixed quantity of tokens for one channel (ADR-0010 Phase 2). The unit price is NOT accepted
+ * from the client — it is resolved server-side from the default token price book and locked into the
+ * granted lot, so a caller can neither pick their own price nor have it change under them later.
+ */
+export const purchaseTokensRequestSchema = z.object({
+  channel: messageChannel,
+  /** How many sends to buy. SMS spends one token per SEGMENT, email one per send. */
+  quantity: z.number().int().positive().max(1_000_000),
+  currency: z.string().regex(/^[A-Z]{3}$/),
+  email: z.string().email(),
+});
+export type PurchaseTokensRequest = z.infer<typeof purchaseTokensRequestSchema>;
+
+export const purchaseTokensResponseSchema = z.object({
+  /** Hosted-checkout URL; the grant lands only once the provider webhook confirms payment. */
+  authorization_url: z.string(),
+  reference: z.string(),
+  /** Echoed so the buyer sees the exact price locked in, in minor units. */
+  unit_price_minor: z.string(),
+  amount_minor: z.string(),
+});
+export type PurchaseTokensResponse = z.infer<
+  typeof purchaseTokensResponseSchema
+>;
+
+/** A tenant's spendable token counts, per channel and currency. */
+export const tokenBalanceDtoSchema = z.object({
+  channel: messageChannel,
+  currency: z.string(),
+  available: z.string(),
+});
+export const tokenBalancesResponseSchema = z.object({
+  balances: z.array(tokenBalanceDtoSchema),
+});
+export type TokenBalancesResponse = z.infer<typeof tokenBalancesResponseSchema>;
+
 /** Assign (or clear → default) an account's price book (admin). */
 export const assignPriceBookRequestSchema = z.object({
   price_book_id: z.string().uuid().nullable(),

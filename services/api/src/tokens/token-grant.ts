@@ -20,9 +20,8 @@ import { invalidRequest, notFound } from "../http/api-error.js";
  * quantity × locked price. The caller still owes the signature check and the amount/currency
  * reconciliation against the intent, exactly as `PaymentsService.handleWebhook` does for top-ups.
  *
- * NOT YET CALLED IN PRODUCTION. Tokens are not spendable until the send path consumes them (slice
- * 2b), so no purchase endpoint is exposed — selling a send we cannot deliver would be dishonest. The
- * production caller (initiate + the Paystack webhook branch) lands with slice 2c.
+ * Called in production by `TokenPurchaseService.completeFromWebhook`, once the Paystack webhook's
+ * signature and its amount-vs-intent reconciliation have both passed.
  */
 
 export interface TokenGrantResult {
@@ -123,6 +122,26 @@ export async function grantTokensForPurchase(
       quantity: purchase.quantity,
     };
   });
+}
+
+/** Every spendable token count this tenant holds, for the balances endpoint. */
+export async function listTokenBalances(
+  tx: TenantTx,
+): Promise<{ channel: string; currency: string; available: string }[]> {
+  const rows = (await tx`
+    SELECT channel, currency, available::text AS available
+    FROM token_counters
+    WHERE tenant_id = current_setting('app.tenant_id')::uuid AND available > 0
+    ORDER BY channel, currency`) as {
+    channel: string;
+    currency: string;
+    available: string;
+  }[];
+  return rows.map((row) => ({
+    channel: String(row.channel),
+    currency: String(row.currency),
+    available: String(row.available),
+  }));
 }
 
 /**

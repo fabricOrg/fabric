@@ -97,7 +97,15 @@ describe("statement export (B1)", () => {
   it("CSV lines sum exactly to closing − opening, and closing matches the live balance", async () => {
     const res = await app.inject({
       method: "GET",
-      url: "/v1/wallet/statement?currency=GHS",
+      // An EXPLICIT window instead of the default "up to now". The seeded entries are stamped by
+      // Postgres `now()` while the default `to` comes from the api process's clock, so any skew
+      // between the database and the host (tens of ms here, and it drifts either way) can place the
+      // seed rows just past `to` and empty the statement — a flake with nothing to do with the code
+      // under test. The assertions below are unaffected: `from` predates the seed, so opening is
+      // still 0 and every seeded movement still falls inside the window.
+      url: `/v1/wallet/statement?currency=GHS&from=2026-07-01T00:00:00Z&to=${new Date(
+        Date.now() + 86_400_000,
+      ).toISOString()}`,
       headers: { authorization: `Bearer ${KEY}` },
     });
     expect(res.statusCode).toBe(200);
