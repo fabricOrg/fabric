@@ -13,6 +13,7 @@ import {
   failPreparedSend,
   prepareSend,
   type SendInput,
+  sweepExpired,
 } from "@app/sms-engine";
 import { credit } from "@app/wallet";
 import postgres from "postgres";
@@ -226,6 +227,26 @@ describeDb("send path: tokens first, then wallet", () => {
     expect(await tokenBalance(tenant)).toBe(10n);
     // Committed: the reserve already debited the balance, and commit recognizes it as revenue.
     expect(await walletBalance(tenant)).toBe(997n);
+  });
+
+  it("returns token holds when the reservation sweeper expires a stuck send", async () => {
+    const tenant = await makeTenant();
+    await grantTokens(tenant, 10n);
+    const { prepared } = await send(tenant, "x".repeat(200)); // 2 segments held
+    expect(await tokenBalance(tenant)).toBe(8n);
+
+    // Crash between accept and provider outcome: the message sits non-terminal until the sweeper
+    // resolves it. The sweeper shares resolveMessage, so a token-backed send must return TOKENS
+    // here, not attempt a wallet refund it never reserved.
+    const swept = await sweepExpired(
+      deps,
+      tenant,
+      new Date(Date.now() + 60_000).toISOString(),
+    );
+
+    expect(swept).toBeGreaterThan(0);
+    expect(await tokenBalance(tenant)).toBe(10n);
+    expect(await backingOf(prepared.messageId)).toBe("tokens");
   });
 
   it("never double-charges when the same message id is retried", async () => {
