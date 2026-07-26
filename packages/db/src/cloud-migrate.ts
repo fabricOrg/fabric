@@ -96,6 +96,17 @@ async function prepareRoles(environment: MigrationEnvironment): Promise<void> {
     );
     await admin.unsafe("ALTER SCHEMA public OWNER TO app_migrator");
     await admin.unsafe("GRANT ALL ON SCHEMA public TO app_migrator");
+    // drizzle's own bookkeeping schema (__drizzle_migrations) must be writable by the migrator, or
+    // the very first thing migrate() does — reading which migrations have run — is denied. On a
+    // managed platform this schema can already exist under the platform's owner role from an earlier
+    // attempt, in which case the migrator inherits no rights on it. Create-if-absent then hand it
+    // over, so ownership is correct whether or not a previous run got this far.
+    await admin.unsafe("CREATE SCHEMA IF NOT EXISTS drizzle");
+    await admin.unsafe("ALTER SCHEMA drizzle OWNER TO app_migrator");
+    await admin.unsafe("GRANT ALL ON SCHEMA drizzle TO app_migrator");
+    await admin.unsafe(
+      "GRANT ALL ON ALL TABLES IN SCHEMA drizzle TO app_migrator",
+    );
 
     // app_provisioner (BYPASSRLS): DML on every table the owner creates — now and future. Default
     // privileges are set BEFORE migrate runs, so tables created this run inherit the grant; the
