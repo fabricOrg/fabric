@@ -1,6 +1,6 @@
 "use client";
 
-import type { PriceBookDto } from "@app/contracts";
+import type { PriceBookDto, PriceBookMode } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Dialog,
@@ -70,6 +70,7 @@ export function PriceBookEditorDialog({
   const router = useRouter();
   const [name, setName] = useState(book?.name ?? "");
   const [description, setDescription] = useState(book?.description ?? "");
+  const [mode, setMode] = useState<PriceBookMode>(book?.mode ?? "subscription");
   const [isDefault, setIsDefault] = useState(book?.is_default ?? false);
   const [rows, setRows] = useState<RateRow[]>(() => initialRows(book));
   const [busy, setBusy] = useState(false);
@@ -96,7 +97,7 @@ export function PriceBookEditorDialog({
     try {
       const body = {
         name: name.trim(),
-        mode: "subscription" as const,
+        mode,
         description: description.trim(),
         is_default: isDefault,
         rates: rows.map((r) => ({
@@ -163,13 +164,42 @@ export function PriceBookEditorDialog({
               placeholder="Optional"
             />
           </Field>
+          <Field>
+            <FieldLabel htmlFor="pb-mode">Purchase mode</FieldLabel>
+            <Select
+              value={mode}
+              onValueChange={(v) => setMode(v as PriceBookMode)}
+              // A book's mode decides how accounts resolve against it, and a token lot has already
+              // locked its price from it — switching an existing book's mode would strand both.
+              disabled={book !== null}
+            >
+              <SelectTrigger id="pb-mode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="subscription">
+                  Subscription — pay-as-you-go from the wallet
+                </SelectItem>
+                <SelectItem value="token">
+                  Token — one-off, price locked at purchase
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground">
+              {book
+                ? "A book's mode is fixed once created."
+                : "Token prices are locked into each purchase, so later edits never reprice tokens already bought."}
+            </span>
+          </Field>
           <div className="flex items-center justify-between rounded-md border p-3">
             <div className="flex flex-col">
               <span className="text-sm font-medium">
-                Default for subscription
+                Default for {mode === "token" ? "token" : "subscription"}
               </span>
               <span className="text-xs text-muted-foreground">
-                New/unassigned accounts resolve to the default book.
+                {mode === "token"
+                  ? "Token purchases price against this book when no other is assigned."
+                  : "New/unassigned accounts resolve to the default book."}
               </span>
             </div>
             <Switch checked={isDefault} onCheckedChange={setIsDefault} />

@@ -10,6 +10,7 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PaymentsService } from "../payments/payments.service.js";
+import { TokenPurchaseService } from "../tokens/token-purchase.service.js";
 import { FlowsService } from "./flows.service.js";
 
 const superUrl = process.env.DATABASE_URL_SUPER;
@@ -72,7 +73,13 @@ describeDb("flows (Lighthouse saga)", () => {
     get: (key: string) =>
       key === "PAYSTACK_SECRET_KEY" ? "sk_test_dummy" : undefined,
   } as unknown as ConfigService;
-  const payments = new PaymentsService(provisioning, appDb, config, killSwitch);
+  const payments = new PaymentsService(
+    provisioning,
+    appDb,
+    config,
+    killSwitch,
+    new TokenPurchaseService(provisioning, appDb, config, killSwitch),
+  );
   const fakeProvider = new FakeProvider();
   // Swap the real Paystack client for the fake (no network); readonly at compile-time only.
   (payments as unknown as { provider: FakeProvider }).provider = fakeProvider;
