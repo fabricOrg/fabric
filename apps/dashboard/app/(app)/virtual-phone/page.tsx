@@ -125,7 +125,7 @@ export default function VirtualPhonePage() {
       await reload();
       return true;
     } catch (cause) {
-      setActionError(errorMessage(cause));
+      setActionError(errorMessage(cause, "The reply could not be sent."));
       return false;
     }
   }
@@ -144,7 +144,7 @@ export default function VirtualPhonePage() {
       setSelectedMessageId(undefined);
       await reload();
     } catch (cause) {
-      setActionError(errorMessage(cause));
+      setActionError(errorMessage(cause, "The inbox could not be cleared."));
     }
   }
 
@@ -165,7 +165,9 @@ export default function VirtualPhonePage() {
       );
       setHasLoadedOlder(true);
     } catch (cause) {
-      setActionError(errorMessage(cause));
+      setActionError(
+        errorMessage(cause, "Older conversations could not be loaded."),
+      );
     } finally {
       setLoadingOlder(false);
     }
@@ -275,10 +277,18 @@ export default function VirtualPhonePage() {
   );
 }
 
-function errorMessage(cause: unknown): string {
+/**
+ * The server's message when it sent a structured one, else a caller-supplied fallback. The fallback
+ * is per-ACTION on purpose: every failure used to read "Virtual phone data could not be loaded.",
+ * which is actively misleading when it was a reply that failed, not a load.
+ */
+function errorMessage(
+  cause: unknown,
+  fallback = "Virtual phone data could not be loaded.",
+): string {
   if (typeof cause === "object" && cause && "error" in cause) {
     const error = (cause as { error?: { message?: unknown } }).error;
     if (typeof error?.message === "string") return error.message;
   }
-  return "Virtual phone data could not be loaded.";
+  return fallback;
 }
