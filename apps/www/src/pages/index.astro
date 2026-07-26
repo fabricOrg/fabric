@@ -199,12 +199,6 @@ const capIcon = (k: string): string => (({
       </section>
 
       <!-- 3 · TRUST -->
-      <section class="trustbar" aria-label="What Fabric is built on">
-        <p class="tb-lead">Infrastructure you can verify — not claims.</p>
-        <ul class="guarantees">
-          {guarantees.map((g) => (<li><strong>{g.k}</strong><span>{g.d}</span></li>))}
-        </ul>
-      </section>
 
       <!-- 4 · HOW IT WORKS — signature scroll lifecycle -->
       <Lifecycle />
@@ -475,24 +469,28 @@ const capIcon = (k: string): string => (({
       .trust li { display: inline-flex; align-items: center; gap: .4rem; color: var(--muted-foreground); font-size: .85rem; }
       .hero-il { width: 100%; max-width: 34rem; margin-inline: auto; }
       @media (min-width: 64rem) {
-        .hero { min-height: clamp(34rem, 46vw, 44rem); align-content: center; }
+        .hero { min-height: clamp(42rem, 64vw, 58rem); align-content: center; }
         .hero-copy { position: relative; z-index: 2; max-width: min(46rem, 62%); }
         /* right: calc(50% - 50vw) walks out of the centred container to the true viewport edge */
-        /* pushed further right so it runs OFF the viewport edge, and widened so its left side
-         * reaches back under the headline — the layers genuinely interleave rather than sitting
-         * side by side. The mask keeps only the quietest part of the art beneath the type. */
-        .hero-il { position: absolute; z-index: 1; top: 52%; right: calc(50% - 56vw);
-          width: min(58rem, 74vw); max-width: none; margin: 0; transform: translateY(-50%) rotate(-3deg);
-          -webkit-mask-image: linear-gradient(102deg, transparent 2%, rgba(0,0,0,.35) 18%, #000 40%);
-          mask-image: linear-gradient(102deg, transparent 2%, rgba(0,0,0,.35) 18%, #000 40%);
+        /* Off-grid, but NOT cropped. An earlier pass ran the artwork off the viewport edge, which
+         * sliced the Fabric node and cut the phone and laptop away entirely — the illustration's
+         * whole point (request in, SMS and email out) was destroyed, and it collided with the
+         * section below. The composition stays asymmetric through scale, offset and rotation while
+         * the full artwork remains inside the viewport. */
+        /* height is capped against the HERO, not the viewport, so the artwork can never reach the
+         * next section at any width — vw-based sizing kept overlapping at 1280. */
+        .hero-il { position: absolute; z-index: 1; top: 50%; right: calc(50% - 49vw);
+          width: min(42rem, 50vw); max-width: none; max-height: 62%; margin: 0; transform: translateY(-50%) rotate(-2deg);
+          -webkit-mask-image: linear-gradient(100deg, transparent 0%, #000 26%);
+          mask-image: linear-gradient(100deg, transparent 0%, #000 26%);
           pointer-events: none; }
-        /* the headline crosses in front of the art, so give it a whisper of a scrim */
-        .hero-copy::before { content: ""; position: absolute; inset: -3rem -6rem -2rem -3rem; z-index: -1;
-          background: radial-gradient(60% 70% at 28% 45%, var(--background) 58%, transparent 100%); }
+        .hero-copy::before { content: ""; position: absolute; inset: -3rem -5rem -2rem -3rem; z-index: -1;
+          background: radial-gradient(58% 68% at 26% 45%, var(--background) 60%, transparent 100%); }
         .hero h1 { font-size: clamp(3rem, 6.4vw, 5.1rem); letter-spacing: -.03em; }
         .hero .lede { max-width: 34rem; }
       }
       .hero-il :global(img) { animation: floaty 6s ease-in-out infinite; }
+      @media (min-width: 64rem) { .hero-il :global(img) { max-height: 100%; width: auto; margin-inline-start: auto; display: block; } }
       @keyframes floaty { 50% { transform: translateY(-10px); } }
       @media (prefers-reduced-motion: reduce) { .hero-il :global(img) { animation: none; } }
 
