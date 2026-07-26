@@ -2,4 +2,5 @@
 // double-entry ledger. Consumed by L5 (send pipeline) and the reservation sweeper (F3.3).
 
 export * from "./errors.js";
+export * from "./token-ledger.js";
 export * from "./wallet-service.js";

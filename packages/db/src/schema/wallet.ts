@@ -54,6 +54,10 @@ export const ledgerTxnType = pgEnum("ledger_txn_type", [
   "sms_charge", // a send: reserve → commit lifecycle
   "adjustment", // reconciliation delta (actual segments ≠ estimate)
   "refund", // reservation released back (provider rejected the send)
+  // ADR-0010 Phase 2: a token purchase. Cash in against a DEFERRED-REVENUE liability rather than the
+  // customer balance — token buyers have no wallet. Excluded from the B6 resolution index below,
+  // whose predicate is type = 'sms_charge'.
+  "token_purchase",
 ]);
 
 // A transaction's lifecycle. A reserve opens `pending`; commit/refund closes it.
@@ -81,6 +85,14 @@ export const ledgerReason = pgEnum("ledger_reason", [
   "message_reserve",
   "message_commit",
   "message_refund",
+  // ADR-0010 Phase 2 token lifecycle (see the token-subsystem review). All three land together
+  // because an enum value is a type domain, not code: adding them in one migration avoids a second
+  // fiddly ADD VALUE later. `token_purchase` is written by slice 2a; `token_consume` (recognize
+  // revenue as a send clears, at the lot's locked price) and `token_breakage` (forfeiture — unused
+  // tokens are NON-refundable per the ADR follow-up) by slice 2c.
+  "token_purchase",
+  "token_consume",
+  "token_breakage",
   "adjustment",
 ]);
 
@@ -104,6 +116,10 @@ export const ledgerAccountKind = pgEnum("ledger_account_kind", [
   "revenue",
   "gateway_clearing",
   "writeoff",
+  // ADR-0010 Phase 2: a LIABILITY contra — cash taken for tokens not yet sent. A purchase credits it
+  // (we owe N sends); consumption debits it into `revenue` at the lot's locked price, so revenue is
+  // recognized as tokens are used, never at purchase. Per (tenant, currency) like every other kind.
+  "token_deferred_revenue",
 ]);
 
 // One account per (tenant, currency, kind) — MULTI-CURRENCY from day one (decision #10). No default
