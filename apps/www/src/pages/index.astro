@@ -10,12 +10,27 @@ import "../styles/global.css";
 
 // Fabric landing — a short evaluation path: offer → product proof → sending models → managed
 // messaging → price → coverage → production posture → docs. Claims stay grounded in shipped surfaces.
-const APP_URL =
-  import.meta.env.PUBLIC_DASHBOARD_URL ?? "https://fabric-dashboard-teal.vercel.app";
+// `??` is NOT enough for env values: Vercel/CI can supply a var that is DEFINED BUT EMPTY, which
+// slips past a nullish check and then throws `TypeError: Invalid URL` inside new URL(), taking the
+// whole static render down. Treat blank as absent, and never let a malformed value break the build.
+const envUrl = (value: unknown, fallback: string): string => {
+  const raw = typeof value === "string" ? value.trim() : "";
+  try {
+    return new URL(raw.length > 0 ? raw : fallback).origin;
+  } catch {
+    return new URL(fallback).origin;
+  }
+};
+const APP_URL = envUrl(
+  import.meta.env.PUBLIC_DASHBOARD_URL,
+  "https://fabric-dashboard-teal.vercel.app",
+);
 // Points at the API's UNAUTHENTICATED public snapshot, not the dashboard BFF: the data is public by
 // intent, so it needs no credential and no coupling to the dashboard's uptime.
-const PUBLIC_API_URL =
-  import.meta.env.PUBLIC_API_URL ?? "https://fabric-jezz.onrender.com";
+const PUBLIC_API_URL = envUrl(
+  import.meta.env.PUBLIC_API_URL,
+  "https://fabric-jezz.onrender.com",
+);
 const PUBLIC_PRICING_URL = new URL("/v1/public/pricing", PUBLIC_API_URL).toString();
 
 const why = [
