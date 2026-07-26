@@ -16,7 +16,8 @@ import {
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { APP_DB } from "../db/db.module.js";
-import { holdTokens, resolveTokenHolds } from "../tokens/token-holds.js";
+import { holdTokens } from "../tokens/token-holds.js";
+import { settleTokenHolds } from "../tokens/token-settlement.js";
 import { dispatchSend as dispatchProviderSend } from "./sms-dispatch.js";
 import { buildSmsProviders } from "./sms-providers.js";
 import { VirtualPhoneService } from "./virtual-phone.service.js";
@@ -28,7 +29,8 @@ import { maybeAutoStop } from "./virtual-phone-auto-stop.js";
  */
 const TOKEN_BACKEND = {
   hold: holdTokens,
-  resolve: resolveTokenHolds,
+  // settleTokenHolds, not resolveTokenHolds: a commit must also recognize the deferred revenue.
+  resolve: settleTokenHolds,
 };
 
 @Injectable()

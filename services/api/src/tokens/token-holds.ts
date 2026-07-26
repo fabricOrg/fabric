@@ -26,6 +26,8 @@ export interface TokenHoldAllocation {
   readonly quantity: bigint;
   /** The lot's locked unit price — what slice 2c recognizes as revenue when this hold commits. */
   readonly unitPriceMinorLocked: bigint;
+  /** The lot's currency, so recognition posts against the right per-currency ledger accounts. */
+  readonly currency: string;
 }
 
 export interface TokenHoldResult {
@@ -59,7 +61,7 @@ export async function holdTokens(
   // Replay guard first — a retried accept must not claim a second set of tokens. Mirrors
   // prepareSend's replay check preceding the wallet reserve.
   const existing = (await tx`
-    SELECT h.lot_id, h.quantity, l.unit_price_minor_locked
+    SELECT h.lot_id, h.quantity, h.currency, l.unit_price_minor_locked
     FROM token_holds h
     JOIN token_lots l ON l.id = h.lot_id
     WHERE h.tenant_id = current_setting('app.tenant_id')::uuid
@@ -108,6 +110,7 @@ export async function holdTokens(
       lotId: String(lot.id),
       quantity: take,
       unitPriceMinorLocked: BigInt(String(lot.unit_price_minor_locked)),
+      currency: p.currency,
     });
     outstanding -= take;
   }
@@ -183,5 +186,6 @@ function toAllocation(row: Row): TokenHoldAllocation {
     lotId: String(row.lot_id),
     quantity: BigInt(String(row.quantity)),
     unitPriceMinorLocked: BigInt(String(row.unit_price_minor_locked)),
+    currency: String(row.currency),
   };
 }
