@@ -96,6 +96,12 @@ async function prepareRoles(environment: MigrationEnvironment): Promise<void> {
     );
     await admin.unsafe("ALTER SCHEMA public OWNER TO app_migrator");
     await admin.unsafe("GRANT ALL ON SCHEMA public TO app_migrator");
+    // Changing the SCHEMA owner does not change the owner of tables already inside it. Where an
+    // earlier bootstrap created tables as the platform's own role, the migrator cannot ALTER them
+    // ("must be owner of table ..."), so DDL migrations fail on pre-existing tables. Reassign every
+    // object the admin role owns; the GRANT above makes the admin a member of app_migrator, which is
+    // what REASSIGN OWNED requires. Idempotent — a second run has nothing left to move.
+    await admin.unsafe(`REASSIGN OWNED BY ${quotedAdmin} TO app_migrator`);
     // drizzle's own bookkeeping schema (__drizzle_migrations) must be writable by the migrator, or
     // the very first thing migrate() does — reading which migrations have run — is denied. On a
     // managed platform this schema can already exist under the platform's owner role from an earlier
