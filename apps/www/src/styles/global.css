@@ -1,9 +1,46 @@
-/* Load the brand fonts and bind them to the --font-* vars @app/ui expects (the product apps supply
- * these via next/font; Astro supplies them here). Clash Display = Fontshare; Inter + JetBrains Mono =
- * Google. Without this the display/mono vars fall back to system fonts and the site reads generic. */
-@import url("https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "@app/ui/theme.css";
+
+/* Keep the brand fonts in the build graph so the landing and docs do not depend on third-party
+ * font requests. Latin subsets cover the product's current English content. */
+@font-face {
+  font-family: "Clash Display";
+  src: url("../assets/fonts/clash-display-500.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Clash Display";
+  src: url("../assets/fonts/clash-display-600.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Clash Display";
+  src: url("../assets/fonts/clash-display-700.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("../assets/fonts/inter-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../assets/fonts/jetbrains-mono-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+}
 
 :root {
   --font-clash: "Clash Display";

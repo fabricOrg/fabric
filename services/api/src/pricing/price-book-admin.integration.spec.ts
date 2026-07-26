@@ -47,6 +47,7 @@ describeDb("price-book admin", () => {
       mode: "subscription" as const,
       description: "",
       is_default: false,
+      is_public: false,
       rates: rates.map((r) => ({
         channel: r.channel,
         currency: r.currency,
@@ -132,6 +133,7 @@ describeDb("price-book admin", () => {
       mode: "token" as const,
       description: "",
       is_default: false,
+      is_public: false,
       rates: [
         { channel: "sms" as const, currency: "GHS", unit_price_minor: "8" },
       ],
@@ -158,6 +160,47 @@ describeDb("price-book admin", () => {
     expect(defaults[0]?.id).toBe(second.id);
   });
 
+  it("publishes only one sanitized public price snapshot", async () => {
+    const firstRequest = req([
+      { channel: "sms", currency: "GHS", p: "7" },
+      { channel: "email", currency: "GHS", p: "9" },
+    ]);
+    const first = await admin.upsertBook(
+      null,
+      { ...firstRequest, is_public: true },
+      actor,
+    );
+    const secondRequest = req([
+      { channel: "sms", currency: "GHS", p: "11" },
+      { channel: "email", currency: "GHS", p: "13" },
+    ]);
+    const second = await admin.upsertBook(
+      null,
+      { ...secondRequest, is_public: true },
+      actor,
+    );
+    if (!first || !second) throw new Error("public books not created");
+    bookIds.push(first.id, second.id);
+
+    const published = await admin.publicPricing();
+    expect(published?.rates).toEqual([
+      {
+        channel: "email",
+        currency: "GHS",
+        unit_price_minor: "13",
+        unit_basis: "send",
+      },
+      {
+        channel: "sms",
+        currency: "GHS",
+        unit_price_minor: "11",
+        unit_basis: "segment",
+      },
+    ]);
+    expect(published).not.toHaveProperty("id");
+    expect(published).not.toHaveProperty("name");
+  });
+
   it("rejects a zero unit price at the DB layer (money floor)", async () => {
     await expect(
       admin.upsertBook(
@@ -169,13 +212,21 @@ describeDb("price-book admin", () => {
   });
 
   it("distinguishes unknown book from unknown account on write/assign", async () => {
+    const publishedBefore = await admin.publicPricing();
     expect(
       await admin.upsertBook(
         randomUUID(),
-        req([{ channel: "sms", currency: "GHS", p: "5" }]),
+        {
+          ...req([
+            { channel: "sms", currency: "GHS", p: "5" },
+            { channel: "email", currency: "GHS", p: "7" },
+          ]),
+          is_public: true,
+        },
         actor,
       ),
     ).toBeNull();
+    expect(await admin.publicPricing()).toEqual(publishedBefore);
     // Unknown account → account_not_found; a valid-but-unknown book id → book_not_found (not an FK 500).
     expect(await admin.assignAccount(randomUUID(), null, actor)).toBe(
       "account_not_found",

@@ -82,10 +82,30 @@ const fallbackRates = Object.fromEntries(
 </div>
 
 <script>
-  import { publicPricingResponseSchema } from "@app/contracts";
-
   type CalculatorRate = { sms: number; email: number };
   type CalculatorRates = Record<string, CalculatorRate>;
+  type PublishedRate = {
+    channel: "sms" | "email";
+    currency: string;
+    unit_price_minor: string;
+    unit_basis: "segment" | "send";
+  };
+
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
+  const isPublishedRate = (value: unknown): value is PublishedRate => {
+    if (!isRecord(value)) return false;
+    const channel = value.channel;
+    const expectedBasis =
+      channel === "sms" ? "segment" : channel === "email" ? "send" : null;
+    return (
+      expectedBasis !== null &&
+      value.unit_basis === expectedBasis &&
+      typeof value.currency === "string" &&
+      typeof value.unit_price_minor === "string"
+    );
+  };
 
   for (const root of document.querySelectorAll<HTMLElement>("[data-calc]")) {
     const fallbackRates = JSON.parse(
@@ -151,10 +171,10 @@ const fallbackRates = Object.fromEntries(
     };
 
     const publishedRates = (payload: unknown): CalculatorRates | null => {
-      const parsed = publicPricingResponseSchema.safeParse(payload);
-      if (!parsed.success) return null;
+      if (!isRecord(payload) || !Array.isArray(payload.rates)) return null;
       const next: Record<string, { sms?: number; email?: number }> = {};
-      for (const rate of parsed.data.rates) {
+      for (const rate of payload.rates) {
+        if (!isPublishedRate(rate)) return null;
         if (rate.currency !== "GHS" && rate.currency !== "NGN") continue;
         const value = Number(rate.unit_price_minor);
         if (!Number.isSafeInteger(value) || value <= 0) continue;

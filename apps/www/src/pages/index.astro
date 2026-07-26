@@ -12,7 +12,11 @@ import "../styles/global.css";
 // messaging → price → coverage → production posture → docs. Claims stay grounded in shipped surfaces.
 const APP_URL =
   import.meta.env.PUBLIC_DASHBOARD_URL ?? "https://fabric-dashboard-teal.vercel.app";
-const PUBLIC_PRICING_URL = new URL("/api/public/pricing", APP_URL).toString();
+// Points at the API's UNAUTHENTICATED public snapshot, not the dashboard BFF: the data is public by
+// intent, so it needs no credential and no coupling to the dashboard's uptime.
+const PUBLIC_API_URL =
+  import.meta.env.PUBLIC_API_URL ?? "https://fabric-jezz.onrender.com";
+const PUBLIC_PRICING_URL = new URL("/v1/public/pricing", PUBLIC_API_URL).toString();
 
 const why = [
   {
@@ -104,10 +108,6 @@ const faqs = [
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="preconnect" href="https://api.fontshare.com" />
-    <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -141,7 +141,7 @@ const faqs = [
       <!-- 1 · HERO -->
       <section class="hero">
         <figure class="hero-scene" role="img" aria-label="An application event passing through Fabric into SMS and email delivery routes.">
-          <Image src={dispatchImg} alt="" widths={[595, 892, 1190]} sizes="(min-width: 48rem) 57vw, 100vw" format="webp" quality={90} loading="eager" />
+          <Image src={dispatchImg} alt="" widths={[595, 892, 1190]} sizes="(min-width: 48rem) 57vw, 100vw" format="webp" quality={90} loading="eager" fetchpriority="high" />
         </figure>
         <div class="hero-copy">
           <p class="kicker reveal" style="--d:0s">SMS + email / direct + managed</p>
