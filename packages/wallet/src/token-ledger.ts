@@ -64,3 +64,48 @@ export async function creditTokenPurchase(
   // balance_minor is maintained by the ledger_apply_entry trigger (E3), as for every other movement.
   return { txnId, amountMinor: p.amountMinor, replayed: false };
 }
+
+/**
+ * CONSUMPTION: recognize revenue as tokens are actually used. DEBIT token_deferred_revenue / CREDIT
+ * revenue — the liability we took on at purchase is discharged by delivering the send, which is the
+ * moment the money is genuinely earned. The customer wallet is untouched: a token-backed send never
+ * moved money, so there is nothing to debit.
+ *
+ * `amountMinor` is the LOT'S LOCKED price × the tokens consumed, never the current price book — that
+ * price-lock is what a token purchase buys (ADR-0010 #3).
+ *
+ * Idempotent on `token_consume:{messageId}:{lotId}`, keyed per lot because one send can span lots at
+ * different locked prices. A duplicate delivery callback recognizes nothing further.
+ */
+export async function recognizeTokenConsumption(
+  tx: TenantTx,
+  p: {
+    currency: string;
+    amountMinor: bigint;
+    messageId: string;
+    lotId: string;
+  },
+): Promise<MovementResult> {
+  const idempotencyKey = `token_consume:${p.messageId}:${p.lotId}`;
+  const { txnId, replayed } = await openIdempotentTxn(tx, {
+    type: "token_consume",
+    status: "committed",
+    idempotencyKey,
+    referenceId: p.messageId,
+    referenceType: "message",
+    fingerprint: {
+      op: "token_consume",
+      currency: p.currency,
+      amount: p.amountMinor.toString(),
+      ref: `${p.messageId}:${p.lotId}`,
+    },
+  });
+  if (replayed) return { txnId, amountMinor: p.amountMinor, replayed: true };
+  const deferred = await accountId(tx, p.currency, "token_deferred_revenue");
+  const revenue = await accountId(tx, p.currency, "revenue");
+  await postLegs(tx, txnId, p.messageId, "token_consume", p.amountMinor, {
+    debit: deferred,
+    credit: revenue,
+  });
+  return { txnId, amountMinor: p.amountMinor, replayed: false };
+}

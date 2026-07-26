@@ -58,6 +58,10 @@ export const ledgerTxnType = pgEnum("ledger_txn_type", [
   // customer balance — token buyers have no wallet. Excluded from the B6 resolution index below,
   // whose predicate is type = 'sms_charge'.
   "token_purchase",
+  // Discharging that liability as a token is actually spent (revenue recognition). A separate type
+  // from the purchase because reporting groups on it — labelling a consumption "token_purchase"
+  // would misstate both sides.
+  "token_consume",
 ]);
 
 // A transaction's lifecycle. A reserve opens `pending`; commit/refund closes it.

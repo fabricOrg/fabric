@@ -94,7 +94,7 @@ export async function postLegs(
 export async function openIdempotentTxn(
   tx: TenantTx,
   args: {
-    type: "topup" | "sms_charge" | "token_purchase";
+    type: "topup" | "sms_charge" | "token_purchase" | "token_consume";
     status: "pending" | "committed" | "refunded";
     idempotencyKey: string;
     referenceId: string | null;
