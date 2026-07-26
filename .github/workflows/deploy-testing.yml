@@ -97,9 +97,52 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 
+  # Schema MUST land before the api that queries it. Without this the deploy shipped code ahead of
+  # its database: every migration from 0087 on (price books, the whole token subsystem) was missing
+  # from testing, so the admin Pricing and Tenants pages 500'd against columns that did not exist.
+  # The AWS pre-deploy task used to do this; nothing replaced it when testing moved to Neon + Render.
+  migrate-testing:
+    name: Migrate · testing db
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    environment: testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node + pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Apply migrations
+        env:
+          DATABASE_URL_ADMIN: ${{ secrets.DATABASE_URL_ADMIN }}
+          DATABASE_URL_OWNER: ${{ secrets.DATABASE_URL_OWNER }}
+          DATABASE_URL_APP: ${{ secrets.DATABASE_URL_APP }}
+          DATABASE_URL_PROVISIONER: ${{ secrets.DATABASE_URL_PROVISIONER }}
+        shell: bash
+        run: |
+          # Fail LOUD rather than skipping quietly: a silent skip is what let schema drift for eight
+          # migrations without anyone noticing.
+          missing=()
+          for name in DATABASE_URL_ADMIN DATABASE_URL_OWNER DATABASE_URL_APP DATABASE_URL_PROVISIONER; do
+            [[ -z "${!name}" ]] && missing+=("$name")
+          done
+          if (( ${#missing[@]} )); then
+            echo "::error::Cannot migrate the testing database — missing secrets: ${missing[*]}."
+            echo "::error::Add them to the 'testing' environment; the api must not deploy ahead of its schema."
+            exit 1
+          fi
+          pnpm --filter @app/db build
+          pnpm --filter @app/db cloud:migrate
+
   deploy-api-render:
     name: Render · api
-    needs: gate
+    needs: [gate, migrate-testing]
     if: needs.gate.outputs.enabled == 'true'
     environment: testing
     runs-on: ubuntu-latest
