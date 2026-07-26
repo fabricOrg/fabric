@@ -1,0 +1,130 @@
+---
+// "What will this cost ME?" — the question that decides the evaluation in this market, answered
+// before signup instead of behind it. The section used to say "live rates in the dashboard", which
+// means creating an account just to learn the price.
+//
+// The rates below are the platform's SEEDED DEFAULT price book, not marketing numbers:
+// SMS 3 pesewas / 400 kobo per SEGMENT, email 5 pesewas / 500 kobo per SEND
+// (packages/domain/src/rating.ts — DEFAULT_RATES / DEFAULT_EMAIL_BASE_RATES). Accounts can be moved
+// onto a different book by staff, so the copy says "default rates" and points at the dashboard for
+// an account's own — honest either way, and never a rate we don't actually charge.
+const rates = {
+  GHS: { sms: 3, email: 5, symbol: "GHS" },
+  NGN: { sms: 400, email: 500, symbol: "NGN" },
+};
+---
+
+<div class="calc" data-calc data-rates={JSON.stringify(rates)}>
+  <div class="calc-head">
+    <h3>What it costs at your volume</h3>
+    <div class="calc-cur" role="group" aria-label="Currency">
+      <button type="button" class="cur is-on" data-cur="GHS">GHS</button>
+      <button type="button" class="cur" data-cur="NGN">NGN</button>
+    </div>
+  </div>
+
+  <div class="calc-grid">
+    <label class="cf">
+      <span>SMS / month</span>
+      <input id="calc-sms" type="number" min="0" step="500" value="10000" inputmode="numeric" />
+    </label>
+    <label class="cf">
+      <span>Avg. length</span>
+      <select id="calc-len">
+        <option value="1">Short — 1 segment</option>
+        <option value="2">Medium — 2 segments</option>
+        <option value="3">Long — 3 segments</option>
+      </select>
+    </label>
+    <label class="cf">
+      <span>Emails / month</span>
+      <input id="calc-email" type="number" min="0" step="500" value="20000" inputmode="numeric" />
+    </label>
+  </div>
+
+  <div class="calc-out">
+    <div class="calc-lines">
+      <div class="cl"><span data-out="smsLabel">10,000 SMS × 1 segment</span><b data-out="smsCost">GHS 300.00</b></div>
+      <div class="cl"><span data-out="emailLabel">20,000 emails</span><b data-out="emailCost">GHS 1,000.00</b></div>
+    </div>
+    <div class="calc-total">
+      <span>Estimated monthly</span>
+      <strong data-out="total">GHS 1,300.00</strong>
+    </div>
+  </div>
+
+  <p class="calc-note">
+    Default rates — <span data-out="unit">SMS GHS 0.03 / segment · email GHS 0.05 / send</span>.
+    SMS is billed per segment, email flat per send. Prepaid: you are only ever charged for what
+    actually sends, and a failed delivery is refunded to your wallet.
+  </p>
+</div>
+
+<script is:inline>
+  (() => {
+    const root = document.currentScript.previousElementSibling;
+    const rates = JSON.parse(root.dataset.rates);
+    const sms = root.querySelector("#calc-sms");
+    const len = root.querySelector("#calc-len");
+    const email = root.querySelector("#calc-email");
+    const curBtns = [...root.querySelectorAll(".cur")];
+    let cur = "GHS";
+
+    const num = (el) => Math.max(0, Math.floor(Number(el.value) || 0));
+    const fmt = (minor) =>
+      `${cur} ${(minor / 100).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const set = (k, v) => { const el = root.querySelector(`[data-out="${k}"]`); if (el) el.textContent = v; };
+
+    const recalc = () => {
+      const r = rates[cur];
+      const n = num(sms), segs = Number(len.value), e = num(email);
+      // per SEGMENT for sms, per SEND for email — the same basis the send path bills on
+      const smsCost = n * segs * r.sms;
+      const emailCost = e * r.email;
+      set("smsLabel", `${n.toLocaleString("en")} SMS × ${segs} segment${segs === 1 ? "" : "s"}`);
+      set("emailLabel", `${e.toLocaleString("en")} email${e === 1 ? "" : "s"}`);
+      set("smsCost", fmt(smsCost));
+      set("emailCost", fmt(emailCost));
+      set("total", fmt(smsCost + emailCost));
+      set("unit", `SMS ${cur} ${(r.sms / 100).toFixed(2)} / segment · email ${cur} ${(r.email / 100).toFixed(2)} / send`);
+    };
+
+    for (const el of [sms, len, email]) el.addEventListener("input", recalc);
+    curBtns.forEach((b) =>
+      b.addEventListener("click", () => {
+        cur = b.dataset.cur;
+        curBtns.forEach((o) => o.classList.toggle("is-on", o === b));
+        recalc();
+      }),
+    );
+    recalc();
+  })();
+</script>
+
+<style>
+  .calc { margin-top: clamp(2rem, 4vw, 3rem); padding: clamp(1.25rem, 2.5vw, 1.9rem); background: var(--card); border: 1px solid var(--border); box-shadow: 0 28px 60px -46px rgba(20,20,32,.45); }
+  .calc-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+  .calc-head h3 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.15rem, 2vw, 1.4rem); }
+  .calc-cur { display: inline-flex; border: 1px solid var(--border); }
+  .cur { padding: .35rem .8rem; background: transparent; border: 0; cursor: pointer; font: 600 .76rem var(--font-mono); color: var(--muted-foreground); }
+  .cur.is-on { background: var(--primary); color: #fff; }
+  .cur:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  .calc-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; margin-top: 1.25rem; }
+  @media (max-width: 46rem) { .calc-grid { grid-template-columns: minmax(0, 1fr); } }
+  .cf { display: grid; gap: .35rem; min-width: 0; }
+  .cf > span { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-foreground); }
+  .cf input, .cf select { width: 100%; padding: .6rem .7rem; background: var(--background); color: var(--foreground); border: 1px solid var(--border); border-radius: 0; font-family: var(--font-mono); font-size: .9rem; }
+  .cf input:focus-visible, .cf select:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; border-color: var(--primary); }
+
+  .calc-out { margin-top: 1.25rem; border: 1px solid var(--border); }
+  .cl { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: .7rem .9rem; border-bottom: 1px solid var(--border); font-size: .92rem; }
+  .cl span { color: var(--muted-foreground); font-family: var(--font-mono); font-size: .82rem; }
+  .cl b { font-family: var(--font-mono); font-weight: 600; color: var(--foreground); }
+  .calc-total { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: .9rem; background: color-mix(in oklab, var(--primary) 7%, var(--card)); }
+  .calc-total span { font-family: var(--font-mono); font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-foreground); }
+  .calc-total strong { font-family: var(--font-display); font-size: clamp(1.3rem, 2.6vw, 1.75rem); color: var(--primary); }
+
+  .calc-note { margin: .95rem 0 0; font-size: .82rem; line-height: 1.6; color: var(--muted-foreground); }
+  .calc-note span { font-family: var(--font-mono); color: var(--foreground); }
+</style>

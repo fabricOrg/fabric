@@ -3,6 +3,7 @@ import { Image } from "astro:assets";
 import InteractiveDemo from "../components/InteractiveDemo.astro";
 import Dashboard from "../components/il/Dashboard.astro";
 import Lifecycle from "../components/il/Lifecycle.astro";
+import CostCalculator from "../components/il/CostCalculator.astro";
 import dispatchImg from "../assets/il/dispatch.png";
 import coverageImg from "../assets/il/coverage.png";
 import walletImg from "../assets/il/wallet.png";
@@ -277,7 +278,8 @@ const capIcon = (k: string): string => (({
             ))}
           </ol>
         </div>
-        <p class="price-foot">Prices in <strong>GHS</strong> and <strong>NGN</strong>. Email billed by rendered size. Sandbox is free. Live rates in the dashboard.</p>
+        <CostCalculator />
+        <p class="price-foot">Sandbox is free — build and test without funding anything. Your account's own rate book is in the dashboard.</p>
       </section>
 
       <!-- 9 · COVERAGE -->
