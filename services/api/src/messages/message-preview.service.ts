@@ -6,7 +6,6 @@ import type {
 } from "@app/contracts";
 import {
   type AppDb,
-  applications,
   type EnvironmentId,
   environments,
   messageDefinitionReleases,
@@ -27,8 +26,13 @@ import { and, eq, sql } from "drizzle-orm";
 import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
+import { PricingService } from "../pricing/pricing.service.js";
 import { SendersService } from "../senders/senders.service.js";
 import { assessSendCompliance } from "../sms/sms-compliance.js";
+import {
+  defaultSandboxEnv,
+  resolveEmailParts,
+} from "./message-preview-helpers.js";
 
 export interface PreviewOutput {
   readonly channel: "sms" | "email";
@@ -67,6 +71,7 @@ export class MessagePreviewService {
     @Inject(APP_DB) private readonly db: AppDb,
     @Inject(SendersService) private readonly senders: SendersService,
     @Inject(ConsentService) private readonly consent: ConsentService,
+    @Inject(PricingService) private readonly pricing: PricingService,
   ) {}
 
   async preview(
@@ -74,6 +79,9 @@ export class MessagePreviewService {
     request: PreviewMessageRequest,
     environmentId: string | null,
   ): Promise<PreviewOutput> {
+    // Price the preview against the account's book so it equals a subsequent managed send (ADR-0010).
+    // Resolution uses the provisioning connection and never throws (last-known-good / compiled default).
+    const rates = await this.pricing.resolveRates(tenantId);
     return this.db.withTenantDrizzle(tenantId, async (tx) => {
       // The BFF token carries no environment; fall back to the default application's sandbox env.
       const envId = environmentId ?? (await defaultSandboxEnv(tx, tenantId));
@@ -156,6 +164,7 @@ export class MessagePreviewService {
               schema: released.schema as VariableSchema,
               data: request.data ?? {},
               currency: request.currency ?? "GHS",
+              rates: rates.email,
             })
           : {
               blockers: [
@@ -203,6 +212,7 @@ export class MessagePreviewService {
             schema: released.schema as VariableSchema,
             data: request.data ?? {},
             currency: request.currency ?? "GHS",
+            rates: rates.sms,
           })
         : {
             blockers: [
@@ -243,56 +253,4 @@ export class MessagePreviewService {
       };
     });
   }
-}
-
-/**
- * The subject/text/html for a locale: the base variant for the default locale, or the locale override
- * merged onto the base (per-field). Returns null when a non-default locale has no override — reported as
- * `locale_not_supported`, mirroring the SMS path.
- */
-function resolveEmailParts(
-  email: EmailVariantContent,
-  loc: string,
-  defaultLoc: string,
-): {
-  subject: string;
-  text?: string | undefined;
-  html?: string | undefined;
-} | null {
-  if (loc === defaultLoc) {
-    return { subject: email.subject, text: email.text, html: email.html };
-  }
-  const override = email.locales?.[loc];
-  if (!override) return null;
-  return {
-    subject: override.subject ?? email.subject,
-    text: override.text ?? email.text,
-    html: override.html ?? email.html,
-  };
-}
-
-/** The default application's sandbox environment for a tenant (BFF-token fallback). */
-async function defaultSandboxEnv(
-  tx: Parameters<Parameters<AppDb["withTenantDrizzle"]>[1]>[0],
-  tenantId: string,
-): Promise<string> {
-  const [env] = await tx
-    .select({ id: environments.id })
-    .from(environments)
-    .innerJoin(applications, eq(applications.id, environments.applicationId))
-    .where(
-      and(
-        eq(applications.tenantId, tenantId as TenantId),
-        eq(applications.slug, "default"),
-        eq(environments.type, "sandbox"),
-      ),
-    )
-    .limit(1);
-  if (!env) {
-    throw notFound(
-      "environment_not_found",
-      "No sandbox environment to preview against.",
-    );
-  }
-  return env.id;
 }

@@ -6,6 +6,7 @@ import { IdempotencyModule } from "../idempotency/idempotency.module.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { KillSwitchModule } from "../kill-switches/kill-switches.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
+import { PricingModule } from "../pricing/pricing.module.js";
 import { PrivacyModule } from "../privacy/privacy.module.js";
 import { QueueModule } from "../queue/queue.module.js";
 import { SendersModule } from "../senders/senders.module.js";
@@ -33,6 +34,8 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
     IdempotencyModule,
     PaymentsModule,
     KillSwitchModule,
+    // ADR-0010: the send path prices against the account's resolved price book.
+    PricingModule,
     QueueModule,
     // E10-S4: the live send path enforces active sender-id registrations.
     SendersModule,

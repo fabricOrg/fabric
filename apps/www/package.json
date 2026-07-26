@@ -10,10 +10,13 @@
     "status": "astro dev status",
     "logs": "astro dev logs",
     "build": "astro build",
+    "audit:performance": "pnpm build && lhci autorun",
     "typecheck": "astro check",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@app/contracts": "workspace:*",
+    "@app/domain": "workspace:*",
     "@app/ui": "workspace:*",
     "@astrojs/starlight": "^0.41.4",
     "@tailwindcss/vite": "^4.3.2",
@@ -24,6 +27,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
+    "@lhci/cli": "0.15.1",
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0"
   }

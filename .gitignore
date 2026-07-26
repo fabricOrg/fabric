@@ -45,3 +45,6 @@ docker-compose.override.yml.disabled
 
 .vercel
 .pnpm-store/
+
+# scratch output from codex asset generation (not source)
+.codex-assets/

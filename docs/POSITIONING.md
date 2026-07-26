@@ -1,121 +1,150 @@
-# Fabric — Positioning & Why Customers Choose Us (v2)
+# Fabric - Positioning & Why Customers Choose Us (v3)
 
-> **Date:** 2026-07-10 · **Owner:** Product · **Status:** strategy — verification-led, payments-independent
-> Supersedes v1 (2026-07-05, the payments-seam thesis) — v1 is preserved as **Appendix: Option B**
-> and reactivates if payments ships. Companions: [`COMPETITIVE-ANALYSIS.md`](./COMPETITIVE-ANALYSIS.md),
-> [`decisions/0002-self-serve-sandbox-onboarding.md`](./decisions/0002-self-serve-sandbox-onboarding.md),
-> [`PI-4/REPOSITIONING-PROPOSAL.md`](./PI-4/REPOSITIONING-PROPOSAL.md).
+> **Date:** 2026-07-26 · **Owner:** Product · **Status:** current strategy
+> Supersedes v2 (2026-07-10, verification-led) and v1 (2026-07-05, payments-seam).
+> Product truth comes from the shipped contracts, SDK, API, and dashboard. Historical PI proposals
+> remain decision context, not current positioning.
 
 ## One line
 
-**Fabric delivers the messages that move money** — OTP/verification and transactional SMS for
-Ghana and Nigeria businesses, with compliance-grade deliverability and billing you can audit to
-the pesewa.
+**Fabric is the messaging layer for products operating in Ghana and Nigeria:** direct SMS, direct
+email, and managed messaging through one developer platform, with sandbox-to-live environments,
+delivery evidence, regional controls, and billing that can be reconciled.
 
-## The stance
+## The product
 
-We **enter through the SMS market but never compete on SMS**. SMS is the commodity floor — it
-must work and be priced sanely, and it is never the pitch. The pitch is three layers on top,
-ranked by how hard they are for an incumbent to copy:
+Fabric supports three co-equal ways to send:
 
-1. **Verify as the product.** One OTP/verification API, billed per verification. Termii proved
-   the category in Nigeria (Paystack is their reference customer); **Ghana has no
-   verification-led player** — Hubtel is commerce-first, Arkesel/mNotify are bulk-first. Verify
-   is the first thing a developer integrates and the last thing they rip out: highest switching
-   cost, best margin.
-2. **Deliverability as the promise.** Sender-ID registration and DND/consent tooling built into
-   the product. In Nigeria this is binary — an unregistered sender ID means the message is
-   rejected by the carrier. "Your OTP arrives, provably, in NG + GH."
-3. **Auditable spend as the trust wedge.** The double-entry ledger, reframed: not a payments
-   rail but **audit-grade billing**. Every message is a balanced ledger entry; customers get a
-   reconcilable statement, not a vanishing credit counter. No regional competitor offers this,
-   and copying it is an architectural rebuild for them.
+1. **Direct SMS.** Send one message or a batch, retrieve the result, inspect delivery state, and
+   receive terminal delivery events.
+2. **Direct email.** Send transactional text or HTML email, retrieve and list messages, and move
+   from a fake sandbox provider to a verified live sending domain.
+3. **Managed messaging.** Author immutable, versioned SMS or email definitions with typed variables
+   and locale variants. Release per environment, preview through the same render and pricing path as
+   send, then deliver by stable key.
 
-**Copyability test** for every roadmap item: *could Arkesel ship it in a month?* Yes → parity
-work, spend the minimum. No (compliance engine, double-entry billing, Verify on our own
-identity graph) → moat, invest there.
+Verify/OTP is a supported product resource and an important use case. It is not the organizing
+position for the platform.
 
 ## The problem we remove
 
-A Ghana/Nigeria fintech, lender, or e-commerce operator lives or dies on transactional
-messages: an OTP that doesn't arrive is a lost login, checkout, or disbursement. Today they
-get: opaque deliverability (no per-carrier visibility, silent NCC/DND filtering), opaque
-billing (credits deducted against messages nobody can reconcile), and compliance they must
-figure out alone (sender-ID registration, DND classes, quiet hours). Fabric makes the message
-arrive, proves it arrived, and proves what it cost.
+Product teams commonly assemble communication from separate providers, template systems, delivery
+logs, webhook implementations, and prepaid balances. That creates four recurring problems:
 
-## Who we win first (beachhead ICP)
+- application code owns content that should be versioned and changed independently;
+- SMS and email have different integration, retry, and observability models;
+- an accepted request is mistaken for a delivered message;
+- finance cannot connect a charge or refund to the message that caused it.
 
-Not "everyone who sends SMS." **Ghana-first (Nigeria second) fintechs, lenders, e-commerce and
-logistics** — developer-led, 10–200 staff, revenue-critical OTP + transactional traffic. Buyer
-is the engineering lead; the finance team becomes the internal champion (auditable
-statements). Reached via self-serve sandbox (ADR-0002): sign up → first OTP on your own phone
-in under ten minutes → go-live after the compliance gate.
+Fabric gives both direct and managed sends the same application/environment model, authentication,
+idempotency, delivery vocabulary, webhook scheme, and wallet controls.
 
-## The competitive map (why this hole exists)
+## Who we serve first
 
-| Segment | Owner | Why we don't fight there |
-|---|---|---|
-| Bulk/campaign SMS (GH) | mNotify, Arkesel, Wigal | Price war, race to the bottom |
-| Channel-breadth CPaaS | Africa's Talking | Can't out-channel them soon; don't try |
-| Verification-led (NG) | Termii | Entrenched; we meet them later |
-| **Verification-led (GH)** | **nobody** | **This is the entry** |
+The primary customer is a developer-led Ghana or Nigeria business that sends product communication:
+fintech, lending, e-commerce, logistics, marketplaces, SaaS, and operational platforms.
 
-## Honest current state
+The first buyer is usually an engineering lead or senior developer. Product and operations benefit
+from managed definitions and delivery visibility; finance benefits from local-currency pricing and
+ledgered billing.
 
-- **Real today:** SMS send + delivery, double-entry wallet/ledger, WorkOS identity, admin
-  control plane, dev portal.
-- **On paper:** Verify as a product (E6 exists, not productized), sender-ID/DND engine
-  (partial), per-carrier delivery observability (shallow), self-serve onboarding (ADR-0002,
-  not built), statement export (not built).
+This is not limited to OTP or financial messages. Relevant workloads include:
 
-Until those surfaces ship, Fabric reads as "another SMS sender" regardless of this document.
-The edge ships when the golden path ships.
+- verification and account security;
+- transaction and account alerts;
+- order, delivery, and service notifications;
+- receipts and transactional email;
+- scheduled or batched operational messaging;
+- localized, versioned product communication managed outside application releases.
 
-## The proof — golden path lighthouse
+## Why Fabric
 
-One demoable flow that no regional competitor can match end-to-end:
+### One platform contract
 
-> **A stranger signs up (self-serve) → integrates Verify → first OTP delivered to a real phone
-> in under 10 minutes → watches per-carrier delivery status → downloads a reconcilable,
-> balanced billing statement.**
+SMS, email, and managed messages share scoped API keys, sandbox/live environments, idempotent writes,
+delivery states, signed webhooks, and wallet accounting. A team learns one operational model.
 
-This replaces the payments-seam lighthouse (old E16) as the activation moment and the demo.
+### Managed messaging is a first-class product
 
-## What must be true to win
+Definitions are not a thin template helper. They have stable keys, immutable versions, typed variable
+schemas, locale variants, environment releases, channel-aware recipient validation, preview/send
+parity, optional maximum-cost guards, and generated SDK catalogs that can fail CI on drift.
 
-1. Golden path works end-to-end and is instrumented (time-to-first-OTP is a tracked metric).
-2. We deliver in Nigeria: registered sender IDs + DND/consent handling — table stakes to send.
-3. Ghana NCA compliance confirmed (open research gap, C-6).
-4. Verify pricing is transparent, local-currency, per-verification.
+### Regional depth
 
-## Non-goals (for now)
+Fabric treats Ghana and Nigeria sender-ID registration, recipient consent, DND, and promotional
+quiet hours as product controls. Pricing is expressed in GHS and NGN rather than translated from a
+US-first product.
 
-- Payments as a product dependency — wallet top-up exists for billing; the payments **product**
-  may never land, and nothing above requires it (see Appendix: Option B).
-- Channel breadth as CPaaS parity — WhatsApp/voice arrive later as **Verify fallback
-  channels**, not as headline channels.
-- Marketing/campaign tooling as the headline — parity at most.
-- Global Twilio-scale ambitions — win the West-African transactional seam first.
+### Delivery and billing evidence
 
-## Kill-criteria (honesty check)
+The terminal delivery event, delivery resource, caller reference, and wallet movement form one
+traceable record. The platform reserves before a live send, charges a delivered message, and refunds
+failed or expired delivery according to the wallet contract.
 
-If Ghana fintechs, shown the working golden path, still say **"I'd just use Arkesel — it's
-cheaper"**, the verification-led wedge fails and Fabric is in commodity SMS: rethink the
-venture, don't add features.
+### A safe path from evaluation to production
 
----
+Every application has isolated sandbox and live environments. Sandbox exercises rendering, pricing,
+delivery states, webhooks, and wallet behavior through virtual providers without contacting a
+carrier or inbox. Live activation remains a deliberate compliance and funding gate.
 
-## Appendix: Option B — the payments seam (v1 thesis, dormant)
+## Current product truth
 
-Preserved from v1 (2026-07-05). **Reactivates only if the payments product ships.**
+Implemented and documented:
 
-The thesis: Fabric as the money-messages-identity backbone — verifying a user, charging them,
-and messaging them as a single, reconciled, auditable transaction under one correlation id
-(old lighthouse: `PI-5/LIGHTHOUSE-FLOW.md`, E16). The wedge table showed every incumbent owns
-one slice (AT/Hubtel messaging+payments, Twilio/Termii messaging+verify) and none owns the
-**ledgered, identity-linked seam** across all three.
+- workspace -> application -> sandbox/live environment hierarchy;
+- direct SMS send, batch, retrieval, listing, delivery reports, and insights;
+- direct email send, retrieval, and listing;
+- SMS and email message-definition authoring, immutable versions, release, archive, and preview;
+- managed send by stable key with locale, reference, metadata, idempotency, and cost ceiling;
+- typed Node.js SDK and generated definition catalog;
+- sender-ID registration, consent/DND, and quiet-hours controls;
+- signed, retried, replayable webhooks;
+- prepaid multi-currency wallet and double-entry ledger;
+- self-service sandbox onboarding and dashboard management surfaces.
 
-Nothing in v2 forecloses this: the double-entry ledger and identity graph stay core
-infrastructure, so if payments lands, Option B becomes the expansion story on top of the
-verification beachhead — a stronger sequence than betting the launch on it.
+Operational enablement is separate from implementation. Live SMS, email, payments, and production
+deployment remain subject to the engagement redlines, environment gates, provider configuration, and
+human approval.
+
+## Product narrative
+
+The shortest complete Fabric story is:
+
+> Create an application -> use its sandbox key -> send direct SMS/email or publish a managed
+> definition -> preview and send -> follow the terminal delivery -> reconcile the wallet movement
+> -> activate live resources when sender, domain, compliance, and funding are ready.
+
+The landing page and demos should show this platform loop. OTP can appear as one example alongside
+receipts, order updates, alerts, and email.
+
+## What we do not claim
+
+- WhatsApp, push, voice, USSD, and live inbound carrier messaging are not current headline channels.
+- Sandbox validates the integration and platform behavior; it does not prove carrier or inbox
+  deliverability.
+- An accepted request is not a delivered message.
+- Fabric does not replace a customer's legal and data-protection obligations.
+- Payments and identity may expand the platform later, but they do not define the current messaging
+  proposition.
+
+## Success measures
+
+Track the platform journey rather than a single OTP funnel:
+
+1. visitor -> sandbox workspace conversion;
+2. time to first successful direct or managed sandbox send;
+3. percentage of new workspaces that retrieve a delivery or process a webhook;
+4. definition created -> released -> previewed -> sent conversion;
+5. direct SMS, direct email, and managed-message adoption by workspace;
+6. sandbox -> live activation conversion;
+7. delivery success, webhook health, and billing reconciliation exceptions.
+
+## Copy rules
+
+- Lead with **SMS, email, and managed messaging**, not Verify alone.
+- Name the real user action: send directly, publish a definition, preview, follow delivery, reconcile.
+- Distinguish sandbox behavior from live delivery.
+- Distinguish implemented capability from enabled production routing.
+- Prefer evidence over absolutes. Do not say "always arrives," "exactly like live," or "never fails."
+- Keep future channels explicitly labeled as roadmap.

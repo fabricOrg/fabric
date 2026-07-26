@@ -232,9 +232,8 @@ export interface EmailPreview {
   readonly subject: string;
   readonly text: string | null;
   readonly html: string | null;
-  /** Rendered UTF-8 byte size — the billable size the tier price is derived from. */
+  /** Rendered UTF-8 byte size (measured to enforce the 256 KiB ceiling; email is priced flat per send). */
   readonly sizeBytes: number;
-  readonly tier: "standard" | "large" | "xlarge";
   readonly costMinor: string;
   readonly currency: string;
 }

@@ -14,6 +14,7 @@ import type { RequestTenant } from "../api-keys/api-key.guard.js";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { AutoTopupService } from "../payments/auto-topup.service.js";
+import { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import type { SendersService } from "../senders/senders.service.js";
@@ -80,6 +81,7 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     consentAllowAll,
     liveMode,
     vault,
+    new PricingService(provisioning),
   );
   const idempotency = new IdempotencyService(appDb);
   const controller = new SmsController(

@@ -16,6 +16,7 @@ import { invalidRequest } from "../http/api-error.js";
 import type { KeysetCursor } from "../http/cursor.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { AutoTopupService } from "../payments/auto-topup.service.js";
+import { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import { SendersService } from "../senders/senders.service.js";
@@ -37,6 +38,7 @@ import {
 } from "./sms-read.js";
 import { SmsRuntimeService } from "./sms-runtime.service.js";
 import type { SmsSendJob } from "./sms-send.job.js";
+import { recordVirtualDeliveryOrFail } from "./sms-virtual-record.js";
 import { VirtualPhoneService } from "./virtual-phone.service.js";
 
 @Injectable()
@@ -55,6 +57,7 @@ export class SmsService {
     @Inject(VirtualPhoneService)
     private readonly virtualPhone: VirtualPhoneService,
     @Inject(PiiVaultService) private readonly piiVault: PiiVaultService,
+    @Inject(PricingService) private readonly pricing: PricingService,
     @Inject(SmsRuntimeService) runtime?: SmsRuntimeService,
   ) {
     this.runtime = runtime ?? new SmsRuntimeService(db, config, virtualPhone);
@@ -138,31 +141,27 @@ export class SmsService {
       subjectId,
       bodyPiiId,
     };
+    // Price against the account's book (ADR-0010). resolveRates never throws — a pricing-store
+    // outage serves last-known-good/compiled defaults; the wallet reserve below still fails closed.
+    const rates = await this.pricing.resolveRates(input.tenantId);
     const prepared = await enginePrepareSend(
-      this.runtime.deps(deliveryMode),
+      this.runtime.deps(deliveryMode, rates.sms),
       routedInput,
     );
     if (prepared.replayed && input.managed) {
       return replayManagedSend(this, input.tenantId, prepared.messageId);
     }
     if (deliveryMode === "virtual") {
-      try {
-        await this.virtualPhone.record({
-          tenantId: input.tenantId,
-          messageId: prepared.messageId,
-          subjectId,
-          body: input.body,
-          bodyPiiId,
-        });
-      } catch (error) {
-        await engineFailPreparedSend(
-          this.runtime.deps(deliveryMode),
-          routedInput,
-          prepared,
-          "virtual_delivery_persistence_failed",
-        );
-        throw error;
-      }
+      await recordVirtualDeliveryOrFail({
+        virtualPhone: this.virtualPhone,
+        deps: this.runtime.deps(deliveryMode),
+        tenantId: input.tenantId,
+        body: input.body,
+        subjectId,
+        bodyPiiId,
+        prepared,
+        routedInput,
+      });
     }
 
     let status: SendResult["status"];

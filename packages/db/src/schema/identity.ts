@@ -14,6 +14,7 @@ import {
   timestamps,
   type UserId,
 } from "./_shared.js";
+import { priceBooks } from "./price-books.js";
 
 /**
  * IDENTITY domain (B2 of the build). The root of tenancy.
@@ -57,6 +58,11 @@ export const accounts = pgTable("accounts", {
   workosUpdatedAt: timestamp("workos_updated_at", { withTimezone: true }),
   status: accountStatus("status").notNull().default("active"),
   plan: text("plan").notNull().default("free"),
+  // Assigned rate plan (ADR-0010). NULL → resolve the mode's default book. ON DELETE SET NULL so
+  // retiring a book unassigns its accounts (they fall back to the default) rather than blocking.
+  priceBookId: uuid("price_book_id").references(() => priceBooks.id, {
+    onDelete: "set null",
+  }),
   // data_region drives residency (COMPLIANCE doc); validated at the app boundary.
   dataRegion: text("data_region").notNull().default("af-south-1"),
   settings: jsonb("settings").notNull().default({}),

@@ -21,6 +21,11 @@ import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, unauthorized } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
+import { TokenPurchaseService } from "../tokens/token-purchase.service.js";
+import {
+  captureReusableCard,
+  completeFlowRecord,
+} from "./payment-webhook-effects.js";
 
 /** Paystack top-ups: pending intent, idempotent webhook credit, tenant RLS, and exact minor units. */
 @Injectable()
@@ -33,6 +38,8 @@ export class PaymentsService {
     @Inject(APP_DB) private readonly appDb: AppDb,
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
+    @Inject(TokenPurchaseService)
+    private readonly tokens: TokenPurchaseService,
   ) {}
 
   private creds(): Creds {
@@ -155,6 +162,21 @@ export class PaymentsService {
     const event = this.provider.parseEvent(raw);
     if (event.status !== "success") return; // only successful charges credit
 
+    // ADR-0010 Phase 2: a `token-` reference bought ENTITLEMENT, not wallet money. It grants a
+    // price-locked lot against the deferred-revenue liability instead of crediting the balance, so it
+    // must never fall through to the top-up path below (which would credit cash the buyer never
+    // bought). The signature is already verified above; the amount is reconciled against the stored
+    // intent inside the token service, as it is here.
+    if (event.reference.startsWith("token-")) {
+      await this.tokens.completeFromWebhook(event.reference, {
+        ...(event.amountMinor !== undefined
+          ? { amountMinor: event.amountMinor }
+          : {}),
+        ...(event.currency ? { currency: event.currency } : {}),
+      });
+      return;
+    }
+
     const [payment] = await this.provisioning.db
       .select()
       .from(payments)
@@ -183,39 +205,7 @@ export class PaymentsService {
       return;
     }
 
-    // Capture a reusable card token (auto top-up + real Payment-method card). Latest reusable card
-    // wins; non-reusable auths (e.g. mobile money) are ignored.
-    const auth = event.authorization;
-    if (auth?.reusable && auth.cardType) {
-      await this.provisioning.db
-        .insert(paymentAuthorizations)
-        .values({
-          tenantId: payment.tenantId,
-          provider: "paystack",
-          authorizationCode: auth.authorizationCode,
-          email: payment.email,
-          cardType: auth.cardType,
-          last4: auth.last4 ?? null,
-          expMonth: auth.expMonth ?? null,
-          expYear: auth.expYear ?? null,
-          bank: auth.bank ?? null,
-          reusable: true,
-        })
-        .onConflictDoUpdate({
-          target: paymentAuthorizations.tenantId,
-          set: {
-            authorizationCode: auth.authorizationCode,
-            email: payment.email,
-            cardType: auth.cardType,
-            last4: auth.last4 ?? null,
-            expMonth: auth.expMonth ?? null,
-            expYear: auth.expYear ?? null,
-            bank: auth.bank ?? null,
-            reusable: true,
-            updatedAt: new Date(),
-          },
-        });
-    }
+    await captureReusableCard(this.provisioning, payment, event.authorization);
 
     // Credit under the tenant's RLS context; idempotent on the reference (topup-{uuid}).
     // idempotencyKey (topup-{uuid}) dedups a replayed webhook; referenceId is omitted — it's a uuid
@@ -241,35 +231,7 @@ export class PaymentsService {
             })}::jsonb
           )`;
       }
-      // A `flow-` reference belongs to a Lighthouse flow → complete its charge + notify now that the
-      // collection cleared. No-op for top-ups (no matching flow_records row). Same tenant tx (RLS ok).
-      const entries = [
-        {
-          account: "payments:collection-clearing",
-          label: "Customer collection",
-          direction: "debit",
-          amount: {
-            currency: payment.currency,
-            minor: payment.amountMinor.toString(),
-          },
-        },
-        {
-          account: "wallet:available",
-          label: "Tenant wallet",
-          direction: "credit",
-          amount: {
-            currency: payment.currency,
-            minor: payment.amountMinor.toString(),
-          },
-        },
-      ];
-      await tx`
-        UPDATE flow_records SET
-          charge_status = 'done', charge_at = now(),
-          charge_entries = ${JSON.stringify(entries)}::jsonb,
-          notify_status = 'done', notify_message_id = ${`msg_${randomUUID().slice(0, 10)}`}, notify_at = now(),
-          status = 'complete', updated_at = now()
-        WHERE charge_reference = ${payment.reference} AND status <> 'complete'`;
+      await completeFlowRecord(tx, payment);
     });
     await this.provisioning.db
       .update(payments)

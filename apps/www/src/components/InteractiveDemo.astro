@@ -6,7 +6,9 @@ const fabric = new Fabric({ apiKey: process.env.FABRIC_API_KEY });
 await fabric.messages.send("order.shipped", {
   to: "+233201234567",
   data: { name: "Ama", ref: "GH-4821" },
-  idempotencyKey: "order-4821",
+  locale: "en-GH",
+  reference: "order:GH-4821",
+  idempotencyKey: "order-shipped:GH-4821",
 });`;
 ---
 
@@ -15,7 +17,7 @@ await fabric.messages.send("order.shipped", {
     <header class="toolbar">
       <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
       <span id="editor-title" class="filename">send.ts</span>
-      <span class="demo-label">Sandbox demo</span>
+      <span class="demo-label">Sandbox simulation</span>
       <button class="replay" type="button" data-replay>Replay</button>
     </header>
     <pre aria-label="Fabric SDK request being typed"><code data-code></code><span class="cursor" aria-hidden="true"></span></pre>
@@ -24,7 +26,7 @@ await fabric.messages.send("order.shipped", {
 
   <section class="deliveries" aria-labelledby="deliveries-title">
     <header class="deliveries-head">
-      <span id="deliveries-title">Live deliveries</span>
+      <span id="deliveries-title">Example delivery stream</span>
       <span class="stream"><i></i> connected</span>
     </header>
     <div class="delivery-list" data-deliveries aria-live="polite">
@@ -32,11 +34,11 @@ await fabric.messages.send("order.shipped", {
         <span class="channel email">EMAIL</span>
         <span class="message-key">receipt.paid</span>
         <span class="status delivered">delivered</span>
-        <span class="cost">GHS 0.01</span>
+        <span class="cost">GHS 0.05</span>
       </div>
       <div class="delivery-row">
         <span class="channel sms">SMS</span>
-        <span class="message-key">welcome.otp</span>
+        <span class="message-key">account.alert</span>
         <span class="status delivered">delivered</span>
         <span class="cost">GHS 0.03</span>
       </div>
@@ -61,7 +63,7 @@ await fabric.messages.send("order.shipped", {
 
   const highlight = (value) =>
     escapeHtml(value).replace(
-      /(\/\/[^\n]*|"[^"\n]*"|\b(?:import|from|const|new|await)\b|\b(?:Fabric|messages|send|apiKey|to|data|name|ref|idempotencyKey)\b)/g,
+      /(\/\/[^\n]*|"[^"\n]*"|\b(?:import|from|const|new|await)\b|\b(?:Fabric|messages|send|apiKey|to|data|name|ref|locale|reference|idempotencyKey)\b)/g,
       (token) => {
         if (token.startsWith("//")) {
           return `<span class="syntax-comment">${token}</span>`;
@@ -142,7 +144,7 @@ await fabric.messages.send("order.shipped", {
     await sleep(350);
     if (current !== sequence) return;
     const status = addAnimatedDelivery();
-    setResult("Queued order.shipped with order-4821.");
+    setResult("Queued order.shipped with order:GH-4821.");
 
     await sleep(700);
     if (current !== sequence || !(status instanceof HTMLElement)) return;
@@ -193,13 +195,13 @@ await fabric.messages.send("order.shipped", {
 <style>
   .demo { display: grid; gap: 1rem; min-width: 0; }
   .editor { overflow: hidden; border: 1px solid #2a2b3d; background: #15151f; box-shadow: 0 26px 60px -38px rgba(20,20,32,.6); }
-  .toolbar { display: flex; align-items: center; gap: .55rem; min-height: 2.7rem; padding: .45rem .65rem; border-bottom: 1px solid #2a2b3d; background: #1c1d29; }
+  .toolbar { display: flex; align-items: center; gap: .55rem; min-width: 0; min-height: 2.7rem; padding: .45rem .65rem; border-bottom: 1px solid #2a2b3d; background: #1c1d29; }
   .window-dots { display: inline-flex; gap: .35rem; }
   .window-dots i { width: .58rem; height: .58rem; border-radius: 50%; background: #ff5f57; }
   .window-dots i:nth-child(2) { background: #febc2e; }
   .window-dots i:nth-child(3) { background: #28c840; }
-  .filename { color: #8d91aa; font-family: var(--font-mono); font-size: .7rem; }
-  .demo-label { margin-left: auto; color: #a6a4bc; font-size: .68rem; }
+  .filename { overflow: hidden; color: #8d91aa; font-family: var(--font-mono); font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
+  .demo-label { margin-left: auto; color: #a6a4bc; font-size: .68rem; white-space: nowrap; }
   .replay { min-height: 1.9rem; padding-inline: .7rem; border: 1px solid #8e8fe4; background: #383a96; color: #fff; font: 600 .7rem var(--font-sans); cursor: pointer; }
   .replay:hover { filter: brightness(1.12); }
   .replay:focus-visible { outline: 2px solid #a9abec; outline-offset: 2px; }
@@ -238,6 +240,18 @@ await fabric.messages.send("order.shipped", {
     .demo-label { display: none; }
     .filename { margin-right: auto; }
     pre { height: 15.4rem; font-size: .7rem; }
+    .deliveries { padding: .7rem; }
+    .delivery-list :global(.delivery-row) {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "channel key status"
+        ". cost cost";
+      gap: .35rem .45rem;
+    }
+    .delivery-list :global(.channel) { grid-area: channel; }
+    .delivery-list :global(.message-key) { grid-area: key; }
+    .delivery-list :global(.status) { grid-area: status; }
+    .delivery-list :global(.cost) { grid-area: cost; justify-self: end; }
   }
   @media (prefers-reduced-motion: reduce) {
     .cursor, .stream i, .delivery-list :global(.delivery-row.entering) { animation: none; }

@@ -4,6 +4,7 @@ import type { AppDb } from "@app/db";
 import type { ConfigService } from "@nestjs/config";
 import type { AuditService } from "../audit/audit.service.js";
 import { hashMsisdn, maskMsisdn } from "../consent/msisdn.js";
+import { invalidRequest } from "../http/api-error.js";
 import type { PiiVaultService } from "../privacy/pii-vault.service.js";
 
 type Row = Record<string, unknown>;
@@ -52,7 +53,14 @@ export async function recordVirtualReply(input: {
       LIMIT 1`) as Row[];
     const context = contexts[0];
     if (!context) {
-      throw new Error("Default sandbox environment is not provisioned.");
+      // A bare `throw new Error` here surfaced as an opaque 500 the dashboard could only render as
+      // a generic "could not be loaded" — the reply is inbound-only, so the real cause (this
+      // workspace has no default application with a sandbox environment) was invisible. Structured
+      // + stable so the UI can branch and the operator knows what to provision.
+      throw invalidRequest(
+        "sandbox_environment_missing",
+        "This workspace has no default application with a sandbox environment, so a virtual reply cannot be recorded.",
+      );
     }
     const inserted = (await tx`
       INSERT INTO inbound_messages (
@@ -62,7 +70,12 @@ export async function recordVirtualReply(input: {
         ${virtualNumberFor(input.tenantId)}, ${keyword}
       ) RETURNING id`) as Row[];
     const id = String(inserted[0]?.id ?? "");
-    if (!id) throw new Error("Inbound message insert returned no row.");
+    if (!id) {
+      throw invalidRequest(
+        "virtual_reply_not_recorded",
+        "The virtual reply could not be recorded.",
+      );
+    }
     let consentChanged = false;
     if (keyword === "STOP") {
       await tx`

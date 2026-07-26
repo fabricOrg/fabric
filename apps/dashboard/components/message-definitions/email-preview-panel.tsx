@@ -20,7 +20,7 @@ import {
 
 /**
  * Email counterpart of DefinitionPreviewPanel. Renders subject/text/html through the SAME pure
- * `previewEmail` core managed send uses (byte-size, tier, and price therefore equal a subsequent send),
+ * `previewEmail` core managed send uses (byte-size and flat price therefore equal a subsequent send),
  * and — for a released definition — offers a server round-trip that reads the API's `email_preview`.
  */
 export function EmailPreviewPanel({
@@ -123,7 +123,7 @@ export function EmailPreviewPanel({
       <div>
         <h3 className="text-sm font-semibold">Live preview</h3>
         <p className="text-xs text-muted-foreground">
-          Uses the same renderer, byte sizing, and size-tier pricing core as
+          Uses the same renderer, byte sizing, and flat per-send pricing core as
           managed send. HTML values are escaped.
         </p>
       </div>
@@ -184,7 +184,6 @@ export function EmailPreviewPanel({
             </pre>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">{outcome.preview.tier}</Badge>
             <Badge variant="outline">{outcome.preview.size_bytes} bytes</Badge>
             <Badge variant="outline">
               {outcome.preview.currency} {outcome.preview.cost_minor} minor
@@ -236,12 +235,9 @@ export function EmailPreviewPanel({
               </Badge>
               <Badge variant="outline">{serverPreview.resolved_locale}</Badge>
               {serverEmail ? (
-                <>
-                  <Badge variant="outline">{serverEmail.tier}</Badge>
-                  <Badge variant="outline">
-                    {serverEmail.currency} {serverEmail.cost_minor} minor units
-                  </Badge>
-                </>
+                <Badge variant="outline">
+                  {serverEmail.currency} {serverEmail.cost_minor} minor units
+                </Badge>
               ) : null}
               {serverPreview.blockers.map((blocker) => (
                 <Badge

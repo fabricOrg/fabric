@@ -1,7 +1,13 @@
 # Lighthouse Flow — Verify → Charge → Notify as one ledgered transaction
 
+> **Historical product experiment (2026-07-26):** this flow is not Fabric's current positioning or
+> primary onboarding journey. Preserve it as a specification for the implemented flow surface, but
+> do not use it to shape the landing page or platform roadmap. Current strategy is in
+> [`../POSITIONING.md`](../POSITIONING.md).
+>
 > **Date:** 2026-07-05 · **Owner:** Product (fifi) · **Epic:** E16-S1 · **Status:** spec → build
-> The proof of Fabric's thesis ([`../POSITIONING.md`](../POSITIONING.md)): the one demo no competitor can match — a verification, a payment, and a notification stitched into a **single, reconciled, auditable transaction** under one correlation id.
+> Original thesis: a verification, a payment, and a notification stitched into a **single,
+> reconciled, auditable transaction** under one correlation id.
 
 ## Goal
 Let a business run, through **one Fabric call/flow**, this sequence for one of *their* customers:

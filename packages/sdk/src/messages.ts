@@ -240,11 +240,6 @@ function parseEmailPreview(data: Record<string, unknown>): EmailPreview {
     text: typeof data.text === "string" ? data.text : null,
     html: typeof data.html === "string" ? data.html : null,
     sizeBytes: numberField(data.size_bytes, "email_preview.size_bytes"),
-    tier: enumField(
-      data.tier,
-      ["standard", "large", "xlarge"],
-      "email_preview.tier",
-    ),
     costMinor: stringField(data.cost_minor, "email_preview.cost_minor"),
     currency: stringField(data.currency, "email_preview.currency"),
   };

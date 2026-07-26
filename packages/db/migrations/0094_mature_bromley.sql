@@ -1,0 +1,3 @@
+ALTER TABLE "price_books" ADD COLUMN "is_public" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "uniq_public_price_book" ON "price_books" USING btree ("is_public") WHERE "price_books"."is_public";--> statement-breakpoint
+ALTER TABLE "price_books" ADD CONSTRAINT "price_books_public_subscription_chk" CHECK (not "price_books"."is_public" or "price_books"."mode" = 'subscription');

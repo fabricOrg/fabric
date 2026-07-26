@@ -96,6 +96,7 @@ export class TenantProvisioningService {
         status: accounts.status,
         data_region: accounts.dataRegion,
         workos_organization_id: accounts.workosOrganizationId,
+        price_book_id: accounts.priceBookId,
         created_at: accounts.createdAt,
       });
     if (!updated) throw new Error("tenant status update returned no row");
@@ -138,6 +139,7 @@ export class TenantProvisioningService {
         status: accounts.status,
         data_region: accounts.dataRegion,
         workos_organization_id: accounts.workosOrganizationId,
+        price_book_id: accounts.priceBookId,
         created_at: accounts.createdAt,
       })
       .from(accounts)

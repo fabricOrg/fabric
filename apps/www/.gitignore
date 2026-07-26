@@ -1,4 +1,5 @@
 .astro/
+.lighthouseci/
 dist/
 
 .vercel
