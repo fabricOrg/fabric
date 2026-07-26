@@ -168,9 +168,60 @@ export const tokenCounters = pgTable(
   ],
 );
 
+/**
+ * A send's in-flight claim on tokens — the count-space mirror of a wallet `reserve` (slice 2b).
+ * Lifecycle: `pending` on accept → `committed` on delivery (2c recognizes revenue at this lot's
+ * locked price) → or `returned` on failure/expiry, which puts the quantity back on the counter.
+ *
+ * ONE HOLD ROW PER LOT. A claim that spans lots (the counter aggregates them) is split so every row
+ * carries exactly one locked price, which is what makes recognition unambiguous. Lots are drawn
+ * expiry-soonest then oldest — plain FIFO today, since no expiry exists yet (ADR-0010 #7).
+ *
+ * QUANTITY IS NOT ALWAYS 1: SMS is priced per SEGMENT (ADR-0010 §5), so a 3-segment message holds 3
+ * tokens. Email is flat per send, so 1.
+ */
+export const tokenHolds = pgTable(
+  "token_holds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: tenantIdCol().references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    // RESTRICT: a lot is history for anything held against it; it must never vanish underneath.
+    lotId: uuid("lot_id")
+      .notNull()
+      .references(() => tokenLots.id, { onDelete: "restrict" }),
+    channel: text("channel").notNull(), // sms | email
+    currency: text("currency").notNull(),
+    /** Tokens claimed from THIS lot. A COUNT, not money. */
+    quantity: bigint("quantity", { mode: "bigint" }).notNull(),
+    /** The message/delivery this claim is for — the commit/return key, as `reference_id` is for money. */
+    referenceId: uuid("reference_id").notNull(),
+    /** Deterministic, e.g. `hold:{deliveryId}:{lotId}`. Dedupes a retried accept at the DB. */
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: text("status").notNull().default("pending"), // pending | committed | returned
+    ...timestamps,
+  },
+  (t) => [
+    // Exactly-once per (send, lot): a retried accept cannot claim the same tokens twice.
+    unique("uniq_token_hold_idempotency").on(t.tenantId, t.idempotencyKey),
+    check(
+      "token_holds_status_chk",
+      sql`${t.status} in ('pending', 'committed', 'returned')`,
+    ),
+    check("token_holds_channel_chk", sql`${t.channel} in ('sms', 'email')`),
+    check("token_holds_quantity_chk", sql`${t.quantity} > 0`),
+    // Find every hold for a send (commit/return) and sweep stuck pendings.
+    index("idx_token_holds_reference").on(t.tenantId, t.referenceId),
+    index("idx_token_holds_pending").on(t.tenantId, t.status, t.createdAt),
+  ],
+);
+
 export type TokenPurchase = typeof tokenPurchases.$inferSelect;
 export type NewTokenPurchase = typeof tokenPurchases.$inferInsert;
 export type TokenLot = typeof tokenLots.$inferSelect;
 export type NewTokenLot = typeof tokenLots.$inferInsert;
 export type TokenCounter = typeof tokenCounters.$inferSelect;
 export type NewTokenCounter = typeof tokenCounters.$inferInsert;
+export type TokenHold = typeof tokenHolds.$inferSelect;
+export type NewTokenHold = typeof tokenHolds.$inferInsert;
