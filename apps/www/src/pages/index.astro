@@ -27,13 +27,6 @@ const why = [
 ];
 
 // Honest engineering guarantees — verifiable properties of the platform, not fabricated metrics.
-const guarantees = [
-  { k: "Double-entry wallet", d: "every charge balances" },
-  { k: "Row-level isolation", d: "tenants walled off in Postgres" },
-  { k: "Signed, retried webhooks", d: "delivered at least once" },
-  { k: "Idempotent sends", d: "a retry never double-charges" },
-  { k: "Zero-gate sandbox", d: "the real API before you fund" },
-];
 
 const dxSteps = [
   { t: "One typed SDK", d: "A single server-only package for Node 22+ — not an SDK per channel." },
