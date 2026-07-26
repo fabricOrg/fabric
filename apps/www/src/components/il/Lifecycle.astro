@@ -34,13 +34,15 @@ const stages = [
   <div class="lc-track" data-track style={`--stages:${stages.length}`}>
     <!-- the pinned stage: Fabric at centre, panels emitted beside it -->
     <div class="lc-stage">
-      <div class="lc-core" aria-hidden="true">
-        <div class="lc-rail">
+      {/* the rail is operable (click/Enter jumps to a stage), so it must NOT be aria-hidden —
+          only the purely decorative hub is hidden from assistive tech. */}
+      <div class="lc-core">
+        <nav class="lc-rail" aria-label="Message stages">
           {stages.map((s, i) => (
             <span class="lc-node" data-node={i}><i></i><em>{s.n}</em></span>
           ))}
-        </div>
-        <div class="lc-hub">
+        </nav>
+        <div class="lc-hub" aria-hidden="true">
           <span class="lc-hub-pulse"></span>
           <span class="lc-hub-mark">Fabric</span>
         </div>
@@ -56,34 +58,54 @@ const stages = [
             </div>
 
             {s.key === "call" && (
-              <div class="lc-code">
-                <div class="ed"><span class="dots"><i></i><i></i><i></i></span><em>send.ts</em></div>
-                <pre><code><span class="k">await</span> fabric.messages.<span class="f">send</span>(<span class="s">"order.shipped"</span>, {'{'}
-  <span class="p">to</span>: <span class="s">"+233201234567"</span>,
-  <span class="p">data</span>: {'{'} <span class="p">ref</span>: <span class="s">"GH-4821"</span> {'}'},
+              <div class="lc-compose">
+                <div class="lc-code">
+                  <div class="ed"><span class="dots"><i></i><i></i><i></i></span><em>send.ts</em></div>
+                  <pre><code><span class="k">await</span> fabric.messages.<span class="f">send</span>(<span class="s">"order.shipped"</span>, {'{'}
+  <span class="p">to</span>: <span class="s">"<span data-bind="to">+233201234567</span>"</span>,
+  <span class="p">body</span>: <span class="s">"<span data-bind="body">Hi Ama, your order GH-4821 has shipped.</span>"</span>,
 {'}'});</code></pre>
+                </div>
+
+                <div class="lc-fields">
+                  <label class="fld">
+                    <span>Recipient</span>
+                    <input id="lc-to" type="text" inputmode="tel" value="+233201234567" spellcheck="false" autocomplete="off" />
+                  </label>
+                  <label class="fld fld-wide">
+                    <span>Message — edit it and watch the platform recost</span>
+                    <textarea id="lc-body" rows="2" spellcheck="false">Hi Ama, your order GH-4821 has shipped.</textarea>
+                  </label>
+                </div>
+
+                <p class="lc-live" role="status" aria-live="polite">
+                  <span class="chip" data-bind="enc">GSM-7</span>
+                  <span class="chip" data-bind="segs">1 segment</span>
+                  <span class="chip chip-cost" data-bind="cost">GHS 0.03</span>
+                  <span class="lc-hint" data-bind="hint">Add an emoji or accent and it switches to UCS-2 — the cost moves with it.</span>
+                </p>
               </div>
             )}
 
             {s.key === "render" && (
               <div class="lc-card">
                 <div class="lc-card-head"><span>Rendered message</span><span class="badge sms">SMS</span></div>
-                <div class="bubble"><p>Hi Ama, your order GH-4821 has shipped.</p></div>
-                <div class="meta"><span>1 segment · GSM-7</span><span class="cost">GHS 0.03</span></div>
+                <div class="bubble"><p data-bind="body">Hi Ama, your order GH-4821 has shipped.</p></div>
+                <div class="meta"><span><span data-bind="segs">1 segment</span> · <span data-bind="enc">GSM-7</span></span><span class="cost" data-bind="cost">GHS 0.03</span></div>
               </div>
             )}
 
             {s.key === "reserve" && (
               <div class="lc-card">
                 <div class="lc-card-head"><span>Wallet</span><span class="muted">GHS</span></div>
-                <div class="wal"><span class="wal-b">GHS 412.60</span><span class="wal-d">− 0.03 held</span></div>
-                <div class="row"><span class="tag hold">HOLD</span><span class="rk">order.shipped</span><span class="amt">−0.03</span></div>
+                <div class="wal"><span class="wal-b" data-bind="bal">GHS 412.60</span><span class="wal-d">− <span data-bind="amt">0.03</span> held</span></div>
+                <div class="row"><span class="tag hold">HOLD</span><span class="rk">order.shipped</span><span class="amt">−<span data-bind="amt">0.03</span></span></div>
               </div>
             )}
 
             {s.key === "route" && (
               <div class="lc-card">
-                <div class="lc-card-head"><span>Routing</span><span class="muted">GH · MTN</span></div>
+                <div class="lc-card-head"><span>Routing</span><span class="muted" data-bind="route">GH · MTN</span></div>
                 <div class="row"><span class="tag queue">QUEUED</span><span class="rk">primary route</span><span class="st sending">selected</span></div>
                 <div class="an-foot">Retries and failover are the platform's problem, <strong>not yours</strong></div>
               </div>
@@ -92,7 +114,7 @@ const stages = [
             {s.key === "deliver" && (
               <div class="lc-card">
                 <div class="lc-card-head"><span>Delivery</span><span class="badge sms">SMS</span></div>
-                <div class="row"><span class="rk">order.shipped</span><span class="st delivered">delivered</span><span class="amt">GHS 0.03</span></div>
+                <div class="row"><span class="rk">order.shipped</span><span class="st delivered">delivered</span><span class="amt" data-bind="cost">GHS 0.03</span></div>
                 <div class="tl"><span>queued</span><span>sent</span><span class="on">delivered</span></div>
               </div>
             )}
@@ -157,6 +179,77 @@ const stages = [
     );
     marks.forEach((m) => io.observe(m));
     setActive(0);
+
+    // ---- the interactive part: the visitor's own message flows through every stage ----
+    // Real GSM-7 / UCS-2 segmentation, the same basis Fabric bills on: a message that fits the
+    // 7-bit alphabet packs 160 chars (153 when concatenated); anything outside it forces UCS-2 at
+    // 70 (67 concatenated). Seven GSM chars cost two septets each. Getting this right is the point —
+    // a visitor who pastes an emoji should watch the encoding flip and the price move with it.
+    const GSM = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+    const GSM_EXT = "^{}\\[~]|€";
+    const RATE_MINOR = 3; // GHS 0.03 per segment — the platform's default SMS rate
+    const BALANCE_MINOR = 41260;
+
+    const measure = (text) => {
+      let septets = 0;
+      let gsm = true;
+      for (const ch of text) {
+        if (GSM_EXT.includes(ch)) septets += 2;
+        else if (GSM.includes(ch)) septets += 1;
+        else { gsm = false; break; }
+      }
+      if (gsm) {
+        const units = septets;
+        const segs = units === 0 ? 1 : units <= 160 ? 1 : Math.ceil(units / 153);
+        return { enc: "GSM-7", segs, units, limit: segs > 1 ? 153 : 160 };
+      }
+      // UCS-2 counts UTF-16 code units, so an emoji outside the BMP is legitimately two.
+      const units = text.length;
+      const segs = units === 0 ? 1 : units <= 70 ? 1 : Math.ceil(units / 67);
+      return { enc: "UCS-2", segs, units, limit: segs > 1 ? 67 : 70 };
+    };
+
+    const money = (minor) => (minor / 100).toFixed(2);
+    const toEl = document.getElementById("lc-to");
+    const bodyEl = document.getElementById("lc-body");
+    const bind = (name, value) => {
+      for (const el of track.querySelectorAll(`[data-bind="${name}"]`)) el.textContent = value;
+    };
+
+    const recost = () => {
+      const body = bodyEl.value;
+      const to = toEl.value.trim() || "+233201234567";
+      const m = measure(body);
+      const cost = m.segs * RATE_MINOR;
+      bind("body", body || "…");
+      bind("to", to);
+      bind("enc", m.enc);
+      bind("segs", `${m.segs} segment${m.segs === 1 ? "" : "s"}`);
+      bind("cost", `GHS ${money(cost)}`);
+      bind("amt", money(cost));
+      bind("bal", `GHS ${money(BALANCE_MINOR - cost)}`);
+      // country → carrier, from the dialling prefix. Honest about the ones we actually serve.
+      const route = to.startsWith("+234") ? "NG · MTN" : to.startsWith("+233") ? "GH · MTN" : "INTL · routed";
+      bind("route", route);
+      bind("hint", `${m.units}/${m.limit} characters in this segment`);
+    };
+    for (const el of [toEl, bodyEl]) el.addEventListener("input", recost);
+    recost();
+
+    // the rail is a control, not just an indicator — clicking a node scrolls to that beat
+    nodes.forEach((nd, i) => {
+      nd.setAttribute("role", "button");
+      nd.setAttribute("tabindex", "0");
+      nd.setAttribute("aria-label", `Jump to stage ${i + 1}`);
+      const jump = () => {
+        const m = marks[i].getBoundingClientRect();
+        window.scrollTo({ top: window.scrollY + m.top + m.height / 2 - window.innerHeight / 2, behavior: "smooth" });
+      };
+      nd.addEventListener("click", jump);
+      nd.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); jump(); }
+      });
+    });
   })();
 </script>
 
@@ -225,6 +318,24 @@ const stages = [
   .lc-node.is-done i { background: var(--primary); border-color: var(--primary); }
   .lc-node.is-on i { border-color: var(--primary); background: color-mix(in oklab, var(--primary) 20%, var(--background)); box-shadow: 0 0 0 5px color-mix(in oklab, var(--primary) 13%, transparent); }
   .lc-node.is-on em { color: var(--primary); font-weight: 600; }
+
+  /* the composer — the one place the visitor drives the platform themselves */
+  .lc-compose { display: grid; gap: .9rem; min-width: 0; }
+  .lc-fields { display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 1fr); gap: .75rem; }
+  @media (max-width: 44rem) { .lc-fields { grid-template-columns: minmax(0, 1fr); } }
+  .fld { display: grid; gap: .35rem; min-width: 0; }
+  .fld > span { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-foreground); }
+  .fld input, .fld textarea { width: 100%; padding: .6rem .7rem; background: var(--card); color: var(--foreground);
+    border: 1px solid var(--border); border-radius: 0; font-family: var(--font-mono); font-size: .88rem; line-height: 1.5; resize: vertical; }
+  .fld input:focus-visible, .fld textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; border-color: var(--primary); }
+  .lc-live { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: 0; }
+  .chip { padding: .22rem .55rem; background: color-mix(in oklab, var(--primary) 10%, var(--card)); border: 1px solid color-mix(in oklab, var(--primary) 25%, transparent);
+    font: 600 .72rem var(--font-mono); color: var(--primary); }
+  .chip-cost { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .lc-hint { font-size: .76rem; color: var(--muted-foreground); }
+  /* the rail doubles as a control */
+  .lc-node { cursor: pointer; }
+  .lc-node:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 
   /* card frame */
   .lc-card { display: grid; gap: .9rem; padding: 1.4rem; background: var(--card); border: 1px solid var(--border); box-shadow: 0 28px 60px -44px rgba(20,20,32,.5); }
