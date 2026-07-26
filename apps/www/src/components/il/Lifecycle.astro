@@ -1,268 +1,230 @@
 ---
-// Signature scroll — "catch & release". Each lifecycle stage is its own row: the stage card
-// scrolls in and PINS (position: sticky) around viewport centre and waits; the step description
-// scrolls up the centre thread to meet it. Card and copy share the same fixed band (--lc-band)
-// at the row's end, so the instant they align the card's sticky range runs out and the pair
-// travels off together — then the next card arrives and pins. The lock/release is pure CSS
-// sticky geometry over native scroll (no scroll-jacking). JS only tracks the active row for the
-// thread fill and dim states, so no-JS readers get a plain, fully visible sequence.
+// SIGNATURE MOMENT — "one message, end to end".
+//
+// The whole section is ONE pinned stage. Fabric sits fixed at the centre and stays there; scrolling
+// does not move the illustration, it advances the REQUEST through the platform. Each scroll beat
+// lights the next node on the pipeline and swaps the panel Fabric is currently emitting.
+//
+// This replaces the earlier per-row "catch & release" pairing, where every stage had its own sticky
+// card that had to meet its copy at the row's end. That alignment depended on the row height
+// matching the sticky range exactly, so the card and its copy drifted apart (~400px), consecutive
+// stages overlapped, and the section grew to ~7,500px of mostly dead space. One pinned stage cannot
+// drift: there is only ever a single visual on screen, and every pixel of scroll advances the story.
+//
+// Native scroll only — no scroll-jacking. JS just maps scroll depth to an active index; without it
+// the stages render as a plain, fully visible sequence.
+const stages = [
+  { n: "01", key: "call", title: "You call send()", copy: "One typed SDK call, addressed by template key. SMS or email is a setting — not new code." },
+  { n: "02", key: "render", title: "Fabric renders it", copy: "Variables fill in and the exact cost is known before anything leaves the building." },
+  { n: "03", key: "reserve", title: "The wallet reserves", copy: "Fabric holds the cost against your balance. No hold, no send — that rule has no exceptions." },
+  { n: "04", key: "route", title: "Fabric picks the route", copy: "A provider is selected per destination, with retries and failover owned by the platform." },
+  { n: "05", key: "deliver", title: "It lands", copy: "Delivered under your approved sender ID, with DND and quiet hours respected." },
+  { n: "06", key: "webhook", title: "Your server hears back", copy: "A signed, retried event reports the terminal state. At-least-once, from a durable outbox." },
+  { n: "07", key: "settle", title: "The ledger settles", copy: "The hold becomes a charge, analytics update, and every movement reconciles." },
+];
 ---
 
-<section class="lc" aria-label="The lifecycle of a Fabric message">
+<section class="lc" aria-label="One Fabric message, end to end">
   <div class="lc-head">
     <p class="num">The lifecycle</p>
-    <h2>Watch one message go <span class="hl">the whole way</span>.</h2>
-    <p class="lc-lede">From a single call to a reconciled ledger entry — scroll it end to end.</p>
+    <h2>One message, <span class="hl">end to end</span>.</h2>
+    <p class="lc-lede">Fabric stays put. Scroll, and watch the request move through it.</p>
   </div>
 
-  <div class="lc-flow" data-flow>
-    <!-- 01 · the call -->
-    <article class="lc-item" data-item="0">
-      <div class="lc-visual" aria-hidden="true">
-        <div class="lc-pin">
-          <span class="lc-link"></span>
-          <div class="lc-code">
-            <div class="ed"><span class="dots"><i></i><i></i><i></i></span><em>send.ts</em></div>
-            <pre><code><span class="k">await</span> fabric.messages.<span class="f">send</span>(<span class="s">"order.shipped"</span>, {'{'}
+  <div class="lc-track" data-track style={`--stages:${stages.length}`}>
+    <!-- the pinned stage: Fabric at centre, panels emitted beside it -->
+    <div class="lc-stage">
+      <div class="lc-core" aria-hidden="true">
+        <div class="lc-rail">
+          {stages.map((s, i) => (
+            <span class="lc-node" data-node={i}><i></i><em>{s.n}</em></span>
+          ))}
+        </div>
+        <div class="lc-hub">
+          <span class="lc-hub-pulse"></span>
+          <span class="lc-hub-mark">Fabric</span>
+        </div>
+      </div>
+
+      <div class="lc-panels">
+        {stages.map((s, i) => (
+          <div class="lc-panel" data-panel={i} data-key={s.key}>
+            <div class="lc-panel-copy">
+              <span class="lc-n">{s.n}</span>
+              <h3>{s.title}</h3>
+              <p>{s.copy}</p>
+            </div>
+
+            {s.key === "call" && (
+              <div class="lc-code">
+                <div class="ed"><span class="dots"><i></i><i></i><i></i></span><em>send.ts</em></div>
+                <pre><code><span class="k">await</span> fabric.messages.<span class="f">send</span>(<span class="s">"order.shipped"</span>, {'{'}
   <span class="p">to</span>: <span class="s">"+233201234567"</span>,
   <span class="p">data</span>: {'{'} <span class="p">ref</span>: <span class="s">"GH-4821"</span> {'}'},
 {'}'});</code></pre>
-          </div>
-        </div>
-      </div>
-      <div class="lc-copy">
-        <div class="lc-copy-in">
-          <span class="lc-n">01</span>
-          <h3>Write one call</h3>
-          <p>One typed SDK call, addressed by template key. SMS or email is a setting — not new code.</p>
-        </div>
-      </div>
-    </article>
+              </div>
+            )}
 
-    <!-- 02 · render -->
-    <article class="lc-item" data-item="1">
-      <div class="lc-visual" aria-hidden="true">
-        <div class="lc-pin">
-          <span class="lc-link"></span>
-          <div class="lc-card">
-            <div class="lc-card-head"><span>Rendered message</span><span class="badge sms">SMS</span></div>
-            <div class="bubble"><p>Hi Ama, your order GH-4821 has shipped.</p></div>
-            <div class="meta"><span>1 segment · GSM-7</span><span class="cost">GHS 0.03</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="lc-copy">
-        <div class="lc-copy-in">
-          <span class="lc-n">02</span>
-          <h3>Render the template</h3>
-          <p>Variables fill in and the exact cost is known before anything sends.</p>
-        </div>
-      </div>
-    </article>
+            {s.key === "render" && (
+              <div class="lc-card">
+                <div class="lc-card-head"><span>Rendered message</span><span class="badge sms">SMS</span></div>
+                <div class="bubble"><p>Hi Ama, your order GH-4821 has shipped.</p></div>
+                <div class="meta"><span>1 segment · GSM-7</span><span class="cost">GHS 0.03</span></div>
+              </div>
+            )}
 
-    <!-- 03 · reserve + queue -->
-    <article class="lc-item" data-item="2">
-      <div class="lc-visual" aria-hidden="true">
-        <div class="lc-pin">
-          <span class="lc-link"></span>
-          <div class="lc-card">
-            <div class="lc-card-head"><span>Reserve &amp; queue</span></div>
-            <div class="row"><span class="tag hold">HOLD</span><span class="rk">wallet · GHS</span><span class="amt">−0.03</span></div>
-            <div class="row"><span class="tag queue">QUEUED</span><span class="rk">order.shipped</span><span class="st sending">queued</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="lc-copy">
-        <div class="lc-copy-in">
-          <span class="lc-n">03</span>
-          <h3>Reserve, then queue</h3>
-          <p>The wallet holds the cost and the message enters the queue. No hold, no send.</p>
-        </div>
-      </div>
-    </article>
+            {s.key === "reserve" && (
+              <div class="lc-card">
+                <div class="lc-card-head"><span>Wallet</span><span class="muted">GHS</span></div>
+                <div class="wal"><span class="wal-b">GHS 412.60</span><span class="wal-d">− 0.03 held</span></div>
+                <div class="row"><span class="tag hold">HOLD</span><span class="rk">order.shipped</span><span class="amt">−0.03</span></div>
+              </div>
+            )}
 
-    <!-- 04 · SMS -->
-    <article class="lc-item" data-item="3">
-      <div class="lc-visual" aria-hidden="true">
-        <div class="lc-pin">
-          <span class="lc-link"></span>
-          <div class="lc-card">
-            <div class="lc-card-head"><span>Delivery</span><span class="badge sms">SMS</span></div>
-            <div class="row"><span class="rk">order.shipped</span><span class="st delivered">delivered</span><span class="amt">GHS 0.03</span></div>
-            <div class="tl"><span>queued</span><span>sent</span><span class="on">delivered</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="lc-copy">
-        <div class="lc-copy-in">
-          <span class="lc-n">04</span>
-          <h3>Deliver over SMS</h3>
-          <p>Sent under your approved sender ID, with DND and quiet hours respected.</p>
-        </div>
-      </div>
-    </article>
+            {s.key === "route" && (
+              <div class="lc-card">
+                <div class="lc-card-head"><span>Routing</span><span class="muted">GH · MTN</span></div>
+                <div class="row"><span class="tag queue">QUEUED</span><span class="rk">primary route</span><span class="st sending">selected</span></div>
+                <div class="an-foot">Retries and failover are the platform's problem, <strong>not yours</strong></div>
+              </div>
+            )}
 
-    <!-- 05 · email -->
-    <article class="lc-item" data-item="4">
-      <div class="lc-visual" aria-hidden="true">
-        <div class="lc-pin">
-          <span class="lc-link"></span>
-          <div class="lc-card">
-            <div class="lc-card-head"><span>Delivery</span><span class="badge email">EMAIL</span></div>
-            <div class="row"><span class="rk">receipt.paid</span><span class="st delivered">delivered</span><span class="amt">GHS 0.01</span></div>
-            <div class="tl"><span>queued</span><span>sent</span><span class="on">delivered</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="lc-copy">
-        <div class="lc-copy-in">
-          <span class="lc-n">05</span>
-          <h3>…or over email</h3>
-          <p>The same call, delivered as email. The definition decides the channel.</p>
-        </div>
-      </div>
-    </article>
+            {s.key === "deliver" && (
+              <div class="lc-card">
+                <div class="lc-card-head"><span>Delivery</span><span class="badge sms">SMS</span></div>
+                <div class="row"><span class="rk">order.shipped</span><span class="st delivered">delivered</span><span class="amt">GHS 0.03</span></div>
+                <div class="tl"><span>queued</span><span>sent</span><span class="on">delivered</span></div>
+              </div>
+            )}
 
-    <!-- 06 · webhook -->
-    <article class="lc-item" data-item="5">
-      <div class="lc-visual" aria-hidden="true">
-        <div class="lc-pin">
-          <span class="lc-link"></span>
-          <div class="lc-code">
-            <div class="ed"><span class="dots"><i></i><i></i><i></i></span><em>POST /your/webhook</em></div>
-            <pre><code>{'{'}
+            {s.key === "webhook" && (
+              <div class="lc-code">
+                <div class="ed"><span class="dots"><i></i><i></i><i></i></span><em>POST /your/webhook</em></div>
+                <pre><code>{'{'}
   <span class="p">"type"</span>: <span class="s">"message.delivered"</span>,
   <span class="p">"data"</span>: {'{'} <span class="p">"deliveryId"</span>: <span class="s">"dlv_8f2…"</span> {'}'}
 {'}'}</code></pre>
-          </div>
-        </div>
-      </div>
-      <div class="lc-copy">
-        <div class="lc-copy-in">
-          <span class="lc-n">06</span>
-          <h3>The webhook returns</h3>
-          <p>A signed, retried event reports the terminal delivery state to your server.</p>
-        </div>
-      </div>
-    </article>
+              </div>
+            )}
 
-    <!-- 07 · analytics -->
-    <article class="lc-item" data-item="6">
-      <div class="lc-visual" aria-hidden="true">
-        <div class="lc-pin">
-          <span class="lc-link"></span>
-          <div class="lc-card">
-            <div class="lc-card-head"><span>Analytics</span><span class="muted">7 days</span></div>
-            <div class="bars"><span style="--h:40%;--bi:0"></span><span style="--h:55%;--bi:1"></span><span style="--h:48%;--bi:2"></span><span style="--h:66%;--bi:3"></span><span style="--h:72%;--bi:4"></span><span style="--h:61%;--bi:5"></span><span style="--h:88%;--bi:6"></span></div>
-            <div class="an-foot">Sent, delivered, failed, and cost — <strong>reconciled</strong> to the ledger</div>
+            {s.key === "settle" && (
+              <div class="lc-card">
+                <div class="lc-card-head"><span>Analytics</span><span class="muted">7 days</span></div>
+                <div class="bars"><span style="--h:40%;--bi:0"></span><span style="--h:55%;--bi:1"></span><span style="--h:48%;--bi:2"></span><span style="--h:66%;--bi:3"></span><span style="--h:72%;--bi:4"></span><span style="--h:61%;--bi:5"></span><span style="--h:88%;--bi:6"></span></div>
+                <div class="an-foot">Hold became a charge — <strong>reconciled</strong> to the ledger</div>
+              </div>
+            )}
           </div>
-        </div>
+        ))}
       </div>
-      <div class="lc-copy">
-        <div class="lc-copy-in">
-          <span class="lc-n">07</span>
-          <h3>Track &amp; reconcile</h3>
-          <p>Delivery, cost, and analytics land in the dashboard and on the ledger.</p>
-        </div>
-      </div>
-    </article>
+    </div>
+
+    <!-- scroll runway: one marker per stage, purely to measure depth -->
+    <div class="lc-marks" aria-hidden="true">
+      {stages.map((_, i) => <span class="lc-mark" data-mark={i}></span>)}
+    </div>
   </div>
 </section>
 
 <script is:inline>
   (() => {
     const section = document.currentScript.previousElementSibling;
-    const flow = section.querySelector("[data-flow]");
-    const items = [...flow.querySelectorAll(".lc-item")];
-    // Dim states only exist once JS is running — no-JS readers see everything at full strength.
-    flow.classList.add("js");
+    const track = section.querySelector("[data-track]");
+    const marks = [...track.querySelectorAll(".lc-mark")];
+    const panels = [...track.querySelectorAll(".lc-panel")];
+    const nodes = [...track.querySelectorAll(".lc-node")];
+    // Pinning and panel swapping only exist once JS runs; no-JS readers get the plain sequence.
+    track.classList.add("js");
+    let current = -1;
     const setActive = (i) => {
-      items.forEach((it, n) => {
-        it.classList.toggle("is-active", n === i);
-        it.classList.toggle("is-done", n < i);
+      if (i === current) return;
+      current = i;
+      panels.forEach((p, n) => p.classList.toggle("is-on", n === i));
+      nodes.forEach((nd, n) => {
+        nd.classList.toggle("is-on", n === i);
+        nd.classList.toggle("is-done", n < i);
       });
-      const node = items[i].querySelector(".lc-n");
-      if (node) {
-        // rect difference = layout offset, independent of current scroll position
-        const fr = flow.getBoundingClientRect();
-        const nr = node.getBoundingClientRect();
-        flow.style.setProperty("--prog", `${nr.top - fr.top + nr.height / 2}px`);
-      }
+      track.style.setProperty("--fill", `${(i / (marks.length - 1)) * 100}%`);
     };
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          if (e.isIntersecting) setActive(Number(e.target.dataset.item));
+          if (e.isIntersecting) setActive(Number(e.target.dataset.mark));
         }
       },
-      { rootMargin: "-45% 0px -45% 0px", threshold: 0 },
+      // a marker owns the beat while it straddles the viewport's middle band
+      { rootMargin: "-50% 0px -50% 0px", threshold: 0 },
     );
-    items.forEach((it) => io.observe(it));
+    marks.forEach((m) => io.observe(m));
     setActive(0);
   })();
 </script>
 
 <style>
-  .lc { margin-inline: auto; width: min(100% - 3rem, var(--maxw)); padding-block: var(--section-y); --lc-gap: clamp(4rem, 7vw, 7rem); --lc-band: 17rem; }
+  .lc { margin-inline: auto; width: min(100% - 3rem, var(--maxw)); padding-block: var(--section-y); }
   .lc-head { max-width: 44rem; margin: 0 auto clamp(2rem, 4vw, 3.25rem); text-align: center; }
   .num { margin: 0; color: var(--gold-ink); font-family: var(--font-mono); font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; }
   .lc-head h2 { margin: .6rem 0 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.9rem,3.7vw,2.7rem); line-height: 1.05; }
   .hl { color: var(--primary); }
   .lc-lede { margin: 1rem auto 0; max-width: 40rem; color: var(--muted-foreground); line-height: 1.6; }
 
-  .lc-flow { position: relative; }
+  .lc-track { position: relative; }
+  .lc-marks { display: none; }
 
-  /* centre thread + progress fill (desktop pairing only) */
+  /* ---------- no-JS / small screens: a plain readable sequence ---------- */
+  /* min-width:0 everywhere down the chain: the code panel sets a wide min-content via
+   * `white-space: pre`, and a grid item defaults to min-width:auto, so without this the panel
+   * refuses to shrink, its siblings stretch to match, and the page overflows sideways on mobile.
+   * With it, the `pre` scrolls inside itself instead. */
+  .lc-panels, .lc-panel, .lc-panel-copy, .lc-code, .lc-card { min-width: 0; }
+  .lc-panel { display: grid; gap: 1.1rem; }
+  .lc-panel + .lc-panel { margin-top: 3rem; }
+  .lc-core { display: none; }
+  .lc-n { display: inline-grid; place-items: center; width: 2rem; height: 2rem; margin-bottom: .7rem; border-radius: 50%; background: color-mix(in oklab, var(--primary) 12%, var(--card)); border: 2px solid var(--primary); color: var(--primary); font: 600 .72rem var(--font-mono); }
+  .lc-panel-copy h3 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.5rem,2.6vw,2rem); line-height: 1.12; }
+  .lc-panel-copy p { margin: .7rem 0 0; max-width: 32rem; color: var(--muted-foreground); font-size: 1.02rem; line-height: 1.55; }
+
+  /* ---------- the pinned stage (JS + desktop) ---------- */
   @media (min-width: 60rem) {
-    .lc-flow::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); background: color-mix(in oklab, var(--foreground) 12%, transparent); }
-    .lc-flow::after { content: ""; position: absolute; left: 50%; top: 0; width: 2px; transform: translateX(-50%); height: var(--prog, 0px); background: var(--primary); transition: height .3s ease; }
-  }
-
-  /* one row per stage — card column left, copy column right */
-  .lc-item { position: relative; display: grid; gap: 1.25rem; }
-  .lc-item + .lc-item { margin-top: 3.5rem; }
-  .lc-pin { position: relative; }
-  @media (min-width: 60rem) {
-    .lc-item { grid-template-columns: 1fr 1fr; column-gap: var(--lc-gap); min-height: 110vh; }
-    .lc-item + .lc-item { margin-top: 0; }
-    /* last pair needs no runway below it */
-    .lc-item:last-child { min-height: calc(var(--lc-band) + 24vh); }
-    /* the catch: the card pins near viewport centre and waits. The release: card and copy both
-     * occupy a --lc-band-tall block at the END of the row, so the sticky range runs out exactly
-     * when the copy reaches the card — from there they scroll off together. */
-    .lc-pin { position: sticky; top: calc(50vh - var(--lc-band) / 2 - 2rem); z-index: 1; min-height: var(--lc-band); display: grid; align-content: center; }
-    .lc-copy { display: flex; flex-direction: column; justify-content: flex-end; }
-    .lc-copy-in { min-height: var(--lc-band); display: grid; align-content: center; }
-  }
-  .lc-copy-in { position: relative; }
-
-  /* step node — travels with the copy along the thread, docks into the card's connector */
-  .lc-n { display: inline-grid; place-items: center; width: 2rem; height: 2rem; margin-bottom: .8rem; border-radius: 50%; background: var(--card); border: 2px solid var(--border); color: var(--muted-foreground); font: 600 .72rem var(--font-mono); transition: border-color .3s, color .3s, background .3s, box-shadow .3s; }
-  @media (min-width: 60rem) {
-    .lc-n { position: absolute; left: calc(-.5 * var(--lc-gap)); top: 50%; transform: translate(-50%, -50%); margin: 0; z-index: 2; }
-  }
-  .lc-item.is-done .lc-n { border-color: var(--primary); background: var(--primary); color: #fff; }
-  .lc-item.is-active .lc-n { border-color: var(--primary); background: color-mix(in oklab, var(--primary) 14%, var(--card)); color: var(--primary); box-shadow: 0 0 0 5px color-mix(in oklab, var(--primary) 14%, transparent); }
-
-  /* dim the rows that aren't the story's current beat (JS-gated) */
-  .lc-flow.js .lc-pin, .lc-flow.js .lc-copy-in { transition: opacity .35s ease; }
-  .lc-flow.js .lc-item:not(.is-active) .lc-pin { opacity: .45; }
-  .lc-flow.js .lc-item:not(.is-active) .lc-copy-in { opacity: .4; }
-
-  /* connector — from the card's edge to the thread, ending in a socket the node docks into */
-  .lc-link { display: none; }
-  @media (min-width: 60rem) {
-    .lc-link { display: block; position: absolute; top: 50%; left: 100%; width: calc(var(--lc-gap) / 2); height: 2px; background: color-mix(in oklab, var(--primary) 45%, transparent); transform: translateY(-50%); }
-    .lc-link::after { content: ""; position: absolute; right: -5px; top: 50%; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--primary); background: var(--background); transform: translateY(-50%); animation: lcPing 2.4s ease-in-out infinite; }
-    @keyframes lcPing {
-      0%, 100% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 12%, transparent); }
-      50% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--primary) 7%, transparent); }
+    .lc-track.js { height: calc(var(--stages) * 82vh); }
+    .lc-track.js .lc-marks { display: grid; position: absolute; inset: 0; grid-template-rows: repeat(var(--stages), 1fr); pointer-events: none; }
+    .lc-track.js .lc-stage {
+      position: sticky; top: 0; height: 100vh;
+      display: grid; grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+      align-items: center; column-gap: clamp(3rem, 6vw, 6rem);
     }
+    /* rail + hub read as ONE object: the stage spine feeding Fabric, which emits the panel */
+    .lc-track.js .lc-core { position: relative; display: grid; grid-template-columns: auto auto; align-items: center; justify-content: center; column-gap: clamp(1.1rem, 2vw, 2rem); }
+    .lc-track.js .lc-rail { margin-bottom: 0; }
+    /* every panel occupies the same cell — only the active one is visible, so nothing can overlap */
+    .lc-track.js .lc-panels { position: relative; display: grid; }
+    .lc-track.js .lc-panel { grid-area: 1 / 1; margin: 0; align-content: center;
+      opacity: 0; transform: translateY(14px); pointer-events: none;
+      transition: opacity .45s ease, transform .45s cubic-bezier(.2,.7,.2,1); }
+    .lc-track.js .lc-panel.is-on { opacity: 1; transform: none; pointer-events: auto; }
   }
 
-  /* copy typography */
-  .lc-copy-in h3 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.5rem,2.8vw,2.1rem); line-height: 1.1; }
-  .lc-copy-in p { margin: .7rem 0 0; max-width: 30rem; color: var(--muted-foreground); font-size: 1.02rem; line-height: 1.55; }
+  /* Fabric — the fixed centre. The hub never moves; the rail beside it advances. */
+  .lc-hub { position: relative; display: grid; place-items: center; width: 9.5rem; height: 9.5rem; margin-inline: auto;
+    background: var(--primary); border-radius: 1.6rem; box-shadow: 0 40px 80px -50px color-mix(in oklab, var(--primary) 70%, transparent); }
+  .lc-hub-mark { font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; color: #fff; letter-spacing: -.01em; }
+  .lc-hub-pulse { position: absolute; inset: 0; border-radius: inherit; border: 2px solid var(--primary); animation: lcPulse 2.8s ease-out infinite; }
+  /* the emit line — Fabric hands the request to whatever panel is live */
+  @media (min-width: 60rem) {
+    .lc-track.js .lc-hub::after { content: ""; position: absolute; left: 100%; top: 50%; width: clamp(1.5rem, 4vw, 4rem); height: 2px; background: linear-gradient(90deg, var(--primary), color-mix(in oklab, var(--primary) 10%, transparent)); transform: translateY(-50%); }
+  }
+  @keyframes lcPulse { 0% { transform: scale(1); opacity: .55; } 70%, 100% { transform: scale(1.28); opacity: 0; } }
+
+  /* the pipeline rail — seven nodes, lit as the request reaches them */
+  .lc-rail { position: relative; display: grid; gap: .85rem; margin-bottom: 1.9rem; padding-left: .35rem; }
+  .lc-rail::before { content: ""; position: absolute; left: .85rem; top: .4rem; bottom: .4rem; width: 2px; background: color-mix(in oklab, var(--foreground) 12%, transparent); }
+  .lc-rail::after { content: ""; position: absolute; left: .85rem; top: .4rem; width: 2px; height: var(--fill, 0%); background: var(--primary); transition: height .4s ease; }
+  .lc-node { position: relative; display: flex; align-items: center; gap: .7rem; }
+  .lc-node i { position: relative; z-index: 1; width: 1rem; height: 1rem; border-radius: 50%; background: var(--background); border: 2px solid color-mix(in oklab, var(--foreground) 18%, transparent); transition: border-color .3s, background .3s, box-shadow .3s; }
+  .lc-node em { font: 400 .72rem var(--font-mono); font-style: normal; color: var(--muted-foreground); transition: color .3s; }
+  .lc-node.is-done i { background: var(--primary); border-color: var(--primary); }
+  .lc-node.is-on i { border-color: var(--primary); background: color-mix(in oklab, var(--primary) 20%, var(--background)); box-shadow: 0 0 0 5px color-mix(in oklab, var(--primary) 13%, transparent); }
+  .lc-node.is-on em { color: var(--primary); font-weight: 600; }
 
   /* card frame */
   .lc-card { display: grid; gap: .9rem; padding: 1.4rem; background: var(--card); border: 1px solid var(--border); box-shadow: 0 28px 60px -44px rgba(20,20,32,.5); }
@@ -285,6 +247,11 @@
   .meta { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: .78rem; color: var(--muted-foreground); }
   .meta .cost { color: var(--foreground); }
 
+  /* wallet */
+  .wal { display: flex; align-items: baseline; justify-content: space-between; padding: .9rem 1rem; background: var(--background); border: 1px solid var(--border); }
+  .wal-b { font-family: var(--font-mono); font-size: 1.25rem; color: var(--foreground); }
+  .wal-d { font-family: var(--font-mono); font-size: .78rem; color: var(--gold-ink); }
+
   /* rows */
   .row { display: flex; align-items: center; gap: .7rem; padding: .8rem .9rem; background: var(--background); border: 1px solid var(--border); font-size: .92rem; }
   .rk { flex: 1; font-family: var(--font-mono); color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -303,16 +270,13 @@
   .bars { display: flex; align-items: flex-end; gap: .4rem; height: 6.5rem; padding: .9rem; background: var(--background); border: 1px solid var(--border); }
   .bars span { flex: 1; height: var(--h); background: color-mix(in oklab, var(--primary) 65%, transparent); border-radius: 2px 2px 0 0; transform-origin: bottom; }
   .bars span:last-child { background: var(--primary); }
-  /* bars grow each time the analytics stage becomes the active beat */
-  .lc-item.is-active .bars span { animation: lcGrow .6s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--bi) * 55ms); }
+  .lc-panel.is-on .bars span { animation: lcGrow .6s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--bi) * 55ms); }
   @keyframes lcGrow { from { transform: scaleY(0); } }
   .an-foot { font-size: .82rem; color: var(--muted-foreground); } .an-foot strong { color: var(--foreground); font-family: var(--font-mono); }
 
   @media (prefers-reduced-motion: reduce) {
-    .lc-flow::after { transition: none; }
-    .lc-flow.js .lc-pin, .lc-flow.js .lc-copy-in { transition: none; }
-    .lc-link::after { animation: none; }
-    .lc-item.is-active .bars span { animation: none; }
-    .lc-n { transition: none; }
+    .lc-hub-pulse, .lc-panel.is-on .bars span { animation: none; }
+    .lc-rail::after { transition: none; }
+    .lc-track.js .lc-panel { transition: opacity .01s linear; transform: none; }
   }
 </style>
