@@ -231,6 +231,38 @@ describeDb("token purchase", () => {
     expect(lots[0]?.n).toBe(1);
   });
 
+  it("refuses a charge too large to represent exactly, before taking money", async () => {
+    const tenant = await makeTenant();
+    await ensureTokenBook(7n);
+    // Push the total past 2^53 via a deliberately absurd configured price. The provider coerces the
+    // amount through Number(), so a rounded charge would later mismatch the stored intent and strand
+    // the buyer: charged, no tokens. The sale must stop first.
+    await owner`
+      UPDATE price_book_rates SET unit_price_minor = 9007199254740993
+      WHERE price_book_id = ${tokenBookId}::uuid AND channel = 'sms' AND currency = 'GHS'`;
+
+    await expect(
+      service.initiate(tenant, {
+        channel: "sms",
+        quantity: 1000,
+        currency: "GHS",
+        email: "buyer@example.com",
+      }),
+    ).rejects.toMatchObject({
+      response: { error: { code: "token_amount_too_large" } },
+    });
+
+    const rows = (await owner`
+      SELECT count(*)::int AS n FROM token_purchases
+      WHERE tenant_id = ${tenant}::uuid`) as { n: number }[];
+    // No intent written — nothing to reconcile against later.
+    expect(rows[0]?.n).toBe(0);
+
+    await owner`
+      UPDATE price_book_rates SET unit_price_minor = 7
+      WHERE price_book_id = ${tokenBookId}::uuid AND channel = 'sms' AND currency = 'GHS'`;
+  });
+
   it("refuses a currency the token book does not price", async () => {
     const tenant = await makeTenant();
     await ensureTokenBook(7n); // GHS only

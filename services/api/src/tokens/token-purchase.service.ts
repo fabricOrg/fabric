@@ -103,6 +103,18 @@ export class TokenPurchaseService {
     );
     const quantity = BigInt(request.quantity);
     const amountMinor = quantity * unitPrice;
+    // The provider serializes the charge amount through `Number()`, so anything past 2^53 is rounded
+    // on the way to checkout. The webhook would then disagree with the exact `amount_minor` we
+    // stored, we would mark the purchase failed, and the buyer would be charged with nothing granted.
+    // Refuse BEFORE writing an intent or taking money — a misconfigured token price should stop the
+    // sale, not produce a silent half-completed one.
+    if (amountMinor > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw invalidRequest(
+        "token_amount_too_large",
+        "That quantity exceeds the largest charge we can process exactly. Buy a smaller batch.",
+        "quantity",
+      );
+    }
     // Paystack references allow alphanumerics + - . = (no colon); the `token-` prefix is what the
     // webhook branches on to tell a token purchase from a wallet top-up.
     const reference = `token-${randomUUID()}`;
