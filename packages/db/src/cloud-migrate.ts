@@ -4,29 +4,17 @@ import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres, { type Sql } from "postgres";
+import { synchronizeRole } from "./cloud-migrate-roles.js";
+
+// Re-exported so existing importers (and the spec) keep their entry point after the role helpers
+// moved into cloud-migrate-roles.ts.
+export { assertLeastPrivilege } from "./cloud-migrate-roles.js";
 
 interface MigrationEnvironment {
   adminUrl: string;
   ownerUrl: string;
   runtimeUrl: string;
   provisionerUrl: string;
-}
-
-interface RoleSpec {
-  // app_provisioner: cross-tenant provisioning connection (BFF-guarded internal endpoints only).
-  // NOBYPASSRLS like the others (RDS forbids BYPASSRLS) — its reach comes from permissive RLS
-  // policies in migration 0013, not a role attribute. See docs/PI-3/PATH-TO-TESTING.md.
-  name: "app_migrator" | "app_runtime" | "app_provisioner";
-  password: string;
-}
-
-interface RoleAttributes {
-  canLogin: boolean;
-  superuser: boolean;
-  bypassRls: boolean;
-  createDatabase: boolean;
-  createRole: boolean;
-  replication: boolean;
 }
 
 function requireUrl(name: keyof NodeJS.ProcessEnv): string {
@@ -46,17 +34,6 @@ function readEnvironment(): MigrationEnvironment {
   };
 }
 
-async function quotedLiteral(sql: Sql, value: string): Promise<string> {
-  const rows = await sql<{ quoted: string }[]>`
-    SELECT quote_literal(${value}) AS quoted
-  `;
-  const quoted = rows[0]?.quoted;
-  if (!quoted) {
-    throw new Error("PostgreSQL did not return a quoted literal.");
-  }
-  return quoted;
-}
-
 async function quotedIdentifier(sql: Sql, value: string): Promise<string> {
   const rows = await sql<{ quoted: string }[]>`
     SELECT quote_ident(${value}) AS quoted
@@ -66,54 +43,6 @@ async function quotedIdentifier(sql: Sql, value: string): Promise<string> {
     throw new Error("PostgreSQL did not return a quoted identifier.");
   }
   return quoted;
-}
-
-async function synchronizeRole(sql: Sql, spec: RoleSpec): Promise<void> {
-  const roleRows = await sql<{ exists: boolean }[]>`
-    SELECT EXISTS (
-      SELECT 1 FROM pg_roles WHERE rolname = ${spec.name}
-    ) AS exists
-  `;
-  const password = await quotedLiteral(sql, spec.password);
-
-  if (roleRows[0]?.exists) {
-    // RDS administrators are not PostgreSQL superusers, so they cannot restate
-    // NOSUPERUSER on an existing role even when the role is already non-super.
-    await sql.unsafe(`ALTER ROLE ${spec.name} WITH LOGIN PASSWORD ${password}`);
-  } else {
-    await sql.unsafe(
-      `CREATE ROLE ${spec.name} WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD ${password}`,
-    );
-  }
-
-  const attributeRows = await sql<RoleAttributes[]>`
-    SELECT
-      rolcanlogin AS "canLogin",
-      rolsuper AS superuser,
-      rolbypassrls AS "bypassRls",
-      rolcreatedb AS "createDatabase",
-      rolcreaterole AS "createRole",
-      rolreplication AS replication
-    FROM pg_roles
-    WHERE rolname = ${spec.name}
-  `;
-  assertLeastPrivilege(spec.name, attributeRows[0]);
-}
-
-export function assertLeastPrivilege(
-  roleName: RoleSpec["name"],
-  attributes: RoleAttributes | undefined,
-): void {
-  if (
-    !attributes?.canLogin ||
-    attributes.superuser ||
-    attributes.bypassRls ||
-    attributes.createDatabase ||
-    attributes.createRole ||
-    attributes.replication
-  ) {
-    throw new Error(`${roleName} failed its least-privilege verification.`);
-  }
 }
 
 async function prepareRoles(environment: MigrationEnvironment): Promise<void> {
