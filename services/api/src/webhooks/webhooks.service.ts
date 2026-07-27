@@ -18,6 +18,7 @@ import {
 import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { and, asc, eq, sql } from "drizzle-orm";
+import { primaryApplicationId } from "../applications/primary-application.js";
 import { AuditService } from "../audit/audit.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
@@ -48,8 +49,16 @@ export class WebhooksService {
     const secret = `whsec_${randomBytes(32).toString("base64url")}`;
     const requestedEnvType = opts.envType ?? "sandbox";
     const resolved = await this.db.withTenantDrizzle(tenantId, async (tx) => {
+      // BFF-token path names neither an environment nor an application: scope to the workspace's
+      // primary application. Resolved here rather than pinned to the slug `default` in the
+      // predicate, since a workspace need not have an application by that name.
+      const scopeApplicationId =
+        opts.applicationId ??
+        (opts.environmentId
+          ? undefined
+          : ((await primaryApplicationId(tx, tenantId)) ?? undefined));
       const envScopeFilter = webhookEnvScope({
-        ...(opts.applicationId ? { applicationId: opts.applicationId } : {}),
+        ...(scopeApplicationId ? { applicationId: scopeApplicationId } : {}),
         ...(opts.environmentId ? { environmentId: opts.environmentId } : {}),
         envType: requestedEnvType,
       });
@@ -82,11 +91,13 @@ export class WebhooksService {
             "application_id",
           );
         }
-        // Structured, never a bare throw (which surfaced as a 500) — a workspace whose app isn't
-        // slugged "default" is told to name one.
+        // Structured, never a bare throw (which surfaced as a 500). This used to be reached by any
+        // workspace whose application wasn't slugged "default", and asked the caller to name one as
+        // a workaround; resolution now handles that, so getting here means the workspace genuinely
+        // has no application with this environment yet.
         throw invalidRequest(
           "application_required",
-          "Specify which application this webhook belongs to.",
+          `This workspace has no application with a ${requestedEnvType} environment. Create one first.`,
           "application_id",
         );
       }

@@ -1,6 +1,7 @@
 import type { EmailVariantContent } from "@app/contracts";
 import { type AppDb, applications, environments, type TenantId } from "@app/db";
 import { and, eq } from "drizzle-orm";
+import { primaryApplicationId } from "../applications/primary-application.js";
 import { notFound } from "../http/api-error.js";
 
 /**
@@ -39,6 +40,15 @@ export async function defaultSandboxEnv(
   tx: Parameters<Parameters<AppDb["withTenantDrizzle"]>[1]>[0],
   tenantId: string,
 ): Promise<string> {
+  // The workspace's primary application, not the slug `default` — a workspace whose only
+  // application is named otherwise could not preview at all.
+  const applicationId = await primaryApplicationId(tx, tenantId);
+  if (!applicationId) {
+    throw notFound(
+      "environment_not_found",
+      "No sandbox environment to preview against.",
+    );
+  }
   const [env] = await tx
     .select({ id: environments.id })
     .from(environments)
@@ -46,7 +56,7 @@ export async function defaultSandboxEnv(
     .where(
       and(
         eq(applications.tenantId, tenantId as TenantId),
-        eq(applications.slug, "default"),
+        eq(applications.id, applicationId),
         eq(environments.type, "sandbox"),
       ),
     )

@@ -168,9 +168,10 @@ describeDb(
         send(payload, key),
         send(payload, key),
       ]);
-      // Every caller gets the same accepted delivery; the FOR UPDATE replay probe + the
-      // ON CONFLICT insert guarantee the race produces exactly one message/attempt/reserve.
-      for (const response of [a, b, c]) expect(response.statusCode).toBe(202);
+      // One accepted delivery per caller (FOR UPDATE replay probe + ON CONFLICT insert). `body`
+      // rides along so a failure names what threw — this has flaked in CI as a bare 500.
+      for (const r of [a, b, c])
+        expect({ s: r.statusCode, b: r.body }).toMatchObject({ s: 202 });
       const ids = new Set(
         [a, b, c].map(
           (response) =>

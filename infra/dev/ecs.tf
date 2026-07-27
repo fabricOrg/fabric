@@ -136,6 +136,14 @@ resource "aws_ecs_task_definition" "api" {
           name  = "DASHBOARD_BASE_URL"
           value = "https://${aws_cloudfront_distribution.testing_edge["dashboard"].domain_name}"
         },
+        # Browser origins allowed to read /v1/public/* (the published rate card the marketing site
+        # renders). The marketing site is NOT on this AWS edge — it is a separate Vercel project —
+        # so there is no distribution to derive this from; it is supplied explicitly. Empty by
+        # default, which fails closed: no browser reads the endpoint until an origin is named.
+        {
+          name  = "PUBLIC_CORS_ALLOWED_ORIGINS"
+          value = var.testing_public_cors_origins
+        },
         # ADR-0002: self-serve sandbox sign-up is ON in the testing environment (fail closed
         # elsewhere — the api treats anything but "true" as OFF).
         {

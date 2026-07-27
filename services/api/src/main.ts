@@ -10,6 +10,12 @@ import { Logger } from "nestjs-pino";
 import { AppModule } from "./app.module.js";
 import { edgeOriginAllowed } from "./http/edge-origin-guard.js";
 import { resolveRequestId } from "./http/logging.config.js";
+import {
+  isPublicApiPath,
+  parseAllowedOrigins,
+  publicCorsOrigin,
+  varyWithOrigin,
+} from "./http/public-cors.js";
 
 /**
  * services/api — the public API app (L1 scaffold). NestJS on the Fastify adapter. This process is
@@ -52,6 +58,45 @@ async function bootstrap(): Promise<void> {
     .getInstance()
     .addHook("onRequest", (request, reply, done) => {
       reply.header("x-request-id", request.id);
+      done();
+    });
+  // CORS for the PUBLIC prefix ONLY. The marketing site renders the published rate card by fetching
+  // /v1/public/pricing from the browser; without this header the response is fetched successfully
+  // and then discarded by the browser, so the page silently shows no prices.
+  //
+  // Scoped to `/v1/public/` on purpose, never globally: the rest of /v1/* is the sk_*-authenticated
+  // data plane and /internal/* takes BFF_INTERNAL_TOKEN. Neither may become cross-origin readable.
+  //
+  // Origins come from PUBLIC_CORS_ALLOWED_ORIGINS and are echoed individually rather than answered
+  // with `*`, so only our own sites can read this in a browser. Parsed ONCE at boot — this runs on
+  // every response. `Vary: Origin` is mandatory alongside an echoed origin: the shared CDN cache in
+  // front of this route would otherwise serve one origin's response (and its allow-origin value) to
+  // another. It does mean one cached object per origin instead of one globally.
+  //
+  // onSend, not an @Header decorator on the controller: "no public book is published" is a
+  // legitimate 404, and a decorator would not put the header on that error response — the browser
+  // would report an opaque CORS failure instead of a readable 404 the site can handle.
+  const publicCorsOrigins = parseAllowedOrigins(
+    process.env.PUBLIC_CORS_ALLOWED_ORIGINS,
+  );
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addHook("onSend", (request, reply, _payload, done) => {
+      if (isPublicApiPath(request.url)) {
+        const origin = publicCorsOrigin(
+          request.headers.origin,
+          publicCorsOrigins,
+        );
+        // Vary goes on every public response, matched or not: whether the header appears at all is
+        // itself origin-dependent, so a cache keyed without Origin would still cross the wires.
+        // Merged rather than set — these responses already vary on Accept-Encoding.
+        reply.header(
+          "vary",
+          varyWithOrigin(reply.getHeader("vary")?.toString()),
+        );
+        if (origin) reply.header("access-control-allow-origin", origin);
+      }
       done();
     });
   app.enableShutdownHooks(); // so DbModule.onModuleDestroy closes the pool cleanly
