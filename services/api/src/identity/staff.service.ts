@@ -20,7 +20,7 @@ import { and, asc, count, eq, ne } from "drizzle-orm";
 import { invalidRequest } from "../http/api-error.js";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
 import {
-  WORKOS_CLIENT,
+  WORKOS_STAFF_CLIENT,
   type WorkosClientProvider,
 } from "./workos-client.provider.js";
 
@@ -44,7 +44,9 @@ export class StaffService {
   constructor(
     @Inject(PROVISIONING_DB)
     private readonly provisioning: ProvisioningDb,
-    @Inject(WORKOS_CLIENT)
+    // The STAFF-realm client: an invitation belongs to the AuthKit application whose key created
+    // it, so a staff invite must not be sent with the customer dashboard's key.
+    @Inject(WORKOS_STAFF_CLIENT)
     private readonly workosClient: WorkosClientProvider,
   ) {}
 
@@ -150,7 +152,18 @@ export class StaffService {
     if (!staff) throw new Error("Staff upsert returned no row.");
 
     try {
-      await this.workosClient().userManagement.sendInvitation({ email });
+      const invitation =
+        await this.workosClient().userManagement.sendInvitation({ email });
+      // The accept URL's ORIGIN is the open question: whether an invitation resolves to the
+      // application whose key sent it (so a staff invite lands on the console) or always to the
+      // environment's default application (the dashboard). WorkOS documents no redirect parameter,
+      // so logging the origin — never the token-bearing full URL — is how we find out from the
+      // first real staff invite instead of guessing.
+      this.logger.log(
+        `Staff WorkOS invitation for ${email} accepted-at origin: ${originOf(
+          invitation.acceptInvitationUrl,
+        )}`,
+      );
     } catch (error) {
       // Already invited / already a WorkOS user / SSO-managed — the allowlist row still stands.
       this.logger.warn(
@@ -259,4 +272,17 @@ function toDto(row: {
 }): StaffDto {
   const { externalSubjectId, ...rest } = row;
   return { ...rest, bound: externalSubjectId !== null };
+}
+
+/**
+ * Origin only — the accept URL carries the invitation TOKEN, which is a credential and must never
+ * reach a log. The origin alone answers the question (console vs dashboard) and leaks nothing.
+ */
+function originOf(url: string | undefined): string {
+  if (!url) return "unknown";
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "unparseable";
+  }
 }
