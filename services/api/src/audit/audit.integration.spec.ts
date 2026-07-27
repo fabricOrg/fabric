@@ -56,7 +56,17 @@ describeDb("audit log", () => {
     const seen: string[] = [];
     let cursor: string | undefined;
     let pages = 0;
-    // Page size 2 → walk the whole log 2 at a time, collecting only this tag's rows.
+    // Page size 2, stopping as soon as all 5 tagged rows are collected.
+    //
+    // It used to walk the ENTIRE log to cursor exhaustion, which made the test's length a function
+    // of how many audit events happened to exist. `audit_events` is global — not tenant-scoped —
+    // every parallel spec appends to it and most never clean up, so once the table passed the
+    // 100-page (200-row) guard the test failed with "pagination did not terminate". That is
+    // accumulated state, not a pagination defect, and it got likelier the more the suite ran.
+    //
+    // Ordering is newest-first and these rows were just written, so they arrive in the first few
+    // pages regardless of table size. The page guard stays as a genuine safety net: it can now only
+    // trip if paging really fails to advance.
     do {
       const res = await service.list({
         limit: 2,
@@ -66,6 +76,7 @@ describeDb("audit log", () => {
       for (const e of res.events) {
         if (e.target_id === tag) seen.push(e.id);
       }
+      if (seen.length === 5) break;
       cursor = res.next_cursor ?? undefined;
       pages++;
       if (pages > 100) throw new Error("pagination did not terminate");
