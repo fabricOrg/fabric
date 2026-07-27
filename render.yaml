@@ -39,5 +39,10 @@ services:
       # Providers stay sandboxed (redline)
       - key: SMS_PROVIDER
         value: fake
+      # Browser origins allowed to read /v1/public/* (the published rate card the marketing site
+      # renders). Comma-separated exact origins. Unset = no browser may read it, so the landing
+      # page's pricing section goes empty — fail closed, and visibly.
+      - key: PUBLIC_CORS_ALLOWED_ORIGINS
+        value: https://www-kohl-kappa.vercel.app,https://fabric-dashboard-teal.vercel.app
       # No Redis on the free stack — the engine's inline dispatch fallback is the design.
       # REDIS_QUEUE_URL intentionally unset.
