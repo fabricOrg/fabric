@@ -54,6 +54,25 @@ async function send(payload: Record<string, unknown>) {
   });
 }
 
+/**
+ * Status PLUS the structured error code, so an assertion failure names WHY the API refused instead
+ * of only that it did. A bare `expect(status).toBe(201)` reports "expected 201, got 400" and throws
+ * the reason away — which is precisely what made this spec's CI flake undiagnosable.
+ */
+function describeResponse(response: {
+  statusCode: number;
+  json: () => unknown;
+}) {
+  const body = (() => {
+    try {
+      return response.json() as { error?: { code?: string } };
+    } catch {
+      return undefined;
+    }
+  })();
+  return { status: response.statusCode, code: body?.error?.code };
+}
+
 async function optOuts(
   method: "GET" | "POST" | "DELETE",
   suffix = "",
@@ -181,19 +200,30 @@ describe("consent / DND enforcement (E10-S5)", () => {
     expect(transactional.statusCode).toBe(201);
   });
 
-  it("quiet hours bind promo only — asserted against the pure window fn (deterministic)", async () => {
-    const open = promoWindowOpen(new Date(), "GH");
+  it("quiet hours bind promo only", async () => {
+    // Sampled BOTH sides of the request. The window is a function of wall-clock time, and the
+    // server re-evaluates it while handling the call — so a single reading taken beforehand can
+    // disagree with the server's if the boundary falls in between. Only assert strictly when both
+    // readings agree; otherwise the run straddled the boundary and proves nothing either way.
+    const openBefore = promoWindowOpen(new Date(), "GH");
     const promo = await send({ class: "promotional", to: `+23320${SUFFIX}2` });
-    if (open) {
-      expect(promo.statusCode).toBe(201);
-    } else {
-      expect(promo.statusCode).toBe(400);
-      expect((promo.json() as { error: { code: string } }).error.code).toBe(
-        "promo_quiet_hours",
-      );
+    const openAfter = promoWindowOpen(new Date(), "GH");
+    if (openBefore === openAfter) {
+      if (openBefore) {
+        expect(describeResponse(promo)).toMatchObject({ status: 201 });
+      } else {
+        expect(describeResponse(promo)).toMatchObject({
+          status: 400,
+          code: "promo_quiet_hours",
+        });
+      }
     }
-    // Transactional never sees the window.
+    // Transactional never sees the window — and asserted through describeResponse so a failure
+    // names the refusing code instead of only its status. This assertion has flaked in CI with a
+    // 400 whose cause was invisible; the prime suspect is a GLOBAL kill-switch
+    // (`platform.sms_sending`) toggled by another spec running in parallel against the same
+    // database, which would surface here as `sms_sending_paused`.
     const otp = await send({ to: `+23320${SUFFIX}3` });
-    expect(otp.statusCode).toBe(201);
+    expect(describeResponse(otp)).toMatchObject({ status: 201 });
   });
 });
