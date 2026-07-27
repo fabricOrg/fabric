@@ -83,6 +83,27 @@ staff-allowlist check anywhere in that path — a staff invitee is silently crea
 tenant. **The provisioning half is unconfirmed in code**; confirm before fixing. Remedy differs:
 redirect-only, versus also refusing self-serve provisioning for allowlisted staff emails.
 
+### Money/pricing: what is actually LEFT
+
+ADR-0010's SMS path is complete and verified. The rest is not:
+
+- **Email cannot spend tokens.** Hold/settle lives only in the sms engine's `prepareSend`; the email
+  accept path still `reserve()`s from the wallet. The purchase endpoint accepted BOTH channels, so an
+  email token took real money for an entitlement nothing could consume — lot unusable, liability
+  never discharging, customer paying twice. **Fenced off in #187** (refuses `token_channel_unavailable`
+  before writing an intent). **Wiring email properly is still to do**: a hold in
+  `email-managed-accept.ts`, settle on the email dispatch resolve path, and the sweeper branch.
+  Worth noting how it hid: contract modelled both channels, everything typechecked, every test
+  passed — nothing asserted that a PURCHASABLE channel must also be SPENDABLE.
+- **Unverified**: whether any email token lots already exist on testing. Almost certainly zero (no
+  token book configured, `/v1/public/pricing` still 404s) — but it is a money question, so check.
+- **Phase 3** dashboard: buy-tokens flow, token balance, plan surface. API exists, no UI.
+- **Phase 4** spend-based auto price-book upgrade (loyalty). **Phase 5** SES adapter.
+- **Breakage recognition** — `token_breakage` enum exists with NO caller. With no expiry, deferred
+  revenue for never-sent tokens sits indefinitely. Finance decision (review §6.5).
+- **Review §6.2 consumption order** — FIFO, resolved by ASSUMPTION not sign-off. Only visible once a
+  tenant holds lots bought at different prices.
+
 ### Also open
 
 - **Two staff actions** to switch features on (both intentionally off — seeding a rate would be the
