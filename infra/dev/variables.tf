@@ -22,6 +22,12 @@ variable "github_environments" {
   default     = ["testing", "testing-dashboard", "testing-admin-console"]
 }
 
+variable "testing_public_cors_origins" {
+  description = "Comma-separated browser origins allowed to read /v1/public/* (the published rate card). The marketing site is a separate Vercel project, not on this AWS edge, so its origin is supplied explicitly. Empty fails closed: the pricing section goes empty rather than the endpoint becoming world-readable."
+  type        = string
+  default     = ""
+}
+
 variable "testing_sms_provider" {
   description = "SMS provider selected in testing. Use arkesel so testing exercises the same provider path as production."
   type        = string
