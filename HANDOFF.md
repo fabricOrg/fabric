@@ -3,7 +3,104 @@
 _Snapshot: 2026-07-25. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-26): token slice 2a MERGED (#175) + two live-use bug fixes (#174)
+## Latest (2026-07-27): ADR-0010 COMPLETE + deployed to testing; the deploy pipeline had never migrated
+
+`dev` carries #172–#185. **All four surfaces deployed green on testing, api included**, and the
+testing database is finally at migration **0094**.
+
+### What shipped
+
+- **ADR-0010 complete end to end.** Phase 1 price books (#172) and the whole Phase 2 token vertical:
+  count layer + grant (#175), hold/commit/return (#176), tokens-first send path (#177), revenue
+  recognition (#178), purchase + admin token books (#179). Money stays in the ONE ledger — purchase
+  credits `token_deferred_revenue` (a liability), consumption discharges it into `revenue` at the
+  lot's **locked** price. Count tables carry no money column, so a count-layer bug cannot mint cash.
+- **www landing repositioning + public rate card (#180).** Headline now leads with the outcome
+  ("Turn product events into customer messages"). Page 15,328px → 7,748px, 16 → 13 sections. The
+  pricing section gained a **working cost calculator**; it previously said "live rates in the
+  dashboard", i.e. sign up to learn the price. Also killed a FALSE claim ("email billed by rendered
+  size") that Phase 1 had already retired.
+- **`GET /v1/public/pricing`** — unauthenticated by design. Guarding it with `BFF_INTERNAL_TOKEN`
+  would put a key that can call `/internal/*` on the marketing site, and www is a static build with
+  nowhere to keep one. Safety is the response SHAPE: no book identity, no tenant, no negotiated
+  rates. Staff flag ONE subscription book `is_public` (DB CHECK forbids a token book being it).
+  Display **fails open** to compiled fallbacks — a stale price beats an error while someone budgets.
+- **Two live-use bug fixes (#174)**: webhook table offered "Disable" on already-disabled endpoints;
+  virtual-phone reply failures reported "data could not be loaded" because bare `throw new Error`s
+  escaped as opaque 500s.
+
+### THE BIG ONE: testing had never been migrated
+
+`deploy-testing.yml` had **no migration step**. The AWS pre-deploy task used to do it; nothing
+replaced it when testing moved to Neon + Render + Vercel. Verified read-only: **0 of 6** pricing/token
+tables existed and `accounts.price_book_id` was absent — every migration from **0087** was missing
+while the api that queries them deployed happily. That, not any UI bug, is why admin **Pricing** and
+**Tenants** were erroring.
+
+Fixed by a `migrate-testing` job that `deploy-api-render` **depends on**, so the api can never again
+start against a schema it lacks (it correctly stayed `skipped` through five failed attempts). It
+**fails loudly** on missing secrets rather than skipping — a quiet skip is what hid this.
+
+**Six Neon-vs-RDS differences surfaced, one per deploy** (`cloud-migrate` was written for RDS):
+
+| # | Failure | Fix |
+|---|---|---|
+| 1 | `@app/domain` unresolvable | `prebuild` in www (#181) |
+| 2 | `TypeError: Invalid URL` | `??` misses empty-string env (#182) |
+| 3 | `permission denied to alter role` | tolerate **only** `42501` (#183) |
+| 4 | `app_migrator failed least-privilege` | **`neon roles create` grants `neon_superuser`** — delete it, let migrate create it |
+| 5 | `permission denied for schema drizzle` | hand the bookkeeping schema over (#184) |
+| 6 | `must be owner of table` | `REASSIGN OWNED` — schema owner ≠ table owner (#185) |
+
+**Lesson worth keeping: local state masked CI reality every time** (prebuilt `dist`, populated env
+vars, a Postgres allowing `ALTER ROLE`). Reproduce cold before believing a fix. The loop only broke
+when we ran `cloud:migrate` **locally against Neon** and surfaced the rest in one pass.
+
+### Neon facts (project `dry-recipe-09519949`, branch `production`, db `neondb`)
+
+- **Single branch — testing and production share it.**
+- Roles: `neondb_owner` (admin, `createRole`), `app_migrator` (created BY migrate, least-privileged),
+  `app_runtime` + `app_provisioner` (`rolbypassrls = false` — tenant RLS depends on this).
+- **Never point `DATABASE_URL_APP` at `neondb_owner`**: it has `bypassRls`, which silently disables
+  tenant isolation. The four URLs cannot be collapsed.
+- **Do NOT create `app_migrator` via the Neon CLI** — Neon grants it `neon_superuser` and the
+  least-privilege assertion rejects it.
+- Connection strings contain `&`; **quote them** in env files or the shell truncates at the ampersand.
+
+### Deployed state
+
+api `fabric-jezz.onrender.com` ✅ · www / dashboard / admin-console on Vercel ✅ · schema at 0094 ✅
+(verified independently: 6/6 tables, `accounts.price_book_id`, `price_books.is_public`,
+`messages.backing`, 6 RLS policies).
+
+### NEXT: the staff-invite bug (investigated, NOT fixed)
+
+A stakeholder invited to the **admin console** landed in the **customer dashboard** and got an
+account. Mechanism found: `staff.service.ts` calls `userManagement.sendInvitation({ email })` with
+**no admin-console destination**, so the invite lands on WorkOS's default redirect (the dashboard).
+Then the customer realm **self-serve provisions on first login** (ADR-0002/0004) and — grep found no
+staff-allowlist check anywhere in that path — a staff invitee is silently created as a CUSTOMER
+tenant. **The provisioning half is unconfirmed in code**; confirm before fixing. Remedy differs:
+redirect-only, versus also refusing self-serve provisioning for allowlisted staff emails.
+
+### Also open
+
+- **Two staff actions** to switch features on (both intentionally off — seeding a rate would be the
+  fabricated pricing ADR-0010 §11 forbids): flag a subscription book `is_public`; create a
+  token-mode book so `POST /v1/tokens/purchase` stops returning `token_price_unavailable`.
+- **Set `PUBLIC_API_URL` + `PUBLIC_DASHBOARD_URL`** in the www Vercel project. Both are baked at
+  build time and fall back to **testing** hosts, so a production deploy that omits them silently
+  points pricing and every CTA at testing.
+- **Stale AWS "Deploy" workflow** still fails every push with `Could not assume role with OIDC`.
+  Pre-existing; decide whether to delete or repoint it.
+- **Admin console is off-standard**: pages render bare `<p>` errors while `packages/ui` ships
+  `ErrorState`/`EmptyState`.
+- **`.env.migrate.local`** (gitignored) holds local migration URLs incl. an `app_migrator` password
+  generated locally; CI's `ALTER ROLE` should have reset it to the GitHub secret value.
+- Landing-page brief only part-delivered: card reduction, more product surfaces, keynote pacing and
+  the "remove anything generic" sweep are untouched.
+
+## Earlier (2026-07-26): token slice 2a MERGED (#175) + two live-use bug fixes (#174)
 
 `dev` at `9943446`. Phase 2 is under way; the review (#173) was signed off on §2 (one-ledger) and
 §6.3 (counter granularity).
