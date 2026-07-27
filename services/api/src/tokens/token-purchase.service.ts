@@ -97,6 +97,18 @@ export class TokenPurchaseService {
       );
     }
     const creds = this.creds();
+    // Only SMS can SPEND tokens today: the hold/settle path lives in the sms engine's prepareSend,
+    // while the email accept path still reserves from the wallet directly. Selling an email token
+    // would take money for an entitlement that can never be consumed — the lot would sit unusable,
+    // the deferred-revenue liability would never discharge, and the customer would pay twice (once
+    // for tokens, then per email from the wallet). Refuse until the email send path consumes tokens.
+    if (request.channel !== "sms") {
+      throw invalidRequest(
+        "token_channel_unavailable",
+        "Tokens are only available for SMS today. Email sends bill from the wallet.",
+        "channel",
+      );
+    }
     const unitPrice = await this.resolveTokenPrice(
       request.channel,
       request.currency,

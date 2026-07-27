@@ -263,6 +263,31 @@ describeDb("token purchase", () => {
       WHERE price_book_id = ${tokenBookId}::uuid AND channel = 'sms' AND currency = 'GHS'`;
   });
 
+  it("refuses to sell EMAIL tokens, which no send path can spend", async () => {
+    const tenant = await makeTenant();
+    await ensureTokenBook(7n);
+
+    // Only the sms engine holds/settles tokens; the email accept path still reserves from the
+    // wallet. Selling an email token would take money for an entitlement that can never be
+    // consumed — an undischargeable liability, and the customer pays twice.
+    await expect(
+      service.initiate(tenant, {
+        channel: "email",
+        quantity: 100,
+        currency: "GHS",
+        email: "buyer@example.com",
+      }),
+    ).rejects.toMatchObject({
+      response: { error: { code: "token_channel_unavailable" } },
+    });
+
+    // No intent, so no webhook can later grant against it.
+    const rows = (await owner`
+      SELECT count(*)::int AS n FROM token_purchases
+      WHERE tenant_id = ${tenant}::uuid`) as { n: number }[];
+    expect(rows[0]?.n).toBe(0);
+  });
+
   it("refuses a currency the token book does not price", async () => {
     const tenant = await makeTenant();
     await ensureTokenBook(7n); // GHS only
