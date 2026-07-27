@@ -2,6 +2,7 @@ import { buildLogout, handleUserCallback } from "@app/fe-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import {
   AUTH_NOTICE_COOKIE,
+  adminConsoleUrl,
   customerRealmConfig,
   noticeCookieOptions,
   OAUTH_STATE_COOKIE,
@@ -28,6 +29,29 @@ export async function GET(request: NextRequest) {
       customerRealmConfig(),
       { code, state, expectedState },
     );
+
+    // A Fabric OPERATOR with no customer workspace: they got here because staff invitations are
+    // sent through the same WorkOS app as customer ones and carry no per-invite redirect. Sending
+    // them to /onboarding is how staff ended up creating stray customer tenants they never wanted,
+    // in a product they can't administer. Forward them to the console instead — the WorkOS session
+    // is deliberately left alive (not logged out) so the console's own OAuth hop completes
+    // silently. Staff who ALSO hold a membership fall through and use the dashboard normally.
+    if (session?.staffRealm && session.memberships.length === 0) {
+      const consoleUrl = adminConsoleUrl("/signin");
+      const response = NextResponse.redirect(
+        consoleUrl ?? redirectUrl("/signin?error=staff_account", request),
+      );
+      response.cookies.delete(OAUTH_STATE_COOKIE);
+      // Drop any dashboard session left from a PREVIOUS identity. We mint none for this one, and a
+      // surviving cookie would both defeat the /signin fallback (that page sends an already-
+      // signed-in visitor straight to "/") and leave the operator inside someone else's workspace
+      // after what was, to them, a fresh sign-in. Clearing OUR sealed cookie does not end the
+      // session at WorkOS — that lives on their domain and only buildLogout ends it — so the
+      // console's OAuth hop still completes silently, which is why we don't call it here.
+      response.cookies.delete(WORKOS_COOKIE);
+      response.cookies.delete(WORKSPACE_COOKIE);
+      return response;
+    }
 
     if (session && sealedCookie) {
       const single =

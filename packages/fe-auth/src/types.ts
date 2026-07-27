@@ -114,6 +114,12 @@ export interface UserSession {
   readonly emailVerified: boolean;
   readonly name: string | null;
   readonly memberships: readonly WorkspaceMembershipClaim[];
+  /**
+   * This identity is also on the STAFF allowlist. Purely a ROUTING hint (both realms share one
+   * WorkOS app, so staff invitations land on the customer callback) — it grants nothing here, and
+   * the admin console re-reads the allowlist for its own authorization.
+   */
+  readonly staffRealm: boolean;
   readonly sessionId: string;
 }
 

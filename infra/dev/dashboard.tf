@@ -84,6 +84,10 @@ resource "aws_ecs_task_definition" "dashboard" {
         # The dashboard's OWN public origin. Behind API Gateway + VPC Link the container sees the
         # internal host as request.url, so auth redirects + the trusted-origin check must use this.
         { name = "DASHBOARD_BASE_URL", value = "https://${aws_cloudfront_distribution.testing_edge["dashboard"].domain_name}" },
+        # Staff invitations travel through the SAME WorkOS app as customer ones and carry no
+        # per-invite redirect, so an operator's accept link lands on the dashboard. The callback
+        # forwards them here instead of into the customer onboarding wizard.
+        { name = "ADMIN_CONSOLE_BASE_URL", value = "https://${aws_cloudfront_distribution.testing_edge["admin_console"].domain_name}" },
       ]
       secrets = [
         {

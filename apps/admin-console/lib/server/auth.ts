@@ -51,24 +51,36 @@ export function redirectUrl(path: string, _request?: { url: string }): URL {
 }
 
 /**
- * The admin console shares ONE WorkOS AuthKit app with the customer dashboard (the shared
- * WORKOS_CLIENT_ID). `authenticateWithCode` requires the client id and the API key (client secret)
- * to belong to the SAME app; the separate admin app was never provisioned with its own key, so
- * using its client id against the shared key broke the OAuth code exchange. The admin's redirect
- * URIs are registered on the shared app. WORKOS_ADMIN_CLIENT_ID stays as an override hook for the
- * day the admin app gets its own key — leave it unset to use the shared, working client.
+ * WorkOS API keys are scoped PER AuthKit APPLICATION, not per environment, and
+ * `authenticateWithCode` requires the client id and the key to belong to the same one. The "Fabric
+ * Admin Console" application exists with its own client id but has never been issued a key, so the
+ * console borrows the customer dashboard's working pair — which is why the console's callback URIs
+ * are registered on the DASHBOARD application's redirect list.
+ *
+ * The override is deliberately a PAIR: a client id without its matching key is exactly the
+ * mis-pairing that breaks the code exchange, so setting one alone changes nothing. Provision a key
+ * for the admin application, set BOTH, and the console stops borrowing — after which the two admin
+ * URIs should be removed from the dashboard application, so a customer-app code can no longer be
+ * redirected to the staff origin.
  */
-function staffClientId(): string {
-  return (
-    process.env.WORKOS_ADMIN_CLIENT_ID || process.env.WORKOS_CLIENT_ID || ""
-  );
+function staffCredentials(): { clientId: string; apiKey: string } {
+  const adminClientId = process.env.WORKOS_ADMIN_CLIENT_ID?.trim();
+  const adminApiKey = process.env.WORKOS_ADMIN_API_KEY?.trim();
+  if (adminClientId && adminApiKey) {
+    return { clientId: adminClientId, apiKey: adminApiKey };
+  }
+  return {
+    clientId: process.env.WORKOS_CLIENT_ID ?? "",
+    apiKey: process.env.WORKOS_API_KEY ?? "",
+  };
 }
 
 /** No WORKOS_ORGANIZATION_ID (staff aren't org-scoped); BFF token is needed for the staff-session call. */
 export function workosAuthConfigured(): boolean {
+  const { clientId, apiKey } = staffCredentials();
   return (
-    Boolean(process.env.WORKOS_API_KEY) &&
-    Boolean(staffClientId()) &&
+    Boolean(apiKey) &&
+    Boolean(clientId) &&
     Boolean(process.env.WORKOS_COOKIE_PASSWORD) &&
     Boolean(process.env.BFF_INTERNAL_TOKEN)
   );
@@ -79,10 +91,11 @@ export function staffRealmConfig(): RealmConfig {
     throw new Error("The staff WorkOS realm is not fully configured.");
   }
   const base = appBaseUrl();
+  const { clientId, apiKey } = staffCredentials();
   return {
     realm: "staff",
-    apiKey: process.env.WORKOS_API_KEY ?? "",
-    clientId: staffClientId(),
+    apiKey,
+    clientId,
     cookieName: WORKOS_COOKIE,
     cookiePassword: process.env.WORKOS_COOKIE_PASSWORD ?? "",
     redirectUri: `${base}/auth/callback`,
