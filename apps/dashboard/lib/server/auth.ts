@@ -44,6 +44,22 @@ function appBaseUrl(): string {
   ).replace(/\/$/, "");
 }
 
+/**
+ * Absolute URL on the ADMIN CONSOLE's origin, or null when we don't know it. Both realms share one
+ * WorkOS AuthKit app and `sendInvitation` carries no per-invite redirect, so a staff invitation's
+ * accept link lands on THIS app — the callback needs somewhere to forward operators to. Returns
+ * null rather than guessing in production: a wrong absolute redirect is worse than an in-app
+ * explanation, so the caller falls back to a /signin notice.
+ */
+export function adminConsoleUrl(path: string): string | null {
+  const base = (
+    process.env.ADMIN_CONSOLE_BASE_URL?.trim() ||
+    (process.env.NODE_ENV === "production" ? "" : "http://localhost:3300")
+  ).replace(/\/$/, "");
+  if (!base) return null;
+  return new URL(path, base).toString();
+}
+
 export function workosAuthConfigured(): boolean {
   // WORKOS_ORGANIZATION_ID is no longer required: logins are unpinned (ADR-0002) and the org is
   // resolved per identity — existing membership or self-serve sandbox provisioning.

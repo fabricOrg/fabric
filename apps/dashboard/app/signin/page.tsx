@@ -50,6 +50,14 @@ const ERROR_COPY: Record<string, Banner> = {
     title: "Session expired",
     description: "Your session ended. Sign in again to continue.",
   },
+  // Shown only when the console's URL isn't configured here; normally the callback forwards
+  // operators straight to it rather than landing them back on this page.
+  staff_account: {
+    variant: "default",
+    title: "That's a Fabric staff account",
+    description:
+      "Sign in at the Fabric admin console instead. To use the dashboard, sign in with a workspace account.",
+  },
 };
 
 const NOTICE_COPY: Record<string, Banner> = {

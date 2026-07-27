@@ -60,6 +60,7 @@ export async function resolveUserSessionV2(
     email: parsed.email,
     name: parsed.name,
     sessionId: parsed.session_id,
+    staffRealm: parsed.staff_realm,
     memberships: parsed.memberships.map((membership) => ({
       tenantId: membership.tenant_id,
       workspaceName: membership.workspace_name,

@@ -3,7 +3,201 @@
 _Snapshot: 2026-07-25. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-26): token slice 2a MERGED (#175) + two live-use bug fixes (#174)
+## Latest (2026-07-27): ADR-0010 COMPLETE + deployed to testing; the deploy pipeline had never migrated
+
+`dev` carries #172–#185. **All four surfaces deployed green on testing, api included**, and the
+testing database is finally at migration **0094**.
+
+### What shipped
+
+- **ADR-0010 complete end to end.** Phase 1 price books (#172) and the whole Phase 2 token vertical:
+  count layer + grant (#175), hold/commit/return (#176), tokens-first send path (#177), revenue
+  recognition (#178), purchase + admin token books (#179). Money stays in the ONE ledger — purchase
+  credits `token_deferred_revenue` (a liability), consumption discharges it into `revenue` at the
+  lot's **locked** price. Count tables carry no money column, so a count-layer bug cannot mint cash.
+- **www landing repositioning + public rate card (#180).** Headline now leads with the outcome
+  ("Turn product events into customer messages"). Page 15,328px → 7,748px, 16 → 13 sections. The
+  pricing section gained a **working cost calculator**; it previously said "live rates in the
+  dashboard", i.e. sign up to learn the price. Also killed a FALSE claim ("email billed by rendered
+  size") that Phase 1 had already retired.
+- **`GET /v1/public/pricing`** — unauthenticated by design. Guarding it with `BFF_INTERNAL_TOKEN`
+  would put a key that can call `/internal/*` on the marketing site, and www is a static build with
+  nowhere to keep one. Safety is the response SHAPE: no book identity, no tenant, no negotiated
+  rates. Staff flag ONE subscription book `is_public` (DB CHECK forbids a token book being it).
+  Display **fails open** to compiled fallbacks — a stale price beats an error while someone budgets.
+- **Two live-use bug fixes (#174)**: webhook table offered "Disable" on already-disabled endpoints;
+  virtual-phone reply failures reported "data could not be loaded" because bare `throw new Error`s
+  escaped as opaque 500s.
+
+### THE BIG ONE: testing had never been migrated
+
+`deploy-testing.yml` had **no migration step**. The AWS pre-deploy task used to do it; nothing
+replaced it when testing moved to Neon + Render + Vercel. Verified read-only: **0 of 6** pricing/token
+tables existed and `accounts.price_book_id` was absent — every migration from **0087** was missing
+while the api that queries them deployed happily. That, not any UI bug, is why admin **Pricing** and
+**Tenants** were erroring.
+
+Fixed by a `migrate-testing` job that `deploy-api-render` **depends on**, so the api can never again
+start against a schema it lacks (it correctly stayed `skipped` through five failed attempts). It
+**fails loudly** on missing secrets rather than skipping — a quiet skip is what hid this.
+
+**Six Neon-vs-RDS differences surfaced, one per deploy** (`cloud-migrate` was written for RDS):
+
+| # | Failure | Fix |
+|---|---|---|
+| 1 | `@app/domain` unresolvable | `prebuild` in www (#181) |
+| 2 | `TypeError: Invalid URL` | `??` misses empty-string env (#182) |
+| 3 | `permission denied to alter role` | tolerate **only** `42501` (#183) |
+| 4 | `app_migrator failed least-privilege` | **`neon roles create` grants `neon_superuser`** — delete it, let migrate create it |
+| 5 | `permission denied for schema drizzle` | hand the bookkeeping schema over (#184) |
+| 6 | `must be owner of table` | `REASSIGN OWNED` — schema owner ≠ table owner (#185) |
+
+**Lesson worth keeping: local state masked CI reality every time** (prebuilt `dist`, populated env
+vars, a Postgres allowing `ALTER ROLE`). Reproduce cold before believing a fix. The loop only broke
+when we ran `cloud:migrate` **locally against Neon** and surfaced the rest in one pass.
+
+### Neon facts (project `dry-recipe-09519949`, branch `production`, db `neondb`)
+
+- **Single branch — testing and production share it.**
+- Roles: `neondb_owner` (admin, `createRole`), `app_migrator` (created BY migrate, least-privileged),
+  `app_runtime` + `app_provisioner` (`rolbypassrls = false` — tenant RLS depends on this).
+- **Never point `DATABASE_URL_APP` at `neondb_owner`**: it has `bypassRls`, which silently disables
+  tenant isolation. The four URLs cannot be collapsed.
+- **Do NOT create `app_migrator` via the Neon CLI** — Neon grants it `neon_superuser` and the
+  least-privilege assertion rejects it.
+- Connection strings contain `&`; **quote them** in env files or the shell truncates at the ampersand.
+
+### Deployed state
+
+api `fabric-jezz.onrender.com` ✅ · www / dashboard / admin-console on Vercel ✅ · schema at 0094 ✅
+(verified independently: 6/6 tables, `accounts.price_book_id`, `price_books.is_public`,
+`messages.backing`, 6 RLS policies).
+
+### The staff-invite bug — FIXED (2026-07-27, local, unpushed)
+
+A stakeholder invited to the **admin console** landed in the **customer dashboard** and got an
+account. **Two claims in the previous entry were wrong — don't repeat them:**
+
+- ✗ "add an admin-console destination to `sendInvitation`". `SendInvitationOptions` (@workos-inc/node
+  10.8.0) is `{ email, organizationId?, expiresInDays?, inviterUserId?, roleSlug?, locale? }` —
+  **there is no redirect/destination field.** Nothing configurable in WorkOS fixes this.
+- ✗ "the invitee is silently created as a CUSTOMER tenant". `UserSessionService.resolve` creates only
+  a bare `users` row with **zero memberships**. The tenant appears only if the person then completes
+  the onboarding form, which `createWorkspace` obliges (no allowlist check there — still true).
+
+**Verified against the live WorkOS account (read-only MCP).** Staging holds THREE AuthKit
+applications, not one: Customer Dashboard (`client_01KWP2NBN6…`, **isDefault**, and the only app
+with an API key), Admin Console (`client_01KX21AVNE…`, **zero keys**), Developer Portal
+(`client_01KX225M73…`, zero keys). WorkOS API keys are scoped **per application**, so the console
+borrows the dashboard's pair — which is why `fabric-admin-console.vercel.app/auth/callback` and
+`localhost:3300/auth/callback` are registered on the **dashboard** application's redirect list. The
+customer app will hand an OAuth code to the staff origin. Invitations are issued by the DEFAULT
+application, so a staff invite always lands on the dashboard callback.
+
+**Fix — routing, in our callback.** resolve-v2 reports `staff_realm` (allowlist match, ROUTING ONLY,
+never an authz signal; `z.boolean().default(false)` so a dashboard deployed ahead of the API keeps
+today's behaviour). Both dashboard landing paths — OAuth callback and the ADR-0008 credential path —
+send a staff identity with **zero memberships** to the admin console, mint no dashboard session, and
+clear any session left by a previous identity (a survivor skipped the `/signin` fallback, since that
+page redirects an already-signed-in visitor to `/`, and dropped the operator into someone else's
+workspace). The WorkOS session is deliberately NOT ended — the console's OAuth hop needs it. Staff
+who also hold a membership fall through and use the dashboard normally.
+
+Touched: `packages/contracts/src/identity.ts`, `services/api/src/identity/user-session.service.ts`,
+`packages/fe-auth/src/types.ts`, `apps/dashboard/{app/auth/callback/route.ts,
+lib/server/{auth,identity-client,credential-landing}.ts, app/signin/page.tsx}`, `.env.example`,
+`infra/dev/dashboard.tf`. New: `ADMIN_CONSOLE_BASE_URL` on the dashboard (returns null rather than
+guessing in prod → in-app `staff_account` notice). Also made the admin override a PAIR —
+`WORKOS_ADMIN_CLIENT_ID` + `WORKOS_ADMIN_API_KEY` only take effect together, because a client id
+without its matching key IS the mis-pairing that breaks the code exchange.
+
+Gates: `pnpm typecheck` exit 0; dashboard 79 tests, contracts 71 — both green (5 + 2 new).
+Codex read-only review: one Medium (the stale-cookie hole above) fixed, one Low (coverage) closed.
+
+**Still open, needs a human — ordered so nothing breaks:** ① mint an API key for the Fabric Admin
+Console app (`app_01KX21AVNEXG01Q9S1AFD81Q1N`) — a credential creation, so not an agent action;
+② set both admin env vars on the console only; ③ verify staff sign-in; ④ THEN remove
+`redir_01KXTFRZZMM7W51ARE49TMJ11E` + `redir_01KXTFRZZNKGMZCZ8YM8MS0SDJ` from the dashboard app.
+Doing ④ first locks every operator out. None of this replaces the routing fix — invitations carry no
+application, so staff invites keep landing on the dashboard regardless.
+
+Also unset: `ADMIN_CONSOLE_BASE_URL` on the dashboard's **Vercel** project
+(`https://fabric-admin-console.vercel.app`) — not in the repo, so it must be set there.
+
+### Live SMS pilot — ON HOLD (scaffolding local + unpushed, nothing sent)
+
+Held 2026-07-27: the sender ID has to clear Arkesel first (see the carrier-approval gap below), so
+the scaffolding below stays in the working tree and is deliberately NOT part of the auth-fix PR.
+
+`scripts/dev/seed-live-sms.ts` + `pnpm dev:seed:live-sms` provision a LOCAL live-capable tenant
+(plan `growth`, active live environment, `sk_live_` key, sender approved locally, GHS 200 credited).
+Needed because the normal dev seed is plan `sandbox`, and a sandbox ENVIRONMENT is hard-pinned to
+the virtual phone (ADR-0004) — it can never reach a carrier. `.env.live-sms` holds the run config
+(gitignored via `.env.*`).
+
+The existing rails already implement the live-pinning directive: `SMS_LIVE_RECIPIENT_ALLOWLIST`
+refuses any live send to a number not on it. Pinned to `+233545227189`.
+
+Blocked on three human steps: `infisical login` (session expired — the seed's DB auth failed because
+`.env`'s DB passwords are stale and the real ones are in Infisical), an Arkesel-approved sender ID
+(`Fabric`; carrier approval is not instant), and the Arkesel key pasted into `.env.live-sms`.
+
+**Carrier-approval gap found while scoping this.** Arkesel exposes **no sender-ID registration
+endpoint** (v2 is send / DLR / OTP / contacts / balance; registration is a dashboard action plus
+network-level operator registration), and `SmsSenderPlugin` has no registration method either. So
+our `senders` table is a purely LOCAL record: an operator can mark a sender `active` in Fabric while
+Arkesel has never approved it — `assertSendCompliant` passes, Arkesel then rejects with `PROHIBITED`
+→ mapped `failed` → reservation refunded. Money is safe; the dashboard lies. Worth deciding whether
+the admin console should distinguish *Fabric-approved* from *carrier-approved*, because today one
+implies the other and that isn't true.
+
+Launch, once unblocked — note the `env` prefix goes AFTER `infisical run`, because Infisical's
+values override the parent env and Node's `--env-file` cannot override an already-set var (verified):
+
+```
+infisical run --env=dev -- env SMS_PROVIDER=arkesel ARKESEL_SANDBOX=false \
+  ARKESEL_API_KEY=… SMS_LIVE_RECIPIENT_ALLOWLIST=+233545227189 pnpm dev:api
+```
+
+### Money/pricing: what is actually LEFT
+
+ADR-0010's SMS path is complete and verified. The rest is not:
+
+- **Email cannot spend tokens.** Hold/settle lives only in the sms engine's `prepareSend`; the email
+  accept path still `reserve()`s from the wallet. The purchase endpoint accepted BOTH channels, so an
+  email token took real money for an entitlement nothing could consume — lot unusable, liability
+  never discharging, customer paying twice. **Fenced off in #187** (refuses `token_channel_unavailable`
+  before writing an intent). **Wiring email properly is still to do**: a hold in
+  `email-managed-accept.ts`, settle on the email dispatch resolve path, and the sweeper branch.
+  Worth noting how it hid: contract modelled both channels, everything typechecked, every test
+  passed — nothing asserted that a PURCHASABLE channel must also be SPENDABLE.
+- **Unverified**: whether any email token lots already exist on testing. Almost certainly zero (no
+  token book configured, `/v1/public/pricing` still 404s) — but it is a money question, so check.
+- **Phase 3** dashboard: buy-tokens flow, token balance, plan surface. API exists, no UI.
+- **Phase 4** spend-based auto price-book upgrade (loyalty). **Phase 5** SES adapter.
+- **Breakage recognition** — `token_breakage` enum exists with NO caller. With no expiry, deferred
+  revenue for never-sent tokens sits indefinitely. Finance decision (review §6.5).
+- **Review §6.2 consumption order** — FIFO, resolved by ASSUMPTION not sign-off. Only visible once a
+  tenant holds lots bought at different prices.
+
+### Also open
+
+- **Two staff actions** to switch features on (both intentionally off — seeding a rate would be the
+  fabricated pricing ADR-0010 §11 forbids): flag a subscription book `is_public`; create a
+  token-mode book so `POST /v1/tokens/purchase` stops returning `token_price_unavailable`.
+- **Set `PUBLIC_API_URL` + `PUBLIC_DASHBOARD_URL`** in the www Vercel project. Both are baked at
+  build time and fall back to **testing** hosts, so a production deploy that omits them silently
+  points pricing and every CTA at testing.
+- **Stale AWS "Deploy" workflow** still fails every push with `Could not assume role with OIDC`.
+  Pre-existing; decide whether to delete or repoint it.
+- **Admin console is off-standard**: pages render bare `<p>` errors while `packages/ui` ships
+  `ErrorState`/`EmptyState`.
+- **`.env.migrate.local`** (gitignored) holds local migration URLs incl. an `app_migrator` password
+  generated locally; CI's `ALTER ROLE` should have reset it to the GitHub secret value.
+- Landing-page brief only part-delivered: card reduction, more product surfaces, keynote pacing and
+  the "remove anything generic" sweep are untouched.
+
+## Earlier (2026-07-26): token slice 2a MERGED (#175) + two live-use bug fixes (#174)
 
 `dev` at `9943446`. Phase 2 is under way; the review (#173) was signed off on §2 (one-ledger) and
 §6.3 (counter granularity).

@@ -36,6 +36,31 @@ describe("identity session contract (ADR-0007 resolve-v2)", () => {
     ).toBe(false);
   });
 
+  it("defaults staff_realm to false when the API omits it", () => {
+    // Compatibility direction that matters: a dashboard deployed AHEAD of the API must fall back to
+    // today's onboarding behaviour, never infer staff routing from a missing field.
+    const parsed = resolveUserSessionResponseSchema.parse({
+      user_id: "10000000-0000-4000-8000-000000000001",
+      email: "owner@example.com",
+      name: null,
+      memberships: [],
+      session_id: "session_compat",
+    });
+    expect(parsed.staff_realm).toBe(false);
+  });
+
+  it("carries staff_realm through when the API reports an allowlist match", () => {
+    const parsed = resolveUserSessionResponseSchema.parse({
+      user_id: "10000000-0000-4000-8000-000000000001",
+      email: "operator@example.com",
+      name: null,
+      memberships: [],
+      staff_realm: true,
+      session_id: "session_staff",
+    });
+    expect(parsed.staff_realm).toBe(true);
+  });
+
   it("normalizes the legacy developer role on the wire", () => {
     const parsed = resolveUserSessionResponseSchema.parse({
       user_id: "10000000-0000-4000-8000-000000000001",
