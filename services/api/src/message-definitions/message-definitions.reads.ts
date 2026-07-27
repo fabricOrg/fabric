@@ -15,6 +15,7 @@ import {
   type TenantId,
 } from "@app/db";
 import { and, desc, eq } from "drizzle-orm";
+import { primaryApplicationId } from "../applications/primary-application.js";
 import { invalidRequest } from "../http/api-error.js";
 import {
   toDefinitionDto,
@@ -32,15 +33,27 @@ export async function resolveApplicationId(
   tenantId: string,
   applicationId?: string,
 ): Promise<string> {
+  // No explicit application → the workspace's primary one. This used to pin the slug `default`,
+  // which a workspace is not obliged to have; such a workspace could not read its own definitions.
+  if (!applicationId) {
+    const primary = await primaryApplicationId(tx, tenantId);
+    if (!primary) {
+      throw invalidRequest(
+        "application_not_found",
+        "This workspace has no applications yet.",
+        "application_id",
+      );
+    }
+    return primary;
+  }
+
   const [app] = await tx
     .select({ id: applications.id })
     .from(applications)
     .where(
       and(
         eq(applications.tenantId, tenantId as TenantId),
-        applicationId
-          ? eq(applications.id, applicationId as ApplicationId)
-          : eq(applications.slug, "default"),
+        eq(applications.id, applicationId as ApplicationId),
       ),
     )
     .limit(1);

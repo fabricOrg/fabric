@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { VirtualPhoneReplyResponse } from "@app/contracts";
 import type { AppDb } from "@app/db";
 import type { ConfigService } from "@nestjs/config";
+import { primaryApplicationIdFor } from "../applications/primary-application.js";
 import type { AuditService } from "../audit/audit.service.js";
 import { hashMsisdn, maskMsisdn } from "../consent/msisdn.js";
 import { invalidRequest } from "../http/api-error.js";
@@ -43,23 +44,28 @@ export async function recordVirtualReply(input: {
   const keyword = ["STOP", "START", "HELP"].includes(normalized)
     ? (normalized as "STOP" | "START" | "HELP")
     : null;
+  // Which application a virtual reply belongs to when the caller names none. Resolved here rather
+  // than pinned to the slug `default` in the query below: a workspace whose only application is
+  // named anything else is perfectly legal, and used to fail this path outright.
+  const applicationId = await primaryApplicationIdFor(input.db, input.tenantId);
   const result = await input.db.withTenant(input.tenantId, async (tx) => {
     const contexts = (await tx`
       SELECT a.id AS application_id, e.id AS environment_id
       FROM applications a
       JOIN environments e ON e.application_id = a.id AND e.tenant_id = a.tenant_id
       WHERE a.tenant_id = current_setting('app.tenant_id')::uuid
-        AND a.slug = 'default' AND e.type = 'sandbox'
+        AND a.id = ${applicationId} AND e.type = 'sandbox'
       LIMIT 1`) as Row[];
     const context = contexts[0];
     if (!context) {
       // A bare `throw new Error` here surfaced as an opaque 500 the dashboard could only render as
-      // a generic "could not be loaded" — the reply is inbound-only, so the real cause (this
-      // workspace has no default application with a sandbox environment) was invisible. Structured
-      // + stable so the UI can branch and the operator knows what to provision.
+      // a generic "could not be loaded" — the reply is inbound-only, so the real cause was
+      // invisible. Structured + stable so the UI can branch and the operator knows what to
+      // provision. Reaching this now means either no applications at all, or none with a sandbox
+      // environment — both are genuine provisioning gaps rather than a naming mismatch.
       throw invalidRequest(
         "sandbox_environment_missing",
-        "This workspace has no default application with a sandbox environment, so a virtual reply cannot be recorded.",
+        "This workspace has no application with a sandbox environment, so a virtual reply cannot be recorded.",
       );
     }
     const inserted = (await tx`

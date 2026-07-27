@@ -1,5 +1,6 @@
 import type { AppDb } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
+import { primaryApplicationIdFor } from "../applications/primary-application.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest } from "../http/api-error.js";
 import {
@@ -121,29 +122,28 @@ export class ApiKeyService {
         : null;
     // ADR-0004: a key is minted INTO a specific application's environment. When the caller names an
     // application (the dashboard's app-detail page), mint into IT; otherwise the workspace's
-    // `default` app (operator / legacy path). The env is chosen by the requested key type
+    // PRIMARY application (operator / legacy path). The env is chosen by the requested key type
     // (test -> sandbox, live -> live); the environment row is the single source of truth for whether
     // live keys are allowed — superseding the old accounts.plan check.
+    //
+    // The fallback used to pin the slug `default`, which a workspace is not obliged to have: one
+    // created through the API carries its own slug, and this path then failed with an error blaming
+    // provisioning for a perfectly legal shape.
     const envType = input.env === "live" ? "live" : "sandbox";
+    const applicationId =
+      input.applicationId ?? (await primaryApplicationIdFor(this.db, tenantId));
     const id = await this.db.withTenant(tenantId, async (tx) => {
-      const envRows = (await (input.applicationId
-        ? tx`
+      const envRows = (await tx`
         SELECT e.id, e.status
         FROM environments e
         JOIN applications a ON a.id = e.application_id
-        WHERE a.tenant_id = ${tenantId} AND a.id = ${input.applicationId} AND e.type = ${envType}
-        LIMIT 1`
-        : tx`
-        SELECT e.id, e.status
-        FROM environments e
-        JOIN applications a ON a.id = e.application_id
-        WHERE a.tenant_id = ${tenantId} AND a.slug = 'default' AND e.type = ${envType}
-        LIMIT 1`)) as Array<{ id: string; status: string }>;
+        WHERE a.tenant_id = ${tenantId} AND a.id = ${applicationId} AND e.type = ${envType}
+        LIMIT 1`) as Array<{ id: string; status: string }>;
       const env = envRows[0];
       if (!env) {
         // A named application that has no such env → the caller referenced an app that isn't in this
-        // workspace (RLS already scopes the join). Without one, the default app is missing — a
-        // provisioning bug (provisioning + the backfill both create it), so fail loud.
+        // workspace (RLS already scopes the join). Unnamed means the workspace has no application
+        // with this environment at all — a genuine provisioning gap, so fail loud.
         if (input.applicationId) {
           throw invalidRequest(
             "application_not_found",
@@ -152,7 +152,7 @@ export class ApiKeyService {
           );
         }
         throw new Error(
-          `workspace ${tenantId} has no default '${envType}' environment`,
+          `workspace ${tenantId} has no application with a '${envType}' environment`,
         );
       }
       // ADR-0002 F3 gate, now keyed on the environment: live keys only once go-live has unlocked
