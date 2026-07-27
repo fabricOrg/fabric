@@ -666,6 +666,20 @@
       "when": 1785066647361,
       "tag": "0094_mature_bromley",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1785187445188,
+      "tag": "0095_minor_vivisector",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1785187446188,
+      "tag": "0096_plugin_credentials_grants",
+      "breakpoints": true
     }
   ]
 }

@@ -8,7 +8,7 @@ import {
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
-import { timestamps } from "./_shared.js";
+import { bytea, timestamps } from "./_shared.js";
 
 /**
  * INTEGRATION PLUGINS — PLATFORM-level provider registry (see docs/INTEGRATIONS-PLUGIN-ARCHITECTURE.md).
@@ -54,3 +54,44 @@ export const pluginInstances = pgTable(
 
 export type PluginInstanceRow = typeof pluginInstances.$inferSelect;
 export type NewPluginInstance = typeof pluginInstances.$inferInsert;
+
+/**
+ * PLUGIN CREDENTIALS (ADR-0011) — the encrypted secrets a plugin instance needs to reach its vendor.
+ *
+ * Same envelope shape as the PII vault: a per-credential DEK wrapped under the platform master key,
+ * with the secret encrypted under that DEK rather than under the master key directly. Revoking one
+ * provider is then destroying one wrapped DEK, not re-encrypting every other integration.
+ *
+ * Rotation INSERTs a new version and repoints `plugin_instances.credentials_ref`, so the superseded
+ * row survives until it is pruned — a bad rotation is recoverable, and the AAD binds each ciphertext
+ * to its version so an old blob cannot be replayed against the new record.
+ *
+ * Platform config, not tenant data: no tenant_id, no RLS, reachable only through the provisioning
+ * connection. The plaintext NEVER leaves this table — reads expose `fingerprint` only, which
+ * identifies which key is installed without revealing any of it.
+ */
+export const pluginCredentials = pgTable(
+  "plugin_credentials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pluginInstanceId: uuid("plugin_instance_id")
+      .notNull()
+      .references(() => pluginInstances.id, { onDelete: "cascade" }),
+    /** Monotonic per instance. Part of the AAD, so versions are not interchangeable. */
+    version: integer("version").notNull().default(1),
+    /** The DEK, sealed under the platform master key. NULL = revoked; the secret is unreadable. */
+    dekWrapped: bytea("dek_wrapped"),
+    /** The credential document (JSON) sealed under the DEK. */
+    ciphertext: bytea("ciphertext").notNull(),
+    /** Non-reversible marker so staff can tell WHICH key is installed. Never the secret itself. */
+    fingerprint: text("fingerprint").notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    unique("uniq_plugin_credential_version").on(t.pluginInstanceId, t.version),
+    index("idx_plugin_credentials_instance").on(t.pluginInstanceId),
+  ],
+);
+
+export type PluginCredentialRow = typeof pluginCredentials.$inferSelect;
+export type NewPluginCredential = typeof pluginCredentials.$inferInsert;
