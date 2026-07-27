@@ -73,15 +73,91 @@ api `fabric-jezz.onrender.com` ✅ · www / dashboard / admin-console on Vercel 
 (verified independently: 6/6 tables, `accounts.price_book_id`, `price_books.is_public`,
 `messages.backing`, 6 RLS policies).
 
-### NEXT: the staff-invite bug (investigated, NOT fixed)
+### The staff-invite bug — FIXED (2026-07-27, local, unpushed)
 
 A stakeholder invited to the **admin console** landed in the **customer dashboard** and got an
-account. Mechanism found: `staff.service.ts` calls `userManagement.sendInvitation({ email })` with
-**no admin-console destination**, so the invite lands on WorkOS's default redirect (the dashboard).
-Then the customer realm **self-serve provisions on first login** (ADR-0002/0004) and — grep found no
-staff-allowlist check anywhere in that path — a staff invitee is silently created as a CUSTOMER
-tenant. **The provisioning half is unconfirmed in code**; confirm before fixing. Remedy differs:
-redirect-only, versus also refusing self-serve provisioning for allowlisted staff emails.
+account. **Two claims in the previous entry were wrong — don't repeat them:**
+
+- ✗ "add an admin-console destination to `sendInvitation`". `SendInvitationOptions` (@workos-inc/node
+  10.8.0) is `{ email, organizationId?, expiresInDays?, inviterUserId?, roleSlug?, locale? }` —
+  **there is no redirect/destination field.** Nothing configurable in WorkOS fixes this.
+- ✗ "the invitee is silently created as a CUSTOMER tenant". `UserSessionService.resolve` creates only
+  a bare `users` row with **zero memberships**. The tenant appears only if the person then completes
+  the onboarding form, which `createWorkspace` obliges (no allowlist check there — still true).
+
+**Verified against the live WorkOS account (read-only MCP).** Staging holds THREE AuthKit
+applications, not one: Customer Dashboard (`client_01KWP2NBN6…`, **isDefault**, and the only app
+with an API key), Admin Console (`client_01KX21AVNE…`, **zero keys**), Developer Portal
+(`client_01KX225M73…`, zero keys). WorkOS API keys are scoped **per application**, so the console
+borrows the dashboard's pair — which is why `fabric-admin-console.vercel.app/auth/callback` and
+`localhost:3300/auth/callback` are registered on the **dashboard** application's redirect list. The
+customer app will hand an OAuth code to the staff origin. Invitations are issued by the DEFAULT
+application, so a staff invite always lands on the dashboard callback.
+
+**Fix — routing, in our callback.** resolve-v2 reports `staff_realm` (allowlist match, ROUTING ONLY,
+never an authz signal; `z.boolean().default(false)` so a dashboard deployed ahead of the API keeps
+today's behaviour). Both dashboard landing paths — OAuth callback and the ADR-0008 credential path —
+send a staff identity with **zero memberships** to the admin console, mint no dashboard session, and
+clear any session left by a previous identity (a survivor skipped the `/signin` fallback, since that
+page redirects an already-signed-in visitor to `/`, and dropped the operator into someone else's
+workspace). The WorkOS session is deliberately NOT ended — the console's OAuth hop needs it. Staff
+who also hold a membership fall through and use the dashboard normally.
+
+Touched: `packages/contracts/src/identity.ts`, `services/api/src/identity/user-session.service.ts`,
+`packages/fe-auth/src/types.ts`, `apps/dashboard/{app/auth/callback/route.ts,
+lib/server/{auth,identity-client,credential-landing}.ts, app/signin/page.tsx}`, `.env.example`,
+`infra/dev/dashboard.tf`. New: `ADMIN_CONSOLE_BASE_URL` on the dashboard (returns null rather than
+guessing in prod → in-app `staff_account` notice). Also made the admin override a PAIR —
+`WORKOS_ADMIN_CLIENT_ID` + `WORKOS_ADMIN_API_KEY` only take effect together, because a client id
+without its matching key IS the mis-pairing that breaks the code exchange.
+
+Gates: `pnpm typecheck` exit 0; dashboard 79 tests, contracts 71 — both green (5 + 2 new).
+Codex read-only review: one Medium (the stale-cookie hole above) fixed, one Low (coverage) closed.
+
+**Still open, needs a human — ordered so nothing breaks:** ① mint an API key for the Fabric Admin
+Console app (`app_01KX21AVNEXG01Q9S1AFD81Q1N`) — a credential creation, so not an agent action;
+② set both admin env vars on the console only; ③ verify staff sign-in; ④ THEN remove
+`redir_01KXTFRZZMM7W51ARE49TMJ11E` + `redir_01KXTFRZZNKGMZCZ8YM8MS0SDJ` from the dashboard app.
+Doing ④ first locks every operator out. None of this replaces the routing fix — invitations carry no
+application, so staff invites keep landing on the dashboard regardless.
+
+Also unset: `ADMIN_CONSOLE_BASE_URL` on the dashboard's **Vercel** project
+(`https://fabric-admin-console.vercel.app`) — not in the repo, so it must be set there.
+
+### Live SMS pilot — ON HOLD (scaffolding local + unpushed, nothing sent)
+
+Held 2026-07-27: the sender ID has to clear Arkesel first (see the carrier-approval gap below), so
+the scaffolding below stays in the working tree and is deliberately NOT part of the auth-fix PR.
+
+`scripts/dev/seed-live-sms.ts` + `pnpm dev:seed:live-sms` provision a LOCAL live-capable tenant
+(plan `growth`, active live environment, `sk_live_` key, sender approved locally, GHS 200 credited).
+Needed because the normal dev seed is plan `sandbox`, and a sandbox ENVIRONMENT is hard-pinned to
+the virtual phone (ADR-0004) — it can never reach a carrier. `.env.live-sms` holds the run config
+(gitignored via `.env.*`).
+
+The existing rails already implement the live-pinning directive: `SMS_LIVE_RECIPIENT_ALLOWLIST`
+refuses any live send to a number not on it. Pinned to `+233545227189`.
+
+Blocked on three human steps: `infisical login` (session expired — the seed's DB auth failed because
+`.env`'s DB passwords are stale and the real ones are in Infisical), an Arkesel-approved sender ID
+(`Fabric`; carrier approval is not instant), and the Arkesel key pasted into `.env.live-sms`.
+
+**Carrier-approval gap found while scoping this.** Arkesel exposes **no sender-ID registration
+endpoint** (v2 is send / DLR / OTP / contacts / balance; registration is a dashboard action plus
+network-level operator registration), and `SmsSenderPlugin` has no registration method either. So
+our `senders` table is a purely LOCAL record: an operator can mark a sender `active` in Fabric while
+Arkesel has never approved it — `assertSendCompliant` passes, Arkesel then rejects with `PROHIBITED`
+→ mapped `failed` → reservation refunded. Money is safe; the dashboard lies. Worth deciding whether
+the admin console should distinguish *Fabric-approved* from *carrier-approved*, because today one
+implies the other and that isn't true.
+
+Launch, once unblocked — note the `env` prefix goes AFTER `infisical run`, because Infisical's
+values override the parent env and Node's `--env-file` cannot override an already-set var (verified):
+
+```
+infisical run --env=dev -- env SMS_PROVIDER=arkesel ARKESEL_SANDBOX=false \
+  ARKESEL_API_KEY=… SMS_LIVE_RECIPIENT_ALLOWLIST=+233545227189 pnpm dev:api
+```
 
 ### Money/pricing: what is actually LEFT
 

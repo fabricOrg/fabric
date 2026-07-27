@@ -51,6 +51,15 @@ export const resolveUserSessionResponseSchema = z.object({
   email: z.string(),
   name: z.string().nullable(),
   memberships: z.array(workspaceMembershipSchema),
+  /**
+   * True when this email is on the STAFF allowlist. Staff and customers share one WorkOS AuthKit
+   * app, and `sendInvitation` has no per-invite redirect, so a staff invitation's accept link
+   * always lands on the customer dashboard. The dashboard callback reads this to route a
+   * staff-only identity to the admin console instead of the customer onboarding wizard.
+   * NOT an authorization signal — staff authorization is the allowlist read in the admin console.
+   * Defaults false so a dashboard deployed ahead of the API keeps today's behaviour.
+   */
+  staff_realm: z.boolean().default(false),
   session_id: identifier,
 });
 

@@ -4,6 +4,7 @@ import type { CredentialOutcome, UserSession } from "@app/fe-auth";
 import { NextResponse } from "next/server";
 import {
   AUTH_NOTICE_COOKIE,
+  adminConsoleUrl,
   sessionCookieOptions,
   WORKOS_COOKIE,
 } from "./auth";
@@ -54,6 +55,23 @@ export function authenticatedResponse(
   session: UserSession,
   sealedCookie: string,
 ): NextResponse {
+  // Fabric OPERATOR with no customer workspace — the same case the OAuth callback handles. Send
+  // them to the console and set NO dashboard cookie: a session that can only reach /onboarding is
+  // how staff end up creating stray customer tenants. Staff who also hold a membership fall
+  // through and use the dashboard normally.
+  if (session.staffRealm && session.memberships.length === 0) {
+    const response = NextResponse.json({
+      outcome: "authenticated",
+      next: adminConsoleUrl("/signin") ?? "/signin?error=staff_account",
+    });
+    // Same reasoning as the OAuth callback: mint nothing for this identity, and clear a session
+    // left by a previous one so the /signin fallback isn't skipped and the operator doesn't land
+    // in someone else's workspace.
+    response.cookies.delete(WORKOS_COOKIE);
+    response.cookies.delete(WORKSPACE_COOKIE);
+    return response;
+  }
+
   const single =
     session.memberships.length === 1 ? session.memberships[0] : undefined;
   const next =

@@ -3,7 +3,13 @@ import type {
   ResolveUserSessionResponse,
 } from "@app/contracts";
 import { effectivePermissions } from "@app/contracts";
-import { accounts, memberships, type ProvisioningDb, users } from "@app/db";
+import {
+  accounts,
+  memberships,
+  type ProvisioningDb,
+  staffUsers,
+  users,
+} from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, eq, inArray } from "drizzle-orm";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
@@ -160,10 +166,25 @@ export class UserSessionService {
         )
         .orderBy(accounts.name);
 
+      // 4. Is this person also a Fabric operator? Staff and customers share ONE WorkOS AuthKit app
+      //    and sendInvitation carries no per-invite redirect, so a staff invitation's accept link
+      //    lands HERE. Reporting the allowlist match lets the dashboard callback send them to the
+      //    admin console instead of the onboarding wizard (where they would otherwise create a
+      //    stray customer workspace and never find the console). Routing hint only — staff
+      //    authorization stays the admin console's own allowlist read.
+      const [staff] = await tx
+        .select({ id: staffUsers.id })
+        .from(staffUsers)
+        .where(
+          and(eq(staffUsers.email, email), eq(staffUsers.status, "active")),
+        )
+        .limit(1);
+
       return {
         user_id: userId,
         email,
         name: user.name,
+        staff_realm: Boolean(staff),
         memberships: rows.map((row) => {
           const developerAccess =
             row.developerAccess || row.role === "developer";

@@ -36,6 +36,7 @@ const resolvedSession = {
   emailVerified: true,
   name: "Person",
   memberships: [],
+  staffRealm: false,
   sessionId: "session_1",
 };
 
