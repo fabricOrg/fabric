@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Currency } from "@app/contracts";
 import {
   accounts,
   auditEvents,
@@ -40,7 +41,9 @@ describeDb("price-book admin", () => {
   }
 
   function req(
-    rates: { channel: "sms" | "email"; currency: string; p: string }[],
+    // `Currency`, not `string`: the upsert request now only accepts a currency the platform can
+    // settle, so the fixture has to be as narrow as the contract it feeds.
+    rates: { channel: "sms" | "email"; currency: Currency; p: string }[],
   ) {
     return {
       name: `Book — ${randomUUID()}`,
@@ -135,7 +138,11 @@ describeDb("price-book admin", () => {
       is_default: false,
       is_public: false,
       rates: [
-        { channel: "sms" as const, currency: "GHS", unit_price_minor: "8" },
+        {
+          channel: "sms" as const,
+          currency: "GHS" as Currency,
+          unit_price_minor: "8",
+        },
       ],
       ...extra,
     });

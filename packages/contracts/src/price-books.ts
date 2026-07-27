@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { messageChannel } from "./message-definition-content.js";
+import { currency } from "./money.js";
 
 /**
  * Price-book DTOs (ADR-0010). A price book is a named set of per-channel, per-currency unit prices
@@ -22,14 +23,33 @@ const unitPriceMinor = z
     message: "unit_price_minor must be greater than 0",
   });
 
+/**
+ * A rate as READ BACK. Currency stays a loose 3-letter code on purpose: this schema also parses
+ * rows already in the database, and those were written when any `[A-Z]{3}` string was accepted.
+ * Tightening the read would turn a legacy row into a 500 on the pricing page instead of something
+ * staff can see and correct. Writes are constrained separately — see `priceBookRateInputSchema`.
+ */
 export const priceBookRateDtoSchema = z.object({
   channel: messageChannel,
-  // ISO 4217, UPPERCASE — the send path keys rates by the exact currency, so a lowercase/typo rate
-  // would never match and silently fail sends. Enforced uppercase closes that footgun at the boundary.
+  // UPPERCASE — the send path keys rates by the exact currency, so a lowercase/typo rate would
+  // never match and silently fail sends. Enforced uppercase closes that footgun at the boundary.
   currency: z.string().regex(/^[A-Z]{3}$/),
   unit_price_minor: unitPriceMinor,
 });
 export type PriceBookRateDto = z.infer<typeof priceBookRateDtoSchema>;
+
+/**
+ * A rate being WRITTEN. Constrained to the currencies the platform can actually settle: anything
+ * else has no entry in `MINOR_PER_MAJOR`, so nothing downstream knows its scale, and a send priced
+ * in it could never be billed. `[A-Z]{3}` accepted "XYZ" happily, which is a money-shaped hole
+ * rather than a typo.
+ */
+export const priceBookRateInputSchema = z.object({
+  channel: messageChannel,
+  currency,
+  unit_price_minor: unitPriceMinor,
+});
+export type PriceBookRateInput = z.infer<typeof priceBookRateInputSchema>;
 
 export const priceBookDtoSchema = z.object({
   id: z.string().uuid(),
@@ -53,9 +73,9 @@ export type ListPriceBooksResponse = z.infer<
 
 /**
  * Upsert a book's identity + full rate set (admin, Phase 1 slice 3). The rate list is REPLACED
- * wholesale — a book always carries its complete price table. Positivity + uppercase currency are
- * enforced by `priceBookRateDtoSchema`; the rate set must have no duplicate (channel, currency) pair
- * (the DB `uniq_price_book_rate` index would otherwise 500 on insert).
+ * wholesale — a book always carries its complete price table. Positivity and a settleable currency
+ * are enforced by `priceBookRateInputSchema`; the rate set must have no duplicate (channel,
+ * currency) pair (the DB `uniq_price_book_rate` index would otherwise 500 on insert).
  */
 export const upsertPriceBookRequestSchema = z
   .object({
@@ -65,7 +85,7 @@ export const upsertPriceBookRequestSchema = z
     is_default: z.boolean().default(false),
     is_public: z.boolean().default(false),
     rates: z
-      .array(priceBookRateDtoSchema)
+      .array(priceBookRateInputSchema)
       .min(1)
       .superRefine((rates, ctx) => {
         const seen = new Set<string>();
@@ -120,7 +140,9 @@ export const purchaseTokensRequestSchema = z.object({
   channel: messageChannel,
   /** How many sends to buy. SMS spends one token per SEGMENT, email one per send. */
   quantity: z.number().int().positive().max(1_000_000),
-  currency: z.string().regex(/^[A-Z]{3}$/),
+  // Settleable currencies only — this one takes real money, so an unsupported code must be refused
+  // before a payment intent exists rather than stranding a lot nothing can price.
+  currency,
   email: z.string().email(),
 });
 export type PurchaseTokensRequest = z.infer<typeof purchaseTokensRequestSchema>;
