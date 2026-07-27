@@ -1,5 +1,5 @@
 import type { UserSession, WorkspaceMembershipClaim } from "@app/fe-auth";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WORKOS_COOKIE } from "./auth";
 import { authenticatedResponse } from "./credential-landing";
 import { WORKSPACE_COOKIE } from "./workspace-cookie";
@@ -50,6 +50,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   if (ORIGINAL_ADMIN_URL === undefined)
     delete process.env.ADMIN_CONSOLE_BASE_URL;
   else process.env.ADMIN_CONSOLE_BASE_URL = ORIGINAL_ADMIN_URL;
@@ -92,18 +93,15 @@ describe("authenticatedResponse — staff landing", () => {
 
   it("falls back to an in-app notice when the console URL is unknown", async () => {
     delete process.env.ADMIN_CONSOLE_BASE_URL;
-    process.env.NODE_ENV = "production";
-    try {
-      const response = authenticatedResponse(
-        session({ staffRealm: true }),
-        "sealed",
-      );
-      await expect(response.json()).resolves.toMatchObject({
-        next: "/signin?error=staff_account",
-      });
-    } finally {
-      process.env.NODE_ENV = "test";
-    }
+    // stubEnv, not a plain assignment: NODE_ENV is typed read-only, and this restores itself.
+    vi.stubEnv("NODE_ENV", "production");
+    const response = authenticatedResponse(
+      session({ staffRealm: true }),
+      "sealed",
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      next: "/signin?error=staff_account",
+    });
   });
 
   it("lets a staff member who also holds a membership use the dashboard", async () => {
