@@ -26,6 +26,6 @@
     "@app/contracts": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^25.9.5"
   }
 }
