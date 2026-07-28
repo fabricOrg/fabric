@@ -39,10 +39,20 @@ services:
       # Providers stay sandboxed (redline)
       - key: SMS_PROVIDER
         value: fake
-      # Browser origins allowed to read /v1/public/* (the published rate card the marketing site
-      # renders). Comma-separated exact origins. Unset = no browser may read it, so the landing
-      # page's pricing section goes empty — fail closed, and visibly.
+      # Browser origins allowed to read /v1/public/* (the published rate card). Comma-separated
+      # exact origins; unset = no browser may read it, so the landing page's pricing section goes
+      # empty — fail closed, and visibly.
+      #
+      # ONLY the marketing site belongs here: it is the sole browser-side caller of that endpoint
+      # (apps/www/src/pages/index.astro). The dashboard and admin console reach pricing through
+      # their own server-side BFF routes, so listing them would grant cross-origin reads to origins
+      # that never ask — which is what an allowlist exists to avoid.
+      #
+      # NOTE: this file does NOT retro-apply. deploy-testing.yml triggers Render via
+      # RENDER_API_SERVICE_ID (a deploy hook), and render.yaml is only read on a blueprint sync, so
+      # an already-provisioned service ignores anything added here. Set it on the service (or a
+      # linked environment group) as well.
       - key: PUBLIC_CORS_ALLOWED_ORIGINS
-        value: https://www-kohl-kappa.vercel.app,https://fabric-dashboard-teal.vercel.app
+        value: https://www-kohl-kappa.vercel.app
       # No Redis on the free stack — the engine's inline dispatch fallback is the design.
       # REDIS_QUEUE_URL intentionally unset.

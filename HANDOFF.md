@@ -3,7 +3,82 @@
 _Snapshot: 2026-07-25. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-27): ADR-0010 COMPLETE + deployed to testing; the deploy pipeline had never migrated
+## Latest (2026-07-27, later): seven PRs — #188–#195 — merged and deployed to testing
+
+Bug-fix session driven by live screenshots. `dev` and `testing` both carry #188–#195.
+
+**The pattern worth carrying forward: three of the four reported bugs were SHARED PRIMITIVES with an
+assumption baked in, not the one-page problems the screenshots suggested.** Each fix was 3–5× the
+scope of the report. Expect this rather than rediscovering it.
+
+| PR | fix | reported as |
+|----|-----|-------------|
+| #188 | staff invitees routed to the admin console | "invited to admin, landed in dashboard" |
+| #189 | CORS on `/v1/public/*` | "CORS error" on the landing page |
+| #190 | `useCursorPage` re-seeds on fresh server props | "removed user, table didn't invalidate" |
+| #191 | primary-application resolver replaces `slug='default'` in **5** places | "virtual reply won't record" |
+| #192 | price-book currency constrained to the settleable enum | "typing the currency will bring unpredictables" |
+| #193 | price-book editor → own page; rates as a matrix | "this can be its own page" / "card could be better" |
+| #194 | flaky integration assertions now capture the response | (found while working) |
+| #195 | audit pagination spec stops walking the global log | (found while working) |
+
+### ⚠️ ONE DEPLOYED FIX IS NOT WORKING — needs a human, config not code
+
+**`PUBLIC_CORS_ALLOWED_ORIGINS` never reached Render**, so the landing page's pricing calculator is
+still empty. Verified live: `vary: Origin` IS present (the onSend hook is deployed and running) but
+no `access-control-allow-origin` for an allowed origin — i.e. the allowlist parsed empty and failed
+closed exactly as designed.
+
+Cause: it was added to `render.yaml`, but `deploy-testing.yml` triggers Render through
+`RENDER_API_SERVICE_ID` (a deploy hook), which does **not** re-read the blueprint. `render.yaml`
+only applies on a blueprint sync, so an already-provisioned service ignores newly added vars.
+
+Fix: Render dashboard → `fabric-api` → Environment →
+`PUBLIC_CORS_ALLOWED_ORIGINS=https://www-kohl-kappa.vercel.app,https://fabric-dashboard-teal.vercel.app`.
+**Confirm the real www origin first** — a wrong value fails identically to a missing one, silently.
+This is the cost of the allowlist over `*` (a deliberate choice: least privilege, per user).
+
+### Integration-test flakiness — 1 of 3 fixed WITH EVIDENCE, 2 still open
+
+Failed 2 of 3 PRs on diffs that could not touch them (once on a PR changing only a React hook).
+
+- **FIXED (#195), proven not guessed.** `audit.integration.spec.ts` walked the ENTIRE global
+  `audit_events` table 2 rows/page with a 100-page guard. That table is global, every parallel spec
+  appends, most never clean up. Measured at the moment of failure: **201 rows → 101 pages vs a
+  100-page guard**, so it fails DETERMINISTICALLY at that size — it only looked flaky because the
+  threshold is crossed gradually as rows accumulate. Now stops once its 5 tagged rows are collected.
+- **STILL OPEN.** `consent.integration.spec.ts` (transactional send → 400) and
+  `managed-messages.integration.spec.ts` (500 under 3 concurrent identical sends). **Did NOT
+  reproduce across 4 local suite runs.** #194 instrumented both to capture the response body/error
+  code, so the next occurrence names its own cause. Leading hypothesis for consent:
+  `sms_sending_paused` from the GLOBAL kill-switch another spec toggles — unconfirmed, do not act
+  on it without evidence. The managed-messages 500 may be a REAL production defect in the
+  idempotency path; do not paper it over with a randomised fixture.
+- **Related hygiene:** `audit_events` grows unbounded across runs (specs clean tenant rows, not
+  audit rows). Same shape as the bug; will keep producing failures.
+
+### Local dev environment facts (learned the hard way)
+
+- **Docker Desktop needs an ELEVATED start** — `com.docker.service` is Manual/Stopped and a
+  non-elevated agent cannot start it. Orphaned `com.docker.backend` processes block startup and
+  must be killed first. Symptom: `docker ps` hangs, port 5432 answers but auth fails.
+- **`.env`'s DB passwords are stale.** Real ones come from Infisical (`infisical run --env=dev`),
+  which points at **localhost** (safe to run the integration suite against — NOT Neon).
+- **`@app/contracts` is consumed as built `dist`.** Changing a contract type and running
+  `pnpm --filter @app/api typecheck` validates against STALE `.d.ts` and passes falsely. Always
+  `pnpm --filter @app/contracts build` first. Cost a CI round-trip.
+- **`packages/ui` is consumed as RAW TS SOURCE** (`"./hooks/*": "./src/hooks/*.ts"`). NodeNext wants
+  a `.js` extension on relative imports; the apps' bundler then can't resolve it. Keep shared hooks
+  in ONE file — this broke the admin-console build.
+- **The file-length guard counts one MORE line than `wc -l`.**
+- **Never pipe a git/gate command whose exit code matters** — `cmd | tail` returns tail's status.
+  This silently reported a green gate on a failed push AND a successful promotion that was a no-op.
+  Verify deploys by inspecting the ref, not the command's report.
+- **Don't edit files while a push runs** — `verify:push` gates the WORKING TREE, so a half-finished
+  edit fails a push of unrelated commits.
+- Stale `.next` from a build on another branch fails typecheck after a branch switch.
+
+## Earlier (2026-07-27): ADR-0010 COMPLETE + deployed to testing; the deploy pipeline had never migrated
 
 `dev` carries #172–#185. **All four surfaces deployed green on testing, api included**, and the
 testing database is finally at migration **0094**.
