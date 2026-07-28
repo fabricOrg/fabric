@@ -78,8 +78,7 @@ export function SendComposerFields(props: Props) {
             <FieldError>This recipient has opted out.</FieldError>
           ) : (
             <FieldDescription>
-              One controlled recipient. Carrier delivery may incur a real
-              charge.
+              One recipient per send. Live delivery charges your wallet.
             </FieldDescription>
           )}
         </Field>
