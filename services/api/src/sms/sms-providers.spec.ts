@@ -1,7 +1,7 @@
 import type { Logger } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import { describe, expect, it } from "vitest";
-import { buildSmsProviders, isLiveRecipientAllowed } from "./sms-providers.js";
+import { buildSmsProviders } from "./sms-providers.js";
 
 const logger = { log: () => undefined } as unknown as Logger;
 
@@ -39,7 +39,6 @@ describe("SMS provider readiness", () => {
         SMS_PROVIDER: "arkesel",
         ARKESEL_API_KEY: "secret",
         ARKESEL_SANDBOX: "false",
-        SMS_LIVE_RECIPIENT_ALLOWLIST: "+233201234567",
       }),
       logger,
     );
@@ -47,8 +46,11 @@ describe("SMS provider readiness", () => {
     expect(live.provider.slug).toBe("arkesel-sms");
   });
 
-  it("fails closed when the live recipient allowlist is absent or invalid", () => {
-    const missing = buildSmsProviders(
+  // The recipient allowlist was pilot scaffolding, removed 2026-07-28 so customers can message
+  // their own audiences. Live readiness now turns on credentials + carrier mode only; who may be
+  // messaged is governed per-tenant by sender registration and consent, not by a platform-wide pin.
+  it("is live-ready without any recipient allowlist configured", () => {
+    const live = buildSmsProviders(
       config({
         NODE_ENV: "production",
         SMS_PROVIDER: "arkesel",
@@ -57,31 +59,20 @@ describe("SMS provider readiness", () => {
       }),
       logger,
     );
-    expect(missing.liveReady).toBe(false);
-    expect(missing.liveReadinessReason).toContain("allowlist");
-
-    const invalid = buildSmsProviders(
-      config({
-        NODE_ENV: "production",
-        SMS_PROVIDER: "arkesel",
-        ARKESEL_API_KEY: "secret",
-        ARKESEL_SANDBOX: "false",
-        SMS_LIVE_RECIPIENT_ALLOWLIST: "0201234567",
-      }),
-      logger,
-    );
-    expect(invalid.liveReady).toBe(false);
-    expect(invalid.liveReadinessReason).toContain("invalid E.164");
+    expect(live.liveReady).toBe(true);
+    expect(live.liveReadinessReason).toBeNull();
   });
 
-  it("allows only exact recipients configured for live Arkesel delivery", () => {
-    const liveConfig = config({
-      SMS_PROVIDER: "arkesel",
-      ARKESEL_SANDBOX: "false",
-      SMS_LIVE_RECIPIENT_ALLOWLIST: "+233201234567, +233501234567",
-    });
-    expect(isLiveRecipientAllowed(liveConfig, "+233201234567")).toBe(true);
-    expect(isLiveRecipientAllowed(liveConfig, "+233501234567")).toBe(true);
-    expect(isLiveRecipientAllowed(liveConfig, "+233241234567")).toBe(false);
+  it("still refuses a placeholder API key", () => {
+    const placeholder = buildSmsProviders(
+      config({
+        NODE_ENV: "production",
+        SMS_PROVIDER: "arkesel",
+        ARKESEL_API_KEY: "REPLACE_ME",
+        ARKESEL_SANDBOX: "false",
+      }),
+      logger,
+    );
+    expect(placeholder.liveReady).toBe(false);
   });
 });

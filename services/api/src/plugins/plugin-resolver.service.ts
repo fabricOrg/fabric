@@ -10,7 +10,7 @@ import type { Creds, SmsSenderPlugin } from "@app/integrations";
 import { smsAdapterFor } from "@app/integrations";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 
 /** A resolved provider: the adapter plus the credentials it needs. */
@@ -113,6 +113,11 @@ export class PluginResolverService {
           eq(pluginInstances.capability, "sms"),
           eq(pluginInstances.mode, mode),
           eq(pluginInstances.enabled, true),
+          // PLATFORM-WIDE only. Slice 3 made per-tenant instances expressible (nullable tenant_id);
+          // without this filter the first tenant-scoped row would silently start carrying every
+          // other tenant's traffic. Per-tenant resolution is deliberate future work — when it lands
+          // it takes a tenantId argument and prefers the tenant row over this one.
+          isNull(pluginInstances.tenantId),
         ),
       )
       .orderBy(asc(pluginInstances.priority));

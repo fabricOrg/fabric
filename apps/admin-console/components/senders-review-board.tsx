@@ -96,6 +96,43 @@ export function SendersReviewBoard({
     }
   }
 
+  /**
+   * Record what the CARRIER said. Separate from `decide` because it is a different fact: we are
+   * transcribing an external outcome, not making our own call. Arkesel has no registration API, so
+   * an operator registers the id in their dashboard and reports the result here.
+   */
+  async function recordCarrier(
+    sender: AdminSenderDto,
+    carrierStatus: "unregistered" | "submitted" | "approved" | "rejected",
+  ) {
+    setBusyId(sender.id);
+    try {
+      const response = await fetch(
+        `/api/admin/senders/${sender.id}/carrier-status`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ carrier_status: carrierStatus }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(
+          await readError(response, "Couldn't record the carrier status."),
+        );
+      }
+      toast.success(`Carrier status set to ${carrierStatus}`);
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Couldn't record the carrier status.",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (senders.length === 0) {
     return (
       <Card>
@@ -141,12 +178,50 @@ export function SendersReviewBoard({
                   <p className="mt-1 truncate text-sm text-muted-foreground">
                     {s.use_case}
                   </p>
+                  {/* Staff-only. The customer never sees carrier vocabulary — for them this
+                      registration is simply still pending until it is genuinely usable. */}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Carrier:{" "}
+                    <span className="font-medium">{s.carrier_status}</span>
+                    {s.carrier_ref ? ` · ${s.carrier_ref}` : ""}
+                    {s.carrier_status !== "approved"
+                      ? " — register this id with the carrier, then record the outcome"
+                      : ""}
+                  </p>
                 </div>
                 {canManage ? (
-                  <div className="flex shrink-0 gap-2">
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {s.carrier_status !== "submitted" &&
+                    s.carrier_status !== "approved" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyId === s.id}
+                        onClick={() => recordCarrier(s, "submitted")}
+                      >
+                        Mark submitted
+                      </Button>
+                    ) : null}
+                    {s.carrier_status !== "approved" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyId === s.id}
+                        onClick={() => recordCarrier(s, "approved")}
+                      >
+                        Carrier approved
+                      </Button>
+                    ) : null}
                     <Button
                       size="sm"
-                      disabled={busyId === s.id}
+                      disabled={
+                        busyId === s.id || s.carrier_status !== "approved"
+                      }
+                      title={
+                        s.carrier_status === "approved"
+                          ? undefined
+                          : "Record the carrier's approval first — activating without it promises delivery the network will refuse."
+                      }
                       onClick={() => decide(s, "active")}
                     >
                       <CheckCircle2 data-icon="inline-start" /> Activate

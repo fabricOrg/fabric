@@ -197,10 +197,6 @@ resource "aws_ecs_task_definition" "api" {
           valueFrom = "${aws_secretsmanager_secret.arkesel_sms.arn}:ARKESEL_API_KEY::"
         },
         {
-          name      = "SMS_LIVE_RECIPIENT_ALLOWLIST"
-          valueFrom = "${aws_secretsmanager_secret.arkesel_sms.arn}:SMS_LIVE_RECIPIENT_ALLOWLIST::"
-        },
-        {
           name      = "VIRTUAL_PHONE_ENCRYPTION_KEY"
           valueFrom = "${aws_secretsmanager_secret.virtual_phone_encryption_key.arn}:VIRTUAL_PHONE_ENCRYPTION_KEY::"
         },

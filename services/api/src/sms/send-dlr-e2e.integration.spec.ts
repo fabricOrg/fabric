@@ -85,8 +85,8 @@ beforeAll(async () => {
     ],
   );
   await owner.unsafe(
-    `INSERT INTO senders (tenant_id, sender_id, country, use_case, status)
-     VALUES ($1, 'JOJO', 'GH', 'walking-skeleton e2e', 'active')
+    `INSERT INTO senders (tenant_id, sender_id, country, use_case, status, carrier_status)
+     VALUES ($1, 'JOJO', 'GH', 'walking-skeleton e2e', 'active', 'approved')
      ON CONFLICT ON CONSTRAINT uniq_sender_tenant_id_country DO NOTHING`,
     [TENANT],
   );

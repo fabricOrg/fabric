@@ -6,6 +6,7 @@ import { IdempotencyModule } from "../idempotency/idempotency.module.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { KillSwitchModule } from "../kill-switches/kill-switches.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
+import { PluginsModule } from "../plugins/plugins.module.js";
 import { PricingModule } from "../pricing/pricing.module.js";
 import { PrivacyModule } from "../privacy/privacy.module.js";
 import { QueueModule } from "../queue/queue.module.js";
@@ -36,6 +37,9 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
     KillSwitchModule,
     // ADR-0010: the send path prices against the account's resolved price book.
     PricingModule,
+    // ADR-0011: which provider carries a live send is control-plane config, resolved per send
+    // through a TTL cache — not SMS_PROVIDER read once at boot.
+    PluginsModule,
     QueueModule,
     // E10-S4: the live send path enforces active sender-id registrations.
     SendersModule,

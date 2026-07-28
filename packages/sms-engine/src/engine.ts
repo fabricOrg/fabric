@@ -4,6 +4,7 @@ import {
   isTerminalMessageStatus,
   type MessageStatus,
   STATUS_RANK,
+  smsResolutionAdapterFor,
 } from "@app/integrations";
 import { commit, refund } from "@app/wallet";
 import type {
@@ -36,7 +37,7 @@ async function resolveMessage(
   } = {},
 ): Promise<MessageStatus> {
   const rows = (await tx`
-    SELECT status, application_id, environment_id, backing
+    SELECT status, application_id, environment_id, backing, provider_slug
     FROM messages WHERE id = ${messageId} FOR UPDATE`) as Row[];
   const prior = String(rows[0]?.status) as MessageStatus;
   const tokenBacked = String(rows[0]?.backing ?? "wallet") === "tokens";
@@ -44,14 +45,31 @@ async function resolveMessage(
   if (isTerminalMessageStatus(prior)) return prior;
   if (STATUS_RANK[newStatus] < STATUS_RANK[prior]) return prior;
 
-  const billable = deps.provider.billableStatuses;
+  // Bill against the adapter that ACTUALLY dispatched this message (recorded in provider_slug at
+  // prepare time), not whichever provider the control plane resolves to right now. Once providers
+  // are control-plane config (ADR-0011), staff can swap a vendor between a send and its DLR/sweep —
+  // and `billableStatuses` differs per adapter (`arkesel-sms` bills at `accepted`, `virtual-phone`
+  // at `undelivered`), which is exactly the threshold `reachedBillable` below compares against.
+  // Resolving with the current provider would charge, or refund, against a contract this message
+  // never used.
+  //
+  // Unknown slug (an adapter removed from this build) falls back to the caller's provider: a wrong
+  // guess is bad, but stranding the reservation forever is worse, and the sweeper must still finish.
+  const recordedSlug = rows[0]?.provider_slug
+    ? String(rows[0].provider_slug)
+    : null;
+  const dispatchedBy =
+    (recordedSlug ? smsResolutionAdapterFor(recordedSlug)?.() : null) ??
+    deps.provider;
+
+  const billable = dispatchedBy.billableStatuses;
   const reachedBillable =
     STATUS_RANK[prior] >= STATUS_RANK[billable[0] as MessageStatus];
   const decision = decideResolution({
     newStatus,
     reachedBillable,
     billableStatuses: billable,
-    platformFaultExemptions: deps.provider.platformFaultExemptions,
+    platformFaultExemptions: dispatchedBy.platformFaultExemptions,
     faultCause: opts.faultCause,
   });
   // The DECISION is channel- and backing-neutral (@app/domain owns it); only the EFFECTOR differs.
@@ -221,22 +239,18 @@ export async function sweepExpired(
   deps: EngineDeps,
   tenantId: string,
   olderThanIso: string,
-  depsForMode?: (deliveryMode: "virtual" | "live") => EngineDeps,
 ): Promise<number> {
   return deps.db.withTenant(tenantId, async (tx) => {
     const stuck = (await tx`
-      SELECT id, delivery_mode FROM messages
+      SELECT id FROM messages
       WHERE status IN ('queued','sending','accepted','sent') AND updated_at < ${olderThanIso}::timestamptz
       FOR UPDATE`) as Row[];
     for (const row of stuck) {
-      const mode = row.delivery_mode === "virtual" ? "virtual" : "live";
-      await resolveMessage(
-        depsForMode?.(mode) ?? deps,
-        tx,
-        String(row.id),
-        "expired",
-        {},
-      );
+      // No per-message deps factory: resolveMessage reads each row's own provider_slug and bills
+      // against the adapter that dispatched it. The previous `delivery_mode`-keyed factory was a
+      // proxy for provider identity that only held while exactly one live provider could exist —
+      // which is precisely what ADR-0011 stops being true.
+      await resolveMessage(deps, tx, String(row.id), "expired", {});
     }
     return stuck.length;
   });

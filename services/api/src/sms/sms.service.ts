@@ -24,7 +24,7 @@ import { assertSendCompliant } from "./sms-compliance.js";
 import { recheckedDispatch } from "./sms-dispatch-recheck.js";
 import { completeStoredDispatch } from "./sms-dispatch-store.js";
 import { ingestProviderDlr } from "./sms-dlr.js";
-import { assertLiveRecipientAllowed } from "./sms-live-safety.js";
+import { assertLiveProviderAvailable } from "./sms-live-gate.js";
 import { replayManagedSend } from "./sms-managed-replay.js";
 import {
   enqueueSmsJob,
@@ -50,7 +50,9 @@ export class SmsService {
     @Inject(APP_DB) private readonly db: AppDb,
     @Inject(AutoTopupService) private readonly autoTopup: AutoTopupService,
     @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
-    @Inject(ConfigService) private readonly config: ConfigService,
+    // Not a property: the only remaining consumer is the SmsRuntimeService fallback constructed
+    // below. The live-recipient pin that used to read it here was removed 2026-07-28.
+    @Inject(ConfigService) config: ConfigService,
     @Inject(QueueService) private readonly queue: QueueService,
     @Inject(SendersService) private readonly senders: SendersService,
     @Inject(ConsentService) private readonly consent: ConsentService,
@@ -92,22 +94,12 @@ export class SmsService {
           input.environmentId,
         )
       : await this.virtualPhone.resolveMode(input.tenantId);
-    if (deliveryMode === "live" && !this.runtime.liveReady) {
-      throw invalidRequest(
-        "live_provider_not_ready",
-        this.runtime.liveReadinessReason ?? "Live SMS is not configured.",
-      );
-    }
-    assertLiveRecipientAllowed(this.config, deliveryMode, input.to);
-    if (
-      deliveryMode === "live" &&
-      (await this.killSwitch.isPaused(`provider.${this.runtime.provider.slug}`))
-    ) {
-      throw invalidRequest(
-        "provider_unavailable",
-        "The SMS provider is temporarily unavailable. Try again shortly.",
-      );
-    }
+    // ADR-0011: readiness AND provider identity now come from the control plane, so both are async.
+    await assertLiveProviderAvailable({
+      runtime: this.runtime,
+      killSwitch: this.killSwitch,
+      deliveryMode,
+    });
     // E10-S4/S5: compliance gates (sender registration, opt-outs, promo window) — see
     // sms-compliance.ts for the ordering + postures.
     const messageClass = input.messageClass ?? "transactional";
@@ -145,7 +137,7 @@ export class SmsService {
     // outage serves last-known-good/compiled defaults; the wallet reserve below still fails closed.
     const rates = await this.pricing.resolveRates(input.tenantId);
     const prepared = await enginePrepareSend(
-      this.runtime.deps(deliveryMode, rates.sms),
+      await this.runtime.deps(deliveryMode, rates.sms),
       routedInput,
     );
     if (prepared.replayed && input.managed) {
@@ -154,7 +146,7 @@ export class SmsService {
     if (deliveryMode === "virtual") {
       await recordVirtualDeliveryOrFail({
         virtualPhone: this.virtualPhone,
-        deps: this.runtime.deps(deliveryMode),
+        deps: await this.runtime.deps(deliveryMode),
         tenantId: input.tenantId,
         body: input.body,
         subjectId,
@@ -222,9 +214,9 @@ export class SmsService {
         senders: this.senders,
         runtime: this.runtime,
       }),
-      fail: (input, prepared, mode) =>
+      fail: async (input, prepared, mode) =>
         engineFailPreparedSend(
-          this.runtime.deps(mode),
+          await this.runtime.deps(mode),
           input,
           prepared,
           "dispatch_material_unreadable",
@@ -251,10 +243,9 @@ export class SmsService {
    */
   async sweepStuck(tenantId: string, olderThanIso: string): Promise<number> {
     return engineSweepExpired(
-      this.runtime.deps("live"),
+      await this.runtime.deps("live"),
       tenantId,
       olderThanIso,
-      (mode) => this.runtime.deps(mode),
     );
   }
 
@@ -291,8 +282,8 @@ export class SmsService {
       providerSlug,
       body,
       headers,
-      live: this.runtime.deps("live"),
-      virtual: this.runtime.deps("virtual"),
+      live: await this.runtime.deps("live"),
+      virtual: await this.runtime.deps("virtual"),
     });
   }
 }

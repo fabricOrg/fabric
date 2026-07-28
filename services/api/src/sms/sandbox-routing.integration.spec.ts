@@ -73,8 +73,8 @@ async function seedTenant(id: string, plan: string, rawKey: string) {
   );
   if (plan !== "sandbox") {
     await owner.unsafe(
-      `INSERT INTO senders (tenant_id, sender_id, country, use_case, status)
-       VALUES ($1, 'FABRIC', 'GH', 'routing integration', 'active')
+      `INSERT INTO senders (tenant_id, sender_id, country, use_case, status, carrier_status)
+       VALUES ($1, 'FABRIC', 'GH', 'routing integration', 'active', 'approved')
        ON CONFLICT ON CONSTRAINT uniq_sender_tenant_id_country DO NOTHING`,
       [id],
     );

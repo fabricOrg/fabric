@@ -325,8 +325,7 @@ resource "aws_secretsmanager_secret_version" "webhook_ingress_token" {
 resource "aws_secretsmanager_secret_version" "arkesel_sms" {
   secret_id = aws_secretsmanager_secret.arkesel_sms.id
   secret_string_wo = jsonencode({
-    ARKESEL_API_KEY              = "REPLACE_ME"
-    SMS_LIVE_RECIPIENT_ALLOWLIST = "REPLACE_ME"
+    ARKESEL_API_KEY = "REPLACE_ME"
   })
   secret_string_wo_version = 1
 

@@ -15,6 +15,7 @@
 // ============================================================================================
 
 import { createAppDb } from "@app/db";
+import { VirtualPhoneProvider } from "@app/integrations";
 import { FakeProvider, MAGIC_MSISDNS } from "@app/integrations/testing";
 import { credit } from "@app/wallet";
 import postgres from "postgres";
@@ -218,6 +219,53 @@ describe("L5 money-gate — real FakeProvider through the real engine", () => {
     expect(b.customer).toBe(997n); // unchanged — post-commit fault is not a thin-thread refund
     expect(b.revenue).toBe(3n);
     expect(await statusOf(messageId)).toBe("failed");
+    await assertInvariants();
+  });
+
+  /**
+   * ADR-0011 regression: a message is billed against the adapter that DISPATCHED it, never against
+   * whichever provider the control plane resolves to at settlement time.
+   *
+   * Once providers are control-plane config, staff can swap a vendor between a send and its sweep.
+   * These two adapters disagree on the billing threshold — FakeProvider bills at `accepted`,
+   * VirtualPhoneProvider at `undelivered` — so an `accepted` message swept under the WRONG rules
+   * flips the money outcome outright:
+   *
+   *   fake's rules    → reachedBillable(accepted >= accepted) = true  → 'none'   → stays billed
+   *   virtual's rules → reachedBillable(accepted >= undelivered) = false → 'refund' → money back
+   *
+   * The send below runs on the fake and is recorded as `fake-sms`; the sweep is then handed deps
+   * carrying the virtual provider. Correct behaviour is that the recorded slug wins and the message
+   * STAYS BILLED.
+   *
+   * Verified by removing the fix and re-running: it does NOT silently lose revenue. The wrong rules
+   * attempt a refund on an already-committed message, the B6 commit-XOR-refund constraint catches
+   * it, and sweepExpired throws `AlreadyResolvedError` from inside its row loop. The ledger holds —
+   * but one such message aborts the whole tenant's sweep, stranding every other stuck reservation
+   * behind it. The invariant protects the money; nothing protects the sweeper.
+   */
+  it("bills against the DISPATCHING provider, not the currently-configured one", async () => {
+    await topup(1000n);
+    const { messageId, status } = await send("+999900000004"); // no_dlr → accepted, committed
+    expect(status).toBe("accepted");
+    let b = await balances();
+    expect(b.customer).toBe(997n);
+    expect(b.revenue).toBe(3n);
+
+    // The dispatching adapter is a durable fact on the row — this is what settlement must key on.
+    const rows = (await owner`
+      SELECT provider_slug FROM messages WHERE id = ${messageId}`) as Row[];
+    expect(String(first(rows).provider_slug)).toBe("fake-sms");
+
+    // The vendor "changed" in the control plane after the send. Sweep with the OTHER adapter.
+    const swapped = { db, provider: new VirtualPhoneProvider() };
+    expect(await sweepExpired(swapped, TENANT, FUTURE)).toBe(1);
+
+    b = await balances();
+    expect(b.customer, "stays billed — fake-sms billed at accepted").toBe(997n);
+    expect(b.revenue).toBe(3n);
+    expect(b.reserved_clearing).toBe(0n);
+    expect(await statusOf(messageId)).toBe("expired");
     await assertInvariants();
   });
 });

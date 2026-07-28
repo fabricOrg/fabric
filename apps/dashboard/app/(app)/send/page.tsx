@@ -205,10 +205,7 @@ export default function SendPage() {
     } catch (error) {
       const parsed = parseApiError(error);
       setSendError({
-        message:
-          parsed.code === "live_recipient_not_allowed"
-            ? "This number is not approved for the controlled live test. Ask the workspace owner to approve it before retrying."
-            : parsed.message,
+        message: parsed.message,
         ...(parsed.requestId ? { requestId: parsed.requestId } : {}),
       });
     } finally {

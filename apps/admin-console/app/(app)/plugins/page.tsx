@@ -12,10 +12,12 @@ import {
 import { Skeleton } from "@app/ui/components/ui/skeleton";
 import { CreditCard, MessageCircle, Send, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { ConfigurePluginDialog } from "@/components/forms/configure-plugin-dialog";
 import {
   CAPABILITIES,
   type Capability,
+  createLiveInstance,
   getPlugins,
   type PluginInstance,
   updatePlugin,
@@ -68,9 +70,18 @@ export default function PluginsPage() {
     };
   }, []);
 
+  /** Re-read after a credential install — the fingerprint is server-derived, not guessable here. */
+  async function reload() {
+    try {
+      setInstances(await getPlugins());
+    } catch (e) {
+      toastApiError(e);
+    }
+  }
+
   async function act(
     instance: PluginInstance,
-    action: "enable" | "disable" | "make-default",
+    action: "enable" | "disable" | "make-default" | "activate-live",
   ) {
     try {
       const updated = await updatePlugin({ id: instance.id, action });
@@ -82,6 +93,25 @@ export default function PluginsPage() {
           return i;
         }),
       );
+      if (action === "activate-live") {
+        toast.success(`${updated.label} is live`, {
+          description:
+            "Sends now reach a real carrier. Status stays 'available' until a message actually goes out.",
+        });
+      }
+    } catch (e) {
+      toastApiError(e);
+    }
+  }
+
+  async function addLive(row: PluginInstance) {
+    try {
+      await createLiveInstance({
+        vendor: row.vendor,
+        capability: row.capability,
+        label: `${row.label} (live)`,
+      });
+      await reload();
     } catch (e) {
       toastApiError(e);
     }
@@ -126,7 +156,11 @@ export default function PluginsPage() {
                   <PluginRow
                     key={row.id}
                     row={row}
+                    hasLiveSibling={rows.some(
+                      (i) => i.vendor === row.vendor && i.mode === "live",
+                    )}
                     onAct={act}
+                    onAddLive={() => addLive(row)}
                     onConfigure={() => setConfiguring(row)}
                   />
                 ))}
@@ -140,6 +174,7 @@ export default function PluginsPage() {
         instance={configuring}
         open={configuring !== null}
         onOpenChange={(open) => !open && setConfiguring(null)}
+        onConfigured={reload}
       />
     </div>
   );
@@ -147,13 +182,27 @@ export default function PluginsPage() {
 
 function PluginRow({
   row,
+  hasLiveSibling,
   onAct,
+  onAddLive,
   onConfigure,
 }: {
   row: PluginInstance;
-  onAct: (i: PluginInstance, a: "enable" | "disable" | "make-default") => void;
+  hasLiveSibling: boolean;
+  onAct: (
+    i: PluginInstance,
+    a: "enable" | "disable" | "make-default" | "activate-live",
+  ) => void;
+  onAddLive: () => void;
   onConfigure: () => void;
 }) {
+  const configured = row.credential_fingerprint !== null;
+  const isLive = row.mode === "live";
+  // A live instance without credentials cannot dispatch, so the control is disabled WITH the reason
+  // rather than letting staff click into a `credentials_required` error.
+  const activateBlockedReason = configured
+    ? null
+    : "Install credentials before activating live delivery.";
   return (
     <div className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
       <div className="flex min-w-0 flex-1 flex-col">
@@ -188,12 +237,26 @@ function PluginRow({
           ) : null}
         </div>
         <span className="text-xs text-muted-foreground">
-          {row.status === "connected" ? "Connected" : "Not configured"}
+          {/* `connected` is EARNED by a real dispatch (ADR-0011 §6) — never by enabling a toggle,
+              so it must not be worded as if the toggle proved anything. */}
+          {row.status === "connected"
+            ? "Connected — a message has actually gone out"
+            : row.status === "error"
+              ? "Last send failed"
+              : configured
+                ? "Credentials installed · not yet proven"
+                : "No credentials"}
+          {configured ? ` · ${row.credential_fingerprint}` : ""}
           {row.region ? ` · ${row.region}` : ""}
         </span>
       </div>
 
       <div className="flex items-center gap-2">
+        {!isLive && !hasLiveSibling ? (
+          <Button size="sm" variant="ghost" onClick={onAddLive}>
+            Add live
+          </Button>
+        ) : null}
         {row.enabled && !row.isDefault ? (
           <Button
             size="sm"
@@ -204,15 +267,26 @@ function PluginRow({
           </Button>
         ) : null}
         <Button size="sm" variant="outline" onClick={onConfigure}>
-          Configure
+          {configured ? "Rotate key" : "Configure"}
         </Button>
-        <Button
-          size="sm"
-          variant={row.enabled ? "ghost" : "default"}
-          onClick={() => onAct(row, row.enabled ? "disable" : "enable")}
-        >
-          {row.enabled ? "Disable" : "Enable"}
-        </Button>
+        {isLive && !row.enabled ? (
+          <Button
+            size="sm"
+            disabled={activateBlockedReason !== null}
+            title={activateBlockedReason ?? undefined}
+            onClick={() => onAct(row, "activate-live")}
+          >
+            Activate live
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant={row.enabled ? "ghost" : "default"}
+            onClick={() => onAct(row, row.enabled ? "disable" : "enable")}
+          >
+            {row.enabled ? "Disable" : "Enable"}
+          </Button>
+        )}
       </div>
     </div>
   );

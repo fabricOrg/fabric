@@ -147,11 +147,29 @@ describe("sender-id enforcement (E10-S4)", () => {
       provisioning,
       new AuditService(provisioning),
     );
-    await service.decide(
-      senderRow.id,
-      { status: "active" },
-      { email: "ops@fabric.dev", staffId: null },
+    const actor = { email: "ops@fabric.dev", staffId: null };
+
+    // 3a. Activating BEFORE the carrier approved is refused. Arkesel has no registration API, so
+    // an `active` sender the network never approved would be rejected at send time with PROHIBITED
+    // while the dashboard claimed it was ready — the exact lie this gate exists to prevent.
+    await expect(
+      service.decide(senderRow.id, { status: "active" }, actor),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        (
+          error as { getResponse?: () => { error?: { code?: string } } }
+        ).getResponse?.()?.error?.code === "carrier_not_approved",
     );
+    const blockedByCarrier = await post(LIVE_KEY, "/v1/sms/send", smsPayload);
+    expect(blockedByCarrier.statusCode).toBe(400);
+
+    // 3b. Operator records the carrier's approval, THEN activates the customer.
+    await service.setCarrierStatus(
+      senderRow.id,
+      { carrier_status: "approved", carrier_ref: "ARK-TEST-1" },
+      actor,
+    );
+    await service.decide(senderRow.id, { status: "active" }, actor);
     const sent = await post(LIVE_KEY, "/v1/sms/send", smsPayload);
     expect(sent.statusCode).toBe(201);
     await provisioning.end();

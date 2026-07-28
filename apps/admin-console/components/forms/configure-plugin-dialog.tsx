@@ -17,46 +17,71 @@ import {
 } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import { useForm } from "@tanstack/react-form";
-import { useId } from "react";
+import { useId, useState } from "react";
 import { toast } from "sonner";
-import { z } from "zod";
-import type { PluginInstance } from "@/lib/client/plugins-api";
+import {
+  configurePlugin,
+  type PluginInstance,
+  VENDOR_CREDENTIAL_FIELDS,
+} from "@/lib/client/plugins-api";
 
 /**
- * Credential config for a platform plugin instance. Mock — TODO(BFF): store creds in Vault + verify.
- * Live mode is a redline (real spend/sends): sandbox is the only mode here; going live is a separate,
- * human-approved step with real credentials.
+ * Install or rotate a provider credential (ADR-0011 §1). Fields come from the vendor's own declared
+ * shape; the api re-validates against the adapter's `configSchema` regardless.
+ *
+ * WRITE-ONLY. Existing values are never rendered — they are unreadable once sealed. Rotation shows
+ * the same empty form, because that is honestly what it is: installing a new version, not editing
+ * the old one.
  */
-const schema = z.object({
-  key: z.string().trim().min(1),
-  secret: z.string().trim().min(1),
-});
-
 export function ConfigurePluginDialog({
   instance,
   open,
   onOpenChange,
+  onConfigured,
 }: {
   instance: PluginInstance | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onConfigured?: () => void;
 }) {
   const ids = useId();
+  const [error, setError] = useState<string | null>(null);
+  const fields = instance
+    ? (VENDOR_CREDENTIAL_FIELDS[instance.vendor] ?? [
+        { name: "apiKey", label: "API key", required: true },
+      ])
+    : [];
 
   const form = useForm({
-    defaultValues: { key: "", secret: "" },
-    validators: { onChange: schema },
-    onSubmit: async () => {
+    defaultValues: {} as Record<string, string>,
+    onSubmit: async ({ value }) => {
       if (!instance) return;
-      // Mock persist — TODO(BFF): store creds in Vault + verify against the provider.
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      onOpenChange(false);
-      form.reset();
-      toast.success(`${instance.vendor} configured (sandbox)`, {
-        description: "Test credentials saved. Enable it to route traffic.",
-      });
+      setError(null);
+      // Drop blanks so an untouched optional field is absent rather than stored as "".
+      const credential = Object.fromEntries(
+        Object.entries(value).filter(([, v]) => v?.trim()),
+      );
+      try {
+        const { fingerprint, version } = await configurePlugin(
+          instance.id,
+          credential,
+        );
+        onOpenChange(false);
+        form.reset();
+        onConfigured?.();
+        toast.success(`${instance.label} credentials installed`, {
+          description: `Version ${version} · fingerprint ${fingerprint}`,
+        });
+      } catch (thrown) {
+        const message =
+          (thrown as { error?: { message?: string } })?.error?.message ??
+          "The credential could not be installed.";
+        setError(message);
+      }
     },
   });
+
+  const isLive = instance?.mode === "live";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -69,48 +94,66 @@ export function ConfigurePluginDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Configure {instance?.vendor}</DialogTitle>
+            <DialogTitle>
+              {instance?.credential_fingerprint ? "Rotate" : "Configure"}{" "}
+              {instance?.label}
+            </DialogTitle>
             <DialogDescription>
-              Sandbox / test credentials only. Going live (real spend &amp;
-              sends) is a separate, approved step.
+              {isLive
+                ? "These credentials reach a real carrier. Sends will cost money and arrive on real phones."
+                : "Sandbox credentials. Nothing here reaches a carrier."}
             </DialogDescription>
           </DialogHeader>
+
           <div className="flex flex-col gap-4 py-2">
-            <form.Field name="key">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={`${ids}-key`}>API key</FieldLabel>
-                  <Input
-                    id={`${ids}-key`}
-                    value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    onBlur={field.handleBlur}
-                    placeholder="pk_test_…"
-                    className="font-mono"
-                  />
-                </Field>
-              )}
-            </form.Field>
-            <form.Field name="secret">
-              {(field) => (
-                <Field>
-                  <FieldLabel htmlFor={`${ids}-secret`}>API secret</FieldLabel>
-                  <Input
-                    id={`${ids}-secret`}
-                    type="password"
-                    value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    onBlur={field.handleBlur}
-                    placeholder="sk_test_…"
-                    className="font-mono"
-                  />
-                  <FieldDescription>
-                    Stored encrypted in Vault; never shown again after saving.
-                  </FieldDescription>
-                </Field>
-              )}
-            </form.Field>
+            {instance?.credential_fingerprint ? (
+              <p className="text-muted-foreground text-sm">
+                A credential is already installed (fingerprint{" "}
+                <span className="font-mono">
+                  {instance.credential_fingerprint}
+                </span>
+                ). Saving installs a new version; the previous one stops being
+                used immediately.
+              </p>
+            ) : null}
+
+            {fields.map((spec) => (
+              <form.Field key={spec.name} name={spec.name}>
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={`${ids}-${spec.name}`}>
+                      {spec.label}
+                      {spec.required ? "" : " (optional)"}
+                    </FieldLabel>
+                    <Input
+                      id={`${ids}-${spec.name}`}
+                      type={spec.name === "apiKey" ? "password" : "text"}
+                      value={field.state.value ?? ""}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      className="font-mono"
+                      autoComplete="off"
+                    />
+                    {spec.hint ? (
+                      <FieldDescription>{spec.hint}</FieldDescription>
+                    ) : null}
+                  </Field>
+                )}
+              </form.Field>
+            ))}
+
+            <p className="text-muted-foreground text-xs">
+              Stored encrypted under the platform master key. It cannot be read
+              back from anywhere afterwards — only replaced.
+            </p>
+
+            {error ? (
+              <p className="text-destructive text-sm" role="alert">
+                {error}
+              </p>
+            ) : null}
           </div>
+
           <DialogFooter>
             <form.Subscribe selector={(s) => s.isSubmitting}>
               {(isSubmitting) => (
@@ -125,16 +168,10 @@ export function ConfigurePluginDialog({
                 </DialogClose>
               )}
             </form.Subscribe>
-            <form.Subscribe
-              selector={(s) => [s.canSubmit, s.isSubmitting] as const}
-            >
-              {([canSubmit, isSubmitting]) => (
-                <Button
-                  type="submit"
-                  loading={isSubmitting}
-                  disabled={!canSubmit}
-                >
-                  Save credentials
+            <form.Subscribe selector={(s) => s.isSubmitting}>
+              {(isSubmitting) => (
+                <Button type="submit" loading={isSubmitting}>
+                  Install credentials
                 </Button>
               )}
             </form.Subscribe>

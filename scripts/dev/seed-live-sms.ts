@@ -23,9 +23,8 @@ import { hashApiKey } from "../../services/api/src/api-keys/api-key.crypto.js";
  * country. This script builds exactly that and nothing else.
  *
  * It is a LOCAL development helper: it writes only to the database named by DATABASE_URL_SUPER.
- * It does not enable live delivery on its own — that still requires SMS_PROVIDER=arkesel,
- * ARKESEL_SANDBOX=false and a non-empty SMS_LIVE_RECIPIENT_ALLOWLIST in the API's environment,
- * each of which is a deliberate human-gated flip.
+ * It does not enable live delivery on its own — that still requires SMS_PROVIDER=arkesel and
+ * ARKESEL_SANDBOX=false in the API's environment, each a deliberate human-gated flip.
  */
 const tenantId =
   process.env.LIVE_TENANT_ID ?? "00000000-0000-0000-0000-0000000000e1";
@@ -157,10 +156,21 @@ async function main(): Promise<void> {
         useCase: "Local live-delivery pilot (transactional).",
         status: "active",
         decidedAt: new Date(),
+        // Required for `active` (migration 0097). LOCAL PILOT ONLY: this asserts carrier approval
+        // that this script cannot verify — Arkesel has no registration API. On a real workspace an
+        // operator records it after registering the id, which is the point of the column.
+        carrierStatus: "approved",
+        carrierRef: "local-seed",
+        carrierDecidedAt: new Date(),
       })
       .onConflictDoUpdate({
         target: [senders.tenantId, senders.senderId, senders.country],
-        set: { status: "active", decidedAt: new Date() },
+        set: {
+          status: "active",
+          decidedAt: new Date(),
+          carrierStatus: "approved",
+          carrierDecidedAt: new Date(),
+        },
       });
 
     await appDb.withTenant(tenantId, (tx) =>

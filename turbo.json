@@ -1,6 +1,15 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "//": "Turbo caches & parallelizes tasks across packages. `typecheck`/`test` run per-package; `build` waits for upstream package builds (^build) so dependents compile against fresh types.",
+  "//globalPassThroughEnv": "Env read by ROOT-LEVEL scripts in scripts/, which run directly (pnpm dev:seed:live-sms) rather than through a Turbo task — so no package task declares their env and biome's turbo domain flags them as undeclared. Pass-through, not cache keys: these are connection strings and one-off run parameters, never build inputs.",
+  "globalPassThroughEnv": [
+    "DATABASE_URL_APP",
+    "DATABASE_URL_SUPER",
+    "LIVE_API_KEY",
+    "LIVE_SENDER_COUNTRY",
+    "LIVE_SENDER_ID",
+    "LIVE_TENANT_ID"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

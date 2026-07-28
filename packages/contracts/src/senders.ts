@@ -38,14 +38,47 @@ export const createSenderRequestSchema = z.object({
 });
 export type CreateSenderRequest = z.infer<typeof createSenderRequestSchema>;
 
-/** Staff review queue row — the customer DTO plus the owning tenant. */
+/**
+ * The CARRIER side of a registration. STAFF-ONLY — deliberately absent from `senderDtoSchema`, so a
+ * customer response cannot carry it even by accident.
+ *
+ * We cannot automate this: Arkesel exposes no sender-ID registration endpoint, so registration is an
+ * operator action in their dashboard plus network-level approval. `submitted` is the honest
+ * in-between state — asked, not yet answered.
+ */
+export const senderCarrierStatusSchema = z.enum([
+  "unregistered",
+  "submitted",
+  "approved",
+  "rejected",
+]);
+export type SenderCarrierStatus = z.infer<typeof senderCarrierStatusSchema>;
+
+/** Staff review queue row — the customer DTO plus the owning tenant and the carrier side. */
 export const adminSenderDtoSchema = senderDtoSchema.extend({
   // guid() not uuid(): tenant ids are UUID-shaped opaque identifiers from our own DB, but the dev
   // seed tenant (SEED_TENANT_ID = 00000000-…-00d1) isn't RFC-version-compliant, and zod v4's uuid()
   // rejects it. guid() keeps the shape check without the version pedantry; real v4 tenants still pass.
   tenant_id: z.string().guid(),
+  carrier_status: senderCarrierStatusSchema,
+  carrier_ref: z.string().nullable(),
+  carrier_decided_at: z.string().nullable(),
 });
 export type AdminSenderDto = z.infer<typeof adminSenderDtoSchema>;
+
+/**
+ * Staff recording what the CARRIER said. Separate from `decideSenderRequestSchema` because they are
+ * different facts: this one reports an external outcome we observed, that one is our own decision.
+ * Collapsing them would let an operator approve a customer while only intending to note progress.
+ */
+export const setSenderCarrierStatusRequestSchema = z.object({
+  carrier_status: senderCarrierStatusSchema,
+  /** The carrier's reference for the registration, when it gives one. Free text — there is no API. */
+  carrier_ref: z.string().trim().max(200).optional(),
+});
+export type SetSenderCarrierStatusRequest = z.infer<
+  typeof setSenderCarrierStatusRequestSchema
+>;
 
 export const listAdminSendersResponseSchema = z.object({
   senders: z.array(adminSenderDtoSchema),

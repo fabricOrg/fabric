@@ -73,21 +73,147 @@ design and the five slices.
 **Slice 2b — wire `deps()` to the resolver. THIS IS THE BLOCKER.** Until it lands, `SMS_PROVIDER` /
 `ARKESEL_API_KEY` still drive routing and the whole plugin story is inert.
 
-9 call sites (`sms.service.ts` ×6, `sms-runtime.service.ts`, `sms-dispatch-recheck.ts`). Seven are a
-simple `await`. **Two are the real work**: `sweepStuck` passes `(mode) => this.deps(mode)` and the
-recheck path passes a dispatch factory INTO `@app/sms-engine`, so async resolution changes the
-engine's deps-factory contract across a package boundary. Decide that deliberately — it is a money
-path, and `deps()` currently binds provider + creds at construction (`sms-runtime.service.ts:52`).
+**2b part 1 DONE (2026-07-28): settlement now keys on the DISPATCHING provider.** Found while
+scoping — a naive "make `deps()` async" would have shipped a money bug. `deps.provider` is read on
+RESOLUTION paths, not just dispatch: `resolveMessage` takes `billableStatuses` +
+`platformFaultExemptions` from it to decide commit-vs-refund, and `ingestDlr` matches on
+`provider_slug`. Once staff can swap a vendor between a send and its DLR/sweep, that adapter is the
+WRONG one — `arkesel-sms` bills at `accepted`, `virtual-phone` at `undelivered`, and
+`billableStatuses[0]` is exactly the `STATUS_RANK` threshold `reachedBillable` compares against.
 
-**Slice 3 — widen instance identity.** `unique(capability, vendor)` forbids sandbox and live
-instances of one vendor coexisting. Replace with `unique(tenant_id, capability, vendor, mode)` and
-add a nullable `tenant_id` (null = platform).
+Fix: `resolveMessage` reads each row's own `provider_slug` (stamped at `prepare-send.ts:84`) and
+resolves the adapter through a new `smsResolutionAdapterFor(slug)` in `@app/integrations`. That map
+is slug-keyed and DOES include `fake-sms` + `virtual-phone`, unlike the vendor-keyed dispatch
+registry which deliberately excludes the fake — the two answer different questions ("who carries
+this new send?" vs "whose rules govern one already sent?"), and both files say so at length.
 
-**Slice 4 — go-live gate.** Required before ANY hosted live send. Today `mode` is a column nothing
-enforces, and `apply('enable')` sets `status: 'connected'` **without ever calling the provider** —
-a guess presented as fact. Needs: validated credentials present, explicit `activate-live`,
-maker-checker approval (reuse the existing proposals system), audit, and status derived from a real
-`healthCheck()`.
+**Bonus: this DISSOLVED the hard part of 2b.** `sweepExpired`'s `depsForMode` factory existed only
+to hand it the right provider per message, keyed off `delivery_mode` as a proxy. With slug-based
+resolution it is dead code — deleted, along with the `(mode) => this.deps(mode)` call site. The
+cross-package async-factory contract change the earlier plan feared is simply gone.
+
+**Verified by removing the fix and re-running** (the null hypothesis, §9): it does NOT silently lose
+revenue. The wrong rules attempt a refund on an already-committed message, the B6 commit-XOR-refund
+constraint catches it, and `sweepExpired` throws `AlreadyResolvedError` from inside its row loop —
+so one such message aborts that tenant's ENTIRE sweep and strands every reservation behind it. The
+ledger invariant protects the money; nothing protected the sweeper. Gates: integrations 48/48,
+sms-engine integration 13/13 (incl. a new regression test), api + sms-engine typecheck 0, biome clean.
+
+**THE LIVE-RECIPIENT PIN IS GONE (2026-07-28) — do not re-introduce it.** User directive: *"lets
+remove the restriction and the pin, we can send to any number"*, with the product goal that
+**customers register a sender ID, staff approve it, and they then send to their own audiences without
+hindrance.** A platform-wide recipient allowlist is incompatible with a multi-tenant product, so the
+whole rail was deleted rather than re-pointed.
+
+Removed: `SMS_LIVE_RECIPIENT_ALLOWLIST` + parsing, `isLiveRecipientAllowed`, the `E164` const, the
+entire `sms-live-safety.ts` module, the call site in `sms.service.ts`, the allowlist clause in
+`liveProviderReadiness`, the `live_recipient_not_allowed` code and the dashboard branch that rendered
+it, and the `.env.example` / `ecs.tf` / `database.tf` references. Live readiness now turns on
+credentials + carrier mode only. Gates: integrations 48/48, api unit 198/198, api + dashboard
+typecheck 0, biome clean.
+
+Worth knowing: this rail had ALSO been about to break silently. It only engaged when
+`SMS_PROVIDER === 'arkesel'`, a var the plugin path retires — so on a deployed stack it would have
+read `fake` and allowed every recipient while the resolver dispatched to real Arkesel. Whatever
+replaces a guard must key on **resolved provider identity**, never on `SMS_PROVIDER`. The same trap
+applies to anything else still reading that var before slice 5.
+
+What still governs who may be messaged, all per-tenant and already built: sender-ID registration,
+consent/opt-out suppression, promotional quiet hours (`assertSendCompliant`), the wallet failing
+closed on funds, both kill-switches, and sandbox environments hard-pinned to the virtual phone.
+
+### Sender approval now models the CARRIER side (2026-07-28, migration 0097)
+
+The product goal is *"customers register a sender ID, we approve, they send without hindrance."* The
+blocker was never the pin — it was that `decide('active')` never talked to the carrier. Arkesel
+exposes **no sender-ID registration endpoint**, so `active` was a claim nothing backed: the network
+then rejects with `PROHIBITED` (`arkesel/provider.ts:50` → `failed`), the reservation refunds, and
+the customer sees an "active" sender that cannot deliver.
+
+- `senders` gains `carrier_status` (`unregistered|submitted|approved|rejected`) + `carrier_ref` +
+  `carrier_decided_at`, and a CHECK `sender_active_requires_carrier_approval`. A **constraint**, not
+  a service guard — a migration, fixture, or future code path can bypass service logic, and the
+  database simply refuses to hold the lie.
+- **Admin-only.** The carrier fields live on `adminSenderDtoSchema` only, never `senderDtoSchema`,
+  so a customer response cannot carry them. Customers still see `pending → active/rejected`.
+- `decide()` refuses `active` unless `carrier_status = 'approved'` (`carrier_not_approved`); new
+  audited `setCarrierStatus()` + `POST /internal/admin/senders/:id/carrier-status`.
+- **The backfill was load-bearing**: `ADD CONSTRAINT` validates existing rows, and 1 already-active
+  sender (the local live pilot) would have failed the migration. Grandfathered as
+  `carrier_ref = 'grandfathered:0097'` so the assumption stays auditable — anything carrying that
+  marker should be re-confirmed against the carrier.
+- Verified on real Postgres: the constraint REFUSES `active`+`unregistered`, ALLOWS
+  `active`+`approved`. senders integration 3/3 proves register → pending → refused → record carrier
+  → activate → send 201. api unit 198/198; api + admin-console typecheck 0.
+
+**Still open on this thread:** the admin-console surface for carrier state (disable Activate until
+carrier-approved rather than letting staff hit the error), and the customer-side "send a test
+message" confirmation that their ID actually works — which must reuse the REAL send path (normal
+wallet reserve/commit, normal gates), because a bypassed test proves nothing about real sends.
+
+**2b part 2 REMAINS — `deps()` async + resolver-derived provider identity.** 12 call sites, not the
+9 previously recorded. The three that were missed are all env-derived provider identity:
+`sms.service.ts:95` (`liveReady` gate), `sms.service.ts:104` and `sms-dispatch-recheck.ts:47` (both
+`provider.slug` for the `provider.<slug>` kill-switch). The rest are simple `await`s;
+`sms-dispatch-recheck.ts:53` is already inside an async closure, so only its interface at `:17`
+changes. Note the resolver speaks `'sandbox' | 'live'` while the engine speaks `DeliveryMode
+'virtual' | 'live'` — map deliberately, do not conflate. `deps()` still binds provider + creds at
+construction (`sms-runtime.service.ts:52`).
+
+**Slice 3 — DONE (2026-07-28, migration 0098).** `unique(tenant_id, capability, vendor, mode)`
+**NULLS NOT DISTINCT** + nullable `tenant_id` FK to accounts (RESTRICT). The modifier is
+load-bearing: Postgres treats NULLs as distinct, so a plain UNIQUE over a nullable `tenant_id` would
+have allowed unlimited duplicate PLATFORM-WIDE rows — the exact collision the constraint exists to
+stop, silently permitted for the most common row shape. Also closed a latent defect the new column
+made expressible: the resolver did not filter `tenant_id`, so the first tenant-scoped instance would
+have started carrying everyone's traffic. And the catalog seeder's `onConflictDoNothing` target must
+match the constraint exactly or Postgres cannot infer an arbiter index (42P10).
+
+**Slice 4 — API DONE (2026-07-28, migration 0099 + `PluginCredentialsService`); maker-checker
+deferred.** `configure()` did not exist at all — slice 1 landed the credential STORE and the crypto,
+but nothing ever wrote to it, so `PLUGIN_MASTER_KEY` being set on Render still left no way to install
+a key. Now: validates against the adapter's own `configSchema`, seals through the envelope, INSERTs
+at the next version (rotation is recoverable), repoints `credentials_ref`, audits **fingerprint and
+version only**. New `activate-live` action refuses without installed credentials. `createLiveInstance`
+makes live its own row rather than flipping the sandbox row's mode, which would repoint sandbox
+traffic at a carrier.
+
+**§6 earned status is real now**: `apply('enable')` no longer claims `connected` — that was a guess
+presented to staff as fact. `markDispatchOutcome()` is the only writer and is called from the actual
+dispatch path (a method with no caller is not shipped). Note Arkesel's `healthCheck()` is a stub that
+returns `up` unconditionally and the contract passes it no credentials, so deriving status from it
+would just relocate the same lie; ADR §6's other permitted source — the outcome of the last dispatch —
+is what we use.
+
+Migration 0099 also fixes `credentials_ref` `text` → `uuid` + FK ON DELETE SET NULL: text vs uuid has
+no equality operator so the fingerprint join failed outright, and a pruned credential now degrades to
+an honest "not configured" instead of a dangling id. Needs an explicit `USING` — text→uuid has no
+assignment cast.
+
+**Maker-checker (§5) is deliberately NOT built.** `proposals.decide()` enforces separation of duties,
+so gating `activate-live` behind it makes activation impossible for a SINGLE staff operator — it
+would block the very journey this work enables. Activation is still audited and still refuses without
+validated credentials. Revisit when a second operator exists.
+
+**Admin console surfaces — DONE.** `configure-plugin-dialog.tsx` was a MOCK (a `setTimeout(400)` that
+toasted "configured", stored nothing, and claimed "Stored encrypted in Vault"). It now writes for
+real. Plugins page gained mode + fingerprint, "Add live", "Rotate key", and **Activate live disabled
+with the reason** until credentials exist. Sender review gained the carrier line plus "Mark
+submitted" / "Carrier approved", with **Activate disabled until carrier-approved**.
+
+### The journey is now buildable end to end — what remains is doing it
+
+Audited against code, not comments: request go-live (dashboard card → proposal) ✅ · staff approve
+**executes** (flips `accounts.plan`, unlocks locked live envs, audited, double-approve safe) ✅ ·
+mint `sk_live_` ✅ · register sender ✅ · admin records carrier + activates ✅ · fund wallet via
+`POST /v1/payments/topup` ✅ · send ✅.
+
+Two things to know before the run:
+- **Paystack live keys are redlined off**, so funding the live wallet uses a sandbox test card — no
+  real money IN, while the Arkesel send is real money OUT of our master account. Fine for a first
+  send; do not read the wallet balance as a real payment.
+- `proposals.service.ts:84-87` still claims execution is *"deferred (target features don't exist
+  yet)"*. **Stale — it contradicts line 229 of its own function.** Nearly caused a false report.
 
 **Slice 5 — seed from env, then DELETE the env path.** Two sources of truth for provider selection
 is how this drifted originally.
@@ -146,21 +272,28 @@ scope of the report. Expect this rather than rediscovering it.
 | #194 | flaky integration assertions now capture the response | (found while working) |
 | #195 | audit pagination spec stops walking the global log | (found while working) |
 
-### ⚠️ ONE DEPLOYED FIX IS NOT WORKING — needs a human, config not code
+### ✅ RESOLVED (2026-07-28): the CORS allowlist reached Render
 
-**`PUBLIC_CORS_ALLOWED_ORIGINS` never reached Render**, so the landing page's pricing calculator is
-still empty. Verified live: `vary: Origin` IS present (the onSend hook is deployed and running) but
-no `access-control-allow-origin` for an allowed origin — i.e. the allowlist parsed empty and failed
-closed exactly as designed.
+`PUBLIC_CORS_ALLOWED_ORIGINS` was set in the **Render dashboard** (`fabric-api` → Environment).
+Verified live, headers not report:
 
-Cause: it was added to `render.yaml`, but `deploy-testing.yml` triggers Render through
-`RENDER_API_SERVICE_ID` (a deploy hook), which does **not** re-read the blueprint. `render.yaml`
-only applies on a blueprint sync, so an already-provisioned service ignores newly added vars.
+```
+$ curl -sI -H "Origin: https://www-kohl-kappa.vercel.app" \
+    https://fabric-jezz.onrender.com/v1/public/pricing
+HTTP/1.1 200 OK
+access-control-allow-origin: https://www-kohl-kappa.vercel.app
+vary: Origin
+```
 
-Fix: Render dashboard → `fabric-api` → Environment →
-`PUBLIC_CORS_ALLOWED_ORIGINS=https://www-kohl-kappa.vercel.app,https://fabric-dashboard-teal.vercel.app`.
-**Confirm the real www origin first** — a wrong value fails identically to a missing one, silently.
-This is the cost of the allowlist over `*` (a deliberate choice: least privilege, per user).
+The body carries 6 real rates (sms+email × GHS/NGN/USD, `effective_at` 2026-07-27), so a
+subscription book is now flagged `is_public` as well and the landing calculator has data.
+
+**The reusable lesson, since it will recur:** a var added to `render.yaml` does NOT reach an
+already-provisioned service. `deploy-testing.yml` triggers Render via `RENDER_API_SERVICE_ID` (a
+deploy hook), which never re-reads the blueprint — `render.yaml` only applies on a blueprint sync.
+Any new Render env var must be set in the dashboard (or via a blueprint sync) as a separate human
+step. The failure was silent because the allowlist correctly fails closed on an empty parse, so a
+missing var and a wrong var look identical from outside.
 
 ### Integration-test flakiness — 1 of 3 fixed WITH EVIDENCE, 2 still open
 
@@ -334,8 +467,9 @@ Needed because the normal dev seed is plan `sandbox`, and a sandbox ENVIRONMENT 
 the virtual phone (ADR-0004) — it can never reach a carrier. `.env.live-sms` holds the run config
 (gitignored via `.env.*`).
 
-The existing rails already implement the live-pinning directive: `SMS_LIVE_RECIPIENT_ALLOWLIST`
-refuses any live send to a number not on it. Pinned to `+233545227189`.
+~~The existing rails already implement the live-pinning directive.~~ **Obsolete — the recipient pin
+was removed 2026-07-28** (see the ADR-0011 section above). Live sends go to any number; per-tenant
+sender registration + consent govern reach.
 
 Blocked on three human steps: `infisical login` (session expired — the seed's DB auth failed because
 `.env`'s DB passwords are stale and the real ones are in Infisical), an Arkesel-approved sender ID
@@ -355,7 +489,7 @@ values override the parent env and Node's `--env-file` cannot override an alread
 
 ```
 infisical run --env=dev -- env SMS_PROVIDER=arkesel ARKESEL_SANDBOX=false \
-  ARKESEL_API_KEY=… SMS_LIVE_RECIPIENT_ALLOWLIST=+233545227189 pnpm dev:api
+  ARKESEL_API_KEY=… pnpm dev:api
 ```
 
 ### Money/pricing: what is actually LEFT
@@ -371,7 +505,9 @@ ADR-0010's SMS path is complete and verified. The rest is not:
   Worth noting how it hid: contract modelled both channels, everything typechecked, every test
   passed — nothing asserted that a PURCHASABLE channel must also be SPENDABLE.
 - **Unverified**: whether any email token lots already exist on testing. Almost certainly zero (no
-  token book configured, `/v1/public/pricing` still 404s) — but it is a money question, so check.
+  token book configured) — but it is a money question, so check. Note `/v1/public/pricing` now
+  returns 200 with 6 rates, so the "it still 404s" half of that reasoning is retired; the
+  SUBSCRIPTION book is public, which says nothing about token books.
 - **Phase 3** dashboard: buy-tokens flow, token balance, plan surface. API exists, no UI.
 - **Phase 4** spend-based auto price-book upgrade (loyalty). **Phase 5** SES adapter.
 - **Breakage recognition** — `token_breakage` enum exists with NO caller. With no expiry, deferred
@@ -381,9 +517,10 @@ ADR-0010's SMS path is complete and verified. The rest is not:
 
 ### Also open
 
-- **Two staff actions** to switch features on (both intentionally off — seeding a rate would be the
-  fabricated pricing ADR-0010 §11 forbids): flag a subscription book `is_public`; create a
-  token-mode book so `POST /v1/tokens/purchase` stops returning `token_price_unavailable`.
+- **One staff action left** (intentionally off — seeding a rate would be the fabricated pricing
+  ADR-0010 §11 forbids): create a token-mode book so `POST /v1/tokens/purchase` stops returning
+  `token_price_unavailable`. ~~flag a subscription book `is_public`~~ — DONE, confirmed by
+  `/v1/public/pricing` serving 6 rates on 2026-07-28.
 - **Set `PUBLIC_API_URL` + `PUBLIC_DASHBOARD_URL`** in the www Vercel project. Both are baked at
   build time and fall back to **testing** hosts, so a production deploy that omits them silently
   points pricing and every CTA at testing.

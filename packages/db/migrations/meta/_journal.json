@@ -680,6 +680,27 @@
       "when": 1785187446188,
       "tag": "0096_plugin_credentials_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1785244292018,
+      "tag": "0097_nasty_hellcat",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1785246363720,
+      "tag": "0098_minor_multiple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1785246985605,
+      "tag": "0099_ambiguous_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }
