@@ -116,6 +116,77 @@ describeDb("plugin credentials → resolution (ADR-0011 slices 1+2+4)", () => {
     expect(JSON.stringify(listed)).not.toContain(ARKESEL_KEY);
   });
 
+  /**
+   * The requirement that drove payments into the plugin system: a sandbox workspace must charge with
+   * TEST keys and a live one with LIVE keys. Slice 3 made them separate rows, so this is isolation by
+   * construction rather than a flag someone can get wrong — and it proves the resolver treats
+   * payments exactly as it treats SMS.
+   */
+  it("resolves payment credentials per mode — sandbox gets test keys, live gets live keys", async () => {
+    const sandbox = (await registry.list()).find(
+      (i) => i.vendor === "paystack" && i.mode === "sandbox",
+    );
+    if (!sandbox)
+      throw new Error("expected a seeded sandbox paystack instance");
+    const live = await registry.createLiveInstance({
+      vendor: "paystack",
+      capability: "payment",
+    });
+
+    await credentials.configure(
+      sandbox.id,
+      { credential: { secretKey: "sk_test_sandbox_key" } },
+      { email: "ops@fabric.dev" },
+    );
+    await credentials.configure(
+      live.id,
+      { credential: { secretKey: "sk_live_real_key" } },
+      { email: "ops@fabric.dev" },
+    );
+    await registry.apply(sandbox.id, "enable");
+    await registry.apply(live.id, "activate-live");
+
+    try {
+      resolver.invalidate();
+      const resolvedSandbox = await resolver.resolvePayment("sandbox");
+      const resolvedLive = await resolver.resolvePayment("live");
+      expect(resolvedSandbox?.creds.secretKey).toBe("sk_test_sandbox_key");
+      expect(resolvedLive?.creds.secretKey).toBe("sk_live_real_key");
+      expect(resolvedSandbox?.provider.slug).toBe("paystack");
+      expect(resolvedLive?.provider.slug).toBe("paystack");
+    } finally {
+      // plugin_instances is GLOBAL control-plane config with no tenant scoping, and integration
+      // specs share one database — so an ENABLED payment instance changes resolution for every
+      // other spec running concurrently. Leaving these on made flows' Lighthouse saga resolve this
+      // fake key and make a real Paystack call ("Invalid key"). Disable inside the test rather than
+      // in afterAll, and never leave shared global state enabled.
+      await registry.apply(sandbox.id, "disable");
+      await registry.apply(live.id, "disable");
+      resolver.invalidate();
+    }
+  });
+
+  // Paystack's adapter requires `secretKey`. Before configure() validated non-SMS capabilities this
+  // stored happily under the wrong field name and failed only at charge time.
+  it("rejects a payment credential using the wrong field name", async () => {
+    const live = await registry.createLiveInstance({
+      vendor: "paystack",
+      capability: "payment",
+    });
+    await expect(
+      credentials.configure(
+        live.id,
+        { credential: { apiKey: "sk_live_wrong_field" } },
+        { email: "ops@fabric.dev" },
+      ),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        (
+          error as { getResponse?: () => { error?: { code?: string } } }
+        ).getResponse?.()?.error?.code === "missing_credential_field",
+    );
+  });
+
   it("rotation supersedes the old version and the new key is what resolves", async () => {
     const listed = await registry.list();
     const live = listed.find(
@@ -130,8 +201,17 @@ describeDb("plugin credentials → resolution (ADR-0011 slices 1+2+4)", () => {
     );
     expect(rotated.version).toBe(2);
 
-    resolver.invalidate(); // the send path caches for 30s; a rotation must take effect
-    const resolved = await resolver.resolveSms("live");
-    expect(resolved?.creds.apiKey).toBe("ark_rotated_key");
+    try {
+      resolver.invalidate(); // the send path caches for 30s; a rotation must take effect
+      const resolved = await resolver.resolveSms("live");
+      expect(resolved?.creds.apiKey).toBe("ark_rotated_key");
+    } finally {
+      // Same shared-global-state hazard as the payment test above: an enabled LIVE sms instance
+      // makes every concurrently-running send spec resolve this fake Arkesel key and attempt a real
+      // carrier call. This is the last test that needs it enabled, so switch it off here rather than
+      // relying on afterAll.
+      await registry.apply(live.id, "disable");
+      resolver.invalidate();
+    }
   });
 });

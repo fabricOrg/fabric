@@ -6,8 +6,12 @@ import {
   pluginInstances,
   unwrapCredentialDek,
 } from "@app/db";
-import type { Creds, SmsSenderPlugin } from "@app/integrations";
-import { smsAdapterFor } from "@app/integrations";
+import type {
+  Creds,
+  PaymentProviderPlugin,
+  SmsSenderPlugin,
+} from "@app/integrations";
+import { paymentAdapterFor, smsAdapterFor } from "@app/integrations";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { and, asc, eq, isNull } from "drizzle-orm";
@@ -21,8 +25,16 @@ export interface ResolvedProvider {
   readonly creds: Creds;
 }
 
+/** A resolved PAYMENT provider. Same shape, different adapter contract. */
+export interface ResolvedPaymentProvider {
+  readonly vendor: string;
+  readonly instanceId: string;
+  readonly provider: PaymentProviderPlugin;
+  readonly creds: Creds;
+}
+
 interface CacheEntry {
-  readonly resolved: ResolvedProvider | null;
+  readonly resolved: ResolvedProvider | ResolvedPaymentProvider | null;
   readonly at: number;
 }
 
@@ -64,12 +76,38 @@ export class PluginResolverService {
    * as "cannot send" — never as "send some other way".
    */
   async resolveSms(mode: "sandbox" | "live"): Promise<ResolvedProvider | null> {
-    const key = `sms:${mode}`;
+    return this.resolveCached("sms", mode) as Promise<ResolvedProvider | null>;
+  }
+
+  /**
+   * The payment processor for this mode, or null when none is configured. A sandbox workspace
+   * resolves the instance holding test keys, a live one the instance holding live keys — they are
+   * separate rows, so a test charge can never be attempted with live credentials or vice versa.
+   */
+  async resolvePayment(
+    mode: "sandbox" | "live",
+  ): Promise<ResolvedPaymentProvider | null> {
+    return this.resolveCached(
+      "payment",
+      mode,
+    ) as Promise<ResolvedPaymentProvider | null>;
+  }
+
+  /**
+   * The shared cache + failure posture for every capability. Identical rules whichever provider you
+   * are resolving: short TTL so the control plane stays off the hot path, last-known-good on a blip,
+   * and FAIL CLOSED with nothing cached rather than guessing a provider.
+   */
+  private async resolveCached(
+    capability: "sms" | "payment",
+    mode: "sandbox" | "live",
+  ): Promise<ResolvedProvider | ResolvedPaymentProvider | null> {
+    const key = `${capability}:${mode}`;
     const cached = this.cache.get(key);
     if (cached && Date.now() - cached.at < TTL_MS) return cached.resolved;
 
     try {
-      const resolved = await this.read(mode);
+      const resolved = await this.read(capability, mode);
       this.cache.set(key, { resolved, at: Date.now() });
       return resolved;
     } catch (error) {
@@ -96,8 +134,9 @@ export class PluginResolverService {
   }
 
   private async read(
+    capability: "sms" | "payment",
     mode: "sandbox" | "live",
-  ): Promise<ResolvedProvider | null> {
+  ): Promise<ResolvedProvider | ResolvedPaymentProvider | null> {
     // Enabled instances for this capability+mode, primary (priority 0) first — the failover chain.
     // The first one with a usable adapter AND readable credentials wins; a misconfigured primary
     // falls through to its backup rather than taking sending down.
@@ -110,7 +149,7 @@ export class PluginResolverService {
       .from(pluginInstances)
       .where(
         and(
-          eq(pluginInstances.capability, "sms"),
+          eq(pluginInstances.capability, capability),
           eq(pluginInstances.mode, mode),
           eq(pluginInstances.enabled, true),
           // PLATFORM-WIDE only. Slice 3 made per-tenant instances expressible (nullable tenant_id);
@@ -123,7 +162,10 @@ export class PluginResolverService {
       .orderBy(asc(pluginInstances.priority));
 
     for (const row of rows) {
-      const factory = smsAdapterFor(row.vendor);
+      const factory =
+        capability === "sms"
+          ? smsAdapterFor(row.vendor)
+          : paymentAdapterFor(row.vendor);
       if (!factory) {
         // Enabled in the control plane, but this build has no adapter. Skip rather than throw: a
         // catalog row for a vendor we cannot dispatch must not block a working fallback.
@@ -134,12 +176,16 @@ export class PluginResolverService {
       }
       const creds = await this.credentialsFor(row.id, row.credentialsRef);
       if (!creds) continue;
+      // The cast is safe by construction: the factory was chosen from the capability-matching
+      // registry three lines up, so an sms capability yields an SmsSenderPlugin and a payment
+      // capability a PaymentProviderPlugin. The public resolveSms/resolvePayment wrappers are what
+      // callers see, and each narrows back to its own type.
       return {
         vendor: row.vendor,
         instanceId: row.id,
         provider: factory(),
         creds,
-      };
+      } as ResolvedProvider | ResolvedPaymentProvider;
     }
     return null;
   }

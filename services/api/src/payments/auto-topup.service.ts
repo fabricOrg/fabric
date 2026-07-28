@@ -9,14 +9,15 @@ import {
   payments,
   type TenantId,
 } from "@app/db";
-import { type Creds, PaystackProvider } from "@app/integrations";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { and, eq } from "drizzle-orm";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
+import { PluginResolverService } from "../plugins/plugin-resolver.service.js";
+import { resolvePaymentContext } from "./payment-provider-resolution.js";
 
 /**
  * Auto top-up (E4) — when a tenant's wallet balance falls to/below a configured threshold, charge
@@ -28,24 +29,31 @@ import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 @Injectable()
 export class AutoTopupService {
   private readonly logger = new Logger(AutoTopupService.name);
-  private readonly provider = new PaystackProvider();
 
   constructor(
     @Inject(PROVISIONING_DB) private readonly provisioning: ProvisioningDb,
     @Inject(APP_DB) private readonly appDb: AppDb,
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
+    // Optional, matching PaymentsService: absent resolver = env fallback, i.e. today's behaviour.
+    @Optional()
+    @Inject(PluginResolverService)
+    private readonly resolver?: PluginResolverService,
   ) {}
 
-  private creds(): Creds {
-    const secretKey = this.config.get<string>("PAYSTACK_SECRET_KEY");
-    if (!secretKey) {
-      throw invalidRequest(
-        "payments_not_configured",
-        "Payments are not configured.",
-      );
-    }
-    return { secretKey };
+  /**
+   * Same resolution as a manual top-up — an auto-charge must use the workspace's own mode, or a
+   * sandbox account could be charged against live keys without anyone choosing that.
+   */
+  private resolved(tenantId: string) {
+    return resolvePaymentContext(
+      {
+        provisioning: this.provisioning,
+        config: this.config,
+        resolver: this.resolver,
+      },
+      tenantId,
+    );
   }
 
   async getAutoTopup(tenantId: string): Promise<AutoTopupResponse> {
@@ -161,7 +169,8 @@ export class AutoTopupService {
         email: auth.email,
         status: "pending",
       });
-      const result = await this.provider.chargeAuthorization(
+      const { provider, creds } = await this.resolved(scoped);
+      const result = await provider.chargeAuthorization(
         {
           authorizationCode: auth.authorizationCode,
           email: auth.email,
@@ -169,7 +178,7 @@ export class AutoTopupService {
           currency: cfg.currency,
           reference,
         },
-        this.creds(),
+        creds,
       );
       // The webhook credits (idempotent). A synchronous failure marks the intent so it doesn't block.
       if (result.status === "failed") {

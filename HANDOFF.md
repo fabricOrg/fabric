@@ -201,6 +201,38 @@ real. Plugins page gained mode + fingerprint, "Add live", "Rotate key", and **Ac
 with the reason** until credentials exist. Sender review gained the carrier line plus "Mark
 submitted" / "Carrier approved", with **Activate disabled until carrier-approved**.
 
+### Payments moved into the plugin system too (2026-07-28)
+
+User directive: *"the plugin system must be consistent"* — sandbox customers charge with test keys,
+live customers with live keys, same `activate-live` gate as Arkesel.
+
+**The answer to "does the Paystack live key work in the plugin" was NO, and it looked like it did.**
+Payments read `PAYSTACK_SECRET_KEY` from env (`payments.service.ts`, `auto-topup.service.ts`); the
+resolver hardcoded `capability: 'sms'`; and `configure()` skipped schema validation for non-SMS, so a
+Paystack key pasted into the admin form stored under `apiKey` when the adapter requires `secretKey` —
+green toast, real fingerprint, unusable credential.
+
+Now: `resolve(capability, mode)` with `resolveSms` / `resolvePayment` sharing one cache and one
+fail-closed posture; a payment vendor→adapter registry; `adapterConfigSchemaFor()` so `configure()`
+validates EVERY capability; both payment services resolve through
+`payment-provider-resolution.ts`. Mode comes from the account's **plan** (sandbox → test keys, else
+live) because a top-up funds the workspace, not one application environment — a send routes on its
+environment instead, which is why the two differ.
+
+**Webhook multi-key verification.** A Paystack webhook carries no tenant and must be verified BEFORE
+its body is trusted, so we cannot read the reference to pick a key without trusting unverified input.
+It tries each configured key until one HMAC matches — constant work over keys we own, and forging
+still needs a valid HMAC under one of them.
+
+**Two test lessons worth keeping.** `flows.integration.spec.ts` swapped a private `provider` FIELD on
+PaymentsService; that field is gone, so the swap silently stopped working and the spec made a REAL
+Paystack call ("Invalid key"). It now stubs the resolver — the seam the code actually uses. And
+`plugin_instances` is GLOBAL config with no tenant scoping, so any spec leaving an instance ENABLED
+changes resolution for every other spec; both plugin tests now disable inside the test rather than in
+`afterAll`.
+
+Gates: full api integration **58 files / 272 tests**, integrations 48/48, all typechecks + biome clean.
+
 ### The journey is now buildable end to end — what remains is doing it
 
 Audited against code, not comments: request go-live (dashboard card → proposal) ✅ · staff approve

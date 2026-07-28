@@ -9,7 +9,7 @@ import {
   pluginInstances,
   wrapCredentialDek,
 } from "@app/db";
-import { smsAdapterFor } from "@app/integrations";
+import { adapterConfigSchemaFor } from "@app/integrations";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { desc, eq } from "drizzle-orm";
@@ -145,19 +145,20 @@ export class PluginCredentialsService {
     vendor: string,
     credential: Record<string, string>,
   ): void {
-    if (capability !== "sms") return; // Only SMS adapters are registry-resolvable today.
-    const factory = smsAdapterFor(vendor);
-    if (!factory) {
+    // EVERY capability, not just SMS. Skipping validation here is how a Paystack instance could be
+    // saved holding `apiKey` when its adapter requires `secretKey`: stored, fingerprinted, reported
+    // as configured, and unusable at charge time.
+    const schema = adapterConfigSchemaFor(capability, vendor) as {
+      required?: unknown;
+      properties?: Record<string, unknown>;
+    } | null;
+    if (!schema) {
       throw invalidRequest(
         "vendor_not_supported",
-        `This build has no adapter for '${vendor}', so it cannot be configured.`,
+        `This build has no ${capability} adapter for '${vendor}', so it cannot be configured.`,
         "vendor",
       );
     }
-    const schema = factory().configSchema as {
-      required?: unknown;
-      properties?: Record<string, unknown>;
-    };
     const required = Array.isArray(schema.required) ? schema.required : [];
     for (const field of required) {
       const name = String(field);

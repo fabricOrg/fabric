@@ -12,16 +12,20 @@ import {
   payments,
   type TenantId,
 } from "@app/db";
-import { type Creds, PaystackProvider } from "@app/integrations";
 import { credit } from "@app/wallet";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { eq } from "drizzle-orm";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, unauthorized } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
+import { PluginResolverService } from "../plugins/plugin-resolver.service.js";
 import { TokenPurchaseService } from "../tokens/token-purchase.service.js";
+import {
+  resolvePaymentContext,
+  webhookVerificationCandidates,
+} from "./payment-provider-resolution.js";
 import {
   captureReusableCard,
   completeFlowRecord,
@@ -31,7 +35,6 @@ import {
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  private readonly provider = new PaystackProvider();
 
   constructor(
     @Inject(PROVISIONING_DB) private readonly provisioning: ProvisioningDb,
@@ -40,17 +43,27 @@ export class PaymentsService {
     @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
     @Inject(TokenPurchaseService)
     private readonly tokens: TokenPurchaseService,
+    // Optional so existing unit/integration fixtures that construct this service directly keep
+    // working on the env fallback while the control plane is populated.
+    @Optional()
+    @Inject(PluginResolverService)
+    private readonly resolver?: PluginResolverService,
   ) {}
 
-  private creds(): Creds {
-    const secretKey = this.config.get<string>("PAYSTACK_SECRET_KEY");
-    if (!secretKey) {
-      throw invalidRequest(
-        "payments_not_configured",
-        "Payments are not configured.",
-      );
-    }
-    return { secretKey };
+  /**
+   * ADR-0011: which processor and credentials this workspace charges with comes from the CONTROL
+   * PLANE, keyed by the account's mode — a sandbox workspace resolves test keys, a live one resolves
+   * live keys. They are separate instances, so a live charge can never run on test credentials.
+   */
+  private resolved(tenantId: string) {
+    return resolvePaymentContext(
+      {
+        provisioning: this.provisioning,
+        config: this.config,
+        resolver: this.resolver,
+      },
+      tenantId,
+    );
   }
 
   async initiate(
@@ -60,7 +73,7 @@ export class PaymentsService {
     if (await this.killSwitch.isPaused("platform.payments")) {
       throw invalidRequest("payments_paused", "Top-ups are paused right now.");
     }
-    const creds = this.creds();
+    const { provider, creds } = await this.resolved(tenantId);
     // Paystack references allow only alphanumerics + - . = (no colon); a uuid with a topup- prefix
     // is all hyphens/alphanumerics. Doubles as our credit() idempotency key.
     const reference = `topup-${randomUUID()}`;
@@ -77,7 +90,7 @@ export class PaymentsService {
     });
 
     const base = this.config.get<string>("DASHBOARD_BASE_URL")?.trim();
-    const init = await this.provider.initCharge(
+    const init = await provider.initCharge(
       {
         amountMinor,
         currency: request.currency,
@@ -113,7 +126,7 @@ export class PaymentsService {
     if (await this.killSwitch.isPaused("platform.payments")) {
       throw invalidRequest("payments_paused", "Collections are paused.");
     }
-    const creds = this.creds();
+    const { provider, creds } = await this.resolved(tenantId);
     const reference = `flow-${randomUUID()}`;
     await this.provisioning.db.insert(payments).values({
       tenantId: tenantId as TenantId,
@@ -125,7 +138,7 @@ export class PaymentsService {
       status: "pending",
     });
     const base = this.config.get<string>("DASHBOARD_BASE_URL")?.trim();
-    const init = await this.provider.initCharge(
+    const init = await provider.initCharge(
       {
         amountMinor: p.amountMinor,
         currency: p.currency,
@@ -148,18 +161,27 @@ export class PaymentsService {
     rawBody: Buffer,
     signature: string | undefined,
   ): Promise<void> {
-    const creds = this.creds();
     const raw = rawBody.toString("utf8");
-    if (
-      !this.provider.verifyWebhook(
+    // A webhook carries no tenant, and its signature must be verified BEFORE the body is trusted —
+    // so we cannot read the reference to decide whether this is a test or live charge without first
+    // trusting unverified input. Instead try each configured key until one HMAC matches. Constant
+    // work over keys we own, and forging still requires a valid HMAC under one of them.
+    const candidates = await webhookVerificationCandidates({
+      provisioning: this.provisioning,
+      config: this.config,
+      resolver: this.resolver,
+    });
+    const verified = candidates.find((candidate) =>
+      candidate.provider.verifyWebhook(
         { headers: { "x-paystack-signature": signature ?? "" }, rawBody: raw },
-        creds,
-      )
-    ) {
+        candidate.creds,
+      ),
+    );
+    if (!verified) {
       throw unauthorized("invalid_signature", "Invalid Paystack signature.");
     }
 
-    const event = this.provider.parseEvent(raw);
+    const event = verified.provider.parseEvent(raw);
     if (event.status !== "success") return; // only successful charges credit
 
     // ADR-0010 Phase 2: a `token-` reference bought ENTITLEMENT, not wallet money. It grants a

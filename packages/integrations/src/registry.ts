@@ -1,5 +1,6 @@
 import { ArkeselSmsProvider } from "./arkesel/provider.js";
-import type { SmsSenderPlugin } from "./plugin.js";
+import { PaystackProvider } from "./paystack/provider.js";
+import type { PaymentProviderPlugin, SmsSenderPlugin } from "./plugin.js";
 import { FakeProvider } from "./testing/fake-provider.js";
 import { VirtualPhoneProvider } from "./virtual-phone/provider.js";
 
@@ -76,4 +77,50 @@ export function smsResolutionAdapterFor(
  */
 export function supportedSmsVendors(): readonly string[] {
   return Object.keys(SMS_ADAPTERS);
+}
+
+/**
+ * VENDOR → PAYMENT ADAPTER. Deliberately the same contract as SMS: the plugin system has to behave
+ * identically whichever capability you configure, or staff learn a different set of rules per vendor.
+ *
+ * Payment credentials are per-MODE like everything else (slice 3's
+ * `unique(tenant_id, capability, vendor, mode)`), which is what lets a sandbox instance hold
+ * `sk_test_` while a live one holds `sk_live_` — two rows, not a flag on one.
+ */
+export type PaymentAdapterFactory = () => PaymentProviderPlugin;
+
+const PAYMENT_ADAPTERS: Readonly<Record<string, PaymentAdapterFactory>> = {
+  paystack: () => new PaystackProvider(),
+};
+
+/** The payment adapter for a vendor, or null when this build has no implementation for it. */
+export function paymentAdapterFor(
+  vendor: string,
+): PaymentAdapterFactory | null {
+  return PAYMENT_ADAPTERS[vendor.trim().toLowerCase()] ?? null;
+}
+
+/** Payment vendors this build can actually charge through. */
+export function supportedPaymentVendors(): readonly string[] {
+  return Object.keys(PAYMENT_ADAPTERS);
+}
+
+/**
+ * The declared credential shape for ANY capability's vendor, or null when unknown.
+ *
+ * One lookup so `configure()` can validate every capability rather than only SMS. Without it a
+ * Paystack instance could be saved carrying `apiKey` when its adapter requires `secretKey` — stored
+ * successfully, fingerprinted, and unusable.
+ */
+export function adapterConfigSchemaFor(
+  capability: string,
+  vendor: string,
+): Record<string, unknown> | null {
+  if (capability === "sms") {
+    return smsAdapterFor(vendor)?.().configSchema ?? null;
+  }
+  if (capability === "payment") {
+    return paymentAdapterFor(vendor)?.().configSchema ?? null;
+  }
+  return null;
 }

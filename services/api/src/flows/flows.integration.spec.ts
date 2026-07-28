@@ -10,6 +10,7 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PaymentsService } from "../payments/payments.service.js";
+import type { PluginResolverService } from "../plugins/plugin-resolver.service.js";
 import { TokenPurchaseService } from "../tokens/token-purchase.service.js";
 import { FlowsService } from "./flows.service.js";
 
@@ -73,16 +74,29 @@ describeDb("flows (Lighthouse saga)", () => {
     get: (key: string) =>
       key === "PAYSTACK_SECRET_KEY" ? "sk_test_dummy" : undefined,
   } as unknown as ConfigService;
+  const fakeProvider = new FakeProvider();
+  /**
+   * Inject the fake through the RESOLVER (ADR-0011), which is how the processor is chosen now. This
+   * used to overwrite a private `provider` field on the service; that field is gone, and swapping it
+   * silently stopped working — the service resolved the real Paystack client and made a live network
+   * call. Stubbing the seam the code actually uses keeps the test honest about that.
+   */
+  const resolver = {
+    resolvePayment: async () => ({
+      vendor: "paystack",
+      instanceId: "flows-spec-fake",
+      provider: fakeProvider,
+      creds: { secretKey: "sk_test_dummy" },
+    }),
+  } as unknown as PluginResolverService;
   const payments = new PaymentsService(
     provisioning,
     appDb,
     config,
     killSwitch,
     new TokenPurchaseService(provisioning, appDb, config, killSwitch),
+    resolver,
   );
-  const fakeProvider = new FakeProvider();
-  // Swap the real Paystack client for the fake (no network); readonly at compile-time only.
-  (payments as unknown as { provider: FakeProvider }).provider = fakeProvider;
   const service = new FlowsService(appDb, killSwitch, payments);
   const tenantId = randomUUID() as TenantId;
 

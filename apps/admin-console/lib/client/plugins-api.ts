@@ -45,6 +45,18 @@ export const VENDOR_CREDENTIAL_FIELDS: Record<
       hint: "Optional. Without it, status stops at accepted and never reaches delivered.",
     },
   ],
+  // Paystack declares `secretKey`, NOT `apiKey` — the generic fallback below would store a
+  // credential the adapter cannot read. Which key belongs here follows the INSTANCE's mode: a
+  // sandbox instance takes sk_test_, a live instance sk_live_.
+  paystack: [
+    {
+      name: "secretKey",
+      label: "Secret key",
+      required: true,
+      hint: "sk_test_… on a sandbox instance, sk_live_… on a live one.",
+    },
+    { name: "publicKey", label: "Public key", required: false },
+  ],
 };
 
 async function bff(path: string, init?: RequestInit): Promise<unknown> {
