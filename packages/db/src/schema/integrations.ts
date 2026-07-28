@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   index,
   integer,
@@ -9,6 +10,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { bytea, timestamps } from "./_shared.js";
+import { accounts } from "./identity.js";
 
 /**
  * INTEGRATION PLUGINS — PLATFORM-level provider registry (see docs/INTEGRATIONS-PLUGIN-ARCHITECTURE.md).
@@ -35,6 +37,17 @@ export const pluginInstances = pgTable(
   "plugin_instances",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    /**
+     * NULL = platform-wide (the normal case). A tenant id scopes the instance to one workspace, so
+     * a customer can eventually bring their own carrier account without another migration
+     * (ADR-0011 §2). Still platform config reached only through the provisioning connection — this
+     * column does NOT make plugin_instances a tenant table and there is no RLS policy on it.
+     *
+     * RESTRICT, matching the ledger: deleting a workspace must not silently shred routing config.
+     */
+    tenantId: uuid("tenant_id").references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
     capability: pluginCapability("capability").notNull(),
     vendor: text("vendor").notNull(), // plugin TYPE, e.g. "paystack", "africas-talking"
     label: text("label").notNull(),
@@ -43,11 +56,33 @@ export const pluginInstances = pgTable(
     mode: pluginMode("mode").notNull().default("sandbox"),
     status: pluginInstanceStatus("status").notNull().default("available"),
     priority: integer("priority").notNull().default(100), // ascending; 0 = primary, then fallbacks
-    credentialsRef: text("credentials_ref"), // Vault key — never the raw secret
+    /**
+     * The ACTIVE credential row (ADR-0011 §1) — never the secret itself.
+     *
+     * A real uuid FK, not free text: rotation keeps superseded versions around to be pruned later,
+     * and SET NULL turns a pruned-away credential into the honest "not configured" state instead of
+     * a dangling id that resolves to nothing at send time. Typing it also lets reads join the
+     * fingerprint directly (text vs uuid has no equality operator in Postgres).
+     */
+    credentialsRef: uuid("credentials_ref").references(
+      (): AnyPgColumn => pluginCredentials.id,
+      { onDelete: "set null" },
+    ),
     ...timestamps,
   },
   (t) => [
-    unique("uniq_plugin_instance").on(t.capability, t.vendor),
+    /**
+     * ADR-0011 §2. The old `unique(capability, vendor)` forbade the cases the product needs: a
+     * sandbox AND a live Arkesel instance side by side, and two accounts with one vendor.
+     *
+     * NULLS NOT DISTINCT is load-bearing (PG15+). Postgres normally treats NULLs as distinct, so a
+     * plain UNIQUE over a nullable tenant_id would let unlimited DUPLICATE platform-wide rows in —
+     * the exact collisions this constraint exists to stop, silently allowed for the most common
+     * row shape. With it, two platform-wide sms/arkesel/live rows conflict as intended.
+     */
+    unique("uniq_plugin_instance")
+      .on(t.tenantId, t.capability, t.vendor, t.mode)
+      .nullsNotDistinct(),
     index("idx_plugin_instances_capability").on(t.capability),
   ],
 );

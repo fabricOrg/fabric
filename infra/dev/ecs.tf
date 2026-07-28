@@ -197,16 +197,18 @@ resource "aws_ecs_task_definition" "api" {
           valueFrom = "${aws_secretsmanager_secret.arkesel_sms.arn}:ARKESEL_API_KEY::"
         },
         {
-          name      = "SMS_LIVE_RECIPIENT_ALLOWLIST"
-          valueFrom = "${aws_secretsmanager_secret.arkesel_sms.arn}:SMS_LIVE_RECIPIENT_ALLOWLIST::"
-        },
-        {
           name      = "VIRTUAL_PHONE_ENCRYPTION_KEY"
           valueFrom = "${aws_secretsmanager_secret.virtual_phone_encryption_key.arn}:VIRTUAL_PHONE_ENCRYPTION_KEY::"
         },
         {
           name      = "PII_MASTER_KEY"
           valueFrom = "${aws_secretsmanager_secret.pii_master_key.arn}:PII_MASTER_KEY::"
+        },
+        {
+          # ADR-0011: without this the API cannot install OR resolve any provider credential, and
+          # masterKey() throws outright in production rather than silently using a dev key.
+          name      = "PLUGIN_MASTER_KEY"
+          valueFrom = "${aws_secretsmanager_secret.plugin_master_key.arn}:PLUGIN_MASTER_KEY::"
         },
         {
           name      = "EDGE_SHARED_SECRET"
@@ -351,6 +353,12 @@ resource "aws_ecs_task_definition" "pii_backfill" {
         {
           name      = "PII_MASTER_KEY"
           valueFrom = "${aws_secretsmanager_secret.pii_master_key.arn}:PII_MASTER_KEY::"
+        },
+        {
+          # ADR-0011: without this the API cannot install OR resolve any provider credential, and
+          # masterKey() throws outright in production rather than silently using a dev key.
+          name      = "PLUGIN_MASTER_KEY"
+          valueFrom = "${aws_secretsmanager_secret.plugin_master_key.arn}:PLUGIN_MASTER_KEY::"
         },
         {
           name      = "VIRTUAL_PHONE_ENCRYPTION_KEY"

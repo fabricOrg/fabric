@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   decryptCredential,
   type ProvisioningDb,
@@ -6,12 +5,21 @@ import {
   pluginInstances,
   unwrapCredentialDek,
 } from "@app/db";
-import type { Creds, SmsSenderPlugin } from "@app/integrations";
-import { smsAdapterFor } from "@app/integrations";
+import type {
+  Creds,
+  PaymentProviderPlugin,
+  SmsSenderPlugin,
+} from "@app/integrations";
+import { paymentAdapterFor, smsAdapterFor } from "@app/integrations";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
+import { derivePluginMasterKey } from "./plugin-master-key.js";
+import {
+  type PaymentWebhookCredential,
+  paymentWebhookCredentials,
+} from "./plugin-webhook-credentials.js";
 
 /** A resolved provider: the adapter plus the credentials it needs. */
 export interface ResolvedProvider {
@@ -19,10 +27,22 @@ export interface ResolvedProvider {
   readonly instanceId: string;
   readonly provider: SmsSenderPlugin;
   readonly creds: Creds;
+  /** Which credential version supplied `creds` — recorded by callers that must verify later. */
+  readonly credentialVersion: number;
+}
+
+/** A resolved PAYMENT provider. Same shape, different adapter contract. */
+export interface ResolvedPaymentProvider {
+  readonly vendor: string;
+  readonly instanceId: string;
+  readonly provider: PaymentProviderPlugin;
+  readonly creds: Creds;
+  /** Stored on the payment intent so its webhook still verifies after a key rotation. */
+  readonly credentialVersion: number;
 }
 
 interface CacheEntry {
-  readonly resolved: ResolvedProvider | null;
+  readonly resolved: ResolvedProvider | ResolvedPaymentProvider | null;
   readonly at: number;
 }
 
@@ -64,12 +84,38 @@ export class PluginResolverService {
    * as "cannot send" — never as "send some other way".
    */
   async resolveSms(mode: "sandbox" | "live"): Promise<ResolvedProvider | null> {
-    const key = `sms:${mode}`;
+    return this.resolveCached("sms", mode) as Promise<ResolvedProvider | null>;
+  }
+
+  /**
+   * The payment processor for this mode, or null when none is configured. A sandbox workspace
+   * resolves the instance holding test keys, a live one the instance holding live keys — they are
+   * separate rows, so a test charge can never be attempted with live credentials or vice versa.
+   */
+  async resolvePayment(
+    mode: "sandbox" | "live",
+  ): Promise<ResolvedPaymentProvider | null> {
+    return this.resolveCached(
+      "payment",
+      mode,
+    ) as Promise<ResolvedPaymentProvider | null>;
+  }
+
+  /**
+   * The shared cache + failure posture for every capability. Identical rules whichever provider you
+   * are resolving: short TTL so the control plane stays off the hot path, last-known-good on a blip,
+   * and FAIL CLOSED with nothing cached rather than guessing a provider.
+   */
+  private async resolveCached(
+    capability: "sms" | "payment",
+    mode: "sandbox" | "live",
+  ): Promise<ResolvedProvider | ResolvedPaymentProvider | null> {
+    const key = `${capability}:${mode}`;
     const cached = this.cache.get(key);
     if (cached && Date.now() - cached.at < TTL_MS) return cached.resolved;
 
     try {
-      const resolved = await this.read(mode);
+      const resolved = await this.read(capability, mode);
       this.cache.set(key, { resolved, at: Date.now() });
       return resolved;
     } catch (error) {
@@ -95,9 +141,22 @@ export class PluginResolverService {
     this.cache.clear();
   }
 
+  /**
+   * Every credential a PAYMENT webhook could legitimately be signed with. Split into its own module
+   * for the file-length guard; see plugin-webhook-credentials.ts for why previous versions count.
+   */
+  paymentWebhookCredentials(): Promise<PaymentWebhookCredential[]> {
+    return paymentWebhookCredentials(
+      this.provisioning,
+      this.config,
+      this.logger,
+    );
+  }
+
   private async read(
+    capability: "sms" | "payment",
     mode: "sandbox" | "live",
-  ): Promise<ResolvedProvider | null> {
+  ): Promise<ResolvedProvider | ResolvedPaymentProvider | null> {
     // Enabled instances for this capability+mode, primary (priority 0) first — the failover chain.
     // The first one with a usable adapter AND readable credentials wins; a misconfigured primary
     // falls through to its backup rather than taking sending down.
@@ -110,15 +169,23 @@ export class PluginResolverService {
       .from(pluginInstances)
       .where(
         and(
-          eq(pluginInstances.capability, "sms"),
+          eq(pluginInstances.capability, capability),
           eq(pluginInstances.mode, mode),
           eq(pluginInstances.enabled, true),
+          // PLATFORM-WIDE only. Slice 3 made per-tenant instances expressible (nullable tenant_id);
+          // without this filter the first tenant-scoped row would silently start carrying every
+          // other tenant's traffic. Per-tenant resolution is deliberate future work — when it lands
+          // it takes a tenantId argument and prefers the tenant row over this one.
+          isNull(pluginInstances.tenantId),
         ),
       )
       .orderBy(asc(pluginInstances.priority));
 
     for (const row of rows) {
-      const factory = smsAdapterFor(row.vendor);
+      const factory =
+        capability === "sms"
+          ? smsAdapterFor(row.vendor)
+          : paymentAdapterFor(row.vendor);
       if (!factory) {
         // Enabled in the control plane, but this build has no adapter. Skip rather than throw: a
         // catalog row for a vendor we cannot dispatch must not block a working fallback.
@@ -127,14 +194,20 @@ export class PluginResolverService {
         );
         continue;
       }
-      const creds = await this.credentialsFor(row.id, row.credentialsRef);
-      if (!creds) continue;
+      const credential = await this.credentialsFor(row.id, row.credentialsRef);
+      if (!credential) continue;
+      const { creds, version } = credential;
+      // The cast is safe by construction: the factory was chosen from the capability-matching
+      // registry three lines up, so an sms capability yields an SmsSenderPlugin and a payment
+      // capability a PaymentProviderPlugin. The public resolveSms/resolvePayment wrappers are what
+      // callers see, and each narrows back to its own type.
       return {
         vendor: row.vendor,
         instanceId: row.id,
         provider: factory(),
         creds,
-      };
+        credentialVersion: version,
+      } as ResolvedProvider | ResolvedPaymentProvider;
     }
     return null;
   }
@@ -143,13 +216,12 @@ export class PluginResolverService {
   private async credentialsFor(
     instanceId: string,
     credentialsRef: string | null,
-  ): Promise<Creds | null> {
+  ): Promise<{ creds: Creds; version: number } | null> {
     if (!credentialsRef) {
       this.logger.warn(`plugin instance ${instanceId} has no credentials`);
       return null;
     }
-    const masterKey = this.masterKey();
-    if (!masterKey) return null;
+    const masterKey = derivePluginMasterKey(this.config, this.logger);
 
     const [row] = await this.provisioning.db
       .select()
@@ -171,7 +243,12 @@ export class PluginResolverService {
         instanceId,
         row.version,
       );
-      return decryptCredential(dek, row.ciphertext, instanceId, row.version);
+      // The version travels with the secret so a caller can record WHICH credential it used — a
+      // payment intent stores it, which is what lets its webhook still verify after a rotation.
+      return {
+        creds: decryptCredential(dek, row.ciphertext, instanceId, row.version),
+        version: row.version,
+      };
     } catch (error) {
       // Wrong master key, tampering, or a version mismatch. Never fall through to another
       // credential — an unreadable secret is a configuration fault that must stay visible.
@@ -182,33 +259,5 @@ export class PluginResolverService {
       );
       return null;
     }
-  }
-
-  /**
-   * Derived, not truncated. The PII vault (privacy/pii-keys.ts) hashes `purpose:secret` for the same
-   * reason: a configured secret is usually ASCII, so slicing 32 bytes off it keeps roughly a byte of
-   * entropy per character, while SHA-256 spreads whatever entropy exists across the full key.
-   *
-   * A distinct purpose label keeps this key independent of the PII master key even if an operator
-   * ever configures both from the same secret — one leak must not become two.
-   */
-  private masterKey(): Buffer | null {
-    const secret = this.config.get<string>("PLUGIN_MASTER_KEY")?.trim();
-    if (!secret || secret.length < 32) {
-      if (this.config.get<string>("NODE_ENV") === "production") {
-        // Never fall back to a derived development key in production: it would make every stored
-        // vendor credential readable by anyone holding this source.
-        throw new Error(
-          "PLUGIN_MASTER_KEY must be set to at least 32 characters in production.",
-        );
-      }
-      this.logger.warn(
-        "PLUGIN_MASTER_KEY unset — using the local development key; credentials are NOT protected",
-      );
-      return createHash("sha256")
-        .update("fabric-local-plugin-development-key")
-        .digest();
-    }
-    return createHash("sha256").update(`plugin-master:${secret}`).digest();
   }
 }

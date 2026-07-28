@@ -1,7 +1,9 @@
 import type {
+  AdminSenderDto,
   CreateSenderRequest,
   DecideSenderRequest,
   SenderDto,
+  SetSenderCarrierStatusRequest,
 } from "@app/contracts";
 import { type AppDb, type ProvisioningDb, senders } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
@@ -117,12 +119,12 @@ export class SendersService {
   }
 
   /** Staff review queue — pending first, cross-tenant on the provisioning connection. */
-  async reviewQueue(): Promise<Array<SenderDto & { tenant_id: string }>> {
+  async reviewQueue(): Promise<AdminSenderDto[]> {
     const rows = await this.provisioning.db
       .select()
       .from(senders)
       .orderBy(asc(senders.status), desc(senders.createdAt));
-    return rows.map((row) => ({ ...toDto(row), tenant_id: row.tenantId }));
+    return rows.map(toAdminDto);
   }
 
   async decide(
@@ -140,6 +142,17 @@ export class SendersService {
       throw invalidRequest(
         "already_decided",
         "This registration has already been decided.",
+      );
+    }
+    // Approving the CUSTOMER only happens once the CARRIER has approved. Arkesel has no
+    // registration API, so an operator records that outcome via setCarrierStatus first; without it
+    // `active` would promise delivery the network will refuse with PROHIBITED. The DB CHECK
+    // (sender_active_requires_carrier_approval) is the backstop — this is the readable error.
+    if (request.status === "active" && current.carrierStatus !== "approved") {
+      throw invalidRequest(
+        "carrier_not_approved",
+        "Record the carrier's approval for this sender before activating it.",
+        "status",
       );
     }
     const [updated] = await this.provisioning.db
@@ -166,6 +179,73 @@ export class SendersService {
     });
     return toDto(updated);
   }
+
+  /**
+   * Record what the CARRIER said about a registration. Staff-only, audited, and separate from
+   * `decide` on purpose: this reports an external outcome we observed, `decide` is our own call.
+   *
+   * Demoting away from `approved` is allowed and deliberately does NOT cascade to `status` — the DB
+   * CHECK would reject an active sender losing carrier approval, so the operator must decide
+   * explicitly what happens to the customer rather than have access revoked as a side effect.
+   */
+  async setCarrierStatus(
+    id: string,
+    request: SetSenderCarrierStatusRequest,
+    actor: Actor,
+  ): Promise<AdminSenderDto> {
+    const [current] = await this.provisioning.db
+      .select()
+      .from(senders)
+      .where(eq(senders.id, id))
+      .limit(1);
+    if (!current) throw notFound("sender_not_found", "Unknown sender id.");
+    if (
+      current.status === "active" &&
+      request.carrier_status !== "approved" &&
+      current.carrierStatus === "approved"
+    ) {
+      throw invalidRequest(
+        "sender_still_active",
+        "Reject or re-review the sender before withdrawing its carrier approval.",
+        "carrier_status",
+      );
+    }
+    const [updated] = await this.provisioning.db
+      .update(senders)
+      .set({
+        carrierStatus: request.carrier_status,
+        carrierRef: request.carrier_ref ?? current.carrierRef,
+        carrierDecidedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(senders.id, id))
+      .returning();
+    if (!updated) throw new Error("Carrier status update returned no row.");
+    await this.audit.record({
+      actorStaffId: actor.staffId ?? null,
+      actorEmail: actor.email,
+      action: `sender.carrier_${request.carrier_status}`,
+      targetType: "sender",
+      targetId: id,
+      summary: `Sender '${current.senderId}' (${current.country}) carrier status ${request.carrier_status}`,
+      reason: null,
+      metadata: {
+        tenant_id: current.tenantId,
+        ...(request.carrier_ref ? { carrier_ref: request.carrier_ref } : {}),
+      },
+    });
+    return toAdminDto(updated);
+  }
+}
+
+function toAdminDto(row: typeof senders.$inferSelect): AdminSenderDto {
+  return {
+    ...toDto(row),
+    tenant_id: row.tenantId,
+    carrier_status: row.carrierStatus,
+    carrier_ref: row.carrierRef,
+    carrier_decided_at: row.carrierDecidedAt?.toISOString() ?? null,
+  };
 }
 
 function toDto(row: typeof senders.$inferSelect): SenderDto {

@@ -13,8 +13,13 @@ import { destinationCountry } from "./sms-compliance.js";
 type DeliveryMode = "virtual" | "live";
 
 interface RecheckRuntime {
-  readonly provider: { readonly slug: string };
-  deps(mode: DeliveryMode): EngineDeps;
+  /**
+   * Async since ADR-0011: which provider carries a live send is control-plane config, so its slug
+   * cannot be read off a field bound at construction. The `provider.<slug>` kill-switch below must
+   * gate the provider that will ACTUALLY carry this message.
+   */
+  providerSlug(mode: DeliveryMode): Promise<string>;
+  deps(mode: DeliveryMode): Promise<EngineDeps>;
   dispatch(
     input: SendInput,
     prepared: PreparedSend,
@@ -44,13 +49,13 @@ export function recheckedDispatch(deps: RecheckDeps) {
       killSwitch: deps.killSwitch,
       consent: deps.consent,
       senders: deps.senders,
-      providerSlug: deps.runtime.provider.slug,
+      providerSlug: await deps.runtime.providerSlug(mode),
       input,
       mode,
     });
     if (blocked) {
       return failPreparedSend(
-        deps.runtime.deps(mode),
+        await deps.runtime.deps(mode),
         input,
         prepared,
         blocked,

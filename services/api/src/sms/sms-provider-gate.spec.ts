@@ -99,41 +99,4 @@ describe("SmsService provider kill-switch gate", () => {
     await expect(svc.send(input)).rejects.toBeInstanceOf(HttpException);
     expect(isPaused).toHaveBeenCalledWith("platform.sms_sending");
   });
-
-  it("rejects an unallowlisted live recipient before sender and PII work", async () => {
-    const liveValues: Readonly<Record<string, string>> = {
-      SMS_PROVIDER: "arkesel",
-      ARKESEL_API_KEY: "test-key",
-      ARKESEL_SANDBOX: "false",
-      SMS_LIVE_RECIPIENT_ALLOWLIST: "+233501234567",
-    };
-    const liveConfig = {
-      get: (key: string) => liveValues[key],
-    } as unknown as ConfigService;
-    const isPaused = vi.fn(async () => false);
-    const senderStatus = vi.fn(async () => "active" as const);
-    const subjectForPhone = vi.fn(async () => randomUUID());
-    const svc = new SmsService(
-      db,
-      autoTopup,
-      { isPaused } as unknown as KillSwitchService,
-      liveConfig,
-      queue,
-      { senderStatus } as unknown as SendersService,
-      consentStub,
-      virtualPhoneStub,
-      { subjectForPhone } as unknown as PiiVaultService,
-      pricingStub,
-    );
-
-    await expect(svc.send(input)).rejects.toSatisfy(
-      (error) =>
-        error instanceof HttpException &&
-        error.getStatus() === 400 &&
-        (error.getResponse() as { error?: { code?: string } }).error?.code ===
-          "live_recipient_not_allowed",
-    );
-    expect(senderStatus).not.toHaveBeenCalled();
-    expect(subjectForPhone).not.toHaveBeenCalled();
-  });
 });

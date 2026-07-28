@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
 import { ProvisioningDbModule } from "../identity/provisioning-db.module.js";
 import { KillSwitchModule } from "../kill-switches/kill-switches.module.js";
+import { PluginsModule } from "../plugins/plugins.module.js";
 import { TokensModule } from "../tokens/tokens.module.js";
 import { AutoTopupService } from "./auto-topup.service.js";
 import { PaymentsController } from "./payments.controller.js";
@@ -19,6 +20,9 @@ import { PaystackWebhookController } from "./paystack-webhook.controller.js";
     ProvisioningDbModule,
     KillSwitchModule,
     TokensModule,
+    // ADR-0011: which processor and credentials a workspace charges with is control-plane config,
+    // resolved per mode — sandbox workspaces on test keys, live ones on live keys.
+    PluginsModule,
   ],
   controllers: [PaymentsController, PaystackWebhookController],
   providers: [PaymentsService, AutoTopupService],

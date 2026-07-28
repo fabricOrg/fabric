@@ -4,6 +4,7 @@ import {
   isTerminalMessageStatus,
   type MessageStatus,
   STATUS_RANK,
+  smsResolutionAdapterFor,
 } from "@app/integrations";
 import { commit, refund } from "@app/wallet";
 import type {
@@ -33,10 +34,18 @@ async function resolveMessage(
     providerRef?: string | undefined;
     faultCause?: string | undefined;
     errorCode?: string | undefined;
+    /**
+     * Set ONLY by the dispatch path, naming the adapter that just handed the message to a vendor.
+     * `provider_slug` is stamped at PREPARE time, but on the queued path a worker may dispatch much
+     * later — long enough for control-plane selection to have changed — so the stamped value can
+     * name a provider that did not send this message. The dispatcher is the one caller that knows
+     * for certain, so it re-stamps the row and its own rules govern this transition.
+     */
+    dispatchedBySlug?: string | undefined;
   } = {},
 ): Promise<MessageStatus> {
   const rows = (await tx`
-    SELECT status, application_id, environment_id, backing
+    SELECT status, application_id, environment_id, backing, provider_slug
     FROM messages WHERE id = ${messageId} FOR UPDATE`) as Row[];
   const prior = String(rows[0]?.status) as MessageStatus;
   const tokenBacked = String(rows[0]?.backing ?? "wallet") === "tokens";
@@ -44,14 +53,36 @@ async function resolveMessage(
   if (isTerminalMessageStatus(prior)) return prior;
   if (STATUS_RANK[newStatus] < STATUS_RANK[prior]) return prior;
 
-  const billable = deps.provider.billableStatuses;
+  // Bill against the adapter that ACTUALLY dispatched this message (recorded in provider_slug at
+  // prepare time), not whichever provider the control plane resolves to right now. Once providers
+  // are control-plane config (ADR-0011), staff can swap a vendor between a send and its DLR/sweep —
+  // and `billableStatuses` differs per adapter (`arkesel-sms` bills at `accepted`, `virtual-phone`
+  // at `undelivered`), which is exactly the threshold `reachedBillable` below compares against.
+  // Resolving with the current provider would charge, or refund, against a contract this message
+  // never used.
+  //
+  // Unknown slug (an adapter removed from this build) falls back to the caller's provider: a wrong
+  // guess is bad, but stranding the reservation forever is worse, and the sweeper must still finish.
+  const recordedSlug = rows[0]?.provider_slug
+    ? String(rows[0].provider_slug)
+    : null;
+  // On the DISPATCH path the caller just spoke to the vendor, so `deps.provider` IS the dispatching
+  // adapter and is authoritative — it also re-stamps provider_slug below, correcting a row whose
+  // prepare-time guess has since gone stale. On DLR and sweep we were not the sender, so the row's
+  // recorded slug is the only honest answer.
+  const dispatchedBy = opts.dispatchedBySlug
+    ? deps.provider
+    : ((recordedSlug ? smsResolutionAdapterFor(recordedSlug)?.() : null) ??
+      deps.provider);
+
+  const billable = dispatchedBy.billableStatuses;
   const reachedBillable =
     STATUS_RANK[prior] >= STATUS_RANK[billable[0] as MessageStatus];
   const decision = decideResolution({
     newStatus,
     reachedBillable,
     billableStatuses: billable,
-    platformFaultExemptions: deps.provider.platformFaultExemptions,
+    platformFaultExemptions: dispatchedBy.platformFaultExemptions,
     faultCause: opts.faultCause,
   });
   // The DECISION is channel- and backing-neutral (@app/domain owns it); only the EFFECTOR differs.
@@ -81,6 +112,9 @@ async function resolveMessage(
       status = ${newStatus},
       status_rank = ${STATUS_RANK[newStatus]},
       provider_ref = COALESCE(${opts.providerRef ?? null}, provider_ref),
+      -- Correct the prepare-time stamp to whoever actually dispatched, so later DLR lookups and
+      -- sweeps settle against the real provider rather than a selection that has since changed.
+      provider_slug = COALESCE(${opts.dispatchedBySlug ?? null}, provider_slug),
       error_code = COALESCE(${opts.errorCode ?? null}, error_code),
       updated_at = now()
     WHERE id = ${messageId}`;
@@ -162,6 +196,9 @@ export async function dispatchSend(
   const status = await deps.db.withTenant(input.tenantId, (tx) =>
     resolveMessage(deps, tx, prepared.messageId, result.status, {
       providerRef: result.providerRef,
+      // We just sent it — record WHO, so settlement and DLR lookup key on fact rather than on the
+      // provider that happened to be selected when the message was prepared.
+      dispatchedBySlug: deps.provider.slug,
     }),
   );
   return { messageId: prepared.messageId, status };
@@ -221,22 +258,18 @@ export async function sweepExpired(
   deps: EngineDeps,
   tenantId: string,
   olderThanIso: string,
-  depsForMode?: (deliveryMode: "virtual" | "live") => EngineDeps,
 ): Promise<number> {
   return deps.db.withTenant(tenantId, async (tx) => {
     const stuck = (await tx`
-      SELECT id, delivery_mode FROM messages
+      SELECT id FROM messages
       WHERE status IN ('queued','sending','accepted','sent') AND updated_at < ${olderThanIso}::timestamptz
       FOR UPDATE`) as Row[];
     for (const row of stuck) {
-      const mode = row.delivery_mode === "virtual" ? "virtual" : "live";
-      await resolveMessage(
-        depsForMode?.(mode) ?? deps,
-        tx,
-        String(row.id),
-        "expired",
-        {},
-      );
+      // No per-message deps factory: resolveMessage reads each row's own provider_slug and bills
+      // against the adapter that dispatched it. The previous `delivery_mode`-keyed factory was a
+      // proxy for provider identity that only held while exactly one live provider could exist —
+      // which is precisely what ADR-0011 stops being true.
+      await resolveMessage(deps, tx, String(row.id), "expired", {});
     }
     return stuck.length;
   });

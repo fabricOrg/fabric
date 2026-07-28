@@ -57,6 +57,12 @@ ephemeral "random_password" "pii_master_key" {
   special = false
 }
 
+# Same rationale for provider credentials (ADR-0011) — see the secret resource below.
+ephemeral "random_password" "plugin_master_key" {
+  length  = 48
+  special = false
+}
+
 resource "random_password" "edge_shared_secret" {
   length  = 48
   special = false
@@ -183,6 +189,27 @@ resource "aws_secretsmanager_secret" "pii_master_key" {
   name                    = "fabric/testing/pii-master-key"
   description             = "Master key wrapping per-subject DEKs in the PII vault. Destroying a DEK is how erasure works; losing THIS key makes all PII unreadable."
   recovery_window_in_days = 7
+}
+
+# Wraps the per-credential DEKs protecting VENDOR secrets in the control plane (ADR-0011). Same
+# envelope shape as the PII vault and the same consequence: losing it makes every stored provider
+# credential unreadable, so the API cannot dispatch or charge until they are re-installed. It must
+# NOT live beside the database it decrypts — that pairing is the accepted risk of moving credentials
+# out of a secret store, and separating key from ciphertext is what keeps it acceptable.
+resource "aws_secretsmanager_secret" "plugin_master_key" {
+  name                    = "fabric/testing/plugin-master-key"
+  description             = "Master key wrapping per-credential DEKs for provider plugins (ADR-0011). Losing it makes every stored vendor credential unreadable."
+  recovery_window_in_days = 7
+}
+
+resource "aws_secretsmanager_secret_version" "plugin_master_key" {
+  secret_id                = aws_secretsmanager_secret.plugin_master_key.id
+  secret_string_wo         = jsonencode({ PLUGIN_MASTER_KEY = ephemeral.random_password.plugin_master_key.result })
+  secret_string_wo_version = 1
+
+  lifecycle {
+    ignore_changes = [secret_string_wo, secret_string_wo_version]
+  }
 }
 
 resource "aws_secretsmanager_secret" "arkesel_sms" {
@@ -325,8 +352,7 @@ resource "aws_secretsmanager_secret_version" "webhook_ingress_token" {
 resource "aws_secretsmanager_secret_version" "arkesel_sms" {
   secret_id = aws_secretsmanager_secret.arkesel_sms.id
   secret_string_wo = jsonencode({
-    ARKESEL_API_KEY              = "REPLACE_ME"
-    SMS_LIVE_RECIPIENT_ALLOWLIST = "REPLACE_ME"
+    ARKESEL_API_KEY = "REPLACE_ME"
   })
   secret_string_wo_version = 1
 

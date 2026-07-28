@@ -18,8 +18,6 @@ export interface ConfiguredSmsProviders {
   readonly liveReadinessReason: string | null;
 }
 
-const E164 = /^\+[1-9]\d{7,14}$/;
-
 export function buildSmsProviders(
   config: ConfigService,
   logger: Logger,
@@ -95,53 +93,7 @@ function liveProviderReadiness(config: ConfigService): {
       reason: "Live SMS carrier delivery is still in sandbox mode.",
     };
   }
-  const allowlist = parseLiveRecipientAllowlist(config);
-  if (!allowlist.valid) {
-    return {
-      ready: false,
-      reason: allowlist.reason,
-    };
-  }
   return { ready: true, reason: null };
-}
-
-/** A live Arkesel request is permitted only for explicitly verified E.164 recipients. */
-export function isLiveRecipientAllowed(
-  config: ConfigService,
-  recipient: string,
-): boolean {
-  if (config.get<string>("SMS_PROVIDER") !== "arkesel") return true;
-  if ((config.get<string>("ARKESEL_SANDBOX") ?? "true") !== "false") {
-    return true;
-  }
-  const allowlist = parseLiveRecipientAllowlist(config);
-  return allowlist.valid && allowlist.recipients.has(recipient);
-}
-
-function parseLiveRecipientAllowlist(
-  config: ConfigService,
-):
-  | { valid: true; recipients: ReadonlySet<string> }
-  | { valid: false; reason: string } {
-  const raw = config.get<string>("SMS_LIVE_RECIPIENT_ALLOWLIST") ?? "";
-  const recipients = raw
-    .split(",")
-    .map((recipient) => recipient.trim())
-    .filter(Boolean);
-  if (recipients.length === 0) {
-    return {
-      valid: false,
-      reason: "The live SMS recipient allowlist is not configured.",
-    };
-  }
-  if (recipients.some((recipient) => !E164.test(recipient))) {
-    return {
-      valid: false,
-      reason:
-        "The live SMS recipient allowlist contains an invalid E.164 number.",
-    };
-  }
-  return { valid: true, recipients: new Set(recipients) };
 }
 
 /**

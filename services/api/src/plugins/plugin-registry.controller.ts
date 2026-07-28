@@ -1,7 +1,21 @@
-import { pluginActionRequestSchema } from "@app/contracts";
-import { Body, Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
-import { invalidRequest, notFound } from "../http/api-error.js";
+import {
+  configurePluginRequestSchema,
+  createLiveInstanceRequestSchema,
+  pluginActionRequestSchema,
+} from "@app/contracts";
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Inject,
+  Param,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
+import { invalidRequest, notFound, unauthorized } from "../http/api-error.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
+import { PluginCredentialsService } from "./plugin-credentials.service.js";
 import { PluginRegistryService } from "./plugin-registry.service.js";
 
 /**
@@ -14,6 +28,8 @@ export class PluginRegistryController {
   constructor(
     @Inject(PluginRegistryService)
     private readonly registry: PluginRegistryService,
+    @Inject(PluginCredentialsService)
+    private readonly credentials: PluginCredentialsService,
   ) {}
 
   @Get()
@@ -36,5 +52,48 @@ export class PluginRegistryController {
     );
     if (!updated) throw notFound("unknown_plugin", "Unknown plugin instance.");
     return updated;
+  }
+
+  /** Create the live sibling of a catalog vendor. Born disabled and uncredentialed. */
+  @Post("live-instances")
+  async createLive(@Body() body: unknown) {
+    const parsed = createLiveInstanceRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest(
+        "invalid_live_instance_request",
+        parsed.error.issues[0]?.message ?? "The request is invalid.",
+        String(parsed.error.issues[0]?.path[0] ?? "vendor"),
+      );
+    }
+    return this.registry.createLiveInstance(parsed.data);
+  }
+
+  /**
+   * Install or rotate an instance's credentials. WRITE-ONLY: the response carries a fingerprint and
+   * version, never the secret. This is the endpoint that makes adding a carrier a staff action
+   * rather than a redeploy (ADR-0011).
+   */
+  @Post(":id/credentials")
+  async configure(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("x-actor-email") actorEmail?: string,
+    @Headers("x-actor-staff-id") actorStaffId?: string,
+  ) {
+    if (!actorEmail) {
+      throw unauthorized("missing_actor", "Actor identity is required.");
+    }
+    const parsed = configurePluginRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest(
+        "invalid_credential_request",
+        parsed.error.issues[0]?.message ?? "The credential payload is invalid.",
+        "credential",
+      );
+    }
+    return this.credentials.configure(id, parsed.data, {
+      email: actorEmail,
+      staffId: actorStaffId ?? null,
+    });
   }
 }

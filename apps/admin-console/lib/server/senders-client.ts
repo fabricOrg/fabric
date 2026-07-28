@@ -7,6 +7,7 @@ import {
   type ListAdminSendersResponse,
   listAdminSendersResponseSchema,
   type SenderDto,
+  type SetSenderCarrierStatusRequest,
   senderDtoSchema,
 } from "@app/contracts";
 
@@ -63,6 +64,36 @@ export async function decideSender(
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new SenderApiError(response.status, payload);
   return senderDtoSchema.parse(payload);
+}
+
+/**
+ * Record what the CARRIER said (ADR-0011-era sender gate). Separate from decideSender because they
+ * are different facts: this reports an external outcome an operator observed, that one is our own
+ * decision. The api refuses to activate a sender whose carrier status is not `approved`.
+ */
+export async function setSenderCarrierStatus(
+  id: string,
+  request: SetSenderCarrierStatusRequest,
+  actor: { email: string; staffId: string },
+): Promise<AdminSenderDto> {
+  const { baseUrl, bffToken } = config();
+  const response = await fetch(
+    new URL(`/internal/admin/senders/${id}/carrier-status`, baseUrl),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "x-bff-token": bffToken,
+        "content-type": "application/json",
+        "x-actor-email": actor.email,
+        "x-actor-staff-id": actor.staffId,
+      },
+      body: JSON.stringify(request),
+    },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw new SenderApiError(response.status, payload);
+  return adminSenderDtoSchema.parse(payload);
 }
 
 export type { AdminSenderDto };
