@@ -160,7 +160,40 @@ no secret in logs/prose, respect RLS + the redlines below.
 - Windows/git-bash: prefer the dedicated file/search tools; `MSYS_NO_PATHCONV=1` for `aws`/`gh` calls
   with `/`-paths; kill stale `.next` before a push if the dev server is fighting the build.
 
-## 9. Delegating to external CLIs (codex / gemini)
+## 9. Verify the artefact, not the report
+
+Every false "done" in this repo has had the same shape: a *report* was trusted instead of the
+*thing*. A command's own output, a green status, a schema file — none of them are the state. Check
+what changed.
+
+- **Never pipe a command whose exit code matters.** `cmd | tail` returns **tail's** status, so a
+  failed push and a no-op promotion both reported success. Redirect to a file and capture `$?`.
+- **Confirm a push/merge/deploy against the ref**, not the command's output:
+  `git ls-remote --heads origin <branch>` vs `git rev-parse`. A `--ff-only` merge that refuses still
+  leaves a clean-looking exit if it is piped, and `dev`→`testing` is a real merge (testing carries
+  merge commits, so `--ff-only` cannot work).
+- **A send is proven by `provider_ref`, never by `status`.** FakeProvider returns `accepted` exactly
+  as a carrier does: `fake-<messageId>` vs a real vendor UUID. `/v1/sms/send` only reserves and
+  enqueues — the **worker** calls the provider, so any API process sharing `REDIS_QUEUE_URL`
+  competes for the job, and a sandbox-configured worker can swallow a live send silently.
+- **Read grants back after a migration.** `ALTER DEFAULT PRIVILEGES` grants `app_runtime` DML on
+  every new table, so a credentials table arrives world-readable to the tenant-facing role unless the
+  migration explicitly `REVOKE`s. The schema file will not show you this.
+- **A green *local* gate is not CI.** `@app/contracts` is consumed as built `dist`, so changing a
+  contract type and running `typecheck` validates against **stale `.d.ts`** and passes falsely —
+  `pnpm --filter @app/contracts build` first. Root `pnpm typecheck` also does not cover what
+  `verify:push` runs (it misses `astro build` entirely).
+- **`verify:push` gates the WORKING TREE, not the commit.** Editing files while a push runs fails it
+  with errors from unrelated half-finished work, and a stale `.next` from another branch fails
+  typecheck after a switch.
+- **When a fix "should work" but doesn't, test the null hypothesis.** Three attempts went into Shiki
+  theme *names* before trying Astro's own default and finding it failed too — which proved instantly
+  that no named theme could work and the config was irrelevant.
+- **`packages/ui` is consumed as RAW TS SOURCE** (`"./hooks/*": "./src/hooks/*.ts"`). NodeNext wants
+  `.js` on relative imports; the apps' bundler then cannot resolve it. Keep shared hooks in one file.
+- The file-length guard counts **one more line** than `wc -l`.
+
+## 10. Delegating to external CLIs (codex / gemini)
 
 Bulk work is routed to external agent CLIs to conserve Claude quota — see
 `~/.claude/CLAUDE.md` for the routing table and the `delegate-*` skills. What that means
