@@ -275,6 +275,33 @@ resolution for every other spec.
 Gates after fixes: full api integration **58 files / 272 tests**, integrations **53/53**, api unit
 198/198, all four typechecks + biome clean.
 
+### Pre-merge preflight against the HOSTED database (2026-07-28) — migrations are safe
+
+Read-only check of Neon before merging PR #211, run because the review correctly flagged that one
+migration rested on an *assumption* about production data rather than a check.
+
+| check | result |
+|-------|--------|
+| schema version | **97 migration rows** (through `0096`), latest 2026-07-27 |
+| `plugin_instances.credentials_ref` | type `text`, **8 rows, 0 non-null** → **`0099` text→uuid is SAFE** |
+| `senders.carrier_status` | absent — `0097` has not run |
+| `0097` backfill scope | **exactly one sender**: `MYBRAND (GH)` on tenant `00000000…` (the seed tenant) |
+| `senders` size | **2 rows** — the `NOT VALID` + batched-backfill suggestion is unnecessary at this scale |
+
+**The `0099` assumption is now VERIFIED, not assumed.** That was the single unchecked claim in the
+batch and it holds: nothing has ever written `credentials_ref`, because `configure()` did not exist
+until this branch.
+
+**Know what `0097` grandfathers.** `MYBRAND` is already `active`, so the backfill preserves the
+status quo rather than granting anything — demoting it would break a working seed. But it gets
+stamped `grandfathered:0097`, which by design means *we assumed, we did not verify*. If MYBRAND was
+never registered with Arkesel, that row now claims otherwise. It is NOT `AKWAAH` — the pilot sender
+exists only in the local database, so the dogfood run registers it fresh through the real flow.
+
+**Credential note for the next session:** `.env.migrate.local`'s `app_migrator` password is STALE —
+CI's `ALTER ROLE` rotated it to the GitHub secret value, exactly as this file already warned. Use
+`DATABASE_URL_ADMIN` from that file for read-only hosted checks; the other roles there still work.
+
 ### The journey is now buildable end to end — what remains is doing it
 
 Audited against code, not comments: request go-live (dashboard card → proposal) ✅ · staff approve
