@@ -51,6 +51,8 @@ export interface ApiKeySummary {
  */
 @Injectable()
 export class ApiKeyService {
+  private readonly touchedAt = new Map<string, number>();
+
   constructor(@Inject(APP_DB) private readonly db: AppDb) {}
 
   /**
@@ -78,7 +80,7 @@ export class ApiKeyService {
     const row = rows[0];
     if (!row) return null; // unknown or revoked → the api_key_auth_lookup policy returned nothing
     const tenantId = String(row.tenant_id);
-    void this.touch(tenantId, keyHash); // fire-and-forget; must never fail auth
+    this.scheduleTouch(tenantId, keyHash);
     // keyId = hash prefix: unique enough to bucket per key, reveals nothing about the raw secret.
     return {
       tenantId,
@@ -90,6 +92,28 @@ export class ApiKeyService {
   }
 
   /** Bump last_used_at inside the tenant's own context — no RLS bypass (the tenant owns the key). */
+  /**
+   * Keep last-used telemetry fresh without turning every authenticated request into a write.
+   * Another replica may also write once during the window; a crash only leaves telemetry stale.
+   */
+  private scheduleTouch(tenantId: string, keyHash: string): void {
+    const now = Date.now();
+    const touchedAt = this.touchedAt.get(keyHash);
+    if (touchedAt !== undefined && now - touchedAt < 5 * 60_000) return;
+    this.touchedAt.set(keyHash, now);
+    if (this.touchedAt.size > 10_000) {
+      for (const [hash, at] of this.touchedAt) {
+        if (now - at >= 5 * 60_000) this.touchedAt.delete(hash);
+      }
+      while (this.touchedAt.size > 10_000) {
+        const oldest = this.touchedAt.keys().next().value;
+        if (oldest === undefined) break;
+        this.touchedAt.delete(oldest);
+      }
+    }
+    void this.touch(tenantId, keyHash);
+  }
+
   private async touch(tenantId: string, keyHash: string): Promise<void> {
     try {
       await this.db.withTenant(

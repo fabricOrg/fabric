@@ -17,7 +17,6 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
-import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import type { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -59,7 +58,6 @@ describeDb("SDK-005 managed crash recovery (accept → crash → sweep)", () => 
     const config = { get: () => undefined } as unknown as ConfigService;
     sms = new SmsService(
       db,
-      {} as AutoTopupService,
       { isPaused: async () => false } as unknown as KillSwitchService,
       config,
       new QueueService(config),

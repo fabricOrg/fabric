@@ -32,7 +32,6 @@ import {
   completeFlowRecord,
 } from "./payment-webhook-effects.js";
 
-/** Paystack top-ups: pending intent, idempotent webhook credit, tenant RLS, and exact minor units. */
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
@@ -138,6 +137,7 @@ export class PaymentsService {
     await this.provisioning.db.insert(payments).values({
       tenantId: tenantId as TenantId,
       reference,
+      kind: "collection",
       provider: "paystack",
       // Bind the intent to its credentials — see webhookModeMismatch for why.
       providerMode: mode,

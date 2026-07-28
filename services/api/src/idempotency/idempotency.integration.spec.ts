@@ -13,7 +13,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { RequestTenant } from "../api-keys/api-key.guard.js";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
-import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -66,14 +65,10 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
   const killSwitch = {
     isPaused: async () => sendingPaused,
   } as unknown as KillSwitchService;
-  const autoTopup = {
-    maybeAutoTopUp: async () => undefined,
-  } as unknown as AutoTopupService;
 
   // Queue disabled (no REDIS_QUEUE_URL) → inline send path, as before finding 7.
   const sms = new SmsService(
     appDb,
-    autoTopup,
     killSwitch,
     config,
     new QueueService(config),

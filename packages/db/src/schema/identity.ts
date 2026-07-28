@@ -64,7 +64,7 @@ export const accounts = pgTable("accounts", {
     onDelete: "set null",
   }),
   // data_region drives residency (COMPLIANCE doc); validated at the app boundary.
-  dataRegion: text("data_region").notNull().default("af-south-1"),
+  dataRegion: text("data_region").notNull().default("eu-west-1"),
   settings: jsonb("settings").notNull().default({}),
   ...timestamps,
 });

@@ -10,10 +10,10 @@ const maxSourceLines = 300;
 const maxTestLines = 350;
 const violations = [];
 
-// Resilient: derive source roots from packages/* and services/* (skip what doesn't exist yet).
+// Resilient: derive source roots from every workspace group (skip what doesn't exist yet).
 function sourceRoots() {
   const roots = [];
-  for (const group of ["packages", "services"]) {
+  for (const group of ["apps", "packages", "services"]) {
     const groupDir = join(root, group);
     if (!existsSync(groupDir)) continue;
     for (const pkg of readdirSync(groupDir)) {

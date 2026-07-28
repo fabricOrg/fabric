@@ -1,7 +1,7 @@
 variable "region" {
-  description = "Production region. af-south-1 (Cape Town) for West-Africa proximity and data residency."
+  description = "Production region. eu-west-1 is the supported launch region."
   type        = string
-  default     = "af-south-1"
+  default     = "eu-west-1"
 }
 
 variable "profile" {

@@ -11,7 +11,6 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
-import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import type { SendersService } from "../senders/senders.service.js";
@@ -52,9 +51,6 @@ function configStub(values: Record<string, string>): ConfigService {
 const killSwitch = {
   isPaused: async () => false,
 } as unknown as KillSwitchService;
-const autoTopup = {
-  maybeAutoTopUp: async () => undefined,
-} as unknown as AutoTopupService;
 const liveMode = {
   resolveMode: async () => "live",
 } as unknown as VirtualPhoneService;
@@ -77,7 +73,6 @@ describeDb("queued send pipeline (BullMQ)", () => {
   const queueOff = new QueueService(configStub({}));
   const smsQueued = new SmsService(
     appDb,
-    autoTopup,
     killSwitch,
     configStub({}),
     queueOn,
@@ -89,7 +84,6 @@ describeDb("queued send pipeline (BullMQ)", () => {
   );
   const smsInline = new SmsService(
     appDb,
-    autoTopup,
     killSwitch,
     configStub({}),
     queueOff,

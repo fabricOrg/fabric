@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.5/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
   // Biome = one fast tool for BOTH lint + format (replaces ESLint + Prettier). Adopted from the
   // team's shop-app-v2 conventions for consistency. (biome.json is JSONC — comments allowed.)
   "formatter": {
@@ -10,7 +10,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "correctness": {
         "noUnusedImports": "error",
         "noUnusedVariables": "error"

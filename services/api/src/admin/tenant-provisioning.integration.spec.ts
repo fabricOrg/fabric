@@ -29,7 +29,7 @@ describeDb("tenant list", () => {
         slug: `alpha-${a}`,
         plan: "growth",
         status: "active",
-        dataRegion: "af-south-1",
+        dataRegion: "eu-west-1",
       },
       {
         id: b,
@@ -37,7 +37,7 @@ describeDb("tenant list", () => {
         slug: `beta-${b}`,
         plan: "free",
         status: "suspended",
-        dataRegion: "af-south-1",
+        dataRegion: "eu-west-1",
       },
     ]);
   });
@@ -57,7 +57,7 @@ describeDb("tenant list", () => {
       name: "Alpha Co",
       plan: "growth",
       status: "active",
-      data_region: "af-south-1",
+      data_region: "eu-west-1",
     });
     expect(beta).toMatchObject({ name: "Beta Co", status: "suspended" });
     // created_at is serialized to an ISO string for the wire.

@@ -9,6 +9,7 @@ export default defineConfig({
   },
   integrations: [
     starlight({
+      disable404Route: true,
       title: "Fabric Docs",
       description:
         "Build reliable SMS and email workflows with Fabric's TypeScript SDK, zero-gate sandbox, and signed webhooks.",

@@ -16,7 +16,7 @@ export const provisionTenantRequestSchema = z.object({
   adminEmail: z.string().trim().email(),
   adminName: z.string().trim().min(1).max(120).optional(),
   // Data-residency region for the account (see accounts.dataRegion). Defaults to the launch region.
-  dataRegion: z.string().trim().min(2).default("af-south-1"),
+  dataRegion: z.string().trim().min(2).default("eu-west-1"),
 });
 export type ProvisionTenantRequest = z.infer<
   typeof provisionTenantRequestSchema

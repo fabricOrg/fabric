@@ -52,12 +52,11 @@ const REGIONS = new Set(["gh-accra", "ng-lagos", "ke-nairobi"]);
 const PLANS = new Set(["free", "growth", "scale"]);
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Market region (UI) → data-residency region (accounts.dataRegion). All West/East-Africa markets
-// currently sit on af-south-1; revisit when we add residency zones.
+// Market region (UI) → deployed data region. Residency zones can replace this single-region map.
 const DATA_REGION: Record<string, string> = {
-  "gh-accra": "af-south-1",
-  "ng-lagos": "af-south-1",
-  "ke-nairobi": "af-south-1",
+  "gh-accra": "eu-west-1",
+  "ng-lagos": "eu-west-1",
+  "ke-nairobi": "eu-west-1",
 };
 
 function fail(message: string, status = 422) {
@@ -105,7 +104,7 @@ export async function POST(request: NextRequest) {
   if (!PLANS.has(plan)) return fail("Choose a valid plan.");
   if (!EMAIL.test(adminEmail)) return fail("Enter a valid admin email.");
 
-  const dataRegion = DATA_REGION[region] ?? "af-south-1";
+  const dataRegion = DATA_REGION[region] ?? "eu-west-1";
   const apiBaseUrl = process.env.API_BASE_URL;
   const bffToken = process.env.BFF_INTERNAL_TOKEN;
   if (!apiBaseUrl || !bffToken) {
