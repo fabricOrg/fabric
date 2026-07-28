@@ -24,6 +24,7 @@ import { PluginResolverService } from "../plugins/plugin-resolver.service.js";
 import { TokenPurchaseService } from "../tokens/token-purchase.service.js";
 import {
   resolvePaymentContext,
+  webhookModeMismatch,
   webhookVerificationCandidates,
 } from "./payment-provider-resolution.js";
 import {
@@ -73,7 +74,8 @@ export class PaymentsService {
     if (await this.killSwitch.isPaused("platform.payments")) {
       throw invalidRequest("payments_paused", "Top-ups are paused right now.");
     }
-    const { provider, creds } = await this.resolved(tenantId);
+    const { provider, creds, mode, instanceId, credentialVersion } =
+      await this.resolved(tenantId);
     // Paystack references allow only alphanumerics + - . = (no colon); a uuid with a topup- prefix
     // is all hyphens/alphanumerics. Doubles as our credit() idempotency key.
     const reference = `topup-${randomUUID()}`;
@@ -83,6 +85,10 @@ export class PaymentsService {
       tenantId: tenantId as TenantId,
       reference,
       provider: "paystack",
+      // Bind the intent to its credentials — see webhookModeMismatch for why.
+      providerMode: mode,
+      pluginInstanceId: instanceId,
+      credentialVersion,
       amountMinor: amountMinor as MinorUnits,
       currency: request.currency,
       email: request.email,
@@ -126,12 +132,17 @@ export class PaymentsService {
     if (await this.killSwitch.isPaused("platform.payments")) {
       throw invalidRequest("payments_paused", "Collections are paused.");
     }
-    const { provider, creds } = await this.resolved(tenantId);
+    const { provider, creds, mode, instanceId, credentialVersion } =
+      await this.resolved(tenantId);
     const reference = `flow-${randomUUID()}`;
     await this.provisioning.db.insert(payments).values({
       tenantId: tenantId as TenantId,
       reference,
       provider: "paystack",
+      // Bind the intent to its credentials — see webhookModeMismatch for why.
+      providerMode: mode,
+      pluginInstanceId: instanceId,
+      credentialVersion,
       amountMinor: p.amountMinor as MinorUnits,
       currency: p.currency,
       email: p.email,
@@ -162,10 +173,8 @@ export class PaymentsService {
     signature: string | undefined,
   ): Promise<void> {
     const raw = rawBody.toString("utf8");
-    // A webhook carries no tenant, and its signature must be verified BEFORE the body is trusted —
-    // so we cannot read the reference to decide whether this is a test or live charge without first
-    // trusting unverified input. Instead try each configured key until one HMAC matches. Constant
-    // work over keys we own, and forging still requires a valid HMAC under one of them.
+    // Verified BEFORE the body is trusted, so the reference cannot pick the key — try each
+    // configured key instead. See payment-provider-resolution.ts for why that is sound.
     const candidates = await webhookVerificationCandidates({
       provisioning: this.provisioning,
       config: this.config,
@@ -207,6 +216,15 @@ export class PaymentsService {
     if (!payment) {
       this.logger.warn(`Webhook for unknown reference ${event.reference}`);
       return;
+    }
+    if (webhookModeMismatch(payment.providerMode, verified.mode)) {
+      this.logger.error(
+        `Webhook for ${payment.reference} verified under '${verified.mode}' credentials but the intent was created in '${payment.providerMode}' mode — refusing.`,
+      );
+      throw unauthorized(
+        "credential_mode_mismatch",
+        "Webhook credentials do not match the payment that created it.",
+      );
     }
     if (payment.status === "success") return; // already credited
 

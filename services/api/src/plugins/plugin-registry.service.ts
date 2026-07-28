@@ -4,11 +4,12 @@ import {
   pluginCredentials,
   pluginInstances,
 } from "@app/db";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { invalidRequest } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { CATALOG } from "./plugin-catalog.js";
+import { PluginResolverService } from "./plugin-resolver.service.js";
 
 /**
  * Platform plugin registry (docs/PI-5/PLUGIN-REGISTRY.md). plugin_instances is GLOBAL config (no
@@ -39,6 +40,11 @@ function toDto(
 export class PluginRegistryService {
   constructor(
     @Inject(PROVISIONING_DB) private readonly provisioning: ProvisioningDb,
+    // Optional for direct construction in tests; when present, every mutation drops its cache so a
+    // disable or re-seat takes effect now rather than after the TTL.
+    @Optional()
+    @Inject(PluginResolverService)
+    private readonly resolver?: PluginResolverService,
   ) {}
 
   /** Idempotently seed the platform provider catalog (first run leaves the table populated). */
@@ -131,11 +137,22 @@ export class PluginRegistryService {
       }
 
       if (action === "make-default") {
-        // Demote the current primary in this capability, then promote this instance.
+        // Demote the current primary in this capability AND MODE, then promote this instance.
+        // Scoping by capability alone predates slice 3: it would reset every live instance's
+        // priority to 100 when a sandbox one was promoted, leaving live resolution to fall back on
+        // whatever order the database returned. Primary is a per-mode notion.
         await tx
           .update(pluginInstances)
           .set({ isDefault: false, priority: 100, updatedAt: new Date() })
-          .where(eq(pluginInstances.capability, current.capability));
+          .where(
+            and(
+              eq(pluginInstances.capability, current.capability),
+              eq(pluginInstances.mode, current.mode),
+              current.tenantId
+                ? eq(pluginInstances.tenantId, current.tenantId)
+                : isNull(pluginInstances.tenantId),
+            ),
+          );
         await tx
           .update(pluginInstances)
           .set({
@@ -172,6 +189,10 @@ export class PluginRegistryService {
         .from(pluginInstances)
         .where(eq(pluginInstances.id, id))
         .limit(1);
+      // Enabling, disabling, re-seating the primary or activating live all change WHO carries
+      // traffic. Without dropping the resolver cache the change takes up to the TTL to apply — and
+      // for `disable`, that means a provider staff believe they switched off keeps sending.
+      this.resolver?.invalidate();
       return updated ? toDto(updated) : null;
     });
   }

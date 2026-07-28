@@ -34,6 +34,14 @@ async function resolveMessage(
     providerRef?: string | undefined;
     faultCause?: string | undefined;
     errorCode?: string | undefined;
+    /**
+     * Set ONLY by the dispatch path, naming the adapter that just handed the message to a vendor.
+     * `provider_slug` is stamped at PREPARE time, but on the queued path a worker may dispatch much
+     * later — long enough for control-plane selection to have changed — so the stamped value can
+     * name a provider that did not send this message. The dispatcher is the one caller that knows
+     * for certain, so it re-stamps the row and its own rules govern this transition.
+     */
+    dispatchedBySlug?: string | undefined;
   } = {},
 ): Promise<MessageStatus> {
   const rows = (await tx`
@@ -58,9 +66,14 @@ async function resolveMessage(
   const recordedSlug = rows[0]?.provider_slug
     ? String(rows[0].provider_slug)
     : null;
-  const dispatchedBy =
-    (recordedSlug ? smsResolutionAdapterFor(recordedSlug)?.() : null) ??
-    deps.provider;
+  // On the DISPATCH path the caller just spoke to the vendor, so `deps.provider` IS the dispatching
+  // adapter and is authoritative — it also re-stamps provider_slug below, correcting a row whose
+  // prepare-time guess has since gone stale. On DLR and sweep we were not the sender, so the row's
+  // recorded slug is the only honest answer.
+  const dispatchedBy = opts.dispatchedBySlug
+    ? deps.provider
+    : ((recordedSlug ? smsResolutionAdapterFor(recordedSlug)?.() : null) ??
+      deps.provider);
 
   const billable = dispatchedBy.billableStatuses;
   const reachedBillable =
@@ -99,6 +112,9 @@ async function resolveMessage(
       status = ${newStatus},
       status_rank = ${STATUS_RANK[newStatus]},
       provider_ref = COALESCE(${opts.providerRef ?? null}, provider_ref),
+      -- Correct the prepare-time stamp to whoever actually dispatched, so later DLR lookups and
+      -- sweeps settle against the real provider rather than a selection that has since changed.
+      provider_slug = COALESCE(${opts.dispatchedBySlug ?? null}, provider_slug),
       error_code = COALESCE(${opts.errorCode ?? null}, error_code),
       updated_at = now()
     WHERE id = ${messageId}`;
@@ -180,6 +196,9 @@ export async function dispatchSend(
   const status = await deps.db.withTenant(input.tenantId, (tx) =>
     resolveMessage(deps, tx, prepared.messageId, result.status, {
       providerRef: result.providerRef,
+      // We just sent it — record WHO, so settlement and DLR lookup key on fact rather than on the
+      // provider that happened to be selected when the message was prepared.
+      dispatchedBySlug: deps.provider.slug,
     }),
   );
   return { messageId: prepared.messageId, status };

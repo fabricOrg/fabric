@@ -28,10 +28,17 @@ export interface PluginInstance {
  */
 export const VENDOR_CREDENTIAL_FIELDS: Record<
   string,
-  { name: string; label: string; required: boolean; hint?: string }[]
+  {
+    name: string;
+    label: string;
+    required: boolean;
+    /** Render masked. Set on anything that IS the secret, not just fields literally named apiKey. */
+    secret?: boolean;
+    hint?: string;
+  }[]
 > = {
   arkesel: [
-    { name: "apiKey", label: "API key", required: true },
+    { name: "apiKey", label: "API key", required: true, secret: true },
     {
       name: "sandbox",
       label: "Sandbox",
@@ -53,8 +60,10 @@ export const VENDOR_CREDENTIAL_FIELDS: Record<
       name: "secretKey",
       label: "Secret key",
       required: true,
-      hint: "sk_test_… on a sandbox instance, sk_live_… on a live one.",
+      secret: true,
+      hint: "sk_test_… on a sandbox instance, sk_live_… on a live one. The mode is enforced — a live instance refuses a test key and vice versa.",
     },
+    // Public by design; masking it would imply a confidentiality it does not have.
     { name: "publicKey", label: "Public key", required: false },
   ],
 };

@@ -11,6 +11,9 @@ export interface ResolvedPaymentContext {
   readonly provider: PaymentProviderPlugin;
   readonly creds: Creds;
   readonly mode: "sandbox" | "live";
+  /** Null on the env fallback, which has no control-plane instance behind it. */
+  readonly instanceId: string | null;
+  readonly credentialVersion: number | null;
 }
 
 export interface PaymentResolutionDeps {
@@ -55,7 +58,13 @@ export async function resolvePaymentContext(
   const mode = await paymentModeFor(deps.provisioning, tenantId);
   const resolved = await deps.resolver?.resolvePayment(mode);
   if (resolved) {
-    return { provider: resolved.provider, creds: resolved.creds, mode };
+    return {
+      provider: resolved.provider,
+      creds: resolved.creds,
+      mode,
+      instanceId: resolved.instanceId,
+      credentialVersion: resolved.credentialVersion,
+    };
   }
   const secretKey = deps.config.get<string>("PAYSTACK_SECRET_KEY");
   if (!secretKey) {
@@ -64,7 +73,30 @@ export async function resolvePaymentContext(
       "Payments are not configured.",
     );
   }
-  return { provider: new PaystackProvider(), creds: { secretKey }, mode };
+  // The env fallback carries no instance or version — recorded as null so a webhook cannot be
+  // required to match a binding that never existed.
+  return {
+    provider: new PaystackProvider(),
+    creds: { secretKey },
+    mode,
+    instanceId: null,
+    credentialVersion: null,
+  };
+}
+
+/**
+ * The signature only proves SOME key of ours signed it — not the right one. We hold both a test and
+ * a live secret, and test keys circulate far more freely, so without this a webhook signed with the
+ * test key could settle a live-mode reference and credit a real wallet.
+ *
+ * Intents created through the env fallback carry no mode and are exempt: there was no binding to
+ * honour, and refusing them would break every in-flight charge during the migration.
+ */
+export function webhookModeMismatch(
+  intentMode: string | null,
+  verifiedMode: "sandbox" | "live",
+): boolean {
+  return intentMode !== null && intentMode !== verifiedMode;
 }
 
 /**
@@ -83,24 +115,29 @@ export async function webhookVerificationCandidates(
   deps: PaymentResolutionDeps,
 ): Promise<ResolvedPaymentContext[]> {
   const candidates: ResolvedPaymentContext[] = [];
-  for (const mode of ["sandbox", "live"] as const) {
-    const resolved = await deps.resolver?.resolvePayment(mode);
-    if (resolved) {
-      candidates.push({
-        provider: resolved.provider,
-        creds: resolved.creds,
-        mode,
-      });
-    }
+  // Current AND immediately-previous credential per enabled instance: a charge created just before a
+  // rotation must still have its webhook verified, or the payment strands unverifiable.
+  for (const entry of (await deps.resolver?.paymentWebhookCredentials()) ??
+    []) {
+    candidates.push({
+      provider: entry.provider,
+      creds: entry.creds,
+      mode: entry.mode,
+      instanceId: entry.instanceId,
+      credentialVersion: entry.version,
+    });
   }
   const secretKey = deps.config.get<string>("PAYSTACK_SECRET_KEY");
   if (secretKey) {
     // Migration fallback: an env-configured key must still verify its own in-flight webhooks while
-    // the control plane is being populated.
+    // the control plane is being populated. Mode is null-equivalent here — intents it created carry
+    // no binding, so nothing is enforced against them.
     candidates.push({
       provider: new PaystackProvider(),
       creds: { secretKey },
       mode: "sandbox",
+      instanceId: null,
+      credentialVersion: null,
     });
   }
   return candidates;

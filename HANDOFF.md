@@ -233,6 +233,48 @@ changes resolution for every other spec; both plugin tests now disable inside th
 
 Gates: full api integration **58 files / 272 tests**, integrations 48/48, all typechecks + biome clean.
 
+### Independent review (codex, 2026-07-28) — 12 findings fixed, 1 rejected
+
+Ran `codex exec -s read-only` over `origin/dev...HEAD`. Every finding was verified against the code
+before acting; the ones that landed:
+
+- **Credential/mode consistency** was the worst. A LIVE Arkesel instance whose credential omits
+  `sandbox='false'` is accepted by Arkesel, never forwarded to a carrier, returns `accepted` — and
+  `billableStatuses[0]` COMMITS the wallet reservation. Fabricated success, billed. Now
+  `credentialModeViolation()` rejects it at configure time, and the Paystack equivalent binds key
+  prefixes (`sk_live_` ⇄ live, `sk_test_` ⇄ sandbox) so a sandbox workspace cannot make real charges.
+- **Webhook mode binding.** The verified candidate's mode was discarded, so a webhook signed with the
+  TEST key could settle a LIVE reference and credit a real wallet. `payments` now records
+  `provider_mode` / `plugin_instance_id` / `credential_version` (migration 0100) and the webhook
+  refuses a mismatch. Test keys circulate far more loosely — that is what made it worth closing.
+- **Rotation stranded in-flight webhooks.** Verification now considers each enabled instance's
+  current AND previous credential version, bounded at two.
+- **`invalidate()` had ZERO production callers.** A rotated or disabled provider stayed live for up
+  to the 30s TTL. Now called from `configure()` and every registry mutation. (Caveat: clears the
+  local process only; other replicas still age out on their own TTL.)
+- **Dispatch-time provider identity.** `provider_slug` was stamped at PREPARE, but on the queued path
+  a worker dispatches later — long enough for selection to change — so settlement could key on a
+  provider that did not send. `dispatchSend` now re-stamps with who actually sent, and its own rules
+  govern that transition. Near-zero window on hosted today (no Redis → inline dispatch), real once
+  the worker returns.
+- `make-default` demoted by capability alone, resetting live priorities when a sandbox instance was
+  promoted — now scoped to `(tenant, capability, mode)`.
+- `PLUGIN_MASTER_KEY` was missing from `ecs.tf`; without it the API cannot install OR resolve any
+  credential on the AWS path. Secret + injection added.
+- Paystack's `secretKey` rendered as PLAIN TEXT in the admin form (only `apiKey` was masked). Masking
+  now comes from field metadata, defaulting to masked for unknown vendors.
+
+**Rejected:** "removing the recipient allowlist exceeds the redline" — that was an explicit user
+decision, which codex had no way to know. Worth noting it reached the concern independently.
+
+**Two test lessons.** `flows.integration.spec.ts` stubbed a private `provider` FIELD that no longer
+exists, so the stub silently became a no-op and the spec made a REAL Paystack call. It now stubs the
+resolver. And `plugin_instances` is global config — a spec leaving an instance enabled changes
+resolution for every other spec.
+
+Gates after fixes: full api integration **58 files / 272 tests**, integrations **53/53**, api unit
+198/198, all four typechecks + biome clean.
+
 ### The journey is now buildable end to end — what remains is doing it
 
 Audited against code, not comments: request go-live (dashboard card → proposal) ✅ · staff approve

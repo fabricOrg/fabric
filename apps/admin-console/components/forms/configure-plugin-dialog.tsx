@@ -48,7 +48,9 @@ export function ConfigurePluginDialog({
   const [error, setError] = useState<string | null>(null);
   const fields = instance
     ? (VENDOR_CREDENTIAL_FIELDS[instance.vendor] ?? [
-        { name: "apiKey", label: "API key", required: true },
+        // Unknown vendor: assume the single field IS the secret and mask it. Failing closed on
+        // masking is the right default — a needlessly hidden value costs nothing.
+        { name: "apiKey", label: "API key", required: true, secret: true },
       ])
     : [];
 
@@ -127,7 +129,9 @@ export function ConfigurePluginDialog({
                     </FieldLabel>
                     <Input
                       id={`${ids}-${spec.name}`}
-                      type={spec.name === "apiKey" ? "password" : "text"}
+                      // Masked from the field's own metadata, not a hard-coded name — keying on
+                      // `apiKey` left Paystack's secretKey rendering in plain text.
+                      type={spec.secret ? "password" : "text"}
                       value={field.state.value ?? ""}
                       onChange={(e) => field.handleChange(e.target.value)}
                       onBlur={field.handleBlur}

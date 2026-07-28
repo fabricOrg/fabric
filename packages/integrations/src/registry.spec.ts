@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  credentialModeViolation,
   smsAdapterFor,
   smsResolutionAdapterFor,
   supportedSmsVendors,
@@ -96,5 +97,74 @@ describe("sms resolution registry (settling a dispatched message)", () => {
     expect(virtual?.platformFaultExemptions).toEqual(
       arkesel?.platformFaultExemptions,
     );
+  });
+});
+
+/**
+ * A credential must AGREE with the mode of the instance holding it. Presence checks alone let
+ * through the two worst configurations in the system, both of which look successful:
+ *
+ *   - a LIVE Arkesel instance without sandbox='false' — the provider accepts the message, never
+ *     delivers it, returns `accepted`, and `billableStatuses[0]` commits the wallet reservation;
+ *   - a SANDBOX Paystack instance holding sk_live_ — real charges from a test workspace.
+ */
+describe("credential/mode consistency", () => {
+  it("refuses a live SMS credential that is still sandboxed", () => {
+    expect(
+      credentialModeViolation("sms", "arkesel", "live", { apiKey: "k" }),
+    ).toMatch(/sandbox='false'/);
+    expect(
+      credentialModeViolation("sms", "arkesel", "live", {
+        apiKey: "k",
+        sandbox: "true",
+      }),
+    ).not.toBeNull();
+  });
+
+  it("accepts a live SMS credential with sandbox disabled", () => {
+    expect(
+      credentialModeViolation("sms", "arkesel", "live", {
+        apiKey: "k",
+        sandbox: "false",
+      }),
+    ).toBeNull();
+  });
+
+  it("refuses a sandbox SMS instance configured to reach real carriers", () => {
+    expect(
+      credentialModeViolation("sms", "arkesel", "sandbox", {
+        apiKey: "k",
+        sandbox: "false",
+      }),
+    ).not.toBeNull();
+  });
+
+  it("binds Paystack key prefixes to the instance mode", () => {
+    expect(
+      credentialModeViolation("payment", "paystack", "live", {
+        secretKey: "sk_test_x",
+      }),
+    ).toMatch(/live secret key/);
+    expect(
+      credentialModeViolation("payment", "paystack", "sandbox", {
+        secretKey: "sk_live_x",
+      }),
+    ).toMatch(/test secret key/);
+    expect(
+      credentialModeViolation("payment", "paystack", "live", {
+        secretKey: "sk_live_x",
+      }),
+    ).toBeNull();
+    expect(
+      credentialModeViolation("payment", "paystack", "sandbox", {
+        secretKey: "sk_test_x",
+      }),
+    ).toBeNull();
+  });
+
+  it("has no opinion about vendors it does not know", () => {
+    expect(
+      credentialModeViolation("sms", "hubtel", "live", { apiKey: "k" }),
+    ).toBeNull();
   });
 });

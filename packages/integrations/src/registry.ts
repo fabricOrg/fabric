@@ -124,3 +124,51 @@ export function adapterConfigSchemaFor(
   }
   return null;
 }
+
+/**
+ * Whether a credential CONTRADICTS the mode of the instance holding it — returns the reason, or null
+ * when consistent.
+ *
+ * Presence checks are not enough, because for both vendors the credential itself carries a
+ * live-vs-test switch that can disagree with the instance:
+ *
+ *   - **Arkesel** defaults to SANDBOX unless `sandbox === "false"` exactly. A live instance whose
+ *     credential omits that flag is accepted by Arkesel, never forwarded to a carrier, and returns
+ *     `accepted` — which is `billableStatuses[0]`, so the wallet reservation COMMITS. The customer is
+ *     billed for a message that never left the building. That is fabricated success, and it is the
+ *     precise failure this whole subsystem exists to prevent.
+ *   - **Paystack** keys are prefixed. A sandbox instance holding `sk_live_…` makes REAL charges from
+ *     what everyone believes is a test workspace; a live instance holding `sk_test_…` credits real
+ *     wallets from payments that never happened.
+ *
+ * Enforced at configure time AND before activation, so neither ordering slips through.
+ */
+export function credentialModeViolation(
+  capability: string,
+  vendor: string,
+  mode: "sandbox" | "live",
+  credential: Readonly<Record<string, string>>,
+): string | null {
+  const key = vendor.trim().toLowerCase();
+  if (capability === "sms" && key === "arkesel") {
+    const sandboxed = credential.sandbox !== "false";
+    if (mode === "live" && sandboxed) {
+      return "A live instance requires sandbox='false'. Without it the provider accepts the message, never delivers it, and the send is still billed.";
+    }
+    if (mode === "sandbox" && !sandboxed) {
+      return "A sandbox instance must not set sandbox='false' — that reaches real carriers and spends real money.";
+    }
+    return null;
+  }
+  if (capability === "payment" && key === "paystack") {
+    const secret = credential.secretKey ?? "";
+    if (mode === "live" && !secret.startsWith("sk_live_")) {
+      return "A live instance requires a live secret key (sk_live_…).";
+    }
+    if (mode === "sandbox" && !secret.startsWith("sk_test_")) {
+      return "A sandbox instance requires a test secret key (sk_test_…).";
+    }
+    return null;
+  }
+  return null;
+}

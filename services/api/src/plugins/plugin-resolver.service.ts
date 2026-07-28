@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   decryptCredential,
   type ProvisioningDb,
@@ -16,6 +15,11 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
+import { derivePluginMasterKey } from "./plugin-master-key.js";
+import {
+  type PaymentWebhookCredential,
+  paymentWebhookCredentials,
+} from "./plugin-webhook-credentials.js";
 
 /** A resolved provider: the adapter plus the credentials it needs. */
 export interface ResolvedProvider {
@@ -23,6 +27,8 @@ export interface ResolvedProvider {
   readonly instanceId: string;
   readonly provider: SmsSenderPlugin;
   readonly creds: Creds;
+  /** Which credential version supplied `creds` — recorded by callers that must verify later. */
+  readonly credentialVersion: number;
 }
 
 /** A resolved PAYMENT provider. Same shape, different adapter contract. */
@@ -31,6 +37,8 @@ export interface ResolvedPaymentProvider {
   readonly instanceId: string;
   readonly provider: PaymentProviderPlugin;
   readonly creds: Creds;
+  /** Stored on the payment intent so its webhook still verifies after a key rotation. */
+  readonly credentialVersion: number;
 }
 
 interface CacheEntry {
@@ -133,6 +141,18 @@ export class PluginResolverService {
     this.cache.clear();
   }
 
+  /**
+   * Every credential a PAYMENT webhook could legitimately be signed with. Split into its own module
+   * for the file-length guard; see plugin-webhook-credentials.ts for why previous versions count.
+   */
+  paymentWebhookCredentials(): Promise<PaymentWebhookCredential[]> {
+    return paymentWebhookCredentials(
+      this.provisioning,
+      this.config,
+      this.logger,
+    );
+  }
+
   private async read(
     capability: "sms" | "payment",
     mode: "sandbox" | "live",
@@ -174,8 +194,9 @@ export class PluginResolverService {
         );
         continue;
       }
-      const creds = await this.credentialsFor(row.id, row.credentialsRef);
-      if (!creds) continue;
+      const credential = await this.credentialsFor(row.id, row.credentialsRef);
+      if (!credential) continue;
+      const { creds, version } = credential;
       // The cast is safe by construction: the factory was chosen from the capability-matching
       // registry three lines up, so an sms capability yields an SmsSenderPlugin and a payment
       // capability a PaymentProviderPlugin. The public resolveSms/resolvePayment wrappers are what
@@ -185,6 +206,7 @@ export class PluginResolverService {
         instanceId: row.id,
         provider: factory(),
         creds,
+        credentialVersion: version,
       } as ResolvedProvider | ResolvedPaymentProvider;
     }
     return null;
@@ -194,13 +216,12 @@ export class PluginResolverService {
   private async credentialsFor(
     instanceId: string,
     credentialsRef: string | null,
-  ): Promise<Creds | null> {
+  ): Promise<{ creds: Creds; version: number } | null> {
     if (!credentialsRef) {
       this.logger.warn(`plugin instance ${instanceId} has no credentials`);
       return null;
     }
-    const masterKey = this.masterKey();
-    if (!masterKey) return null;
+    const masterKey = derivePluginMasterKey(this.config, this.logger);
 
     const [row] = await this.provisioning.db
       .select()
@@ -222,7 +243,12 @@ export class PluginResolverService {
         instanceId,
         row.version,
       );
-      return decryptCredential(dek, row.ciphertext, instanceId, row.version);
+      // The version travels with the secret so a caller can record WHICH credential it used — a
+      // payment intent stores it, which is what lets its webhook still verify after a rotation.
+      return {
+        creds: decryptCredential(dek, row.ciphertext, instanceId, row.version),
+        version: row.version,
+      };
     } catch (error) {
       // Wrong master key, tampering, or a version mismatch. Never fall through to another
       // credential — an unreadable secret is a configuration fault that must stay visible.
@@ -233,33 +259,5 @@ export class PluginResolverService {
       );
       return null;
     }
-  }
-
-  /**
-   * Derived, not truncated. The PII vault (privacy/pii-keys.ts) hashes `purpose:secret` for the same
-   * reason: a configured secret is usually ASCII, so slicing 32 bytes off it keeps roughly a byte of
-   * entropy per character, while SHA-256 spreads whatever entropy exists across the full key.
-   *
-   * A distinct purpose label keeps this key independent of the PII master key even if an operator
-   * ever configures both from the same secret — one leak must not become two.
-   */
-  private masterKey(): Buffer | null {
-    const secret = this.config.get<string>("PLUGIN_MASTER_KEY")?.trim();
-    if (!secret || secret.length < 32) {
-      if (this.config.get<string>("NODE_ENV") === "production") {
-        // Never fall back to a derived development key in production: it would make every stored
-        // vendor credential readable by anyone holding this source.
-        throw new Error(
-          "PLUGIN_MASTER_KEY must be set to at least 32 characters in production.",
-        );
-      }
-      this.logger.warn(
-        "PLUGIN_MASTER_KEY unset — using the local development key; credentials are NOT protected",
-      );
-      return createHash("sha256")
-        .update("fabric-local-plugin-development-key")
-        .digest();
-    }
-    return createHash("sha256").update(`plugin-master:${secret}`).digest();
   }
 }

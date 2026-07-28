@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { ConfigurePluginRequest } from "@app/contracts";
 import {
   credentialFingerprint,
@@ -9,13 +8,18 @@ import {
   pluginInstances,
   wrapCredentialDek,
 } from "@app/db";
-import { adapterConfigSchemaFor } from "@app/integrations";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import {
+  adapterConfigSchemaFor,
+  credentialModeViolation,
+} from "@app/integrations";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { desc, eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
+import { derivePluginMasterKey } from "./plugin-master-key.js";
+import { PluginResolverService } from "./plugin-resolver.service.js";
 
 interface Actor {
   readonly email: string;
@@ -37,6 +41,11 @@ export class PluginCredentialsService {
     @Inject(PROVISIONING_DB) private readonly provisioning: ProvisioningDb,
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(AuditService) private readonly audit: AuditService,
+    // Optional so tests can construct this service without a resolver; when present, a write here
+    // drops its cache immediately rather than letting a superseded credential live out the TTL.
+    @Optional()
+    @Inject(PluginResolverService)
+    private readonly resolver?: PluginResolverService,
   ) {}
 
   /**
@@ -64,8 +73,20 @@ export class PluginCredentialsService {
       instance.vendor,
       request.credential,
     );
+    // The credential must also AGREE with the instance's mode. Presence alone lets a live Arkesel
+    // instance omit sandbox='false' (accepted, never delivered, still billed) or a sandbox Paystack
+    // instance hold sk_live_ (real charges from a test workspace).
+    const violation = credentialModeViolation(
+      instance.capability,
+      instance.vendor,
+      instance.mode,
+      request.credential,
+    );
+    if (violation) {
+      throw invalidRequest("credential_mode_mismatch", violation, "credential");
+    }
 
-    const masterKey = this.masterKey();
+    const masterKey = derivePluginMasterKey(this.config, this.logger);
     const [latest] = await this.provisioning.db
       .select({ version: pluginCredentials.version })
       .from(pluginCredentials)
@@ -116,6 +137,11 @@ export class PluginCredentialsService {
     this.logger.log(
       `plugin credential installed: ${instance.vendor}/${instance.mode} v${version} fp=${fingerprint}`,
     );
+    // Drop the resolver's 30s cache NOW. Without this a rotated key keeps being used for up to the
+    // TTL — and a rotation is often a response to compromise, where "eventually" is the wrong
+    // answer. NOTE: this clears THIS process's cache; other API replicas still age out on their own
+    // TTL, so a rotation is not instantaneous fleet-wide.
+    this.resolver?.invalidate();
     return { fingerprint, version };
   }
 
@@ -170,30 +196,5 @@ export class PluginCredentialsService {
         );
       }
     }
-  }
-
-  /**
-   * Derived, not truncated — same rationale as the PII vault and the resolver: a configured secret
-   * is usually ASCII, so slicing bytes off it keeps roughly a byte of entropy per character.
-   *
-   * MUST stay identical to PluginResolverService.masterKey(), or a credential sealed here cannot be
-   * opened on the send path. Same purpose label, same digest.
-   */
-  private masterKey(): Buffer {
-    const secret = this.config.get<string>("PLUGIN_MASTER_KEY")?.trim();
-    if (!secret || secret.length < 32) {
-      if (this.config.get<string>("NODE_ENV") === "production") {
-        throw new Error(
-          "PLUGIN_MASTER_KEY must be set to at least 32 characters in production.",
-        );
-      }
-      this.logger.warn(
-        "PLUGIN_MASTER_KEY unset — using the local development key; credentials are NOT protected",
-      );
-      return createHash("sha256")
-        .update("fabric-local-plugin-development-key")
-        .digest();
-    }
-    return createHash("sha256").update(`plugin-master:${secret}`).digest();
   }
 }

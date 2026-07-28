@@ -81,13 +81,27 @@ describeDb("flows (Lighthouse saga)", () => {
    * silently stopped working — the service resolved the real Paystack client and made a live network
    * call. Stubbing the seam the code actually uses keeps the test honest about that.
    */
+  // instanceId must be a real UUID: it is persisted to payments.plugin_instance_id (uuid), which is
+  // how a webhook is later bound to the credential that created the charge.
+  const fakeInstanceId = randomUUID();
   const resolver = {
     resolvePayment: async () => ({
       vendor: "paystack",
-      instanceId: "flows-spec-fake",
+      instanceId: fakeInstanceId,
       provider: fakeProvider,
       creds: { secretKey: "sk_test_dummy" },
+      credentialVersion: 1,
     }),
+    // The webhook path verifies against these rather than the resolved-for-charge credential.
+    paymentWebhookCredentials: async () => [
+      {
+        mode: "live" as const,
+        instanceId: fakeInstanceId,
+        version: 1,
+        provider: fakeProvider,
+        creds: { secretKey: "sk_test_dummy" },
+      },
+    ],
   } as unknown as PluginResolverService;
   const payments = new PaymentsService(
     provisioning,
