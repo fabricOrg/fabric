@@ -36,6 +36,14 @@ services:
       # PII vault key material (index/data keys derive from the one master key)
       - key: PII_MASTER_KEY
         sync: false
+      # Wraps every per-credential DEK (ADR-0011 §1). REQUIRED here: NODE_ENV=production makes
+      # derivePluginMasterKey throw rather than fall back to the development key, so without it every
+      # plugin credential write and every live resolve 500s.
+      #
+      # Set it ONCE and never rotate it casually — a credential sealed under one master key cannot be
+      # opened under another, and the failure surfaces at dispatch, not at save. Must be >=32 chars.
+      - key: PLUGIN_MASTER_KEY
+        sync: false
       # Providers stay sandboxed (redline)
       - key: SMS_PROVIDER
         value: fake
