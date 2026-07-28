@@ -1,6 +1,7 @@
 import {
   createSenderRequestSchema,
   decideSenderRequestSchema,
+  setSenderCarrierStatusRequestSchema,
 } from "@app/contracts";
 import {
   Body,
@@ -84,6 +85,35 @@ export class SendersAdminController {
       throw invalidRequest("invalid_decision", "The decision is invalid.");
     }
     return this.senders.decide(id, parsed.data, {
+      email: actorEmail,
+      staffId: actorStaffId ?? null,
+    });
+  }
+
+  /**
+   * Record the CARRIER's outcome for a registration. Staff-only and separate from `decide` — the
+   * carrier is the real delivery gate and we cannot poll it (Arkesel has no registration API), so an
+   * operator transcribes what the carrier said before the customer can be activated.
+   */
+  @Post(":id/carrier-status")
+  async setCarrierStatus(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("x-actor-email") actorEmail?: string,
+    @Headers("x-actor-staff-id") actorStaffId?: string,
+  ) {
+    if (!actorEmail) {
+      throw unauthorized("missing_actor", "Actor identity is required.");
+    }
+    const parsed = setSenderCarrierStatusRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest(
+        "invalid_carrier_status",
+        parsed.error.issues[0]?.message ?? "The carrier status is invalid.",
+        String(parsed.error.issues[0]?.path[0] ?? "carrier_status"),
+      );
+    }
+    return this.senders.setCarrierStatus(id, parsed.data, {
       email: actorEmail,
       staffId: actorStaffId ?? null,
     });

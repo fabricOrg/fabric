@@ -59,8 +59,9 @@ async function seedTenant(id: string, plan: string, rawKey: string) {
   // E10-S4: live-plan tenants need an active sender for the default OTP sender id.
   if (plan !== "sandbox") {
     await owner.unsafe(
-      `INSERT INTO senders (tenant_id, sender_id, country, use_case, status)
-       VALUES ($1, 'FABRIC', 'GH', 'verify integration', 'active')
+      // carrier_status required for `active` — see migration 0097.
+      `INSERT INTO senders (tenant_id, sender_id, country, use_case, status, carrier_status)
+       VALUES ($1, 'FABRIC', 'GH', 'verify integration', 'active', 'approved')
        ON CONFLICT ON CONSTRAINT uniq_sender_tenant_id_country DO NOTHING`,
       [id],
     );
