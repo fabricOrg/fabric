@@ -32,7 +32,14 @@ const ALGO = "aes-256-gcm";
 const IV_BYTES = 12;
 export const DEK_BYTES = 32;
 
-/** A wrapped DEK, or any vault ciphertext: iv ‖ authTag ‖ ciphertext, packed for a `bytea` column. */
+/**
+ * A wrapped DEK, or any vault ciphertext: iv ‖ authTag ‖ ciphertext, packed for a `bytea` column.
+ *
+ * Exported (as `sealEnvelope` / `openEnvelope` below) so other vaults — plugin credentials, ADR-0011
+ * — reuse this exact AEAD rather than hand-rolling a second one. The module header's rule holds:
+ * ONE implementation of the envelope, because two would diverge silently and each would write rows
+ * the other could not read.
+ */
 function seal(key: Buffer, plaintext: Buffer, aad: string): Buffer {
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv(ALGO, key, iv);
@@ -56,6 +63,23 @@ function open(key: Buffer, sealed: Buffer, aad: string): Buffer {
 
 export function newDek(): Buffer {
   return randomBytes(DEK_BYTES);
+}
+
+/**
+ * The generic AEAD, for vaults whose AAD is not the PII vault's tenant/subject/kind triple. The
+ * caller owns the AAD string and must bind enough context that a ciphertext cannot be lifted from
+ * one record into another and still decrypt.
+ */
+export function sealEnvelope(
+  key: Buffer,
+  plaintext: Buffer,
+  aad: string,
+): Buffer {
+  return seal(key, plaintext, aad);
+}
+
+export function openEnvelope(key: Buffer, sealed: Buffer, aad: string): Buffer {
+  return open(key, sealed, aad);
 }
 
 /** Wrap a subject's DEK under the master key. AAD binds it to the tenant + subject it belongs to. */

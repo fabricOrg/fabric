@@ -18,5 +18,7 @@ export {
 export * from "./arkesel/provider.js";
 export * from "./paystack/provider.js";
 export * from "./plugin.js";
+// ADR-0011: vendor string → adapter, so the send path never names a vendor.
+export * from "./registry.js";
 export * from "./status.js";
 export * from "./virtual-phone/provider.js";

@@ -6,6 +6,7 @@ export * from "./client.js";
 export * from "./ledger-invariant.js";
 export * from "./pagination.js";
 export * from "./pii-envelope.js";
+export * from "./plugin-envelope.js";
 export * from "./provisioning.js";
 export * from "./queries/customer-reads.js";
 export * from "./schema/index.js";
