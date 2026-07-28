@@ -1,5 +1,6 @@
 ---
 import { Image } from "astro:assets";
+import { Code } from "astro/components";
 import InteractiveDemo from "../components/InteractiveDemo.astro";
 import CostCalculator from "../components/il/CostCalculator.astro";
 import dispatchImg from "../assets/il/dispatch.png";
@@ -84,12 +85,16 @@ const prodReady = [
   },
 ];
 
+// `l` is the Shiki grammar: the first two steps are shell/env, not JS, and highlighting them as JS
+// mis-colours the package name and the key.
 const quickstart = [
-  { n: "1", t: "Install", c: "npm i @fabric-messaging/sdk" },
-  { n: "2", t: "Add your key", c: "FABRIC_API_KEY=sk_test_…" },
-  { n: "3", t: "Send", c: "fabric.messages.send(\"order.shipped\", { to, data, idempotencyKey })" },
-  { n: "4", t: "Follow", c: "fabric.messages.retrieveDelivery(deliveryId)" },
-];
+  { n: "1", t: "Install", l: "bash", c: "npm i @fabric-messaging/sdk" },
+  { n: "2", t: "Add your key", l: "ini", c: "FABRIC_API_KEY=sk_test_…" },
+  { n: "3", t: "Send", l: "js", c: "const { deliveryId } = await fabric.messages.send(\"order.shipped\", { to, data, idempotencyKey });" },
+  { n: "4", t: "Follow", l: "js", c: "const delivery = await fabric.messages.retrieveDelivery(deliveryId);" },
+  // `as const` keeps `l` a literal union — <Code lang> wants a CodeLanguage, and a widened
+  // `string` doesn't satisfy it.
+] as const;
 
 const docs = [
   { t: "Quickstart", d: "Send a sandbox message with the Node SDK in minutes.", href: "/docs/quickstarts/working-quickstart/" },
@@ -278,7 +283,16 @@ const faqs = [
         <div class="qs-grid">
           <ol class="qs-steps">
             {quickstart.map((q) => (
-              <li><span class="qs-n">{q.n}</span><div><strong>{q.t}</strong><code>{q.c}</code></div></li>
+              <li>
+                <span class="qs-n">{q.n}</span>
+                <div>
+                  <strong>{q.t}</strong>
+                  <div class="qs-code">
+                    <Code code={q.c} lang={q.l} theme="css-variables" wrap />
+                    <button class="qs-copy" type="button" data-copy={q.c} aria-label={`Copy the ${q.t.toLowerCase()} snippet`}>Copy</button>
+                  </div>
+                </div>
+              </li>
             ))}
           </ol>
           <div class="docs-cards">
@@ -337,6 +351,25 @@ const faqs = [
         mnav?.addEventListener("click", (e) => {
           if (e.target instanceof Element && e.target.closest("a")) mnav.removeAttribute("open");
         });
+        // Quickstart copy buttons. Bound here rather than rendered as links so a no-JS reader still
+        // sees selectable code and never a control that does nothing.
+        for (const btn of document.querySelectorAll(".qs-copy")) {
+          btn.addEventListener("click", async () => {
+            const text = btn.getAttribute("data-copy");
+            if (!text || !navigator.clipboard) return;
+            try {
+              await navigator.clipboard.writeText(text);
+            } catch {
+              return;
+            }
+            btn.textContent = "Copied";
+            btn.setAttribute("data-copied", "");
+            setTimeout(() => {
+              btn.textContent = "Copy";
+              btn.removeAttribute("data-copied");
+            }, 1600);
+          });
+        }
         // Scroll-reveal for section heads. Classes are added here, not in markup, so no-JS and
         // reduced-motion readers get fully static content.
         if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -390,11 +423,15 @@ const faqs = [
 
       /* shared type + section heads */
       .kicker, .num { margin: 0; color: var(--gold-ink); font-family: var(--font-mono); font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; }
-      h1, h2, h3 { font-family: var(--font-display); font-weight: 700; letter-spacing: 0; }
+      /* Clash Display sets tight word gaps at display weight — at 2.7rem "From install" closes up
+         and reads as one word. A little word-spacing separates them without loosening the letters. */
+      h1, h2, h3 { font-family: var(--font-display); font-weight: 700; letter-spacing: 0; word-spacing: .06em; }
       .hl { color: var(--primary); }
       .sec-head { max-width: 44rem; }
       .sec-head.center { margin-inline: auto; text-align: center; }
-      .sec-head h2 { margin: .6rem 0 0; font-size: clamp(1.9rem,3.7vw,2.7rem); line-height: 1.05; }
+      /* balance stops a two-line head from dropping a one-word orphan ("… in four / steps."); 1.05
+         was tight enough that a descender met the next line's caps. */
+      .sec-head h2 { margin: .6rem 0 0; font-size: clamp(1.9rem,3.7vw,2.7rem); line-height: 1.1; text-wrap: balance; }
       .section-lede { margin: 1rem 0 0; color: var(--muted-foreground); line-height: 1.6; }
       .sec-head.center .section-lede { margin-inline: auto; }
       :is(#product, #pricing, #coverage) { scroll-margin-top: 1.5rem; }
@@ -405,7 +442,7 @@ const faqs = [
       .hero-scene :global(img) { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; }
       .hero-copy { position: relative; z-index: 1; align-self: center; width: min(40rem, 52vw); }
       .hero .kicker { color: var(--gold-ink); }
-      .hero h1 { margin: .9rem 0 0; color: var(--foreground); font-size: clamp(2.8rem,4.1vw,3.9rem); line-height: 1; }
+      .hero h1 { margin: .9rem 0 0; color: var(--foreground); font-size: clamp(2.8rem,4.1vw,3.9rem); line-height: 1.04; text-wrap: balance; }
       .hero .hl { color: var(--primary); }
       .hero-lede { max-width: 28rem; margin: 1.25rem 0 0; color: var(--muted-foreground); font-size: 1.08rem; line-height: 1.55; }
       .actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
@@ -509,8 +546,40 @@ const faqs = [
       .qs-steps li > div { min-width: 0; }
       .qs-n { display: grid; place-items: center; width: 1.6rem; height: 1.6rem; background: var(--primary); color: #fff; font-family: var(--font-mono); font-size: .78rem; font-weight: 600; }
       .qs-steps strong { display: block; font-family: var(--font-display); font-size: .98rem; margin-bottom: .3rem; }
-      .qs-steps code { display: block; overflow-x: auto; padding: .5rem .6rem; background: #15151f; color: #c7c9e0; border: 1px solid #2a2b3d; font-family: var(--font-mono); font-size: .76rem; }
-      .docs-cards { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); align-content: start; }
+      /* Card material, not the InteractiveDemo's dark editor: that one framed window is the page's
+         only code artifact, and four naked black bars beside light doc cards read as unstyled. */
+      /* Shiki runs on the `css-variables` theme, not a named one. Starlight restricts which themes
+         are bundled, so `github-light` (and even Astro's default `github-dark`) fail the STATIC
+         build with "not included in this bundle" while working fine in dev — dev resolves themes
+         lazily. css-variables is the way out, and it is the better answer anyway: the tokens below
+         follow the page's own palette, so the snippet is legible in both colour schemes instead of
+         carrying baked-in light-theme colours onto a page that has a dark mode. */
+      .qs-code {
+        display: flex; align-items: flex-start; gap: .5rem; padding: .55rem .6rem;
+        background: color-mix(in oklab, var(--primary) 4%, var(--card));
+        border: 1px solid var(--border);
+        --astro-code-foreground: var(--foreground);
+        --astro-code-background: transparent;
+        --astro-code-token-comment: var(--muted-foreground);
+        --astro-code-token-punctuation: var(--muted-foreground);
+        --astro-code-token-keyword: color-mix(in oklab, var(--primary) 75%, var(--foreground));
+        --astro-code-token-function: color-mix(in oklab, var(--primary) 55%, var(--foreground));
+        --astro-code-token-string: color-mix(in oklab, var(--success, #2f7d5b) 70%, var(--foreground));
+        --astro-code-token-string-expression: var(--astro-code-token-string);
+        --astro-code-token-constant: color-mix(in oklab, var(--primary) 40%, var(--foreground));
+        --astro-code-token-parameter: var(--foreground);
+        --astro-code-token-link: var(--primary);
+      }
+      /* Shiki inlines the theme's background on its <pre>; override it so the snippet sits on the
+         card tint instead of punching a rectangle through it. :global because the <pre> is rendered
+         inside astro/components/Code and never carries this file's scope attribute. */
+      .qs-code :global(pre.astro-code) { flex: 1; min-width: 0; margin: 0; padding: 0; background: transparent !important; font-family: var(--font-mono); font-size: .78rem; line-height: 1.65; }
+      .qs-code :global(pre.astro-code code) { font-family: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
+      .qs-copy { flex: none; padding: .1rem .4rem; background: transparent; color: var(--muted-foreground); border: 1px solid var(--border); font-family: var(--font-mono); font-size: .68rem; line-height: 1.6; cursor: pointer; transition: color .15s, border-color .15s; }
+      .qs-copy:hover, .qs-copy:focus-visible, .qs-copy[data-copied] { color: var(--primary); border-color: var(--primary); }
+      /* No align-content:start — with 4 cards in 2 rows the leftover track exposed the container's
+         hairline background as a dead grey band under the grid. */
+      .docs-cards { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); }
       @media (min-width: 32rem) { .docs-cards { grid-template-columns: 1fr 1fr; } }
       .doc-card { display: block; background: var(--card); padding: var(--card-pad); color: inherit; text-decoration: none; transition: background .15s; }
       .doc-card:hover { background: color-mix(in oklab, var(--primary) 5%, var(--card)); }
