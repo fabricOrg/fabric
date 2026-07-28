@@ -3,6 +3,50 @@
 _Snapshot: 2026-07-25. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
+## NEW BUG (2026-07-28): customer-dashboard member invite sends no email
+
+**Staff invites now WORK on the admin console** — user-confirmed after setting the per-app WorkOS
+keys. That **settles the open question**: WorkOS invitations ARE application-scoped (belong to the
+app whose API key created them). The inference behind #205 was right, and it is now evidence rather
+than a hypothesis. Anywhere the docs still hedge on that, they can be tightened.
+
+**But a customer-dashboard member invite produced no email.** Not yet diagnosed.
+
+### Why there is no evidence to look at
+
+`services/api/src/members/members-invite.ts:68` discards the failure completely:
+
+```ts
+await getWorkos().userManagement.sendInvitation({ email }).catch(() => undefined);
+```
+
+No log, no error, no audit. The staff path was given a log line in #205; this one has nothing — so
+"no email arrived" produces zero signal anywhere. **Fix the observability FIRST** (mirror the staff
+service: log the failure, and log the accept-URL ORIGIN on success — never the full URL, it carries
+the invitation token). Diagnosing before that is guesswork.
+
+### Candidate causes, cheapest first
+
+1. **Expected, not a bug.** WorkOS rejects `sendInvitation` for an email that already has a user or
+   a pending invite — the comment above the call says exactly that, and the person is meant to just
+   sign in and bind. If the invitee already has a WorkOS identity, no email is correct behaviour.
+   The membership row is still written, so access works.
+2. **The API's `WORKOS_API_KEY` was changed to the ADMIN app's key.** Member invites are CUSTOMER
+   realm and must go out under the customer dashboard's key. If the API's key was repointed while
+   configuring per-app keys, customer invites now originate from the wrong application. Check which
+   application the API's `WORKOS_API_KEY` belongs to — `WORKOS_ADMIN_API_KEY` is the separate one
+   the staff client uses (#205).
+3. WorkOS-side delivery (spam, suppression, sender domain) — check the WorkOS dashboard's invitation
+   list: if the invitation EXISTS there, the API call succeeded and it is a delivery problem, not a
+   code one. That single check splits 1/2 from 3.
+
+### Note on the swallow itself
+
+`.catch(() => undefined)` is defensible for not blocking the membership write — the local row is the
+source of truth for access. It is NOT defensible to discard the reason. Same failure mode as the
+integration assertions that threw away the response body (#194): the system behaved "correctly" and
+told nobody why.
+
 ## START HERE (2026-07-28): plugin architecture — ADR-0011, slices 1+2a done, 2b/3/4/5 open
 
 **The mandate: external providers are control-plane PLUGINS, not environment variables.** Adding,
