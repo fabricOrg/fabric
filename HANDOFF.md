@@ -3,7 +3,87 @@
 _Snapshot: 2026-07-25. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## Latest (2026-07-27, later): seven PRs — #188–#195 — merged and deployed to testing
+## START HERE (2026-07-28): plugin architecture — ADR-0011, slices 1+2a done, 2b/3/4/5 open
+
+**The mandate: external providers are control-plane PLUGINS, not environment variables.** Adding,
+swapping, or taking a provider live must be a staff action, never a redeploy. Read
+[ADR-0011](./docs/decisions/0011-provider-plugins-as-control-plane-config.md) first — it has the full
+design and the five slices.
+
+### What is DONE (merged, deployed to testing)
+
+- **Slice 1 — credential store.** `plugin_credentials` (migrations 0095 + 0096). Per-credential DEK
+  wrapped under a platform master key; the secret sealed under that DEK, never under the master key
+  directly, so revoking one provider destroys one wrapped DEK rather than re-encrypting everything.
+  AAD binds instance AND version — rotation keeps the old row, so without version binding a
+  superseded key would still decrypt against the record that replaced it. 12 crypto tests.
+- **Slice 2a — registry + resolver.** `smsAdapterFor(vendor)` in `@app/integrations` maps a vendor
+  string to an adapter (the fake provider is deliberately ABSENT — it must be unreachable by
+  resolving a vendor name). `PluginResolverService` walks the enabled chain primary-first, caches
+  30s, serves last-known-good on a blip, and **fails closed** with nothing cached. 9 tests.
+
+`PLUGIN_MASTER_KEY` is set on Render (done 2026-07-28).
+
+### What is NOT done — and the order matters
+
+**Slice 2b — wire `deps()` to the resolver. THIS IS THE BLOCKER.** Until it lands, `SMS_PROVIDER` /
+`ARKESEL_API_KEY` still drive routing and the whole plugin story is inert.
+
+9 call sites (`sms.service.ts` ×6, `sms-runtime.service.ts`, `sms-dispatch-recheck.ts`). Seven are a
+simple `await`. **Two are the real work**: `sweepStuck` passes `(mode) => this.deps(mode)` and the
+recheck path passes a dispatch factory INTO `@app/sms-engine`, so async resolution changes the
+engine's deps-factory contract across a package boundary. Decide that deliberately — it is a money
+path, and `deps()` currently binds provider + creds at construction (`sms-runtime.service.ts:52`).
+
+**Slice 3 — widen instance identity.** `unique(capability, vendor)` forbids sandbox and live
+instances of one vendor coexisting. Replace with `unique(tenant_id, capability, vendor, mode)` and
+add a nullable `tenant_id` (null = platform).
+
+**Slice 4 — go-live gate.** Required before ANY hosted live send. Today `mode` is a column nothing
+enforces, and `apply('enable')` sets `status: 'connected'` **without ever calling the provider** —
+a guess presented as fact. Needs: validated credentials present, explicit `activate-live`,
+maker-checker approval (reuse the existing proposals system), audit, and status derived from a real
+`healthCheck()`.
+
+**Slice 5 — seed from env, then DELETE the env path.** Two sources of truth for provider selection
+is how this drifted originally.
+
+### Facts a fresh context will need
+
+- **Live SMS works.** First real message sent 2026-07-27 via Arkesel: sender `AKWAAH` (the approved
+  one — NOT "Fabric"), to +233545227189, 1 segment, GHS 0.03, committed against the double-entry
+  wallet. `scripts/dev/seed-live-sms.ts` + `pnpm dev:seed:live-sms` provision the local pilot tenant.
+- **A sandbox worker can swallow a live send.** `/v1/sms/send` only reserves and enqueues; the
+  WORKER calls the provider. Any API process on the same Redis competes for jobs, and FakeProvider
+  returns `accepted` identically. **Verify `provider_ref`, never `status`** — `fake-<messageId>` vs a
+  real UUID. This cost a false "the SMS went out" claim.
+- **DLRs need a public callback.** Local runs are `dlr=off`, so status stops at `accepted` and never
+  reaches `delivered`. Hosted can do better — `ARKESEL_DLR_CALLBACK_URL` + `WEBHOOK_INGRESS_TOKEN`.
+- **The plugin registry was decorative.** The admin console renders it; nothing in the send path
+  imported it. That is the bug ADR-0011 exists to fix.
+- **`app_runtime` nearly got read access to the credential vault.** `ALTER DEFAULT PRIVILEGES` grants
+  the runtime role DML on every table the migrator creates, so `plugin_credentials` arrived with
+  `SELECT` already granted. Migration 0096's REVOKE is load-bearing. **Unverified on Neon** — confirm
+  with `SELECT grantee, privilege_type FROM information_schema.role_table_grants WHERE table_name =
+  'plugin_credentials'` (expect only `app_migrator` + `app_provisioner`).
+
+### Also open
+
+- **#7 integration flakes.** One FIXED with measurement (#195: audit spec walked the global
+  `audit_events` table, 201 rows → 101 pages vs a 100-page guard — deterministic at that size). TWO
+  STILL OPEN and NOT reproduced in four local runs: consent's transactional 400, managed-messages'
+  concurrent 500. #194 instrumented both to print the cause. **Do not paper over the 500** — it may
+  be a real idempotency defect.
+- **Two dependabot PRs are RED and need migrations, not merges.** #203 TypeScript 5.9→7.0 (exposes
+  that `packages/fe-auth` uses `node:crypto`/`Buffer` without declaring `@types/node`; the build
+  halted at the first package so there may be more). #200 react-day-picker 9→10 (breaking
+  `ClassNames` API at `packages/ui/src/components/ui/calendar.tsx:90`). The other six bumps merged.
+- **WorkOS per-app keys.** #205 added a staff-realm client on `WORKOS_ADMIN_API_KEY`, inert until
+  configured. The first real staff invite logs the accept-URL ORIGIN — that settles whether
+  invitations are application-scoped (inferred, NOT documented). If it logs the dashboard origin, the
+  inference was wrong and #188's callback routing is what protects operators.
+
+## Earlier (2026-07-27, later): seven PRs — #188–#195 — merged and deployed to testing
 
 Bug-fix session driven by live screenshots. `dev` and `testing` both carry #188–#195.
 

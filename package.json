@@ -20,6 +20,7 @@
     "dev:api:infisical": "infisical run --env=dev -- pnpm dev:api",
     "dev:seed": "node --env-file-if-exists=.env --conditions development --import tsx scripts/dev/seed-local.ts",
     "dev:seed:infisical": "infisical run --env=dev -- pnpm dev:seed",
+    "dev:seed:live-sms": "node --env-file-if-exists=.env --conditions development --import tsx scripts/dev/seed-live-sms.ts",
     "dev:dashboard:infisical": "infisical run --env=dev -- pnpm dev",
     "dev:admin": "pnpm --filter @app/admin-console dev",
     "dev:sdk-playground": "npm --prefix examples/sdk-playground start",
