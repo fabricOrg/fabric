@@ -7,12 +7,16 @@ FROM node:22-bookworm-slim AS build
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV HUSKY=0
+# Non-interactive build: pnpm aborts reconciling the modules dir without a TTY unless CI is set.
+ENV CI=true
 RUN corepack enable
 
 WORKDIR /workspace
-RUN corepack install
+# Manifests FIRST: a bare `corepack install` reads packageManager from the local package.json,
+# so running it in an empty WORKDIR fails with "Couldnt find a project in the local directory".
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-RUN pnpm fetch --prod
+RUN corepack install
+RUN pnpm fetch
 COPY . .
 RUN pnpm install --frozen-lockfile --offline
 RUN pnpm --filter @app/admin-console... build
