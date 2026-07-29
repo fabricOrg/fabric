@@ -17,6 +17,35 @@ Each bucket has a full-minute burst capacity and refills continuously (the per-m
 across the minute). Both buckets are checked on every request; whichever is exhausted first returns
 the limit.
 
+## Sandbox allowances
+
+A sandbox workspace does not spend from a wallet — sandbox messages are free, and capacity is a
+**daily allowance** per channel instead.
+
+| Channel | Default | Unit | Error code |
+| --- | --- | --- | --- |
+| SMS | 100 / UTC day | segment | `sandbox_daily_limit_exceeded` |
+| Email | 200 / UTC day | message | `sandbox_daily_limit_exceeded` |
+
+SMS is counted **per segment**, not per message, so one 3-segment message draws 3 from the allowance.
+The allowance is per workspace and shared across every application and environment in it.
+
+This arrives as a `429`, but it is **not a rate limit** — no amount of backing off will clear it,
+because it refills at midnight UTC rather than continuously. The SDK knows the difference and does
+**not** retry this code, so it surfaces immediately instead of consuming your retry budget:
+
+```ts
+try {
+  await fabric.sms.send(params, { idempotencyKey });
+} catch (err) {
+  if (err instanceof RateLimitError && err.code === "sandbox_daily_limit_exceeded") {
+    // Out of sandbox capacity until midnight UTC. Backing off will not help.
+  }
+}
+```
+
+Going live replaces the allowance with your wallet balance — see [Wallet and billing](/docs/account/wallet-billing/).
+
 ## The 429 response
 
 Over the limit, Fabric returns HTTP **429** with the error envelope:

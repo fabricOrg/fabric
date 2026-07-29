@@ -12,21 +12,22 @@ import {
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PluginResolverService } from "../plugins/plugin-resolver.service.js";
 import { runtimeRoleEnabled } from "../runtime/runtime-role.js";
+import { reconcilePendingAutoTopUp } from "./auto-topup-reconcile.js";
 import { resolvePaymentContext } from "./payment-provider-resolution.js";
 
 /**
  * Auto top-up (E4) — when a tenant's wallet balance falls to/below a configured threshold, charge
- * the saved (reusable) card for the top-up amount. The credit lands via the same Paystack
- * charge.success webhook as a manual top-up (idempotent on the reference), so this service only
- * TRIGGERS the charge — PaymentsService.handleWebhook does the crediting. SANDBOX only (sk_test_);
- * the platform.payments kill-switch gates auto-charges just like manual ones.
+ * the saved (reusable) card for the top-up amount. The credit normally lands via the same Paystack
+ * charge.success webhook as a manual top-up (idempotent on the reference); when that webhook never
+ * arrives, the reconciler in maybeAutoTopUp settles from `verifyCharge` evidence instead. The
+ * platform.payments kill-switch gates auto-charges just like manual ones.
  */
 @Injectable()
 export class AutoTopupService {
@@ -176,38 +177,22 @@ export class AutoTopupService {
         .onConflictDoNothing()
         .returning({ id: payments.id });
       if (inserted.length === 0) {
-        const [pending] = await this.provisioning.db
-          .select()
-          .from(payments)
-          .where(
-            and(
-              eq(payments.tenantId, scoped),
-              eq(payments.kind, "auto_topup"),
-              eq(payments.status, "pending"),
-            ),
-          )
-          .limit(1);
-        if (!pending?.updatedAt || pending.providerRef) return;
-        if (Date.now() - pending.updatedAt.getTime() < 30_000) return;
-        if (
-          pending.providerMode !== mode ||
-          pending.pluginInstanceId !== instanceId ||
-          pending.credentialVersion !== credentialVersion
-        ) {
-          this.logger.error(
-            `Auto top-up ${pending.reference} requires an unavailable credential binding.`,
-          );
-          return;
-        }
-        const verified = await provider.verifyCharge(pending.reference, creds);
-        if (verified) {
-          await this.recordProviderResult(pending.reference, verified);
-          return;
-        }
-        reference = pending.reference;
-        amountMinor = pending.amountMinor;
-        currency = pending.currency;
-        email = pending.email;
+        const outcome = await reconcilePendingAutoTopUp(
+          {
+            provisioning: this.provisioning,
+            appDb: this.appDb,
+            logger: this.logger,
+            provider,
+            creds,
+            binding: { mode, instanceId, credentialVersion },
+          },
+          scoped,
+        );
+        if (outcome.action === "stop") return;
+        reference = outcome.payment.reference;
+        amountMinor = outcome.payment.amountMinor;
+        currency = outcome.payment.currency;
+        email = outcome.payment.email;
       }
       const result = await provider.chargeAuthorization(
         {
