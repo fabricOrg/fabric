@@ -4,7 +4,9 @@
 // compliance suites already cover the gates in the direct path; these prove the MANAGED path routes
 // through the same assessment and fails closed before any write.
 //
-// Covered here (deterministic): recipient opt-out (STOP/full suppression) and insufficient funds.
+// Covered here (deterministic): recipient opt-out (STOP/full suppression) and an exhausted sandbox
+// allowance. Insufficient funds is no longer reachable on a sandbox key — that path stopped touching
+// the wallet when allowances landed.
 // Quiet hours is deliberately NOT driven through HTTP — `promoWindowOpen` reads the wall clock and
 // the preview service does not accept an injected `now`, so an integration test for it would pass or
 // fail by time of day. It stays proven at the pure-function level in `consent/consent.window.spec`.
@@ -35,6 +37,9 @@ const appUrl = process.env.DATABASE_URL_APP;
 const describeDb = superUrl && appUrl ? describe : describe.skip;
 process.env.REDIS_QUEUE_URL = "";
 process.env.MAINTENANCE_CRON_ENABLED = "false";
+// One segment a day, so the allowance gate is reachable in a test instead of after 100 sends. Read
+// at SandboxAllowanceService construction, so it must be set before the module is created below.
+process.env.SANDBOX_SMS_SEGMENTS_PER_DAY = "1";
 process.env.TENANT_TOKEN_SECRET ??= "integration-test-tenant-token-secret";
 
 describeDb("SDK-005 managed sends — pre-acceptance gates fail closed", () => {
@@ -92,14 +97,15 @@ describeDb("SDK-005 managed sends — pre-acceptance gates fail closed", () => {
       tenantId: fundedTenant,
       rawKey: fundedKey,
     });
-    // 1 minor unit cannot cover a single segment — the reserve must refuse before any write.
+    // fundMinor is now incidental: a sandbox key never reaches the wallet. The allowance capped to
+    // one segment above is what refuses the second send.
     await seedManagedTenant({
       owner,
       db,
       tenantId: brokeTenant,
       rawKey: brokeKey,
       fundMinor: 1n,
-      // sms:send too, so the same underfunded wallet drives the DIRECT route as well.
+      // sms:send too, so the same exhausted allowance drives the DIRECT route as well.
       scopes: ["messages:send", "messages:read", "sms:send"],
     });
     app = await NestFactory.create<NestFastifyApplication>(
@@ -138,7 +144,15 @@ describeDb("SDK-005 managed sends — pre-acceptance gates fail closed", () => {
     expect(await counts(fundedTenant)).toEqual(before);
   });
 
-  it("refuses an underfunded wallet and writes nothing", async () => {
+  it("refuses an exhausted sandbox allowance and writes nothing", async () => {
+    // This asserted 402 insufficient_funds on a 1-minor-unit wallet until sandbox allowances landed.
+    // A sandbox key routes to the virtual phone (ADR-0004), and that path no longer consults the
+    // wallet — so the underfunded state is unreachable here and the gate that actually fires is the
+    // daily allowance. The suite's subject is unchanged: a pre-acceptance gate must fail closed.
+    // Spend the single segment this workspace is allowed, so the assertion is about the gate rather
+    // than about which test ran first.
+    await send(brokeKey, SOLVENT_RECIPIENT, `warm-${randomUUID()}`);
+
     const before = await counts(brokeTenant);
     const response = await send(
       brokeKey,
@@ -146,20 +160,21 @@ describeDb("SDK-005 managed sends — pre-acceptance gates fail closed", () => {
       `broke-${randomUUID()}`,
     );
 
-    // 402 + the declared `insufficient_funds_error` category — NOT an opaque 500. Regression guard:
-    // the wallet error previously escaped unmapped, so the SDK could not branch on "top up".
-    expect(response.statusCode).toBe(402);
+    // 429 + the declared `rate_limit_error` category — NOT an opaque 500. Same regression guard the
+    // 402 case carried: the gate error must stay mapped so an SDK can branch on it.
+    expect(response.statusCode).toBe(429);
     const body = response.json() as { error: { type: string; code: string } };
-    expect(body.error.type).toBe("insufficient_funds_error");
-    expect(body.error.code).toBe("insufficient_funds");
-    // Fails closed: the balance gate rejects inside the acceptance transaction, so no partial row
-    // survives — not a message, not an attempt, and no acceptance event a consumer could observe.
+    expect(body.error.type).toBe("rate_limit_error");
+    expect(body.error.code).toBe("sandbox_daily_limit_exceeded");
+    // Fails closed: the gate rejects inside the acceptance transaction, so no partial row survives —
+    // not a message, not an attempt, and no acceptance event a consumer could observe.
     expect(await counts(brokeTenant)).toEqual(before);
   });
 
-  it("returns the same 402 on the direct sms route, not a 500", async () => {
-    // The direct path carried the identical unmapped wallet error. Mapped at the controller
-    // boundary so `SmsService` keeps throwing the domain error for ManagedMessagesService.
+  it("returns the same 429 on the direct sms route, not a 500", async () => {
+    // The direct path carried the identical unmapped gate error. Mapped at the controller boundary
+    // so `SmsService` keeps throwing the domain error for ManagedMessagesService. The allowance is
+    // already spent by the case above — same workspace, same daily bucket.
     const before = await counts(brokeTenant);
     const response = await app.inject({
       method: "POST",
@@ -175,10 +190,10 @@ describeDb("SDK-005 managed sends — pre-acceptance gates fail closed", () => {
       },
     });
 
-    expect(response.statusCode).toBe(402);
+    expect(response.statusCode).toBe(429);
     const body = response.json() as { error: { type: string; code: string } };
-    expect(body.error.type).toBe("insufficient_funds_error");
-    expect(body.error.code).toBe("insufficient_funds");
+    expect(body.error.type).toBe("rate_limit_error");
+    expect(body.error.code).toBe("sandbox_daily_limit_exceeded");
     expect(await counts(brokeTenant)).toEqual(before);
   });
 
