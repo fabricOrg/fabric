@@ -68,3 +68,19 @@ export const updateTenantStatusRequestSchema = z.object({
 export type UpdateTenantStatusRequest = z.infer<
   typeof updateTenantStatusRequestSchema
 >;
+
+export const sandboxAllowancePolicySchema = z.object({
+  sms_segments_per_day: z.number().int().positive().max(1_000_000_000),
+  email_messages_per_day: z.number().int().positive().max(1_000_000_000),
+});
+export type SandboxAllowancePolicy = z.infer<
+  typeof sandboxAllowancePolicySchema
+>;
+
+export const updateSandboxAllowancePolicySchema =
+  sandboxAllowancePolicySchema.extend({
+    reason: z.string().trim().min(8, "Give a reason (at least 8 characters)."),
+  });
+export type UpdateSandboxAllowancePolicy = z.infer<
+  typeof updateSandboxAllowancePolicySchema
+>;

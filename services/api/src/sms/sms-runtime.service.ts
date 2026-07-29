@@ -1,5 +1,5 @@
 import type { DeliveryMode } from "@app/contracts";
-import type { AppDb } from "@app/db";
+import type { AppDb, TenantTx } from "@app/db";
 import type { RateTable } from "@app/domain";
 import type {
   Creds,
@@ -19,6 +19,7 @@ import { ConfigService } from "@nestjs/config";
 import { APP_DB } from "../db/db.module.js";
 import { PluginRegistryService } from "../plugins/plugin-registry.service.js";
 import { PluginResolverService } from "../plugins/plugin-resolver.service.js";
+import { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.service.js";
 import { holdTokens } from "../tokens/token-holds.js";
 import { settleTokenHolds } from "../tokens/token-settlement.js";
 import { dispatchSend as dispatchProviderSend } from "./sms-dispatch.js";
@@ -56,6 +57,7 @@ export class SmsRuntimeService {
   private readonly envCreds: Creds | undefined;
   private readonly envLiveReady: boolean;
   private readonly envLiveReason: string | null;
+  private readonly sandboxAllowance: SandboxAllowanceService;
 
   constructor(
     @Inject(APP_DB) private readonly db: AppDb,
@@ -71,6 +73,9 @@ export class SmsRuntimeService {
     @Optional()
     @Inject(PluginRegistryService)
     private readonly registry?: PluginRegistryService,
+    @Optional()
+    @Inject(SandboxAllowanceService)
+    sandboxAllowance?: SandboxAllowanceService,
   ) {
     const wired = buildSmsProviders(config, new Logger(SmsRuntimeService.name));
     this.envProvider = wired.provider;
@@ -79,6 +84,8 @@ export class SmsRuntimeService {
     this.legacySandboxProvider = wired.legacySandboxProvider;
     this.envLiveReady = wired.liveReady;
     this.envLiveReason = wired.liveReadinessReason;
+    this.sandboxAllowance =
+      sandboxAllowance ?? new SandboxAllowanceService(config);
   }
 
   /**
@@ -130,7 +137,16 @@ export class SmsRuntimeService {
         : await this.liveDeps();
     // The token backend is injected on EVERY deps() — unlike `rates`, resolution (DLR, sweeper)
     // must also settle token holds, and those paths don't pass rates.
-    const withTokens = { ...base, tokens: TOKEN_BACKEND };
+    const withTokens = {
+      ...base,
+      tokens: TOKEN_BACKEND,
+      sandboxAllowance: {
+        consume: (
+          tx: TenantTx,
+          input: Parameters<SandboxAllowanceService["consume"]>[1],
+        ) => this.sandboxAllowance.consume(tx, input),
+      },
+    };
     return rates ? { ...withTokens, rates } : withTokens;
   }
 

@@ -33,7 +33,6 @@ describeDb("SDK-007 managed email dispatch recovery", () => {
   const db = createAppDb(appUrl ?? "");
   const tenantId = randomUUID();
   const rawKey = `sk_test_${randomUUID().replace(/-/g, "")}${"0".repeat(8)}`;
-  const COST = 5n;
   let applicationId = "";
   let environmentId = "";
   let app: NestFastifyApplication;
@@ -185,13 +184,13 @@ describeDb("SDK-007 managed email dispatch recovery", () => {
     await Promise.all([owner.end(), db.end()]);
   });
 
-  it("rechecks the kill-switch before provider contact and refunds managed email", async () => {
+  it("rechecks the kill-switch without creating wallet movement", async () => {
     const before = await customerBalance();
     const messageId = await acceptManaged(
       "blocked@example.test",
       "email-block",
     );
-    expect(await customerBalance()).toBe(before - COST);
+    expect(await customerBalance()).toBe(before);
 
     emailPaused = true;
     await expect(email.process({ tenantId, messageId })).resolves.toBe(
@@ -199,7 +198,7 @@ describeDb("SDK-007 managed email dispatch recovery", () => {
     );
 
     expect(await customerBalance()).toBe(before);
-    expect(await terminalTxnCount(messageId, "refunded")).toBe(1);
+    expect(await terminalTxnCount(messageId, "refunded")).toBe(0);
     expect(await state(messageId)).toMatchObject({
       messageStatus: "failed",
       errorCode: "email_sending_paused",
@@ -218,15 +217,15 @@ describeDb("SDK-007 managed email dispatch recovery", () => {
       "delivered",
     );
 
-    expect(await customerBalance()).toBe(before - COST);
-    expect(await terminalTxnCount(messageId, "committed")).toBe(1);
+    expect(await customerBalance()).toBe(before);
+    expect(await terminalTxnCount(messageId, "committed")).toBe(0);
     expect(await state(messageId)).toMatchObject({
       messageStatus: "delivered",
       deliveryStatus: "delivered",
     });
   });
 
-  it("expires and refunds stale managed email without provider contact", async () => {
+  it("expires stale managed email without provider contact or wallet movement", async () => {
     const before = await customerBalance();
     const messageId = await acceptManaged("crash@example.test", "email-crash");
     await stale(messageId);
@@ -236,7 +235,7 @@ describeDb("SDK-007 managed email dispatch recovery", () => {
     ).resolves.toBe(1);
 
     expect(await customerBalance()).toBe(before);
-    expect(await terminalTxnCount(messageId, "refunded")).toBe(1);
+    expect(await terminalTxnCount(messageId, "refunded")).toBe(0);
     expect(await state(messageId)).toMatchObject({
       messageStatus: "expired",
       errorCode: "dispatch_expired",
@@ -247,7 +246,7 @@ describeDb("SDK-007 managed email dispatch recovery", () => {
     });
   });
 
-  it("does not refund a stale managed email twice on a second sweep", async () => {
+  it("does not resolve a stale managed email twice on a second sweep", async () => {
     const messageId = await acceptManaged(
       "replay@example.test",
       "email-replay",
@@ -256,7 +255,7 @@ describeDb("SDK-007 managed email dispatch recovery", () => {
 
     expect(await email.sweepStuck(tenantId, new Date().toISOString())).toBe(1);
     expect(await email.sweepStuck(tenantId, new Date().toISOString())).toBe(0);
-    expect(await terminalTxnCount(messageId, "refunded")).toBe(1);
+    expect(await terminalTxnCount(messageId, "refunded")).toBe(0);
   });
 
   it("ignores stale direct email because it has no managed attempt row", async () => {

@@ -83,27 +83,40 @@ export function SendReviewSidebar(props: Props) {
             value={<span className="tabular-nums">{props.segments}</span>}
           />
           <Separator className="my-1" />
-          <ConfirmRow
-            label="Estimated cost"
-            value={
-              <span className="font-mono font-semibold tabular-nums">
-                {formatMoney(toMoney(props.estimateMinor, CURRENCY))}
-              </span>
-            }
-          />
-          <ConfirmRow
-            label="Estimated balance after"
-            value={
-              <span
-                className={
-                  "font-mono tabular-nums " +
-                  (props.insufficient ? "text-destructive" : "")
+          {props.settings.delivery_mode === "virtual" ? (
+            <ConfirmRow
+              label="Sandbox usage"
+              value={
+                <span className="font-mono font-semibold tabular-nums">
+                  {props.segments} segment{props.segments === 1 ? "" : "s"}
+                </span>
+              }
+            />
+          ) : (
+            <>
+              <ConfirmRow
+                label="Estimated cost"
+                value={
+                  <span className="font-mono font-semibold tabular-nums">
+                    {formatMoney(toMoney(props.estimateMinor, CURRENCY))}
+                  </span>
                 }
-              >
-                {formatMoney(toMoney(props.balanceAfterMinor, CURRENCY))}
-              </span>
-            }
-          />
+              />
+              <ConfirmRow
+                label="Estimated balance after"
+                value={
+                  <span
+                    className={
+                      "font-mono tabular-nums " +
+                      (props.insufficient ? "text-destructive" : "")
+                    }
+                  >
+                    {formatMoney(toMoney(props.balanceAfterMinor, CURRENCY))}
+                  </span>
+                }
+              />
+            </>
+          )}
         </CardContent>
         <CardFooter className="flex-col items-stretch gap-2">
           <Button

@@ -137,6 +137,8 @@ export async function cleanManagedTenant(
   await owner`DELETE FROM email_dispatches WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM email_messages WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM messages WHERE tenant_id = ${tenantId}`;
+  await owner`DELETE FROM sandbox_usage_events WHERE tenant_id = ${tenantId}`;
+  await owner`DELETE FROM sandbox_usage_buckets WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM message_definition_releases WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM message_definition_sender_bindings WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM message_definition_versions WHERE tenant_id = ${tenantId}`;

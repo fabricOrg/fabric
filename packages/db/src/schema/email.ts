@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  check,
   foreignKey,
   index,
   integer,
@@ -43,12 +44,17 @@ export const emailMessages = pgTable(
     }),
     status: messageStatus("status").notNull().default("queued"),
     statusRank: integer("status_rank").notNull().default(0),
+    backing: text("backing").notNull().default("wallet"),
     providerSlug: text("provider_slug").notNull().default("sandbox-email"),
     providerRef: text("provider_ref"),
     errorCode: text("error_code"),
     ...timestamps,
   },
   (t) => [
+    check(
+      "email_messages_backing_chk",
+      sql`${t.backing} in ('wallet', 'sandbox_allowance')`,
+    ),
     index("idx_email_messages_environment_created").on(
       t.tenantId,
       t.environmentId,

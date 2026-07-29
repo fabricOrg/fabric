@@ -11,7 +11,7 @@ import {
 
 type Row = Record<string, unknown>;
 
-type Backing = "wallet" | "tokens";
+type Backing = "wallet" | "tokens" | "sandbox_allowance";
 
 /**
  * Try tokens for a NEWLY created message; fall back to the wallet. A held claim flips the row to
@@ -21,8 +21,36 @@ type Backing = "wallet" | "tokens";
 async function chooseBacking(
   deps: EngineDeps,
   tx: TenantTx,
-  p: { messageId: string; currency: string; segments: number },
+  p: {
+    messageId: string;
+    currency: string;
+    segments: number;
+    deliveryMode: "virtual" | "live";
+    applicationId?: string | null;
+    environmentId?: string | null;
+  },
 ): Promise<Backing> {
+  if (p.deliveryMode === "virtual") {
+    if (!deps.sandboxAllowance) {
+      // Fail closed: a virtual send without its allowance backend must never fall into money.
+      throw new Error("Sandbox allowance backend is unavailable.");
+    }
+    await deps.sandboxAllowance.consume(tx, {
+      channel: "sms",
+      units: BigInt(p.segments),
+      referenceId: p.messageId,
+      ...(p.applicationId !== undefined
+        ? { applicationId: p.applicationId }
+        : {}),
+      ...(p.environmentId !== undefined
+        ? { environmentId: p.environmentId }
+        : {}),
+    });
+    await tx`
+      UPDATE messages SET backing = 'sandbox_allowance'
+      WHERE id = ${p.messageId}`;
+    return "sandbox_allowance";
+  }
   if (!deps.tokens) return "wallet";
   // SMS is priced PER SEGMENT (ADR-0010 §5), so a 3-segment message claims 3 tokens, not 1.
   const outcome = await deps.tokens.hold(tx, {
@@ -40,12 +68,12 @@ async function chooseBacking(
 async function readBacking(tx: TenantTx, messageId: string): Promise<Backing> {
   const rows = (await tx`
     SELECT backing FROM messages WHERE id = ${messageId} LIMIT 1`) as Row[];
-  return String(rows[0]?.backing ?? "wallet") === "tokens"
-    ? "tokens"
-    : "wallet";
+  const backing = String(rows[0]?.backing ?? "wallet");
+  if (backing === "tokens" || backing === "sandbox_allowance") return backing;
+  return "wallet";
 }
 
-/** Persist the message, reserve funds, and create its recoverable dispatch intent atomically. */
+/** Persist the message, claim its backing, and create its recoverable dispatch intent atomically. */
 export async function prepareSend(
   deps: EngineDeps,
   input: SendInput,
@@ -107,6 +135,13 @@ export async function prepareSend(
           messageId,
           currency: input.currency,
           segments: seg.segments,
+          deliveryMode: input.deliveryMode ?? "live",
+          ...(input.applicationId !== undefined
+            ? { applicationId: input.applicationId }
+            : {}),
+          ...(input.environmentId !== undefined
+            ? { environmentId: input.environmentId }
+            : {}),
         })
       : await readBacking(tx, messageId);
     if (backing === "wallet") {

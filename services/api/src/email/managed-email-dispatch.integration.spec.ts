@@ -131,14 +131,14 @@ describeDb("SDK-007 managed email dispatch money resolution", () => {
     await Promise.all([owner.end(), db.end()]);
   });
 
-  it("commits the managed reserve when the provider delivers", async () => {
+  it("delivers without touching the wallet", async () => {
     const before = await customerBalance();
     const messageId = await acceptManaged("ok@example.com", "email-delivered");
     const status = await email.process({ tenantId, messageId });
 
     expect(status).toBe("delivered");
-    expect(await customerBalance()).toBe(before - 5n);
-    expect(await ledgerTerminalCount(messageId, "committed")).toBe(1);
+    expect(await customerBalance()).toBe(before);
+    expect(await ledgerTerminalCount(messageId, "committed")).toBe(0);
     expect(await deliveryState(messageId)).toMatchObject({
       messageStatus: "delivered",
       attemptStatus: "delivered",
@@ -147,7 +147,7 @@ describeDb("SDK-007 managed email dispatch money resolution", () => {
     });
   });
 
-  it("refunds the managed reserve when the provider rejects the recipient", async () => {
+  it("records rejection without creating a wallet refund", async () => {
     const before = await customerBalance();
     const messageId = await acceptManaged(
       "reject@example.com",
@@ -157,7 +157,7 @@ describeDb("SDK-007 managed email dispatch money resolution", () => {
 
     expect(status).toBe("undelivered");
     expect(await customerBalance()).toBe(before);
-    expect(await ledgerTerminalCount(messageId, "refunded")).toBe(1);
+    expect(await ledgerTerminalCount(messageId, "refunded")).toBe(0);
     expect(await deliveryState(messageId)).toMatchObject({
       messageStatus: "undelivered",
       attemptStatus: "undelivered",
@@ -167,14 +167,14 @@ describeDb("SDK-007 managed email dispatch money resolution", () => {
     });
   });
 
-  it("refunds the managed reserve when the provider fails", async () => {
+  it("records provider failure without creating a wallet refund", async () => {
     const before = await customerBalance();
     const messageId = await acceptManaged("fail@example.com", "email-failed");
     const status = await email.process({ tenantId, messageId });
 
     expect(status).toBe("failed");
     expect(await customerBalance()).toBe(before);
-    expect(await ledgerTerminalCount(messageId, "refunded")).toBe(1);
+    expect(await ledgerTerminalCount(messageId, "refunded")).toBe(0);
     expect(await deliveryState(messageId)).toMatchObject({
       messageStatus: "failed",
       attemptStatus: "failed",
@@ -184,7 +184,7 @@ describeDb("SDK-007 managed email dispatch money resolution", () => {
     });
   });
 
-  it("does not double-commit or double-bump on a replayed delivered resolve", async () => {
+  it("does not create money movement or double-bump on replay", async () => {
     const messageId = await acceptManaged(
       "ok-again@example.com",
       "email-delivered-replay",
@@ -193,7 +193,7 @@ describeDb("SDK-007 managed email dispatch money resolution", () => {
     const replay = await email.process({ tenantId, messageId });
 
     expect(replay).toBe("delivered");
-    expect(await ledgerTerminalCount(messageId, "committed")).toBe(1);
+    expect(await ledgerTerminalCount(messageId, "committed")).toBe(0);
     expect(await deliveryState(messageId)).toMatchObject({
       deliveryStatus: "delivered",
       resourceVersion: 2,

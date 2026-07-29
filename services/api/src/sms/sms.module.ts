@@ -9,6 +9,7 @@ import { PluginsModule } from "../plugins/plugins.module.js";
 import { PricingModule } from "../pricing/pricing.module.js";
 import { PrivacyModule } from "../privacy/privacy.module.js";
 import { QueueModule } from "../queue/queue.module.js";
+import { SandboxAllowanceModule } from "../sandbox-allowance/sandbox-allowance.module.js";
 import { SendersModule } from "../senders/senders.module.js";
 import { DlrController } from "./dlr.controller.js";
 import { MessagingInsightsService } from "./messaging-insights.service.js";
@@ -38,6 +39,7 @@ import { WebhookTokenGuard } from "./webhook-token.guard.js";
     // through a TTL cache — not SMS_PROVIDER read once at boot.
     PluginsModule,
     QueueModule,
+    SandboxAllowanceModule,
     // E10-S4: the live send path enforces active sender-id registrations.
     SendersModule,
     // E10-S5: DND/consent + promotional quiet hours on the same path.

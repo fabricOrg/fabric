@@ -81,13 +81,17 @@ export default function SendPage() {
     setContext(null);
     setLoadFailed(false);
     Promise.all([
-      getWallet(),
       listSenders(),
       getConsent(),
       getMessagingSettings(),
       listSmsTemplates(),
     ])
-      .then(([balances, senders, consent, settings, templates]) => {
+      .then(async ([senders, consent, settings, templates]) => {
+        const balances =
+          settings.delivery_mode === "live" ? await getWallet() : [];
+        return { balances, senders, consent, settings, templates };
+      })
+      .then(({ balances, senders, consent, settings, templates }) => {
         if (!current) return;
         const ghs = balances.find(
           (balance) => balance.balance.currency === CURRENCY,
@@ -174,7 +178,7 @@ export default function SendPage() {
       ? rateSegments(segmentation.segments, CURRENCY, DEFAULT_RATES)
       : 0n;
   const balanceAfterMinor = context ? context.balanceMinor - estimateMinor : 0n;
-  const insufficient = balanceAfterMinor < 0n;
+  const insufficient = deliveryMode === "live" && balanceAfterMinor < 0n;
   const canSend = Boolean(
     context &&
       recipient &&

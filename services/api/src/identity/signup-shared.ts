@@ -5,10 +5,6 @@ import { randomBytes } from "node:crypto";
 /** Sandbox tenants are a PLAN state, not a separate environment (ADR-0002 / F3). */
 export const SANDBOX_PLAN = "sandbox";
 
-/** F3: play money for the fake provider — GHS 50.00, enough for hundreds of test segments. */
-export const SANDBOX_SEED_CURRENCY = "GHS";
-export const SANDBOX_SEED_MINOR = 5_000n;
-
 // Best-effort signup throttle: single-instance in-memory sliding window. Enough for the current
 // one-task api service; move to the Redis rate-limit buckets when the api scales out.
 const WINDOW_MS = 60 * 60 * 1000;

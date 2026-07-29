@@ -94,7 +94,10 @@ export const messages = pgTable(
   // drizzle 0.45: the 3rd pgTable arg returns an ARRAY (the object form is deprecated).
   (t) => [
     index("idx_messages_tenant_created").on(t.tenantId, t.createdAt),
-    check("messages_backing_chk", sql`${t.backing} in ('wallet', 'tokens')`),
+    check(
+      "messages_backing_chk",
+      sql`${t.backing} in ('wallet', 'tokens', 'sandbox_allowance')`,
+    ),
     // provider_ref must be unique per provider so a DLR maps to exactly one message (dedup + B2).
     // Partial (provider_ref set only once acknowledged) — also serves the reconcile lookup.
     uniqueIndex("uniq_messages_provider_ref")

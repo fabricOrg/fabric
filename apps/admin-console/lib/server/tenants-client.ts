@@ -3,8 +3,11 @@ import "server-only";
 import {
   type ListTenantsResponse,
   listTenantsResponseSchema,
+  type SandboxAllowancePolicy,
+  sandboxAllowancePolicySchema,
   type TenantSummaryDto,
   tenantSummaryDtoSchema,
+  type UpdateSandboxAllowancePolicy,
   type UpdateTenantStatusRequest,
 } from "@app/contracts";
 
@@ -19,6 +22,56 @@ export class TenantApiError extends Error {
   ) {
     super(`Tenant API request failed with status ${status}.`);
   }
+}
+
+export async function getSandboxAllowancePolicy(
+  tenantId: string,
+): Promise<SandboxAllowancePolicy> {
+  const { baseUrl, bffToken } = connection();
+  const response = await fetch(
+    new URL(`/internal/admin/tenants/${tenantId}/sandbox-allowances`, baseUrl),
+    {
+      cache: "no-store",
+      headers: { "x-bff-token": bffToken },
+    },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw new TenantApiError(response.status, payload);
+  return sandboxAllowancePolicySchema.parse(payload);
+}
+
+export async function updateSandboxAllowancePolicy(
+  tenantId: string,
+  request: UpdateSandboxAllowancePolicy,
+  actor: { email: string; staffId: string },
+): Promise<SandboxAllowancePolicy> {
+  const { baseUrl, bffToken } = connection();
+  const response = await fetch(
+    new URL(`/internal/admin/tenants/${tenantId}/sandbox-allowances`, baseUrl),
+    {
+      method: "PATCH",
+      cache: "no-store",
+      headers: {
+        "content-type": "application/json",
+        "x-bff-token": bffToken,
+        "x-actor-email": actor.email,
+        "x-actor-staff-id": actor.staffId,
+      },
+      body: JSON.stringify(request),
+    },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw new TenantApiError(response.status, payload);
+  return sandboxAllowancePolicySchema.parse(payload);
+}
+
+function connection(): { baseUrl: string; bffToken: string } {
+  const baseUrl = process.env.API_BASE_URL;
+  const bffToken = process.env.BFF_INTERNAL_TOKEN;
+  if (!baseUrl || !bffToken) {
+    throw new Error("API_BASE_URL and BFF_INTERNAL_TOKEN are required.");
+  }
+  return { baseUrl, bffToken };
 }
 
 export async function listTenants(

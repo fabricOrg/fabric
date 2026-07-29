@@ -3,7 +3,6 @@ import type {
   CreateWorkspaceResponse,
 } from "@app/contracts";
 import {
-  type AppDb,
   accounts,
   applications,
   environments,
@@ -11,20 +10,12 @@ import {
   type ProvisioningDb,
   users,
 } from "@app/db";
-import { credit } from "@app/wallet";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
-import { APP_DB } from "../db/db.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PROVISIONING_DB } from "./provisioning-db.module.js";
-import {
-  deriveSlug,
-  SANDBOX_PLAN,
-  SANDBOX_SEED_CURRENCY,
-  SANDBOX_SEED_MINOR,
-  throttled,
-} from "./signup-shared.js";
+import { deriveSlug, SANDBOX_PLAN, throttled } from "./signup-shared.js";
 
 /**
  * ADR-0007: workspace creation is a LOCAL transaction entered through the onboarding wizard —
@@ -35,12 +26,9 @@ import {
  */
 @Injectable()
 export class WorkspaceProvisioningService {
-  private readonly logger = new Logger(WorkspaceProvisioningService.name);
-
   constructor(
     @Inject(PROVISIONING_DB)
     private readonly provisioning: ProvisioningDb,
-    @Inject(APP_DB) private readonly appDb: AppDb,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
   ) {}
@@ -140,22 +128,6 @@ export class WorkspaceProvisioningService {
       ]);
       return account;
     });
-
-    // F3: seed ledgered test credits (idempotent on the tenant) so the first sandbox send works
-    // immediately. Best-effort — a seeding hiccup must not fail onboarding; support can re-seed.
-    try {
-      await this.appDb.withTenant(created.id, (tx) =>
-        credit(tx, {
-          currency: SANDBOX_SEED_CURRENCY,
-          amountMinor: SANDBOX_SEED_MINOR,
-          idempotencyKey: `signup-seed-${created.id}`,
-        }),
-      );
-    } catch (error) {
-      this.logger.error(
-        `sandbox credit seeding failed for ${created.id}: ${error instanceof Error ? error.message : "unknown"}`,
-      );
-    }
 
     await this.audit.record({
       actorStaffId: null,

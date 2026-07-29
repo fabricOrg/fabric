@@ -57,6 +57,7 @@ export * from "./privacy.js";
 // Maker-checker — two-person control for consequential tenant changes.
 export * from "./proposals.js";
 export * from "./request-logs.js";
+export * from "./sandbox-allowances.js";
 export * from "./senders.js";
 export * from "./sms.js";
 export * from "./sms-templates.js";
