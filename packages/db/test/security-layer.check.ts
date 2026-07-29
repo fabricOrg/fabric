@@ -129,9 +129,12 @@ export async function checkSecurityLayerApplied(
       );
   }
 
-  // 5. No role OTHER than the test-only superuser may hold BYPASSRLS (app_runtime + app_migrator must not).
+  // 5. No application role other than the test-only superuser may hold BYPASSRLS. Managed Postgres
+  // platforms retain internal administrative roles with BYPASSRLS; those roles are not application
+  // identities and cannot be governed by our migrations. The runtime/provisioner checks remain
+  // explicit, and this query catches any other app_* role that accidentally gains the attribute.
   const bypass = await db.query(
-    "SELECT rolname FROM pg_roles WHERE rolbypassrls = true",
+    "SELECT rolname FROM pg_roles WHERE rolbypassrls = true AND rolname LIKE 'app\\_%' ESCAPE '\\'",
   );
   for (const r of bypass.rows) {
     const name = String(r.rolname);
