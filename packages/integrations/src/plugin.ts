@@ -212,6 +212,14 @@ export interface PaymentProviderPlugin extends PluginManifest {
     req: ChargeAuthorizationRequest,
     creds: Creds,
   ): Promise<ChargeAuthorizationResult>;
+  /**
+   * Resolve an ambiguous saved-card attempt by its stable reference. Null means the provider has no
+   * transaction with that reference, so a durable worker may safely submit it.
+   */
+  verifyCharge(
+    reference: string,
+    creds: Creds,
+  ): Promise<ChargeAuthorizationResult | null>;
   verifyWebhook(req: IncomingRequest, creds: Creds): boolean;
   parseEvent(payload: unknown): CanonicalPaymentEvent;
 }

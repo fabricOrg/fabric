@@ -6,13 +6,14 @@ import type {
 import type { AppDb } from "@app/db";
 import { STATUS_RANK } from "@app/integrations";
 import { FakeEmailProvider } from "@app/integrations/testing/email";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, newRequestId } from "../http/api-error.js";
 import type { PageInput } from "../http/cursor.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
+import { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.service.js";
 import { isTerminalEmailStatus, parseEmailContent } from "./email-content.js";
 import {
   emailDispatchBlockReason,
@@ -33,13 +34,19 @@ type Row = Record<string, unknown>;
 export class EmailService {
   private readonly provider = new FakeEmailProvider();
   private readonly logger = new Logger(EmailService.name);
+  private readonly sandboxAllowance: SandboxAllowanceService;
 
   constructor(
     @Inject(APP_DB) private readonly db: AppDb,
     @Inject(QueueService) private readonly queue: QueueService,
     @Inject(PiiVaultService) private readonly vault: PiiVaultService,
     @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
-  ) {}
+    @Optional()
+    @Inject(SandboxAllowanceService)
+    sandboxAllowance?: SandboxAllowanceService,
+  ) {
+    this.sandboxAllowance = sandboxAllowance ?? new SandboxAllowanceService();
+  }
 
   async send(
     context: {
@@ -70,13 +77,20 @@ export class EmailService {
       const rows = (await tx`
         INSERT INTO email_messages (
           tenant_id, application_id, environment_id, subject_id, content_pii_id,
-          status, status_rank, provider_slug
+          status, status_rank, backing, provider_slug
         ) VALUES (
           current_setting('app.tenant_id')::uuid, ${context.applicationId},
           ${context.environmentId}, ${subjectId}, ${contentPiiId}, 'queued',
-          ${STATUS_RANK.queued}, ${this.provider.slug}
+          ${STATUS_RANK.queued}, 'sandbox_allowance', ${this.provider.slug}
         ) RETURNING id`) as Row[];
       const id = String(rows[0]?.id);
+      await this.sandboxAllowance.consume(tx, {
+        channel: "email",
+        units: 1n,
+        referenceId: id,
+        applicationId: context.applicationId,
+        environmentId: context.environmentId,
+      });
       await tx`
         INSERT INTO email_dispatches (message_id, tenant_id)
         VALUES (${id}, current_setting('app.tenant_id')::uuid)`;
@@ -95,7 +109,6 @@ export class EmailService {
     if (this.queue.enabled) {
       // A queue outage must not fail the accepted send — the row is persisted and the maintenance
       // sweep recovers it. Log the deferral (SMS logs the equivalent) so a Redis outage is observable
-      // rather than silently swallowed.
       await this.enqueue(context.tenantId, messageId).catch(
         (error: unknown) => {
           this.logger.warn(
@@ -109,13 +122,6 @@ export class EmailService {
     return { id: messageId, status, request_id: newRequestId() };
   }
 
-  /**
-   * Accept a managed Email delivery: reserve the wallet by the flat per-send price and persist the
-   * delivery/attempt/email_message/outbox rows in one tenant tx, keyed on the delivery id so a replay
-   * is a no-op (no double-reserve). ACCEPT ONLY — dispatch/settle happens on the queued worker via
-   * process()/resolve(). The kill-switch check here fails closed before any reserve. Core lives in
-   * email-managed-accept.ts.
-   */
   async acceptManaged(input: ManagedEmailAcceptInput): Promise<void> {
     if (await this.killSwitch.isPaused("platform.email_sending")) {
       throw invalidRequest(
@@ -130,6 +136,8 @@ export class EmailService {
         providerSlug: this.provider.slug,
         assertSandbox: (context) =>
           assertEmailSandboxEnvironment(this.db, context),
+        consumeSandboxAllowance: (tx, context) =>
+          this.sandboxAllowance.consume(tx, context),
       },
       input,
     );

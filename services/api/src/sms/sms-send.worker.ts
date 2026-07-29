@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Job } from "bullmq";
 import { QueueService } from "../queue/queue.service.js";
+import { runtimeRoleEnabled } from "../runtime/runtime-role.js";
 import { SmsService } from "./sms.service.js";
 import { SMS_SEND_QUEUE, type SmsSendJob } from "./sms-send.job.js";
 
@@ -25,7 +26,8 @@ export class SmsSendWorker implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    if (!this.queue.enabled) return;
+    if (!runtimeRoleEnabled(this.config, "worker") || !this.queue.enabled)
+      return;
     const raw = this.config.get<string>("SMS_SEND_CONCURRENCY");
     const parsed = raw ? Number(raw) : Number.NaN;
     const concurrency =

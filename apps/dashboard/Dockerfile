@@ -11,9 +11,11 @@ ENV HUSKY=0
 RUN corepack enable
 
 WORKDIR /workspace
-COPY . .
 RUN corepack install
-RUN pnpm install --frozen-lockfile
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+RUN pnpm fetch --prod
+COPY . .
+RUN pnpm install --frozen-lockfile --offline
 RUN pnpm --filter @app/dashboard... build
 
 FROM node:22-bookworm-slim AS runtime

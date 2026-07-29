@@ -24,6 +24,7 @@ export interface ClaimedWebhookDelivery {
 export class WebhookDeliveryStore {
   private static readonly MAX_ATTEMPTS = 10;
   private static readonly BATCH = 100;
+  private static readonly MATERIALIZE_BATCH = 1_000;
   private static readonly LEASE_MS = 30_000;
 
   constructor(
@@ -33,26 +34,44 @@ export class WebhookDeliveryStore {
   async materialize(): Promise<void> {
     await this.provisioning.db.transaction(async (tx) => {
       await tx.execute(sql`
+        WITH due AS (
+          SELECT o.tenant_id, o.application_id, o.environment_id,
+                 o.id AS event_id, e.id AS endpoint_id
+          FROM outbox_events o
+          JOIN webhook_endpoints e
+            ON e.tenant_id = o.tenant_id
+            AND e.environment_id = o.environment_id
+            AND e.status = 'active'
+            AND e.created_at <= o.created_at
+          WHERE o.delivered_at IS NULL
+            AND o.application_id IS NOT NULL
+            AND o.environment_id IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM webhook_deliveries d
+              WHERE d.event_id = o.id AND d.endpoint_id = e.id
+            )
+          ORDER BY o.created_at, o.id, e.id
+          LIMIT ${WebhookDeliveryStore.MATERIALIZE_BATCH}
+        )
         INSERT INTO webhook_deliveries (
           tenant_id, application_id, environment_id, event_id, endpoint_id
         )
-        SELECT o.tenant_id, o.application_id, o.environment_id, o.id, e.id
-        FROM outbox_events o
-        JOIN webhook_endpoints e
-          ON e.tenant_id = o.tenant_id
-          AND e.environment_id = o.environment_id
-          AND e.status = 'active'
-          AND e.created_at <= o.created_at
-        WHERE o.delivered_at IS NULL
-          AND o.application_id IS NOT NULL
-          AND o.environment_id IS NOT NULL
+        SELECT tenant_id, application_id, environment_id, event_id, endpoint_id
+        FROM due
         ON CONFLICT (event_id, endpoint_id) DO NOTHING
       `);
       // Endpoints registered after an event must never receive that historical event.
       await tx.execute(sql`
+        WITH candidates AS (
+          SELECT id FROM outbox_events
+          WHERE delivered_at IS NULL
+          ORDER BY created_at, id
+          LIMIT ${WebhookDeliveryStore.MATERIALIZE_BATCH}
+        )
         UPDATE outbox_events o
         SET delivered_at = now(), updated_at = now()
-        WHERE o.delivered_at IS NULL
+        FROM candidates c
+        WHERE o.id = c.id
           AND NOT EXISTS (
             SELECT 1 FROM webhook_deliveries d WHERE d.event_id = o.id
           )

@@ -47,6 +47,10 @@ services:
       # Providers stay sandboxed (redline)
       - key: SMS_PROVIDER
         value: fake
+      - key: SANDBOX_SMS_SEGMENTS_PER_DAY
+        value: "100"
+      - key: SANDBOX_EMAIL_MESSAGES_PER_DAY
+        value: "200"
       # Browser origins allowed to read /v1/public/* (the published rate card). Comma-separated
       # exact origins; unset = no browser may read it, so the landing page's pricing section goes
       # empty — fail closed, and visibly.

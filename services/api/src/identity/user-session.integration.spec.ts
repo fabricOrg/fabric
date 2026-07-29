@@ -8,7 +8,6 @@ import { randomUUID } from "node:crypto";
 import {
   accounts,
   applications,
-  createAppDb,
   createProvisioningDb,
   environments,
   memberships,
@@ -35,12 +34,10 @@ function killSwitchWith(signupOn: boolean): KillSwitchService {
 
 describeDb("resolve-v2 + local workspace creation (ADR-0007)", () => {
   const db = createProvisioningDb(superUrl ?? "", { max: 1 });
-  const appDb = createAppDb(appUrl ?? "", { max: 1 });
   const audit = { record: async () => undefined } as unknown as AuditService;
   const sessions = new UserSessionService(db);
   const provisioning = new WorkspaceProvisioningService(
     db,
-    appDb,
     audit,
     killSwitchWith(true),
   );
@@ -84,7 +81,6 @@ describeDb("resolve-v2 + local workspace creation (ADR-0007)", () => {
         .where(inArray(memberships.tenantId, tenants));
       await db.db.delete(accounts).where(inArray(accounts.id, tenants));
     }
-    await appDb.end();
     await db.end();
   });
 
@@ -262,13 +258,13 @@ describeDb("resolve-v2 + local workspace creation (ADR-0007)", () => {
       ]),
     );
 
-    // F3: the sandbox wallet was seeded with ledgered test credits (balanced by trigger).
+    // Sandbox onboarding creates no money: capacity comes from the daily operational allowance.
     const bal = await db.db.execute(
       sql.raw(
         `SELECT balance_minor::text AS b FROM ledger_accounts WHERE tenant_id = '${created.tenant_id}' AND kind = 'customer' AND currency = 'GHS'`,
       ),
     );
-    expect((bal as unknown as Array<{ b: string }>)[0]?.b).toBe("5000");
+    expect((bal as unknown as Array<{ b: string }>)[0]?.b).toBeUndefined();
 
     // Replay with the same name returns the SAME workspace, creates nothing.
     const replay = await provisioning.createWorkspace(request);
@@ -315,7 +311,6 @@ describeDb("resolve-v2 + local workspace creation (ADR-0007)", () => {
   it("fails closed when the signup kill-switch is off", async () => {
     const gated = new WorkspaceProvisioningService(
       db,
-      appDb,
       audit,
       killSwitchWith(false),
     );

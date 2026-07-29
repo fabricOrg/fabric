@@ -1,5 +1,6 @@
 import {
   provisionTenantRequestSchema,
+  updateSandboxAllowancePolicySchema,
   updateTenantStatusRequestSchema,
 } from "@app/contracts";
 import {
@@ -65,6 +66,31 @@ export class TenantProvisioningController {
       );
     }
     return this.provisioning.updateStatus(id, parsed.data, {
+      email: actorEmail ?? null,
+      staffId: actorStaffId ?? null,
+    });
+  }
+
+  @Get("tenants/:id/sandbox-allowances")
+  async sandboxAllowances(@Param("id") id: string) {
+    return this.provisioning.sandboxAllowancePolicy(id);
+  }
+
+  @Patch("tenants/:id/sandbox-allowances")
+  async updateSandboxAllowances(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("x-actor-email") actorEmail?: string,
+    @Headers("x-actor-staff-id") actorStaffId?: string,
+  ) {
+    const parsed = updateSandboxAllowancePolicySchema.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest(
+        "invalid_sandbox_allowance_policy",
+        "Provide positive daily SMS and email limits plus a reason of at least 8 characters.",
+      );
+    }
+    return this.provisioning.updateSandboxAllowancePolicy(id, parsed.data, {
       email: actorEmail ?? null,
       staffId: actorStaffId ?? null,
     });

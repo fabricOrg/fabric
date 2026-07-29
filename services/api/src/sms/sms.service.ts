@@ -15,7 +15,6 @@ import { APP_DB } from "../db/db.module.js";
 import { invalidRequest } from "../http/api-error.js";
 import type { KeysetCursor } from "../http/cursor.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
-import { AutoTopupService } from "../payments/auto-topup.service.js";
 import { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -48,7 +47,6 @@ export class SmsService {
 
   constructor(
     @Inject(APP_DB) private readonly db: AppDb,
-    @Inject(AutoTopupService) private readonly autoTopup: AutoTopupService,
     @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
     // Not a property: the only remaining consumer is the SmsRuntimeService fallback constructed
     // below. The live-recipient pin that used to read it here was removed 2026-07-28.
@@ -185,13 +183,6 @@ export class SmsService {
       await completeStoredDispatch(this.db, input.tenantId, prepared.messageId);
     }
 
-    // After-debit trigger: the send just reserved against the wallet — check whether the balance
-    // has fallen to the auto-top-up threshold. Fire-and-forget: never block or fail the send.
-    void this.autoTopup.maybeAutoTopUp(input.tenantId).catch((error) => {
-      this.logger.error(
-        `maybeAutoTopUp failed post-send for ${input.tenantId}: ${error instanceof Error ? error.message : "unknown"}`,
-      );
-    });
     const message = await this.get(input.tenantId, prepared.messageId);
     return {
       id: message.id,

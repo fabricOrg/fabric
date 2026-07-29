@@ -1,7 +1,7 @@
 variable "region" {
-  description = "Staging region — mirror prod. af-south-1 (Cape Town) for West-Africa proximity + residency parity."
+  description = "Staging region — mirror production in the supported launch region."
   type        = string
-  default     = "af-south-1"
+  default     = "eu-west-1"
 }
 
 variable "profile" {

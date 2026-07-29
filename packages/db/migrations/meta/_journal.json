@@ -708,6 +708,41 @@
       "when": 1785256448998,
       "tag": "0100_next_mentallo",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1785279297019,
+      "tag": "0101_daily_leo",
+      "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1785279335271,
+      "tag": "0102_narrow_shinko_yamashiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1785280583903,
+      "tag": "0103_equal_wolfsbane",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1785282945696,
+      "tag": "0104_peaceful_madripoor",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1785282945697,
+      "tag": "0105_sandbox_allowance_rls",
+      "breakpoints": true
     }
   ]
 }

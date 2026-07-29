@@ -13,7 +13,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { EmailService } from "../email/email.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
-import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -66,13 +65,9 @@ describeDb("scheduled maintenance (sweeper + ledger invariant)", () => {
   const killSwitch = {
     isPaused: async () => false,
   } as unknown as KillSwitchService;
-  // sweepStuck never touches auto-top-up; a bare stub keeps the test honest about what runs.
-  const autoTopup = {} as AutoTopupService;
-
   // Queue disabled (no REDIS_QUEUE_URL) → inline send path; the sweeper never enqueues anyway.
   const sms = new SmsService(
     appDb,
-    autoTopup,
     killSwitch,
     config,
     new QueueService(config),

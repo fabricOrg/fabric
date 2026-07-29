@@ -6,6 +6,7 @@ import type { Job } from "bullmq";
 import { sql } from "drizzle-orm";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { QueueService } from "../queue/queue.service.js";
+import { runtimeRoleEnabled } from "../runtime/runtime-role.js";
 import { EmailService } from "./email.service.js";
 import { EMAIL_SEND_QUEUE, type EmailSendJob } from "./email-send.job.js";
 
@@ -22,7 +23,8 @@ export class EmailSendWorker implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    if (!this.queue.enabled) return;
+    if (!runtimeRoleEnabled(this.config, "worker") || !this.queue.enabled)
+      return;
     this.queue.createWorker(
       EMAIL_SEND_QUEUE,
       async (job: Job<EmailSendJob>) => this.email.process(job.data),
@@ -33,6 +35,7 @@ export class EmailSendWorker implements OnModuleInit {
   @Cron("*/30 * * * * *")
   async recoveryTick(): Promise<void> {
     if (
+      !runtimeRoleEnabled(this.config, "scheduler") ||
       !this.queue.enabled ||
       this.config.get<string>("MAINTENANCE_CRON_ENABLED") === "false"
     ) {

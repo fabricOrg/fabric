@@ -5,7 +5,6 @@ import type { ConfigService } from "@nestjs/config";
 import { describe, expect, it, vi } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
-import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import type { PricingService } from "../pricing/pricing.service.js";
 import type { PiiVaultService } from "../privacy/pii-vault.service.js";
 import type { QueueService } from "../queue/queue.service.js";
@@ -27,9 +26,6 @@ import type { VirtualPhoneService } from "./virtual-phone.service.js";
 const db = {
   withTenant: async () => [{ plan: "free" }],
 } as unknown as AppDb;
-const autoTopup = {
-  maybeAutoTopUp: async () => undefined,
-} as unknown as AutoTopupService;
 const config = { get: () => undefined } as unknown as ConfigService; // provider = fake-sms
 const queue = { enabled: false } as unknown as QueueService;
 // E10-S4: sender enforcement has its own spec — always registered here.
@@ -60,7 +56,6 @@ function serviceWithSwitch(paused: Record<string, boolean>): {
   return {
     svc: new SmsService(
       db,
-      autoTopup,
       killSwitch,
       config,
       queue,

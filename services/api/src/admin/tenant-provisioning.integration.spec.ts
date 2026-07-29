@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { accounts, createProvisioningDb, type TenantId } from "@app/db";
+import type { ConfigService } from "@nestjs/config";
 import type { WorkOS } from "@workos-inc/node";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -17,6 +18,7 @@ describeDb("tenant list", () => {
     db,
     () => ({}) as WorkOS,
     audit,
+    { get: () => undefined } as unknown as ConfigService,
   );
   const a = randomUUID() as TenantId;
   const b = randomUUID() as TenantId;
@@ -29,7 +31,7 @@ describeDb("tenant list", () => {
         slug: `alpha-${a}`,
         plan: "growth",
         status: "active",
-        dataRegion: "af-south-1",
+        dataRegion: "eu-west-1",
       },
       {
         id: b,
@@ -37,9 +39,34 @@ describeDb("tenant list", () => {
         slug: `beta-${b}`,
         plan: "free",
         status: "suspended",
-        dataRegion: "af-south-1",
+        dataRegion: "eu-west-1",
       },
     ]);
+  });
+
+  it("stores and resolves per-workspace sandbox allowance overrides", async () => {
+    await expect(service.sandboxAllowancePolicy(a)).resolves.toEqual({
+      sms_segments_per_day: 100,
+      email_messages_per_day: 200,
+    });
+    await expect(
+      service.updateSandboxAllowancePolicy(
+        a,
+        {
+          sms_segments_per_day: 750,
+          email_messages_per_day: 900,
+          reason: "Approved test capacity",
+        },
+        { email: "operator@example.com" },
+      ),
+    ).resolves.toEqual({
+      sms_segments_per_day: 750,
+      email_messages_per_day: 900,
+    });
+    await expect(service.sandboxAllowancePolicy(a)).resolves.toEqual({
+      sms_segments_per_day: 750,
+      email_messages_per_day: 900,
+    });
   });
 
   afterAll(async () => {
@@ -57,7 +84,7 @@ describeDb("tenant list", () => {
       name: "Alpha Co",
       plan: "growth",
       status: "active",
-      data_region: "af-south-1",
+      data_region: "eu-west-1",
     });
     expect(beta).toMatchObject({ name: "Beta Co", status: "suspended" });
     // created_at is serialized to an ISO string for the wire.

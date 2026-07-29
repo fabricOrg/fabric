@@ -6,9 +6,11 @@ ENV HUSKY=0
 RUN corepack enable
 
 WORKDIR /workspace
-COPY . .
 RUN corepack install
-RUN pnpm install --frozen-lockfile
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+RUN pnpm fetch --prod
+COPY . .
+RUN pnpm install --frozen-lockfile --offline
 RUN pnpm --filter @app/api... build
 RUN pnpm --filter @app/api deploy --prod --legacy /runtime
 

@@ -30,12 +30,27 @@ export interface TokenBackend {
   ): Promise<unknown>;
 }
 
+/** Operational sandbox capacity. It never owns money and has no settlement lifecycle. */
+export interface SandboxAllowanceBackend {
+  consume(
+    tx: TenantTx,
+    p: {
+      channel: "sms";
+      units: bigint;
+      referenceId: string;
+      applicationId?: string | null;
+      environmentId?: string | null;
+    },
+  ): Promise<void>;
+}
+
 export interface EngineDeps {
   db: AppDb;
   provider: SmsSenderPlugin;
   creds?: Creds;
   rates?: RateTable;
   tokens?: TokenBackend;
+  sandboxAllowance?: SandboxAllowanceBackend;
 }
 
 export interface SendInput {

@@ -25,6 +25,23 @@ function apiConfiguration(): { baseUrl: string; bffToken: string } {
 // ADR-0003: the data-plane credential is a short-lived tenant token minted on demand — no
 // stored per-tenant secret. Cached per tenant in process memory; refreshed 30s before expiry.
 const tenantTokens = new Map<string, { token: string; expiresAt: number }>();
+const tenantTokenMints = new Map<string, Promise<string>>();
+
+function cacheTenantToken(
+  tenantId: string,
+  value: { token: string; expiresAt: number },
+): void {
+  const now = Date.now();
+  tenantTokens.set(tenantId, value);
+  for (const [id, cached] of tenantTokens) {
+    if (cached.expiresAt <= now) tenantTokens.delete(id);
+  }
+  while (tenantTokens.size > 1_000) {
+    const oldest = tenantTokens.keys().next().value;
+    if (oldest === undefined) break;
+    tenantTokens.delete(oldest);
+  }
+}
 
 async function mintTenantToken(tenantId: string): Promise<string> {
   const { baseUrl, bffToken } = apiConfiguration();
@@ -43,7 +60,7 @@ async function mintTenantToken(tenantId: string): Promise<string> {
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new BffError(response.status, payload);
   const minted = mintTenantTokenResponseSchema.parse(payload);
-  tenantTokens.set(tenantId, {
+  cacheTenantToken(tenantId, {
     token: minted.token,
     expiresAt: Date.now() + minted.expires_in * 1000,
   });
@@ -53,7 +70,13 @@ async function mintTenantToken(tenantId: string): Promise<string> {
 async function tenantToken(tenantId: string): Promise<string> {
   const cached = tenantTokens.get(tenantId);
   if (cached && cached.expiresAt - 30_000 > Date.now()) return cached.token;
-  return mintTenantToken(tenantId);
+  const inFlight = tenantTokenMints.get(tenantId);
+  if (inFlight) return inFlight;
+  const mint = mintTenantToken(tenantId).finally(() => {
+    tenantTokenMints.delete(tenantId);
+  });
+  tenantTokenMints.set(tenantId, mint);
+  return mint;
 }
 
 async function apiRequest<T>(
@@ -80,7 +103,7 @@ async function apiRequest<T>(
   // fresh one and retry ONCE; anything else surfaces as-is.
   if (response.status === 401) {
     tenantTokens.delete(tenantId);
-    response = await request(await mintTenantToken(tenantId));
+    response = await request(await tenantToken(tenantId));
   }
   // 204 No Content (e.g. a DELETE) has no body — don't try to parse it. `.catch` also guards a
   // non-JSON error body so a failure still surfaces as a BffError rather than a parse throw.
@@ -148,7 +171,7 @@ export async function dashboardApiRaw(
     response = await fetch(new URL(path, baseUrl), {
       cache: "no-store",
       headers: {
-        authorization: `Bearer ${await mintTenantToken(session.orgId)}`,
+        authorization: `Bearer ${await tenantToken(session.orgId)}`,
       },
     });
   }
@@ -157,7 +180,7 @@ export async function dashboardApiRaw(
 
 export async function dashboardApi<T>(
   path: string,
-  permission: string,
+  permission: string | readonly string[],
   init?: RequestInit,
 ): Promise<T> {
   // Expired access token? Try a silent refresh (swaps the refresh token, re-seals the cookie) before
@@ -173,7 +196,8 @@ export async function dashboardApi<T>(
       },
     });
   }
-  requirePermission(session, permission);
+  const required = Array.isArray(permission) ? permission : [permission];
+  for (const item of required) requirePermission(session, item);
   // The tenant id comes from the resolved session — never from the client request.
   return apiRequest<T>(path, session.orgId, init);
 }

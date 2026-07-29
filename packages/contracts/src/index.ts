@@ -44,6 +44,7 @@ export * from "./message-status.js";
 // Money (exact, minor-unit strings) + SMS/wallet response DTOs — consumed by the dashboard/SDK.
 export * from "./money.js";
 export * from "./opt-outs.js";
+export * from "./overview.js";
 // Cursor pagination for public list endpoints (page query + next_cursor token).
 export * from "./pagination.js";
 // Membership permission catalog + baselines + per-user override (admin-managed effective permissions).
@@ -56,6 +57,7 @@ export * from "./privacy.js";
 // Maker-checker — two-person control for consequential tenant changes.
 export * from "./proposals.js";
 export * from "./request-logs.js";
+export * from "./sandbox-allowances.js";
 export * from "./senders.js";
 export * from "./sms.js";
 export * from "./sms-templates.js";

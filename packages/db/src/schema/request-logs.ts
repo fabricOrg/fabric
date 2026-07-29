@@ -18,7 +18,7 @@ import { accounts } from "./identity.js";
  * REQUEST LOGS (W-B) — one row per customer public-API request, for the developer's Logs view. High
  * volume + immutable, so it's deliberately lean: no updated_at, METADATA ONLY (never request/response
  * bodies, never a raw key — only the key's hash prefix). Tenant-scoped -> FORCE RLS; scoped to an
- * application-environment (ADR-0004). Written fire-and-forget off the hot path by the request-log
+ * application-environment (ADR-0004). Written in bounded batches off the hot path by the request-log
  * interceptor (via the provisioner connection) and read per-tenant via the query API; a scheduled
  * sweeper deletes rows past the retention window (unbounded logs would be a cost/scale bug).
  */

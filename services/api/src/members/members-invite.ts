@@ -31,7 +31,7 @@ export async function inviteMember(
     .from(accounts)
     .where(eq(accounts.id, scoped))
     .limit(1);
-  if (!account || account.status !== "active") {
+  if (account?.status !== "active") {
     throw notFound("tenant_not_found", "This organisation is not active.");
   }
 

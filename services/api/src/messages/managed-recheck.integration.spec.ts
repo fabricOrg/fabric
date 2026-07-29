@@ -15,7 +15,6 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
-import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import type { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -159,7 +158,6 @@ describeDb(
       vault = new PiiVaultService(db, config);
       sms = new SmsService(
         db,
-        {} as AutoTopupService,
         {
           isPaused: async (key: string) =>
             smsPaused && key === "platform.sms_sending",
