@@ -2,7 +2,10 @@ import type { SendEmailApiResponse } from "@app/contracts";
 import type { AppDb } from "@app/db";
 import { notFound, unauthorized } from "../http/api-error.js";
 import type { EmailRuntimeService } from "./email-runtime.service.js";
-import { verifySesSnsEvent } from "./ses-sns-verifier.js";
+import {
+  confirmSesSnsSubscription,
+  verifySesSnsEvent,
+} from "./ses-sns-verifier.js";
 
 type Row = Record<string, unknown>;
 
@@ -41,6 +44,17 @@ export async function ingestSesEvent(input: {
     );
   }
   if (!event) return { status: "ignored" };
+  if (event.kind === "subscription_confirmation") {
+    try {
+      await confirmSesSnsSubscription(event.confirmationUrl);
+    } catch {
+      throw unauthorized(
+        "email_webhook_confirmation_failed",
+        "The Email event subscription could not be confirmed.",
+      );
+    }
+    return { status: "subscription_confirmed" };
+  }
 
   const owner = await input.db.withProviderRefLookup(
     event.providerRef,

@@ -21,6 +21,10 @@ services:
         value: production
       - key: PORT
         value: "3000"
+      # Testing intentionally co-locates API, worker, and scheduler. Staging and production split
+      # these roles into separate ECS services using the same image.
+      - key: RUNTIME_ROLE
+        value: all
       # Neon connection strings (one Neon project, four roles — see docs/DEPLOY-FREE-TIER.md).
       - key: DATABASE_URL_APP
         sync: false

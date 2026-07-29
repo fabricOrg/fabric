@@ -43,7 +43,7 @@ jobs:
 
   deploy-frontends:
     name: Vercel · ${{ matrix.app }}
-    needs: gate
+    needs: [gate, migrate-testing]
     if: needs.gate.outputs.enabled == 'true'
     environment: testing
     runs-on: ubuntu-latest
@@ -54,48 +54,58 @@ jobs:
         include:
           - app: dashboard
             projectSecret: VERCEL_PROJECT_ID_DASHBOARD
+            healthPath: /healthz
           - app: admin-console
             projectSecret: VERCEL_PROJECT_ID_ADMIN
+            healthPath: /healthz
           - app: www
             projectSecret: VERCEL_PROJECT_ID_WWW
+            healthPath: /healthz
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets[matrix.projectSecret] }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v7
-      - name: Skip if this app's project is not configured
-        id: guard
+      - name: Require this app's deployment configuration
         shell: bash
         run: |
           if [[ -z "$VERCEL_PROJECT_ID" || -z "$VERCEL_TOKEN" ]]; then
-            echo "::notice::${{ matrix.app }} Vercel project/token not configured — skipping."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::error::${{ matrix.app }} Vercel project/token is not configured."
+            exit 1
           fi
       # `vercel build` runs each project's install command (pnpm install --frozen-lockfile), so pnpm
       # must be on PATH — the runner has Node but not pnpm until corepack enables it.
       - name: Set up Node + pnpm
-        if: steps.guard.outputs.skip != 'true'
         uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Enable pnpm
-        if: steps.guard.outputs.skip != 'true'
         run: corepack enable
       - name: Install Vercel CLI
-        if: steps.guard.outputs.skip != 'true'
         run: npm install --global vercel@latest
       # Vercel builds each app from its own project (root-directory set in the Vercel project), so the
       # monorepo build is driven by project settings — we pull them, build, and deploy the prebuilt output.
       - name: Pull Vercel project settings
-        if: steps.guard.outputs.skip != 'true'
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
       - name: Build
-        if: steps.guard.outputs.skip != 'true'
         run: vercel build --prod --token="$VERCEL_TOKEN"
       - name: Deploy (prebuilt)
-        if: steps.guard.outputs.skip != 'true'
-        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        id: deploy
+        shell: bash
+        run: |
+          deployment_url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          if [[ ! "$deployment_url" =~ ^https:// ]]; then
+            echo "::error::Vercel did not return a deployment URL."
+            exit 1
+          fi
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+      - name: Smoke test hosted app
+        shell: bash
+        run: |
+          curl --fail --show-error --silent \
+            --retry 6 --retry-all-errors --retry-delay 5 \
+            "${{ steps.deploy.outputs.url }}${{ matrix.healthPath }}"
 
   # Schema MUST land before the api that queries it. Without this the deploy shipped code ahead of
   # its database: every migration from 0087 on (price books, the whole token subsystem) was missing
@@ -139,6 +149,7 @@ jobs:
           fi
           pnpm --filter @app/db build
           pnpm --filter @app/db cloud:migrate
+          pnpm --filter @app/db db:assert
 
   deploy-api-render:
     name: Render · api
@@ -146,7 +157,7 @@ jobs:
     if: needs.gate.outputs.enabled == 'true'
     environment: testing
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Trigger Render deploy
         env:
@@ -155,31 +166,54 @@ jobs:
         shell: bash
         run: |
           if [[ -z "$RENDER_API_KEY" || -z "$RENDER_API_SERVICE_ID" ]]; then
-            echo "::notice::Render API key/service id not configured — skipping."
-            exit 0
+            echo "::error::Render API key/service id is not configured."
+            exit 1
           fi
-          # Render builds the api from its own service config (Dockerfile/build command). Trigger a
-          # deploy of the current pushed commit and wait for it to finish (fail the job if it errors).
+          # Render builds the api from its own service config. Pin this workflow's tested commit,
+          # then wait for it to finish and fail the job if the build or rollout errors.
           deploy_id=$(curl -sS -X POST \
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
             "https://api.render.com/v1/services/$RENDER_API_SERVICE_ID/deploys" \
-            -d '{"clearCache":"do_not_clear"}' | jq -r '.id')
+            -d "$(jq -n --arg commit "$GITHUB_SHA" \
+              '{clearCache:"do_not_clear",commitId:$commit}')" | jq -r '.id')
           if [[ -z "$deploy_id" || "$deploy_id" == "null" ]]; then
             echo "::error::Render deploy did not return an id." && exit 1
           fi
           echo "Render deploy $deploy_id started; polling…"
           for _ in $(seq 1 60); do
             sleep 15
-            status=$(curl -sS \
+            deploy=$(curl -sS \
               -H "Authorization: Bearer $RENDER_API_KEY" \
-              "https://api.render.com/v1/services/$RENDER_API_SERVICE_ID/deploys/$deploy_id" \
-              | jq -r '.status')
+              "https://api.render.com/v1/services/$RENDER_API_SERVICE_ID/deploys/$deploy_id")
+            status=$(jq -r '.status' <<< "$deploy")
             echo "status=$status"
             case "$status" in
-              live) echo "Render deploy live." && exit 0 ;;
+              live)
+                deployed_commit=$(jq -r '.commit.id // empty' <<< "$deploy")
+                if [[ "$deployed_commit" != "$GITHUB_SHA" ]]; then
+                  echo "::error::Render published $deployed_commit instead of $GITHUB_SHA."
+                  exit 1
+                fi
+                break
+                ;;
               build_failed|update_failed|canceled|deactivated|pre_deploy_failed)
                 echo "::error::Render deploy $status." && exit 1 ;;
             esac
           done
-          echo "::error::Render deploy timed out." && exit 1
+          if [[ "$status" != "live" ]]; then
+            echo "::error::Render deploy timed out."
+            exit 1
+          fi
+
+          service=$(curl -sS \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            "https://api.render.com/v1/services/$RENDER_API_SERVICE_ID")
+          service_url=$(jq -r '.serviceDetails.url // empty' <<< "$service")
+          if [[ ! "$service_url" =~ ^https:// ]]; then
+            echo "::error::Render service did not return a public URL."
+            exit 1
+          fi
+          curl --fail --show-error --silent \
+            --retry 12 --retry-all-errors --retry-delay 10 \
+            "$service_url/health/readyz"
