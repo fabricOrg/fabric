@@ -47,7 +47,59 @@ source of truth for access. It is NOT defensible to discard the reason. Same fai
 integration assertions that threw away the response body (#194): the system behaved "correctly" and
 told nobody why.
 
-## START HERE (2026-07-28): plugin architecture — ADR-0011, slices 1+2a done, 2b/3/4/5 open
+## START HERE (2026-07-28, late): ADR-0011 slices 1–4 DEPLOYED to testing; slice 5 still open
+
+**Deployed 2026-07-28** — PR #211 (5 commits) + PR #212 (the migration fix) squash-merged to `dev`,
+`dev` merged to `testing`, run `30405278317` green: migrations → Vercel (www / dashboard /
+admin-console) → Render api live. `testing` = `41f8576`.
+
+Verified against the hosted database, not the workflow's own report:
+
+| check | result |
+| --- | --- |
+| migration rows | 101 (97 → +4, i.e. 0097–0100 applied) |
+| `MYBRAND` (the pre-existing active sender) | `active` / `approved` / `carrier_ref='grandfathered:0097'` |
+| `SWEEP818` | `pending` / `unregistered` — correctly untouched |
+| `plugin_instances.credentials_ref` | `text` → `uuid` |
+| `uniq_plugin_instance` | `UNIQUE NULLS NOT DISTINCT (tenant_id, capability, vendor, mode)` |
+| `payments` | `provider_mode`, `plugin_instance_id`, `credential_version` present |
+| `senders` FORCE RLS | `true` — restored; the 0097 lift did not leak |
+| api `/health` | `{"status":"ok","db":"up"}` |
+
+### The deploy failure worth remembering: FORCE RLS silently voids a migration backfill
+
+The first attempt (run `30404624322`) died on `23514` — the check constraint "violated by some row"
+that the `UPDATE` directly above it had supposedly just fixed.
+
+`senders` carries `FORCE ROW LEVEL SECURITY` (0036), and **FORCE subjects the table OWNER to the
+tenant policy too** — the owner being exactly the role `cloud-migrate` runs `migrate()` as
+(`packages/db/src/cloud-migrate.ts:211`). A migration sets no `app.tenant_id`, so the backfill matched
+ZERO rows, while `ADD CONSTRAINT` validated the table *regardless of RLS* and found the untouched row.
+
+**No local gate could have caught it**: the test harness migrates as a SUPERUSER, which bypasses RLS
+even under FORCE. Another entry in the §9 "a green local gate is not CI" column.
+
+The fix (0097) lifts FORCE around the backfill only, then restores it. **Any future migration that
+backfills a FORCE-RLS tenant table has this same trap** — a silently-zero `UPDATE` that only surfaces
+if something downstream validates the whole table. Most won't have a constraint to catch them.
+
+Editing 0097 in place was safe because drizzle's migrator skips by TIMESTAMP
+(`created_at < folderMillis`, `pg-core/dialect.js:62`), not by content hash — verified in
+`node_modules`, not assumed.
+
+### What still blocks the first live send
+
+`PLUGIN_MASTER_KEY` must be present on the Render service. It is declared in `render.yaml`
+(`sync: false`) but that file does NOT retro-apply to an already-provisioned service. Nothing has
+exercised it yet — every `credentials_ref` is still null — so its presence is unproven from this side.
+If it is missing, `derivePluginMasterKey` THROWS under `NODE_ENV=production` (deliberately: it must
+never fall back to the development key), and installing the Arkesel credential 500s with
+`PLUGIN_MASTER_KEY must be set to at least 32 characters in production`. That error is the signal.
+
+Set it once and never rotate it casually: a credential sealed under one master key cannot be opened
+under another, and the failure surfaces at DISPATCH, not at save.
+
+## Earlier (2026-07-28): plugin architecture — ADR-0011, slices 1+2a done, 2b/3/4/5 open
 
 **The mandate: external providers are control-plane PLUGINS, not environment variables.** Adding,
 swapping, or taking a provider live must be a staff action, never a redeploy. Read

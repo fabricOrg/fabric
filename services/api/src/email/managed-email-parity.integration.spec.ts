@@ -149,7 +149,7 @@ describeDb("SDK-007 managed email preview/send parity", () => {
     await Promise.all([owner.end(), db.end()]);
   });
 
-  it("stores byte-identical rendered content and reserves the preview price", async () => {
+  it("stores byte-identical content without reserving the preview estimate", async () => {
     const previewResponse = await app.inject({
       method: "POST",
       url: "/v1/messages/preview",
@@ -189,7 +189,7 @@ describeDb("SDK-007 managed email preview/send parity", () => {
       html: preview.html,
     });
     expect(preview.html).toBe("<p>Hi &lt;b&gt;Ada &amp; Co&lt;/b&gt;</p>");
-    expect(await reserveAmount(deliveryId)).toBe(BigInt(preview.cost_minor));
+    expect(await reserveAmount(deliveryId)).toBe(0n);
     expect(await deliveryMoney(deliveryId)).toEqual({
       totalCostMinor: preview.cost_minor,
       attemptCostMinor: preview.cost_minor,
@@ -197,7 +197,7 @@ describeDb("SDK-007 managed email preview/send parity", () => {
     expect(preview.currency).toBe("GHS");
   });
 
-  it("collapses concurrent identical email sends onto one reserve", async () => {
+  it("collapses concurrent identical email sends onto one allowance use", async () => {
     const key = "email-concurrent";
     const [a, b, c] = await Promise.all([
       app.inject({
@@ -233,8 +233,8 @@ describeDb("SDK-007 managed email preview/send parity", () => {
       deliveries: 1,
       attempts: 1,
       emailMessages: 1,
-      reserves: 1,
+      reserves: 0,
     });
-    expect(await reserveAmount(deliveryId)).toBe(5n);
+    expect(await reserveAmount(deliveryId)).toBe(0n);
   });
 });

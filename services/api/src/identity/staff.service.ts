@@ -69,7 +69,7 @@ export class StaffService {
         .from(staffUsers)
         .where(eq(staffUsers.email, email))
         .limit(1);
-      if (!staff || staff.status !== "active") return null;
+      if (staff?.status !== "active") return null;
 
       await tx
         .update(staffUsers)

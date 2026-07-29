@@ -1,4 +1,8 @@
-import type { MemberDto, PriceBookDto } from "@app/contracts";
+import type {
+  MemberDto,
+  PriceBookDto,
+  SandboxAllowancePolicy,
+} from "@app/contracts";
 import { Avatar, AvatarFallback } from "@app/ui/components/ui/avatar";
 import { Badge } from "@app/ui/components/ui/badge";
 import {
@@ -21,6 +25,7 @@ import { notFound } from "next/navigation";
 import { AccountPriceBookAssign } from "@/components/account-price-book-assign";
 import { SetBreadcrumbTitle } from "@/components/breadcrumb-title";
 import { InviteTenantMemberDialog } from "@/components/forms/invite-tenant-member-dialog";
+import { SandboxAllowancePolicyEditor } from "@/components/sandbox-allowance-policy";
 import { TenantMemberRowActions } from "@/components/tenant-member-row-actions";
 import { TenantStatusActions } from "@/components/tenant-status-actions";
 import { requireAdminSession } from "@/lib/server/auth";
@@ -29,7 +34,10 @@ import {
   listTenantMembers,
   TenantMemberApiError,
 } from "@/lib/server/tenant-members-client";
-import { listTenants } from "@/lib/server/tenants-client";
+import {
+  getSandboxAllowancePolicy,
+  listTenants,
+} from "@/lib/server/tenants-client";
 
 type Role = MemberDto["role"];
 const ROLE_LABEL: Record<Role, string> = {
@@ -86,6 +94,12 @@ export default async function TenantDetailPage({
   const assignedBook =
     books.find((b) => b.id === tenant.price_book_id)?.name ??
     "Default (by mode)";
+  let sandboxPolicy: SandboxAllowancePolicy | null = null;
+  try {
+    sandboxPolicy = await getSandboxAllowancePolicy(tenant.tenant_id);
+  } catch {
+    sandboxPolicy = null;
+  }
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -133,6 +147,34 @@ export default async function TenantDetailPage({
               books={books}
             />
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Sandbox allowances</CardTitle>
+          <CardDescription>
+            Workspace-wide daily capacity. SMS counts segments and email counts
+            messages. Changes apply when the next UTC bucket is created; a
+            bucket already used today keeps its original limit.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!sandboxPolicy ? (
+            <p className="text-sm text-muted-foreground">
+              Sandbox allowance settings are temporarily unavailable.
+            </p>
+          ) : canManage ? (
+            <SandboxAllowancePolicyEditor
+              tenantId={tenant.tenant_id}
+              initial={sandboxPolicy}
+            />
+          ) : (
+            <p className="text-sm">
+              {sandboxPolicy.sms_segments_per_day} SMS segments and{" "}
+              {sandboxPolicy.email_messages_per_day} email messages per UTC day.
+            </p>
+          )}
         </CardContent>
       </Card>
 

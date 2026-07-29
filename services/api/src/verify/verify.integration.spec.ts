@@ -116,7 +116,7 @@ afterAll(async () => {
 });
 
 describe("Verify V1 (golden path core)", () => {
-  it("start → billed OTP SMS (ledgered, fake provider) → wrong codes bounded → verify → idempotent re-check", async () => {
+  it("start → metered OTP SMS (sandbox allowance, virtual phone) → wrong codes bounded → verify → idempotent re-check", async () => {
     const started = await post(SANDBOX_KEY, "/v1/verify", { to: PHONE });
     expect(started.statusCode).toBe(201);
     const startBody = started.json() as {
@@ -130,20 +130,22 @@ describe("Verify V1 (golden path core)", () => {
     // Sandbox quickstart affordance: the OTP is visible without a real phone.
     expect(startBody.debug_code).toMatch(/^\d{6}$/);
 
-    // The OTP rode the real send pipeline: a message exists, pinned to the SANDBOX provider, and
-    // its reserve/commit ledger entries ARE the verification's billing record. A sandbox tenant is
-    // pinned to the virtual phone (ADR-0002 F3) — an OTP for a sandbox workspace must never be able
-    // to reach a carrier, whatever SMS_PROVIDER says.
+    // The OTP rode the real send pipeline: a message exists, pinned to the SANDBOX provider, and it
+    // was ACCOUNTED FOR. A sandbox tenant is pinned to the virtual phone (ADR-0002 F3) — an OTP for a
+    // sandbox workspace must never be able to reach a carrier, whatever SMS_PROVIDER says.
     const [msg] = (await owner.unsafe(
       "SELECT id, provider_slug FROM messages WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
       [SANDBOX_TENANT],
     )) as Array<{ id: string; provider_slug: string }>;
     expect(msg?.provider_slug).toBe("virtual-phone");
-    const ledger = (await owner.unsafe(
-      "SELECT count(*)::int AS n FROM ledger_transactions WHERE tenant_id = $1 AND reference_id = $2",
+    // The record is the daily ALLOWANCE, not the ledger. Sandbox stopped spending money, so a
+    // reserve/commit pair no longer exists to assert — but the send must still be counted, or a
+    // sandbox tenant would have found an unmetered path to send through.
+    const usage = (await owner.unsafe(
+      "SELECT count(*)::int AS n FROM sandbox_usage_events WHERE tenant_id = $1 AND reference_id = $2",
       [SANDBOX_TENANT, msg?.id ?? ""],
     )) as Array<{ n: number }>;
-    expect(ledger[0]?.n ?? 0).toBeGreaterThan(0);
+    expect(usage[0]?.n ?? 0).toBeGreaterThan(0);
 
     // Wrong code: structured error + bounded attempts.
     const wrongCode = startBody.debug_code === "000000" ? "111111" : "000000";

@@ -10,6 +10,7 @@ import { Cron, CronExpression } from "@nestjs/schedule";
 import { sql } from "drizzle-orm";
 import { EmailService } from "../email/email.service.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
+import { runtimeRoleEnabled } from "../runtime/runtime-role.js";
 import { SmsService } from "../sms/sms.service.js";
 import { VirtualPhoneService } from "../sms/virtual-phone.service.js";
 import { runEmailSweep } from "./maintenance-email-sweep.js";
@@ -79,7 +80,10 @@ export class MaintenanceService {
 
   /** Cron gate so integration tests (which build the Nest app) don't run wall-clock jobs. */
   private cronEnabled(): boolean {
-    return this.config.get<string>("MAINTENANCE_CRON_ENABLED") !== "false";
+    return (
+      runtimeRoleEnabled(this.config, "scheduler") &&
+      this.config.get<string>("MAINTENANCE_CRON_ENABLED") !== "false"
+    );
   }
 
   /** Never let a maintenance failure crash the process; the next tick retries. */

@@ -22,13 +22,11 @@ process.env.ARKESEL_API_KEY = ""; // no creds — an accidental real call could 
 process.env.REDIS_QUEUE_URL = ""; // inline path: assert the synchronous outcome
 process.env.PII_MASTER_KEY =
   "integration-pii-master-key-at-least-32-characters";
-
 const SANDBOX_TENANT = "abcdabcd-0000-4000-8000-0000000000f3";
 const LIVE_TENANT = "abcdabcd-1111-4111-8111-0000000000f3";
 const SANDBOX_KEY = `sk_test_${"f".repeat(40)}`;
 const LIVE_KEY = `sk_test_${"a".repeat(40)}`;
 const CURRENCY = "GHS";
-
 const owner = postgres(SUPER_URL, { max: 2 });
 const db = createAppDb(APP_URL, { max: 2 });
 let app: NestFastifyApplication;
@@ -64,14 +62,14 @@ async function seedTenant(id: string, plan: string, rawKey: string) {
      ON CONFLICT (key_hash) DO NOTHING`,
     [id, hashApiKey(rawKey), appId, sandboxEnvId],
   );
-  await db.withTenant(id, (tx) =>
-    credit(tx, {
-      currency: CURRENCY,
-      amountMinor: 10_000n,
-      idempotencyKey: `topup:routing-seed-${id}`,
-    }),
-  );
   if (plan !== "sandbox") {
+    await db.withTenant(id, (tx) =>
+      credit(tx, {
+        currency: CURRENCY,
+        amountMinor: 10_000n,
+        idempotencyKey: `topup:routing-seed-${id}`,
+      }),
+    );
     await owner.unsafe(
       `INSERT INTO senders (tenant_id, sender_id, country, use_case, status, carrier_status)
        VALUES ($1, 'FABRIC', 'GH', 'routing integration', 'active', 'approved')
@@ -83,6 +81,8 @@ async function seedTenant(id: string, plan: string, rawKey: string) {
 
 async function cleanTenant(id: string) {
   for (const table of [
+    "sandbox_usage_events",
+    "sandbox_usage_buckets",
     "senders",
     "inbound_messages",
     "opt_outs",
@@ -134,7 +134,7 @@ beforeAll(async () => {
   app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
-    { logger: false },
+    { logger: false, abortOnError: false },
   );
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

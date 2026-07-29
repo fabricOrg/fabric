@@ -22,8 +22,9 @@ import { PLATFORM_FAULT_CAUSES } from "../status.js";
  *
  * SANDBOX SAFETY: `creds.sandbox` (default 'true') sends `sandbox: true` — Arkesel accepts the request
  * but never forwards to the carrier and never bills. Real delivery requires `sandbox: 'false'`, which
- * is a deliberate, human-gated config flip (live SMS is a redline). The engine stays provider-agnostic;
- * this adapter is only selected when SMS_PROVIDER=arkesel.
+ * is a deliberate, human-gated config flip (live SMS is a redline). The engine stays
+ * provider-agnostic; the control-plane plugin resolver normally selects this adapter, with
+ * SMS_PROVIDER retained only as the migration fallback.
  *
  * DLR: Arkesel calls the configured `callback_url` with a GET carrying `sms_id` + `status` query params
  * (UNSIGNED — Arkesel requires the URL be auth-exempt). The HTTP ingress normalises those params into

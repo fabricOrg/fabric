@@ -15,7 +15,6 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ConsentService } from "../consent/consent.service.js";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
-import type { AutoTopupService } from "../payments/auto-topup.service.js";
 import type { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -39,6 +38,8 @@ describeDb(
     const tenantId = randomUUID();
     const rawKey = `sk_test_${randomUUID().replace(/-/g, "")}${"0".repeat(8)}`;
     const CREDIT = 10_000n;
+    /** One GSM-7 segment at the compiled default GHS rate — what a single clean send commits. */
+    const SEGMENT_COST = 3n;
     let applicationId = "";
     let environmentId = "";
     let definitionId = "";
@@ -81,7 +82,7 @@ describeDb(
           senderId: "FABRIC",
           body: "Hi Ada, 2 orders.",
           currency: "GHS",
-          deliveryMode: "virtual",
+          deliveryMode: "live",
           subjectId,
           bodyPiiId,
           managed: {
@@ -106,7 +107,7 @@ describeDb(
       const result = await sms.processQueuedSend({
         tenantId,
         messageId: deliveryId,
-        deliveryMode: "virtual",
+        deliveryMode: "live",
       });
       expect(result.status).toBe("failed");
 
@@ -132,7 +133,7 @@ describeDb(
       const replay = await sms.processQueuedSend({
         tenantId,
         messageId: deliveryId,
-        deliveryMode: "virtual",
+        deliveryMode: "live",
       });
       expect(replay.status).toBe("failed");
       expect(await customerBalance()).toBe(CREDIT);
@@ -159,7 +160,6 @@ describeDb(
       vault = new PiiVaultService(db, config);
       sms = new SmsService(
         db,
-        {} as AutoTopupService,
         {
           isPaused: async (key: string) =>
             smsPaused && key === "platform.sms_sending",
@@ -219,12 +219,15 @@ describeDb(
       const result = await sms.processQueuedSend({
         tenantId,
         messageId: deliveryId,
-        deliveryMode: "virtual",
+        deliveryMode: "live",
       });
       expect(["delivered", "sent", "accepted"]).toContain(result.status);
-      // Virtual traffic reserves through the real wallet path and refunds at the terminal —
-      // sandbox rehearses the money flow without charging for it.
-      expect(await customerBalance()).toBe(CREDIT);
+      // A send that actually goes out is BILLED — the reservation commits rather than refunding,
+      // which is the whole difference between this case and the blocked ones above. It used to read
+      // `toBe(CREDIT)` because a virtual send reserved and refunded at the terminal, rehearsing the
+      // money flow without charging; sandbox allowances replaced that rehearsal, so the assertion
+      // now has to state the real cost or it is asserting nothing.
+      expect(await customerBalance()).toBe(CREDIT - SEGMENT_COST);
     });
   },
 );

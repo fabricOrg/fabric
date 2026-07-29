@@ -3,6 +3,7 @@ import type {
   ProvisionTenantRequest,
   ProvisionTenantResponse,
   TenantSummaryDto,
+  UpdateSandboxAllowancePolicy,
   UpdateTenantStatusRequest,
 } from "@app/contracts";
 import {
@@ -20,6 +21,7 @@ import {
   users,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { desc, eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
@@ -28,8 +30,13 @@ import {
   WORKOS_CLIENT,
   type WorkosClientProvider,
 } from "../identity/workos-client.provider.js";
+import {
+  type AllowanceActor,
+  getTenantSandboxAllowancePolicy,
+  setTenantSandboxAllowancePolicy,
+} from "./tenant-sandbox-allowances.js";
 
-interface Actor {
+interface Actor extends AllowanceActor {
   readonly staffId?: string | null;
   readonly email?: string | null;
 }
@@ -48,7 +55,31 @@ export class TenantProvisioningService {
     @Inject(PROVISIONING_DB) private readonly provisioning: ProvisioningDb,
     @Inject(WORKOS_CLIENT) private readonly workosClient: WorkosClientProvider,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
+
+  async sandboxAllowancePolicy(tenantId: string) {
+    return getTenantSandboxAllowancePolicy(
+      this.provisioning,
+      this.config,
+      tenantId,
+    );
+  }
+
+  async updateSandboxAllowancePolicy(
+    tenantId: string,
+    request: UpdateSandboxAllowancePolicy,
+    actor: Actor,
+  ) {
+    return setTenantSandboxAllowancePolicy(
+      this.provisioning,
+      this.config,
+      this.audit,
+      tenantId,
+      request,
+      actor,
+    );
+  }
 
   /**
    * Change a tenant's lifecycle status (suspend / reinstate / soft-close). Staff-gated at the BFF.

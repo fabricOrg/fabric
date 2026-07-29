@@ -1,0 +1,2 @@
+ALTER TABLE "auto_topup" ADD COLUMN "next_check_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_auto_topup_due" ON "auto_topup" USING btree ("next_check_at","tenant_id") WHERE "auto_topup"."enabled" = true;

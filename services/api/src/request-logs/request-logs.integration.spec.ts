@@ -84,6 +84,7 @@ describeDb("request logs (real RLS)", () => {
   });
 
   afterAll(async () => {
+    await svc.onModuleDestroy();
     await owner.unsafe("DELETE FROM accounts WHERE id = $1", [TENANT]);
     await appDb.end();
     await provisioning.end();

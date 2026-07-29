@@ -21,8 +21,8 @@ interface AuthedRequest {
  * Captures one request_logs row per CUSTOMER public-API request (W-B). Global, but records only when
  * a real `sk_*` key authenticated the request — it skips unauthenticated traffic (no `req.tenant`)
  * and the dashboard's own BFF tenant-token calls (`bfft_` keyId), which aren't the developer's API
- * usage. Capture is fire-and-forget via RequestLogService.record() (never awaited, never throws), so
- * logging can't slow or fail the request. Runs for both success (tap next) and error (tap error).
+ * usage. Capture enters a bounded batch via RequestLogService.record(), so logging cannot slow or
+ * fail the request. Runs for both success (tap next) and error (tap error).
  */
 @Injectable()
 export class RequestLogInterceptor implements NestInterceptor {

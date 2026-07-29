@@ -72,6 +72,40 @@ describe("PaystackProvider.initCharge", () => {
   });
 });
 
+describe("PaystackProvider.verifyCharge", () => {
+  it("returns the canonical status for an existing reference", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: true,
+          data: {
+            id: 90213,
+            status: "success",
+            reference: "autotopup-abc",
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      provider.verifyCharge("autotopup-abc", CREDS),
+    ).resolves.toMatchObject({ status: "success", providerRef: "90213" });
+    expect(fetchMock.mock.calls[0]?.[0]).toContain(
+      "/transaction/verify/autotopup-abc",
+    );
+  });
+
+  it("returns null only when the reference does not exist", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 404 }),
+    );
+    await expect(
+      provider.verifyCharge("autotopup-missing", CREDS),
+    ).resolves.toBeNull();
+  });
+});
+
 describe("PaystackProvider.verifyWebhook", () => {
   const rawBody = JSON.stringify({ event: "charge.success", data: {} });
   const signature = createHmac("sha512", SECRET)

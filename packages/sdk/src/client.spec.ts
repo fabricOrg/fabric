@@ -219,4 +219,31 @@ describe("Fabric client", () => {
       retryAfter: expect.any(Number),
     });
   });
+
+  it("does not retry an exhausted sandbox allowance", async () => {
+    // A daily quota refills at midnight UTC, so a backoff cannot clear it. Retrying would spend the
+    // caller's whole retry budget and add latency to a request that could never have succeeded.
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      json(
+        {
+          error: {
+            code: "sandbox_daily_limit_exceeded",
+            message: "The sandbox sms daily allowance is exhausted.",
+          },
+        },
+        429,
+      ),
+    );
+    await expect(
+      new Fabric({
+        apiKey: "sk_test_example",
+        fetch,
+        maxRetries: 3,
+      }).sms.list(),
+    ).rejects.toMatchObject({
+      code: "sandbox_daily_limit_exceeded",
+      retryable: false,
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });

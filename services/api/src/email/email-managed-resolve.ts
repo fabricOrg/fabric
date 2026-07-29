@@ -13,18 +13,21 @@ export async function reconcileManagedEmailTerminal(
   },
 ): Promise<void> {
   const attempts = (await tx`
-    SELECT delivery_id, application_id, environment_id
-    FROM message_delivery_attempts
-    WHERE email_message_id = ${input.messageId}
+    SELECT a.delivery_id, a.application_id, a.environment_id, m.backing
+    FROM message_delivery_attempts a
+    JOIN email_messages m ON m.id = a.email_message_id
+    WHERE a.email_message_id = ${input.messageId}
     LIMIT 1`) as Row[];
-  if (!attempts[0]) return;
+  const attempt = attempts[0];
+  if (!attempt) return;
 
-  if (input.newStatus === "delivered") {
+  const financial = String(attempt.backing ?? "wallet") === "wallet";
+  if (financial && input.newStatus === "delivered") {
     await commit(tx, {
       referenceId: input.messageId,
       idempotencyKey: `commit:${input.messageId}`,
     });
-  } else {
+  } else if (financial) {
     await refund(tx, {
       referenceId: input.messageId,
       idempotencyKey: `refund:${input.messageId}`,
@@ -47,6 +50,6 @@ export async function reconcileManagedEmailTerminal(
       status = ${input.newStatus},
       resource_version = resource_version + 1,
       updated_at = now()
-    WHERE id = ${String(attempts[0].delivery_id)}`;
+    WHERE id = ${String(attempt.delivery_id)}`;
   // The caller already emits message.updated; managed email message_id equals delivery_id.
 }

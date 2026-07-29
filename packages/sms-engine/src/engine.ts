@@ -15,7 +15,7 @@ import type {
 } from "./engine-types.js";
 import { prepareSend } from "./prepare-send.js";
 
-/** Two-phase SMS pipeline: persist + reserve, dispatch outside the transaction, then reconcile. */
+/** Two-phase SMS pipeline: persist + claim backing, dispatch outside the transaction, then reconcile. */
 
 type Row = Record<string, unknown>;
 
@@ -48,7 +48,9 @@ async function resolveMessage(
     SELECT status, application_id, environment_id, backing, provider_slug
     FROM messages WHERE id = ${messageId} FOR UPDATE`) as Row[];
   const prior = String(rows[0]?.status) as MessageStatus;
-  const tokenBacked = String(rows[0]?.backing ?? "wallet") === "tokens";
+  const backing = String(rows[0]?.backing ?? "wallet");
+  const tokenBacked = backing === "tokens";
+  const sandboxBacked = backing === "sandbox_allowance";
   // Terminal-freeze + monotonicity: never regress a recorded status or overwrite a terminal one.
   if (isTerminalMessageStatus(prior)) return prior;
   if (STATUS_RANK[newStatus] < STATUS_RANK[prior]) return prior;
@@ -88,7 +90,7 @@ async function resolveMessage(
   // The DECISION is channel- and backing-neutral (@app/domain owns it); only the EFFECTOR differs.
   // A token-backed send settles its holds and must never touch the ledger — it never reserved money,
   // so a commit/refund here would throw NoReservationError at best and mis-state revenue at worst.
-  if (decision === "commit") {
+  if (decision === "commit" && !sandboxBacked) {
     if (tokenBacked) {
       await deps.tokens?.resolve(tx, messageId, "committed");
     } else {
@@ -97,7 +99,7 @@ async function resolveMessage(
         idempotencyKey: `commit:${messageId}`,
       });
     }
-  } else if (decision === "refund") {
+  } else if (decision === "refund" && !sandboxBacked) {
     if (tokenBacked) {
       await deps.tokens?.resolve(tx, messageId, "returned");
     } else {

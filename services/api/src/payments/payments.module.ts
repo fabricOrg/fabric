@@ -26,7 +26,7 @@ import { PaystackWebhookController } from "./paystack-webhook.controller.js";
   ],
   controllers: [PaymentsController, PaystackWebhookController],
   providers: [PaymentsService, AutoTopupService],
-  // AutoTopupService → SmsModule (after-debit trigger); PaymentsService → FlowsModule (collections).
+  // AutoTopupService owns the durable threshold scan; PaymentsService supports flow collections.
   exports: [AutoTopupService, PaymentsService],
 })
 export class PaymentsModule {}

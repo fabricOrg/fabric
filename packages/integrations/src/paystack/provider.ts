@@ -132,6 +132,49 @@ export class PaystackProvider implements PaymentProviderPlugin {
     };
   }
 
+  async verifyCharge(
+    reference: string,
+    creds: Creds,
+  ): Promise<ChargeAuthorizationResult | null> {
+    const response = await fetch(
+      `${BASE_URL}/transaction/verify/${encodeURIComponent(reference)}`,
+      {
+        headers: { authorization: `Bearer ${requireSecret(creds)}` },
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    if (response.status === 404) return null;
+    const payload = (await response.json().catch(() => null)) as {
+      status?: boolean;
+      message?: string;
+      data?: { status?: string; id?: number; reference?: string };
+    } | null;
+    if (!response.ok || !payload?.status || !payload.data) {
+      throw new PaystackError(
+        payload?.message ??
+          `Paystack verification failed (${response.status}).`,
+      );
+    }
+    if (payload.data.reference && payload.data.reference !== reference) {
+      throw new PaystackError(
+        "Paystack verification returned another reference.",
+      );
+    }
+    const status = payload.data.status;
+    return {
+      status:
+        status === "success"
+          ? "success"
+          : status === "failed"
+            ? "failed"
+            : "pending",
+      ...(typeof payload.data.id === "number"
+        ? { providerRef: String(payload.data.id) }
+        : {}),
+      raw: payload,
+    };
+  }
+
   verifyWebhook(req: IncomingRequest, creds: Creds): boolean {
     const secretKey = requireSecret(creds);
     const provided = req.headers["x-paystack-signature"];

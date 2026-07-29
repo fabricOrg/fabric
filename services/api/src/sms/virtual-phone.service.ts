@@ -10,8 +10,9 @@ import { ConfigService } from "@nestjs/config";
 import { AuditService } from "../audit/audit.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
+import { PluginResolverService } from "../plugins/plugin-resolver.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
-import { assertLiveProviderReady } from "./sms-providers.js";
+import { assertLiveSmsConfigured } from "./sms-live-readiness.js";
 import { listVirtualInbox } from "./virtual-phone-inbox.js";
 import {
   auditVirtualClear,
@@ -35,6 +36,8 @@ export class VirtualPhoneService {
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(PiiVaultService) private readonly vault: PiiVaultService,
+    @Inject(PluginResolverService)
+    private readonly pluginResolver: PluginResolverService,
   ) {}
 
   async settings(tenantId: string): Promise<MessagingSettings> {
@@ -95,16 +98,7 @@ export class VirtualPhoneService {
       );
     }
     if (deliveryMode === "live") {
-      try {
-        assertLiveProviderReady(this.config);
-      } catch (error) {
-        throw invalidRequest(
-          "live_provider_not_ready",
-          error instanceof Error
-            ? error.message
-            : "Live SMS is not configured.",
-        );
-      }
+      await assertLiveSmsConfigured(this.pluginResolver, this.config);
       const active = (await this.db.withTenant(
         tenantId,
         (tx) => tx`

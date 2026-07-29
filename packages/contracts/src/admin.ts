@@ -16,7 +16,7 @@ export const provisionTenantRequestSchema = z.object({
   adminEmail: z.string().trim().email(),
   adminName: z.string().trim().min(1).max(120).optional(),
   // Data-residency region for the account (see accounts.dataRegion). Defaults to the launch region.
-  dataRegion: z.string().trim().min(2).default("af-south-1"),
+  dataRegion: z.string().trim().min(2).default("eu-west-1"),
 });
 export type ProvisionTenantRequest = z.infer<
   typeof provisionTenantRequestSchema
@@ -67,4 +67,20 @@ export const updateTenantStatusRequestSchema = z.object({
 });
 export type UpdateTenantStatusRequest = z.infer<
   typeof updateTenantStatusRequestSchema
+>;
+
+export const sandboxAllowancePolicySchema = z.object({
+  sms_segments_per_day: z.number().int().positive().max(1_000_000_000),
+  email_messages_per_day: z.number().int().positive().max(1_000_000_000),
+});
+export type SandboxAllowancePolicy = z.infer<
+  typeof sandboxAllowancePolicySchema
+>;
+
+export const updateSandboxAllowancePolicySchema =
+  sandboxAllowancePolicySchema.extend({
+    reason: z.string().trim().min(8, "Give a reason (at least 8 characters)."),
+  });
+export type UpdateSandboxAllowancePolicy = z.infer<
+  typeof updateSandboxAllowancePolicySchema
 >;

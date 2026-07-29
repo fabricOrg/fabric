@@ -12,7 +12,6 @@ import {
   payments,
   type TenantId,
 } from "@app/db";
-import { credit } from "@app/wallet";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { eq } from "drizzle-orm";
@@ -27,12 +26,8 @@ import {
   webhookModeMismatch,
   webhookVerificationCandidates,
 } from "./payment-provider-resolution.js";
-import {
-  captureReusableCard,
-  completeFlowRecord,
-} from "./payment-webhook-effects.js";
+import { settleSucceededPayment } from "./payment-settlement.js";
 
-/** Paystack top-ups: pending intent, idempotent webhook credit, tenant RLS, and exact minor units. */
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
@@ -138,6 +133,7 @@ export class PaymentsService {
     await this.provisioning.db.insert(payments).values({
       tenantId: tenantId as TenantId,
       reference,
+      kind: "collection",
       provider: "paystack",
       // Bind the intent to its credentials — see webhookModeMismatch for why.
       providerMode: mode,
@@ -245,38 +241,13 @@ export class PaymentsService {
       return;
     }
 
-    await captureReusableCard(this.provisioning, payment, event.authorization);
-
-    // Credit under the tenant's RLS context; idempotent on the reference (topup-{uuid}).
-    // idempotencyKey (topup-{uuid}) dedups a replayed webhook; referenceId is omitted — it's a uuid
-    // FK to messages, not applicable to a top-up.
-    await this.appDb.withTenant(payment.tenantId, async (tx) => {
-      const credited = await credit(tx, {
-        currency: payment.currency,
-        amountMinor: payment.amountMinor,
-        idempotencyKey: payment.reference,
-      });
-      // Transactional outbox (finding 8): emit only when money actually moved THIS call — a
-      // replayed webhook (credited.replayed) must not fan out a duplicate event.
-      if (!credited.replayed) {
-        await tx`
-          INSERT INTO outbox_events (tenant_id, event_type, payload)
-          VALUES (
-            current_setting('app.tenant_id')::uuid,
-            'topup.succeeded',
-            ${JSON.stringify({
-              reference: payment.reference,
-              amount_minor: payment.amountMinor.toString(),
-              currency: payment.currency,
-            })}::jsonb
-          )`;
-      }
-      await completeFlowRecord(tx, payment);
-    });
-    await this.provisioning.db
-      .update(payments)
-      .set({ status: "success", updatedAt: new Date() })
-      .where(eq(payments.reference, payment.reference));
+    // Shared with the auto-top-up reconciler, which settles the same way on verifyCharge evidence
+    // when a webhook never arrives. See payment-settlement.ts for why that is one implementation.
+    await settleSucceededPayment(
+      { provisioning: this.provisioning, appDb: this.appDb },
+      payment,
+      event.authorization,
+    );
   }
 
   /** The tenant's saved reusable card (Payment-method card + auto-top-up source), or null. */

@@ -1,18 +1,15 @@
 import { AppShell } from "@app/ui/components/ui/app-shell";
-import { Button } from "@app/ui/components/ui/button";
 import { UserMenu } from "@app/ui/components/ui/user-menu";
-import { Wallet } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppBreadcrumbs } from "@/components/app-breadcrumbs";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandMenu, CommandMenuTrigger } from "@/components/command-menu";
 import { DeliveryModeToggle } from "@/components/delivery-mode-toggle";
+import { HeaderFundingStatus } from "@/components/header-funding-status";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { VirtualPhoneNotifier } from "@/components/virtual-phone-notifier";
-import { formatMoney } from "@/lib/money";
 import { requireDashboardWorkspaceContext } from "@/lib/server/auth";
-import { getWalletSnapshot } from "@/lib/server/dashboard-data";
 
 /**
  * Authenticated dashboard shell: the sidebar (corrected IA) + a topbar that keeps balance VISIBILITY
@@ -20,7 +17,6 @@ import { getWalletSnapshot } from "@/lib/server/dashboard-data";
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const { user, session } = await requireDashboardWorkspaceContext();
-  const primaryBalance = (await getWalletSnapshot()).balances[0]?.balance;
   const isSandbox = session.plan === "sandbox";
   return (
     <AppShell
@@ -66,17 +62,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       headerActions={
         <>
           <DeliveryModeToggle />
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="font-mono tabular-nums"
-          >
-            <Link href="/wallet">
-              <Wallet data-icon="inline-start" />
-              {primaryBalance ? formatMoney(primaryBalance) : "Wallet"}
-            </Link>
-          </Button>
+          <HeaderFundingStatus />
           <VirtualPhoneNotifier />
           <ThemeToggle />
           <UserMenu

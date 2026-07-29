@@ -45,58 +45,79 @@ export class SmsBatchService {
     const byReference = new Map(
       request.items.map((item) => [item.client_reference, item]),
     );
-    for (const row of pending) {
-      const clientReference = String(row.client_reference);
-      const item = byReference.get(clientReference);
-      if (!item) {
-        await this.failItem(
-          context.tenantId,
-          String(row.id),
-          "batch_item_missing",
-        );
-        continue;
-      }
-      const parsed = sendSmsRequest.safeParse({
-        to: item.to,
-        sender_id: item.sender_id,
-        body: item.body,
-        currency: item.currency,
-        class: item.class,
-      });
-      if (!parsed.success) {
-        await this.failItem(context.tenantId, String(row.id), "invalid_sms");
-        continue;
-      }
-      try {
-        const result = await this.sms.send({
-          tenantId: context.tenantId,
-          applicationId: context.applicationId,
-          environmentId: context.environmentId,
-          messageId: String(row.id),
-          to: parsed.data.to,
-          senderId: parsed.data.sender_id,
-          body: parsed.data.body,
-          currency: parsed.data.currency,
-          messageClass: parsed.data.class,
-        });
-        await this.db.withTenant(
-          context.tenantId,
-          (tx) => tx`
-            UPDATE message_batch_items
-            SET message_id = ${result.id}, status = ${result.status},
-                error_code = NULL, updated_at = now()
-            WHERE id = ${String(row.id)} AND batch_id = ${batch.id}`,
-        );
-      } catch (error) {
-        const code =
-          error instanceof HttpException
-            ? parseApiError(error.getResponse()).code
-            : "batch_item_failed";
-        await this.failItem(context.tenantId, String(row.id), code);
-      }
+    // Provider delivery is already delegated to the durable sms-send queue when Redis is enabled.
+    // Prepare/reserve items concurrently, but cap fan-out so one 100-item request cannot exhaust DB
+    // connections or provider sockets in the local inline fallback.
+    for (let offset = 0; offset < pending.length; offset += 10) {
+      const slice = pending.slice(offset, offset + 10);
+      await Promise.all(
+        slice.map((row) =>
+          this.processItem(context, batch.id, row, byReference),
+        ),
+      );
     }
     await this.finish(context.tenantId, batch.id);
     return this.get(context.tenantId, context.environmentId, batch.id);
+  }
+
+  private async processItem(
+    context: {
+      tenantId: string;
+      applicationId: string;
+      environmentId: string;
+    },
+    batchId: string,
+    row: Row,
+    byReference: Map<string, SendSmsBatchRequest["items"][number]>,
+  ): Promise<void> {
+    const clientReference = String(row.client_reference);
+    const item = byReference.get(clientReference);
+    if (!item) {
+      await this.failItem(
+        context.tenantId,
+        String(row.id),
+        "batch_item_missing",
+      );
+      return;
+    }
+    const parsed = sendSmsRequest.safeParse({
+      to: item.to,
+      sender_id: item.sender_id,
+      body: item.body,
+      currency: item.currency,
+      class: item.class,
+    });
+    if (!parsed.success) {
+      await this.failItem(context.tenantId, String(row.id), "invalid_sms");
+      return;
+    }
+    try {
+      const result = await this.sms.send({
+        tenantId: context.tenantId,
+        applicationId: context.applicationId,
+        environmentId: context.environmentId,
+        messageId: String(row.id),
+        to: parsed.data.to,
+        senderId: parsed.data.sender_id,
+        body: parsed.data.body,
+        currency: parsed.data.currency,
+        messageClass: parsed.data.class,
+      });
+      await this.db.withTenant(
+        context.tenantId,
+        (tx) => tx`
+            UPDATE message_batch_items
+            SET message_id = ${result.id}, status = ${result.status},
+                error_code = NULL, updated_at = now()
+            WHERE id = ${String(row.id)} AND batch_id = ${batchId}`,
+      );
+    } catch (error) {
+      const code =
+        error instanceof HttpException
+          ? parseApiError(error.getResponse()).code
+          : "batch_item_failed";
+      await this.failItem(context.tenantId, String(row.id), code);
+    }
   }
 
   async get(

@@ -20,7 +20,7 @@ export async function assertEmailSandboxEnvironment(
       LIMIT 1`,
   )) as Row[];
   const environment = rows[0];
-  if (!environment || environment.status !== "active") {
+  if (environment?.status !== "active") {
     throw invalidRequest(
       "environment_unavailable",
       "The API key environment is unavailable.",

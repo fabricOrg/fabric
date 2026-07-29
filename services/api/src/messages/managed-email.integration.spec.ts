@@ -21,6 +21,9 @@ const appUrl = process.env.DATABASE_URL_APP;
 const describeDb = superUrl && appUrl ? describe : describe.skip;
 process.env.REDIS_QUEUE_URL = "";
 process.env.MAINTENANCE_CRON_ENABLED = "false";
+// Three emails a day: exactly what the accepting tests below consume, so the low-allowance case can
+// exhaust it deliberately instead of sending 200 messages to reach the gate.
+process.env.SANDBOX_EMAIL_MESSAGES_PER_DAY = "3";
 process.env.TENANT_TOKEN_SECRET ??= "integration-test-tenant-token-secret";
 
 describeDb("SDK-007 managed email acceptance", () => {
@@ -90,12 +93,20 @@ describeDb("SDK-007 managed email acceptance", () => {
     };
   }
 
-  async function reservedBalance(forTenant = tenantId) {
+  /**
+   * What the workspace has spent from today's email allowance.
+   *
+   * This replaced a `reserved_clearing` balance assertion. Email is sandbox-only by construction
+   * (assertEmailSandboxEnvironment), and sandbox stopped reserving money — so the wallet figure is
+   * now permanently 0n and would pass whatever happened. The allowance is where an accepted email is
+   * actually counted, which is the property these tests were really pinning: accepted exactly once.
+   */
+  async function allowanceUsed(forTenant = tenantId) {
     const rows = await owner`
-      SELECT COALESCE(sum(balance_minor), 0)::bigint AS balance
-      FROM ledger_accounts
-      WHERE tenant_id = ${forTenant} AND kind = 'reserved_clearing'`;
-    return BigInt(String(rows[0]?.balance ?? "0"));
+      SELECT COALESCE(sum(used_units), 0)::bigint AS used
+      FROM sandbox_usage_buckets
+      WHERE tenant_id = ${forTenant} AND channel = 'email'`;
+    return BigInt(String(rows[0]?.used ?? "0"));
   }
 
   async function storedEmailContent(messageId: string) {
@@ -209,10 +220,10 @@ describeDb("SDK-007 managed email acceptance", () => {
       accepted: 1,
       created: 0,
     });
-    expect(await reservedBalance()).toBe(5n);
+    expect(await allowanceUsed()).toBe(1n);
   });
 
-  it("replays the same request without a second reserve or row", async () => {
+  it("replays the same request without a second allowance draw or row", async () => {
     const before = await counts();
     const first = await send(payload, "email-accept-001");
     const second = await send(payload, "email-accept-001");
@@ -222,10 +233,11 @@ describeDb("SDK-007 managed email acceptance", () => {
       (first.json() as { delivery: { id: string } }).delivery.id,
     );
     expect(await counts()).toEqual(before);
-    expect(await reservedBalance()).toBe(5n);
+    // The replay must not draw a SECOND unit — consume() claims once per message reference.
+    expect(await allowanceUsed()).toBe(1n);
   });
 
-  it("409s on idempotency conflict without a second reserve", async () => {
+  it("409s on idempotency conflict without a second allowance draw", async () => {
     const before = await counts();
     const response = await send(
       { ...payload, data: { name: "Grace", count: 3 } },
@@ -238,12 +250,21 @@ describeDb("SDK-007 managed email acceptance", () => {
     expect(await counts()).toEqual(before);
   });
 
-  it("rolls back every email acceptance row on insufficient funds", async () => {
+  it("rolls back every email acceptance row on an exhausted allowance", async () => {
+    // Was `on insufficient funds`, asserting 402 against a 1-minor-unit wallet. Email is sandbox-only
+    // (assertEmailSandboxEnvironment) and sandbox stopped spending money, so that state is now
+    // unreachable — the gate an email can actually fail on is the daily allowance. The property under
+    // test is the same one: the refusal happens INSIDE the acceptance transaction, so nothing
+    // half-written survives it.
+    for (let i = 0; i < 3; i += 1) {
+      await send(payload, `email-low-funds-warm-${i}`, lowFundsKey);
+    }
+
     const before = await counts(lowFundsTenantId);
     const response = await send(payload, "email-low-funds", lowFundsKey);
-    expect(response.statusCode).toBe(402);
+    expect(response.statusCode).toBe(429);
     expect(response.json()).toMatchObject({
-      error: { code: "insufficient_funds" },
+      error: { code: "sandbox_daily_limit_exceeded" },
     });
     expect(await counts(lowFundsTenantId)).toEqual(before);
   });
