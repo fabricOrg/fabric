@@ -72,6 +72,9 @@ export function PriceBookForm({ book }: { book: PriceBookDto | null }) {
   const [mode, setMode] = useState<PriceBookMode>(book?.mode ?? "subscription");
   const [isDefault, setIsDefault] = useState(book?.is_default ?? false);
   const [isPublic, setIsPublic] = useState(book?.is_public ?? false);
+  const [minimumMarginBps, setMinimumMarginBps] = useState(
+    String(book?.minimum_margin_bps ?? 2_000),
+  );
   const [rows, setRows] = useState<RateRow[]>(() => initialRows(book));
   const [busy, setBusy] = useState(false);
 
@@ -88,7 +91,12 @@ export function PriceBookForm({ book }: { book: PriceBookDto | null }) {
   // A (channel, currency) pair is unique per book (the DB index would 500 on a duplicate).
   const noDuplicates =
     new Set(rows.map((r) => `${r.channel}:${r.currency}`)).size === rows.length;
-  const valid = name.trim().length > 0 && ratesValid && noDuplicates;
+  const marginValid =
+    /^\d+$/.test(minimumMarginBps) &&
+    Number(minimumMarginBps) >= 0 &&
+    Number(minimumMarginBps) <= 10_000;
+  const valid =
+    name.trim().length > 0 && ratesValid && noDuplicates && marginValid;
 
   function setRow(index: number, patch: Partial<RateRow>) {
     setRows((current) =>
@@ -105,6 +113,7 @@ export function PriceBookForm({ book }: { book: PriceBookDto | null }) {
         description: description.trim(),
         is_default: isDefault,
         is_public: isPublic,
+        minimum_margin_bps: Number(minimumMarginBps),
         rates: rows.map((r) => ({
           channel: r.channel,
           currency: r.currency,
@@ -157,6 +166,22 @@ export function PriceBookForm({ book }: { book: PriceBookDto | null }) {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Optional"
           />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="pb-margin">
+            Minimum margin (basis points)
+          </FieldLabel>
+          <Input
+            id="pb-margin"
+            inputMode="numeric"
+            value={minimumMarginBps}
+            onChange={(event) => setMinimumMarginBps(event.target.value)}
+            aria-invalid={!marginValid}
+          />
+          <span className="text-xs text-muted-foreground">
+            2,000 = 20%. Live sends fail closed when provider cost breaches this
+            floor.
+          </span>
         </Field>
         <Field>
           <FieldLabel htmlFor="pb-mode">Purchase mode</FieldLabel>

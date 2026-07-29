@@ -1,5 +1,6 @@
 import {
   assignPriceBookRequestSchema,
+  providerCostRateInputSchema,
   upsertPriceBookRequestSchema,
 } from "@app/contracts";
 import {
@@ -89,6 +90,7 @@ export class PricingController {
       accountId,
       parsed.data.price_book_id,
       { email: actorEmail ?? null, staffId: actorStaffId ?? null },
+      parsed.data.billing_currency,
     );
     if (result === "book_not_found") {
       throw notFound("price_book_not_found", "Unknown price book.");
@@ -97,6 +99,27 @@ export class PricingController {
       throw notFound("account_not_found", "Unknown account.");
     }
     return { ok: true };
+  }
+
+  @Get("provider-costs")
+  async listProviderCosts() {
+    return { rates: await this.pricing.listProviderCosts() };
+  }
+
+  @Post("provider-costs")
+  async publishProviderCost(
+    @Body() body: unknown,
+    @Headers("x-actor-email") actorEmail?: string,
+    @Headers("x-actor-staff-id") actorStaffId?: string,
+  ) {
+    const parsed = providerCostRateInputSchema.safeParse(body);
+    if (!parsed.success) {
+      throw invalidRequest("invalid_provider_cost", firstIssue(parsed.error));
+    }
+    return this.pricing.publishProviderCost(parsed.data, {
+      email: actorEmail ?? null,
+      staffId: actorStaffId ?? null,
+    });
   }
 }
 

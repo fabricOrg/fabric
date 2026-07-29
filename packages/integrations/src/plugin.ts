@@ -131,6 +131,8 @@ export interface EmailProviderResult {
 
 export interface EmailSenderPlugin extends PluginManifest {
   readonly capability: "email";
+  /** The first provider state at which its upstream cost is incurred. */
+  readonly billableStatuses: readonly MessageStatus[];
   send(message: NormalizedEmail, creds: Creds): Promise<EmailProviderResult>;
 }
 

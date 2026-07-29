@@ -144,6 +144,7 @@ export default async function TenantDetailPage({
             <AccountPriceBookAssign
               accountId={tenant.tenant_id}
               currentBookId={tenant.price_book_id}
+              currentBillingCurrency={tenant.billing_currency}
               books={books}
             />
           ) : null}

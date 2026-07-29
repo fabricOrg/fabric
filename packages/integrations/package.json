@@ -23,7 +23,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@app/contracts": "workspace:*"
+    "@app/contracts": "workspace:*",
+    "@aws-sdk/client-sesv2": "^3.1096.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.5"

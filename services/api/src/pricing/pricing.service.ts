@@ -5,6 +5,8 @@ import {
   type ProvisioningDb,
   priceBookRates,
   priceBooks,
+  priceBookVersions,
+  pricingSellRules,
   type TenantId,
 } from "@app/db";
 import {
@@ -203,6 +205,32 @@ export class PricingService implements OnModuleInit {
           priceBookRates.currency,
         ],
       });
+    const [existingVersion] = await this.provisioning.db
+      .select({ id: priceBookVersions.id })
+      .from(priceBookVersions)
+      .where(eq(priceBookVersions.priceBookId, bookId))
+      .limit(1);
+    if (existingVersion) return;
+    const [version] = await this.provisioning.db
+      .insert(priceBookVersions)
+      .values({
+        priceBookId: bookId,
+        version: 1,
+        status: "published",
+        minimumMarginBps: 2_000,
+        sourceSnapshot: { source: "compiled_default" },
+      })
+      .onConflictDoNothing({
+        target: [priceBookVersions.priceBookId, priceBookVersions.version],
+      })
+      .returning({ id: priceBookVersions.id });
+    if (!version) return;
+    await this.provisioning.db
+      .insert(pricingSellRules)
+      .values([
+        ...versionedRatesFor(version.id, "sms", COMPILED_DEFAULT.sms),
+        ...versionedRatesFor(version.id, "email", COMPILED_DEFAULT.email),
+      ]);
   }
 
   /** Drop the cache for one account (call after an admin reassigns/edits — slice 3). */
@@ -222,6 +250,21 @@ export class PricingService implements OnModuleInit {
       if (now - entry.fetchedAt >= CACHE_TTL_MS) this.cache.delete(key);
     }
   }
+}
+
+function versionedRatesFor(
+  versionId: string,
+  channel: "sms" | "email",
+  table: RateTable,
+) {
+  return Object.entries(table).map(([currency, unitPriceMinor]) => ({
+    versionId,
+    channel,
+    currency,
+    unitBasis:
+      channel === "sms" ? ("segment" as const) : ("recipient" as const),
+    unitPriceMinor: unitPriceMinor as MinorUnits,
+  }));
 }
 
 function ratesFor(

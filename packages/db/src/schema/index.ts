@@ -26,6 +26,7 @@ export * from "./opt-outs.js";
 export * from "./payment-authorizations.js";
 export * from "./payments.js";
 export * from "./price-books.js";
+export * from "./pricing.js";
 export * from "./privacy.js";
 export * from "./proposals.js";
 export * from "./request-logs.js";

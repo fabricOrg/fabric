@@ -10,7 +10,13 @@ import {
   CardTitle,
 } from "@app/ui/components/ui/card";
 import { Skeleton } from "@app/ui/components/ui/skeleton";
-import { CreditCard, MessageCircle, Send, ShieldCheck } from "lucide-react";
+import {
+  CreditCard,
+  Mail,
+  MessageCircle,
+  Send,
+  ShieldCheck,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ConfigurePluginDialog } from "@/components/forms/configure-plugin-dialog";
@@ -32,6 +38,11 @@ const META: Record<
     label: "SMS",
     icon: Send,
     blurb: "Route SMS through one or more providers with automatic failover.",
+  },
+  email: {
+    label: "Email",
+    icon: Mail,
+    blurb: "Transactional Email through AWS SES with signed delivery events.",
   },
   whatsapp: {
     label: "WhatsApp",

@@ -12,6 +12,7 @@ export class FakeEmailProvider implements EmailSenderPlugin {
   readonly slug = "sandbox-email";
   readonly capability = "email" as const;
   readonly version = "1.0.0";
+  readonly billableStatuses = ["delivered"] as const;
   readonly configSchema = {};
 
   supports(_context: RequestContext): boolean {

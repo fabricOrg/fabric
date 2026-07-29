@@ -6,6 +6,7 @@ import { z } from "zod";
  */
 export const pluginCapabilities = [
   "sms",
+  "email",
   "whatsapp",
   "payment",
   "identity",

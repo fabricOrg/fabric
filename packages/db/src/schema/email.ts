@@ -1,9 +1,12 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
+  char,
   check,
   foreignKey,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -18,6 +21,7 @@ import {
 } from "./_shared.js";
 import { applications, environments } from "./applications.js";
 import { accounts } from "./identity.js";
+import type { PricingSnapshot } from "./pricing.js";
 import { dataSubjects, piiVault } from "./privacy.js";
 import { messageStatus } from "./sms.js";
 
@@ -48,6 +52,11 @@ export const emailMessages = pgTable(
     providerSlug: text("provider_slug").notNull().default("sandbox-email"),
     providerRef: text("provider_ref"),
     errorCode: text("error_code"),
+    costMinor: bigint("cost_minor", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
+    currency: char("currency", { length: 3 }).notNull().default("GHS"),
+    pricingSnapshot: jsonb("pricing_snapshot").$type<PricingSnapshot>(),
     ...timestamps,
   },
   (t) => [
