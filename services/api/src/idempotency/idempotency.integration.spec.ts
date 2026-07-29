@@ -21,6 +21,7 @@ import { MessagingInsightsService } from "../sms/messaging-insights.service.js";
 import { SmsController } from "../sms/sms.controller.js";
 import { SmsService } from "../sms/sms.service.js";
 import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
+import { effectivePricingStub } from "../testing/effective-pricing.stub.js";
 import { IdempotencyService } from "./idempotency.service.js";
 
 // E10-S4: sender enforcement has its own spec — these flows always pass the gate.
@@ -77,6 +78,7 @@ describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
     liveMode,
     vault,
     new PricingService(provisioning),
+    effectivePricingStub(),
   );
   const idempotency = new IdempotencyService(appDb);
   const controller = new SmsController(

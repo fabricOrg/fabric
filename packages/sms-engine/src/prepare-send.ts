@@ -79,7 +79,18 @@ export async function prepareSend(
   input: SendInput,
 ): Promise<PreparedSend> {
   const seg = encodeAndSegment(input.body);
-  const cost = rateSegments(seg.segments, input.currency, deps.rates);
+  if (input.pricing && input.pricing.currency !== input.currency) {
+    throw new Error("The pricing snapshot currency does not match the send.");
+  }
+  if (
+    input.pricing &&
+    input.pricing.snapshot.units !== BigInt(seg.segments).toString()
+  ) {
+    throw new Error("The pricing snapshot unit count does not match the send.");
+  }
+  const cost =
+    input.pricing?.costMinor ??
+    rateSegments(seg.segments, input.currency, deps.rates);
   if (
     input.managed?.maxCostMinor !== undefined &&
     cost > BigInt(input.managed.maxCostMinor)
@@ -102,14 +113,15 @@ export async function prepareSend(
     const rows = (await tx`
       INSERT INTO messages (
         id, tenant_id, application_id, environment_id, subject_id, body_pii_id, sender_id,
-        status, status_rank, encoding, segments, cost_minor, currency, delivery_mode, provider_slug
+        status, status_rank, encoding, segments, cost_minor, currency, delivery_mode, provider_slug,
+        pricing_snapshot
       ) VALUES (
         COALESCE(${input.messageId ?? null}::uuid, gen_random_uuid()),
         current_setting('app.tenant_id')::uuid, ${input.applicationId ?? null},
         ${input.environmentId ?? null}, ${input.subjectId ?? null}, ${input.bodyPiiId ?? null},
         ${input.senderId}, 'sending', ${STATUS_RANK.sending}, ${seg.encoding}, ${seg.segments},
         ${cost.toString()}::bigint, ${input.currency}, ${input.deliveryMode ?? "live"},
-        ${deps.provider.slug}
+        ${deps.provider.slug}, ${input.pricing ? JSON.stringify(input.pricing.snapshot) : null}::jsonb
       ) ON CONFLICT (id) DO NOTHING
       RETURNING id`) as Row[];
     const createdId = rows[0]?.id;

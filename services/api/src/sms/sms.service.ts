@@ -8,13 +8,14 @@ import {
   type SendInput,
   type SendResult,
 } from "@app/sms-engine";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest } from "../http/api-error.js";
 import type { KeysetCursor } from "../http/cursor.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
+import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
 import { PricingService } from "../pricing/pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -23,6 +24,7 @@ import { assertSendCompliant } from "./sms-compliance.js";
 import { recheckedDispatch } from "./sms-dispatch-recheck.js";
 import { completeStoredDispatch } from "./sms-dispatch-store.js";
 import { ingestProviderDlr } from "./sms-dlr.js";
+import { resolveLiveSmsPricing } from "./sms-effective-pricing.js";
 import { assertLiveProviderAvailable } from "./sms-live-gate.js";
 import { replayManagedSend } from "./sms-managed-replay.js";
 import {
@@ -58,6 +60,9 @@ export class SmsService {
     private readonly virtualPhone: VirtualPhoneService,
     @Inject(PiiVaultService) private readonly piiVault: PiiVaultService,
     @Inject(PricingService) private readonly pricing: PricingService,
+    @Optional()
+    @Inject(EffectivePricingService)
+    private readonly effectivePricing?: EffectivePricingService,
     @Inject(SmsRuntimeService) runtime?: SmsRuntimeService,
   ) {
     this.runtime = runtime ?? new SmsRuntimeService(db, config, virtualPhone);
@@ -125,19 +130,33 @@ export class SmsService {
     );
     // tx1 in-request EITHER way: insufficient funds must fail the request synchronously (a queue
     // must never accept money it can't reserve).
+    const rates =
+      deliveryMode === "virtual"
+        ? await this.pricing.resolveRates(input.tenantId)
+        : undefined;
+    const deps = await this.runtime.deps(deliveryMode, rates?.sms);
+    let pricing: SendInput["pricing"];
+    if (deliveryMode === "live") {
+      pricing = await resolveLiveSmsPricing({
+        pricing: this.effectivePricing,
+        tenantId: input.tenantId,
+        body: input.body,
+        to: input.to,
+        requestedCurrency: input.currency,
+        providerVendor: deps.provider.slug,
+        messageClass,
+      });
+    }
+    // The exact quote and its evidence are persisted atomically with the wallet reservation.
     const routedInput: SendInput = {
       ...input,
+      currency: pricing?.currency ?? input.currency,
       deliveryMode,
       subjectId,
       bodyPiiId,
+      ...(pricing ? { pricing } : {}),
     };
-    // Price against the account's book (ADR-0010). resolveRates never throws — a pricing-store
-    // outage serves last-known-good/compiled defaults; the wallet reserve below still fails closed.
-    const rates = await this.pricing.resolveRates(input.tenantId);
-    const prepared = await enginePrepareSend(
-      await this.runtime.deps(deliveryMode, rates.sms),
-      routedInput,
-    );
+    const prepared = await enginePrepareSend(deps, routedInput);
     if (prepared.replayed && input.managed) {
       return replayManagedSend(this, input.tenantId, prepared.messageId);
     }

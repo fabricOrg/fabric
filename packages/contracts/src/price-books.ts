@@ -58,6 +58,7 @@ export const priceBookDtoSchema = z.object({
   description: z.string(),
   is_default: z.boolean(),
   is_public: z.boolean(),
+  minimum_margin_bps: z.number().int().min(0).max(10_000),
   rates: z.array(priceBookRateDtoSchema),
   created_at: z.string(),
   updated_at: z.string(),
@@ -84,6 +85,7 @@ export const upsertPriceBookRequestSchema = z
     description: z.string().trim().max(500).default(""),
     is_default: z.boolean().default(false),
     is_public: z.boolean().default(false),
+    minimum_margin_bps: z.number().int().min(0).max(10_000).optional(),
     rates: z
       .array(priceBookRateInputSchema)
       .min(1)
@@ -173,10 +175,49 @@ export type TokenBalancesResponse = z.infer<typeof tokenBalancesResponseSchema>;
 /** Assign (or clear → default) an account's price book (admin). */
 export const assignPriceBookRequestSchema = z.object({
   price_book_id: z.string().uuid().nullable(),
+  billing_currency: currency.optional(),
 });
 export type AssignPriceBookRequest = z.infer<
   typeof assignPriceBookRequestSchema
 >;
+
+const positiveIntegerString = z
+  .string()
+  .regex(/^\d+$/)
+  .refine((value) => BigInt(value) > 0n, "Must be greater than zero.");
+
+export const providerCostRateInputSchema = z.object({
+  provider_vendor: z.string().trim().min(1).max(120),
+  channel: messageChannel,
+  destination_country: z
+    .string()
+    .regex(/^[A-Z]{2}$/)
+    .nullable()
+    .default(null),
+  traffic_class: z
+    .enum(["promotional", "transactional", "otp"])
+    .nullable()
+    .default(null),
+  currency,
+  numerator_minor: positiveIntegerString,
+  denominator: positiveIntegerString,
+  effective_from: z.string().datetime().optional(),
+  source_reference: z.string().trim().min(1).max(500),
+});
+export type ProviderCostRateInput = z.infer<typeof providerCostRateInputSchema>;
+
+export const providerCostRateDtoSchema = providerCostRateInputSchema
+  .omit({ effective_from: true })
+  .extend({
+    id: z.string().uuid(),
+    effective_from: z.string(),
+    effective_to: z.string().nullable(),
+  });
+export type ProviderCostRateDto = z.infer<typeof providerCostRateDtoSchema>;
+
+export const listProviderCostRatesResponseSchema = z.object({
+  rates: z.array(providerCostRateDtoSchema),
+});
 
 /**
  * Deliberately narrow public pricing snapshot. It contains no price-book identity, tenant assignment,

@@ -23,16 +23,23 @@ interface ErrorPayload {
 export function AccountPriceBookAssign({
   accountId,
   currentBookId,
+  currentBillingCurrency,
   books,
 }: {
   accountId: string;
   currentBookId: string | null;
+  currentBillingCurrency: "GHS" | "NGN" | "USD";
   books: readonly PriceBookDto[];
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState(currentBookId ?? DEFAULT_VALUE);
+  const [billingCurrency, setBillingCurrency] = useState(
+    currentBillingCurrency,
+  );
   const [busy, setBusy] = useState(false);
-  const dirty = selected !== (currentBookId ?? DEFAULT_VALUE);
+  const dirty =
+    selected !== (currentBookId ?? DEFAULT_VALUE) ||
+    billingCurrency !== currentBillingCurrency;
 
   async function save() {
     setBusy(true);
@@ -43,7 +50,10 @@ export function AccountPriceBookAssign({
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ price_book_id: priceBookId }),
+          body: JSON.stringify({
+            price_book_id: priceBookId,
+            billing_currency: billingCurrency,
+          }),
         },
       );
       if (!response.ok) {
@@ -77,6 +87,21 @@ export function AccountPriceBookAssign({
               {book.is_default ? " · default" : ""}
             </SelectItem>
           ))}
+        </SelectContent>
+      </Select>
+      <Select
+        value={billingCurrency}
+        onValueChange={(value) =>
+          setBillingCurrency(value as "GHS" | "NGN" | "USD")
+        }
+      >
+        <SelectTrigger className="w-28" aria-label="Billing currency">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="GHS">GHS</SelectItem>
+          <SelectItem value="NGN">NGN</SelectItem>
+          <SelectItem value="USD">USD</SelectItem>
         </SelectContent>
       </Select>
       <Button size="sm" disabled={!dirty} loading={busy} onClick={save}>

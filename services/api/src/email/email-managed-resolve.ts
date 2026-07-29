@@ -1,6 +1,5 @@
 import type { TenantTx } from "@app/db";
 import type { MessageStatus } from "@app/integrations";
-import { commit, refund } from "@app/wallet";
 
 type Row = Record<string, unknown>;
 
@@ -13,26 +12,13 @@ export async function reconcileManagedEmailTerminal(
   },
 ): Promise<void> {
   const attempts = (await tx`
-    SELECT a.delivery_id, a.application_id, a.environment_id, m.backing
+    SELECT a.delivery_id, a.application_id, a.environment_id
     FROM message_delivery_attempts a
     JOIN email_messages m ON m.id = a.email_message_id
     WHERE a.email_message_id = ${input.messageId}
     LIMIT 1`) as Row[];
   const attempt = attempts[0];
   if (!attempt) return;
-
-  const financial = String(attempt.backing ?? "wallet") === "wallet";
-  if (financial && input.newStatus === "delivered") {
-    await commit(tx, {
-      referenceId: input.messageId,
-      idempotencyKey: `commit:${input.messageId}`,
-    });
-  } else if (financial) {
-    await refund(tx, {
-      referenceId: input.messageId,
-      idempotencyKey: `refund:${input.messageId}`,
-    });
-  }
 
   await tx`
     UPDATE message_delivery_attempts SET

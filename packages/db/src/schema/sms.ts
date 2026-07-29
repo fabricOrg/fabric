@@ -5,6 +5,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -21,6 +22,7 @@ import {
 } from "./_shared.js";
 import { applications, environments } from "./applications.js";
 import { accounts } from "./identity.js";
+import type { PricingSnapshot } from "./pricing.js";
 import { piiVault } from "./privacy.js";
 
 /**
@@ -89,6 +91,8 @@ export const messages = pgTable(
     // provider's message id — set once the provider acknowledges (accepted); the DLR correlation key.
     providerRef: text("provider_ref"),
     errorCode: text("error_code"),
+    /** Immutable explanation of the accepted charge; never recomputed after a rate edit. */
+    pricingSnapshot: jsonb("pricing_snapshot").$type<PricingSnapshot>(),
     ...timestamps,
   },
   // drizzle 0.45: the 3rd pgTable arg returns an ARRAY (the object form is deprecated).

@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AuditModule } from "../audit/audit.module.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { ProvisioningDbModule } from "../identity/provisioning-db.module.js";
+import { EffectivePricingService } from "./effective-pricing.service.js";
 import { PriceBookAdminService } from "./price-book-admin.service.js";
 import { PricingController } from "./pricing.controller.js";
 import { PricingService } from "./pricing.service.js";
@@ -16,7 +17,12 @@ import { PublicPricingController } from "./public-pricing.controller.js";
 @Module({
   imports: [ProvisioningDbModule, AuditModule],
   controllers: [PricingController, PublicPricingController],
-  providers: [PricingService, PriceBookAdminService, BffTokenGuard],
-  exports: [PricingService],
+  providers: [
+    PricingService,
+    EffectivePricingService,
+    PriceBookAdminService,
+    BffTokenGuard,
+  ],
+  exports: [PricingService, EffectivePricingService],
 })
 export class PricingModule {}

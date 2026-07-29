@@ -1,8 +1,10 @@
-import type { PriceBookDto } from "@app/contracts";
+import type { PriceBookDto, ProviderCostRateDto } from "@app/contracts";
 import { PriceBookManager } from "@/components/price-book-manager";
+import { ProviderCostManager } from "@/components/provider-cost-manager";
 import { requireAdminSession } from "@/lib/server/auth";
 import {
   listPriceBooks,
+  listProviderCostRates,
   PriceBookApiError,
 } from "@/lib/server/price-book-client";
 
@@ -11,9 +13,13 @@ export default async function PricingPage() {
   const canManage = session.permissions.includes("staff:write");
 
   let books: PriceBookDto[] = [];
+  let providerCosts: ProviderCostRateDto[] = [];
   let loadError = false;
   try {
-    books = (await listPriceBooks()).books;
+    [books, providerCosts] = await Promise.all([
+      listPriceBooks().then((result) => result.books),
+      listProviderCostRates(),
+    ]);
   } catch (error) {
     loadError = error instanceof PriceBookApiError || error instanceof Error;
   }
@@ -38,6 +44,9 @@ export default async function PricingPage() {
       ) : (
         <PriceBookManager books={books} canManage={canManage} />
       )}
+      {!loadError ? (
+        <ProviderCostManager rates={providerCosts} canManage={canManage} />
+      ) : null}
     </div>
   );
 }

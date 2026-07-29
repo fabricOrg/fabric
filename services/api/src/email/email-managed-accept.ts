@@ -6,7 +6,7 @@
 // one delivery. Accept only — the dispatch worker is slice 4b.
 
 import { sendEmailRequest } from "@app/contracts";
-import type { AppDb, TenantTx } from "@app/db";
+import type { AppDb, PricingSnapshot, TenantTx } from "@app/db";
 import { STATUS_RANK } from "@app/integrations";
 import {
   findManagedReplay,
@@ -19,13 +19,13 @@ import type { PiiVaultService } from "../privacy/pii-vault.service.js";
 export interface ManagedEmailAcceptDeps {
   db: AppDb;
   vault: PiiVaultService;
-  providerSlug: string;
-  /** Sandbox gate: rejects a non-sandbox environment (live Email is not configured). */
-  assertSandbox: (context: {
-    tenantId: string;
-    applicationId: string;
-    environmentId: string;
-  }) => Promise<void>;
+  preparation: {
+    backing: "wallet" | "sandbox_allowance";
+    providerSlug: string;
+    currency: string;
+    costMinor: bigint;
+    pricingSnapshot?: PricingSnapshot;
+  };
   consumeSandboxAllowance: (
     tx: TenantTx,
     input: {
@@ -34,6 +34,14 @@ export interface ManagedEmailAcceptDeps {
       referenceId: string;
       applicationId: string;
       environmentId: string;
+    },
+  ) => Promise<void>;
+  reserveWallet: (
+    tx: TenantTx,
+    input: {
+      currency: string;
+      amountMinor: bigint;
+      messageId: string;
     },
   ) => Promise<void>;
 }
@@ -57,7 +65,6 @@ export async function acceptManagedEmail(
   deps: ManagedEmailAcceptDeps,
   input: ManagedEmailAcceptInput,
 ): Promise<void> {
-  await deps.assertSandbox(input);
   // Store the rendered content in the exact SendEmailRequest shape the dispatch worker reads back.
   const content = sendEmailRequest.safeParse({
     to: input.to,
@@ -89,29 +96,40 @@ export async function acceptManagedEmail(
     await tx`
       INSERT INTO email_messages (
         id, tenant_id, application_id, environment_id, subject_id, content_pii_id,
-        status, status_rank, backing, provider_slug
+        status, status_rank, backing, provider_slug, cost_minor, currency, pricing_snapshot
       ) VALUES (
         ${input.deliveryId}, current_setting('app.tenant_id')::uuid,
         ${input.applicationId}, ${input.environmentId}, ${subjectId}, ${contentPiiId},
-        'queued', ${STATUS_RANK.queued}, 'sandbox_allowance', ${deps.providerSlug}
+        'queued', ${STATUS_RANK.queued}, ${deps.preparation.backing},
+        ${deps.preparation.providerSlug}, ${deps.preparation.costMinor.toString()}::bigint,
+        ${deps.preparation.currency},
+        ${deps.preparation.pricingSnapshot ? JSON.stringify(deps.preparation.pricingSnapshot) : null}::jsonb
       ) ON CONFLICT (id) DO NOTHING`;
-    await deps.consumeSandboxAllowance(tx, {
-      channel: "email",
-      units: 1n,
-      referenceId: input.deliveryId,
-      applicationId: input.applicationId,
-      environmentId: input.environmentId,
-    });
+    if (deps.preparation.backing === "sandbox_allowance") {
+      await deps.consumeSandboxAllowance(tx, {
+        channel: "email",
+        units: 1n,
+        referenceId: input.deliveryId,
+        applicationId: input.applicationId,
+        environmentId: input.environmentId,
+      });
+    } else {
+      await deps.reserveWallet(tx, {
+        currency: deps.preparation.currency,
+        amountMinor: deps.preparation.costMinor,
+        messageId: input.deliveryId,
+      });
+    }
     await tx`
       INSERT INTO email_dispatches (message_id, tenant_id)
       VALUES (${input.deliveryId}, current_setting('app.tenant_id')::uuid)
       ON CONFLICT (message_id) DO NOTHING`;
     await persistManagedAcceptance(tx, {
       managed: input.managed,
-      currency: input.currency,
+      currency: deps.preparation.currency,
       channel: "email",
       emailMessageId: input.deliveryId,
-      costMinor: input.costMinor,
+      costMinor: deps.preparation.costMinor.toString(),
       applicationId: input.applicationId,
       environmentId: input.environmentId,
     });
