@@ -80,7 +80,7 @@ describeDb(
           senderId: "FABRIC",
           body: "Hi Ada, 2 orders.",
           currency: "GHS",
-          deliveryMode: "virtual",
+          deliveryMode: "live",
           subjectId,
           bodyPiiId,
           managed: {
@@ -105,7 +105,7 @@ describeDb(
       const result = await sms.processQueuedSend({
         tenantId,
         messageId: deliveryId,
-        deliveryMode: "virtual",
+        deliveryMode: "live",
       });
       expect(result.status).toBe("failed");
 
@@ -131,7 +131,7 @@ describeDb(
       const replay = await sms.processQueuedSend({
         tenantId,
         messageId: deliveryId,
-        deliveryMode: "virtual",
+        deliveryMode: "live",
       });
       expect(replay.status).toBe("failed");
       expect(await customerBalance()).toBe(CREDIT);
@@ -217,7 +217,7 @@ describeDb(
       const result = await sms.processQueuedSend({
         tenantId,
         messageId: deliveryId,
-        deliveryMode: "virtual",
+        deliveryMode: "live",
       });
       expect(["delivered", "sent", "accepted"]).toContain(result.status);
       // Virtual traffic reserves through the real wallet path and refunds at the terminal —

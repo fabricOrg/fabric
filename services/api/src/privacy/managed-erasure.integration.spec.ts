@@ -81,7 +81,7 @@ describeDb(
           senderId: "FABRIC",
           body: "Hi Ada, 2 orders.",
           currency: "GHS",
-          deliveryMode: "virtual",
+          deliveryMode: "live",
           subjectId,
           bodyPiiId,
           managed: {

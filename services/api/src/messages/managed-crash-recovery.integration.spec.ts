@@ -103,7 +103,7 @@ describeDb("SDK-005 managed crash recovery (accept → crash → sweep)", () => 
         senderId: "FABRIC",
         body: "Hi Ada, 2 orders.",
         currency: "GHS",
-        deliveryMode: "virtual",
+        deliveryMode: "live",
         managed: {
           deliveryId,
           definitionId: String(definition.definition_id),
