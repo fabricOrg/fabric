@@ -20,10 +20,20 @@ const envelopeSchema = z.object({
 });
 
 export interface VerifiedSesEvent {
+  readonly kind: "event";
   readonly providerRef: string;
   readonly status: "sent" | "delivered" | "undelivered" | "failed";
   readonly errorCode?: string;
 }
+
+export interface VerifiedSnsSubscriptionConfirmation {
+  readonly kind: "subscription_confirmation";
+  readonly confirmationUrl: string;
+}
+
+export type VerifiedSesSnsMessage =
+  | VerifiedSesEvent
+  | VerifiedSnsSubscriptionConfirmation;
 
 type FetchCertificate = (url: string) => Promise<string>;
 type VerifySignature = (
@@ -38,30 +48,41 @@ export async function verifySesSnsEvent(
   expectedTopicArn: string,
   fetchCertificate: FetchCertificate = defaultFetchCertificate,
   verifySignature: VerifySignature = defaultVerifySignature,
-): Promise<VerifiedSesEvent | null> {
+): Promise<VerifiedSesSnsMessage | null> {
   const parsed = envelopeSchema.safeParse(body);
   if (!parsed.success) throw new Error("Invalid SNS envelope.");
   const envelope = parsed.data;
   if (envelope.TopicArn !== expectedTopicArn) {
     throw new Error("Unexpected SNS topic.");
   }
-  if (envelope.Type !== "Notification") {
-    // Subscription confirmation is deliberately not followed automatically. Staff confirm the
-    // preconfigured topic during setup; the public webhook never performs an attacker-chosen GET.
-    return null;
-  }
 
   const certUrl = validatedCertificateUrl(envelope.SigningCertURL);
   const pem = await fetchCertificate(certUrl);
   const authentic = verifySignature(
-    canonicalNotification(envelope),
+    canonicalMessage(envelope),
     envelope.Signature,
     envelope.SignatureVersion,
     pem,
   );
   if (!authentic) throw new Error("Invalid SNS signature.");
 
-  return parseSesEvent(envelope.Message);
+  if (envelope.Type === "Notification") {
+    return parseSesEvent(envelope.Message);
+  }
+  if (envelope.Type === "SubscriptionConfirmation") {
+    if (!envelope.SubscribeURL || !envelope.Token) {
+      throw new Error("Invalid SNS subscription confirmation.");
+    }
+    return {
+      kind: "subscription_confirmation",
+      confirmationUrl: validatedConfirmationUrl(
+        envelope.SubscribeURL,
+        expectedTopicArn,
+        envelope.Token,
+      ),
+    };
+  }
+  return null;
 }
 
 function validatedCertificateUrl(value: string): string {
@@ -84,21 +105,71 @@ function validatedCertificateUrl(value: string): string {
   return url.toString();
 }
 
-function canonicalNotification(
-  envelope: z.infer<typeof envelopeSchema>,
-): string {
-  const fields: Array<[string, string | undefined]> = [
-    ["Message", envelope.Message],
-    ["MessageId", envelope.MessageId],
-    ["Subject", envelope.Subject],
-    ["Timestamp", envelope.Timestamp],
-    ["TopicArn", envelope.TopicArn],
-    ["Type", envelope.Type],
-  ];
+function canonicalMessage(envelope: z.infer<typeof envelopeSchema>): string {
+  const fields: Array<[string, string | undefined]> =
+    envelope.Type === "Notification"
+      ? [
+          ["Message", envelope.Message],
+          ["MessageId", envelope.MessageId],
+          ["Subject", envelope.Subject],
+          ["Timestamp", envelope.Timestamp],
+          ["TopicArn", envelope.TopicArn],
+          ["Type", envelope.Type],
+        ]
+      : [
+          ["Message", envelope.Message],
+          ["MessageId", envelope.MessageId],
+          ["SubscribeURL", envelope.SubscribeURL],
+          ["Timestamp", envelope.Timestamp],
+          ["Token", envelope.Token],
+          ["TopicArn", envelope.TopicArn],
+          ["Type", envelope.Type],
+        ];
   return fields
     .filter((entry): entry is [string, string] => entry[1] !== undefined)
     .map(([key, value]) => `${key}\n${value}\n`)
     .join("");
+}
+
+function validatedConfirmationUrl(
+  suppliedUrl: string,
+  expectedTopicArn: string,
+  token: string,
+): string {
+  const match =
+    /^arn:(aws|aws-cn|aws-us-gov):sns:([a-z0-9-]+):[0-9]{12}:[A-Za-z0-9_-]+$/.exec(
+      expectedTopicArn,
+    );
+  if (!match) throw new Error("Invalid SNS topic ARN.");
+  const partition = match[1];
+  const region = match[2];
+  if (!partition || !region) throw new Error("Invalid SNS topic ARN.");
+  const domain = partition === "aws-cn" ? "amazonaws.com.cn" : "amazonaws.com";
+  const expectedHost = `sns.${region}.${domain}`;
+
+  const supplied = new URL(suppliedUrl);
+  const keys = [...supplied.searchParams.keys()];
+  const expectedKeys = ["Action", "Token", "TopicArn"];
+  const trusted =
+    supplied.protocol === "https:" &&
+    supplied.hostname === expectedHost &&
+    supplied.port === "" &&
+    supplied.pathname === "/" &&
+    !supplied.username &&
+    !supplied.password &&
+    keys.length === expectedKeys.length &&
+    expectedKeys.every((key) => keys.includes(key)) &&
+    supplied.searchParams.get("Action") === "ConfirmSubscription" &&
+    supplied.searchParams.get("TopicArn") === expectedTopicArn &&
+    supplied.searchParams.get("Token") === token;
+  if (!trusted) throw new Error("Untrusted SNS confirmation URL.");
+
+  // Rebuild from the configured topic rather than fetching the envelope-supplied URL.
+  const confirmation = new URL(`https://${expectedHost}/`);
+  confirmation.searchParams.set("Action", "ConfirmSubscription");
+  confirmation.searchParams.set("TopicArn", expectedTopicArn);
+  confirmation.searchParams.set("Token", token);
+  return confirmation.toString();
 }
 
 function parseSesEvent(message: string): VerifiedSesEvent {
@@ -118,15 +189,21 @@ function parseSesEvent(message: string): VerifiedSesEvent {
     .parse(JSON.parse(message));
   switch (parsed.notificationType) {
     case "Delivery":
-      return { providerRef: parsed.mail.messageId, status: "delivered" };
+      return {
+        kind: "event",
+        providerRef: parsed.mail.messageId,
+        status: "delivered",
+      };
     case "Bounce":
       return {
+        kind: "event",
         providerRef: parsed.mail.messageId,
         status: "undelivered",
         errorCode: "ses_bounce",
       };
     case "Complaint":
       return {
+        kind: "event",
         providerRef: parsed.mail.messageId,
         status: "undelivered",
         errorCode: "ses_complaint",
@@ -134,20 +211,39 @@ function parseSesEvent(message: string): VerifiedSesEvent {
     case "Reject":
     case "Rendering Failure":
       return {
+        kind: "event",
         providerRef: parsed.mail.messageId,
         status: "failed",
         errorCode: `ses_${parsed.notificationType.toLowerCase().replaceAll(" ", "_")}`,
       };
     case "Send":
     case "DeliveryDelay":
-      return { providerRef: parsed.mail.messageId, status: "sent" };
+      return {
+        kind: "event",
+        providerRef: parsed.mail.messageId,
+        status: "sent",
+      };
     default:
       throw new Error("Unsupported SES event.");
   }
 }
 
+export async function confirmSesSnsSubscription(
+  confirmationUrl: string,
+  fetchConfirmation: typeof fetch = fetch,
+): Promise<void> {
+  const response = await fetchConfirmation(confirmationUrl, {
+    redirect: "error",
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!response.ok) throw new Error("SNS subscription confirmation failed.");
+}
+
 async function defaultFetchCertificate(url: string): Promise<string> {
-  const response = await fetch(url, { redirect: "error" });
+  const response = await fetch(url, {
+    redirect: "error",
+    signal: AbortSignal.timeout(5_000),
+  });
   if (!response.ok) throw new Error("SNS certificate fetch failed.");
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/plain")) {
