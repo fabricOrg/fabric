@@ -16,6 +16,7 @@ import {
   publicCorsOrigin,
   varyWithOrigin,
 } from "./http/public-cors.js";
+import { assertRequiredSecrets } from "./runtime/required-secrets.js";
 
 /**
  * services/api — the public API app (L1 scaffold). NestJS on the Fastify adapter. This process is
@@ -23,6 +24,9 @@ import {
  * data access through @app/db's `withTenant` (the RLS runtime seam). Fastify for throughput.
  */
 async function bootstrap(): Promise<void> {
+  // BEFORE the container starts. Both master keys are read lazily, so an invalid one otherwise
+  // yields a service that boots, reports healthy, and fails at the first credential install or send.
+  assertRequiredSecrets();
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     // Request id lives at the FASTIFY layer (its id wins over pino-http's under this adapter):

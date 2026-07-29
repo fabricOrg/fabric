@@ -20,12 +20,20 @@ import {
 import { applications, environments } from "./applications.js";
 import { accounts } from "./identity.js";
 
-/** One lazily-created UTC-day counter per workspace and channel. */
+/**
+ * One lazily-created UTC-day counter per workspace and channel.
+ *
+ * CASCADE, not restrict. These are derived, expiring operational counters — nothing here is a record
+ * worth refusing a deletion to protect. Under `restrict` a workspace could not be deleted because
+ * someone sent a test message weeks ago, which blocked closure and GDPR erasure alike, and there is
+ * no prune to clear them first. Contrast plugin_instances, where restrict is deliberate: a sealed
+ * credential IS something a careless delete should trip over.
+ */
 export const sandboxUsageBuckets = pgTable(
   "sandbox_usage_buckets",
   {
     tenantId: tenantIdCol().references(() => accounts.id, {
-      onDelete: "restrict",
+      onDelete: "cascade",
     }),
     usageDate: date("usage_date", { mode: "string" }).notNull(),
     channel: text("channel").notNull(),
@@ -57,7 +65,7 @@ export const sandboxUsageEvents = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: tenantIdCol().references(() => accounts.id, {
-      onDelete: "restrict",
+      onDelete: "cascade",
     }),
     applicationId: uuid("application_id").$type<ApplicationId>(),
     environmentId: uuid("environment_id").$type<EnvironmentId>(),
@@ -92,7 +100,7 @@ export const sandboxUsageEvents = pgTable(
       columns: [t.applicationId, t.tenantId],
       foreignColumns: [applications.id, applications.tenantId],
       name: "sandbox_usage_events_application_tenant_fk",
-    }).onDelete("restrict"),
+    }).onDelete("cascade"),
     foreignKey({
       columns: [t.environmentId, t.applicationId, t.tenantId],
       foreignColumns: [
@@ -101,7 +109,7 @@ export const sandboxUsageEvents = pgTable(
         environments.tenantId,
       ],
       name: "sandbox_usage_events_environment_application_tenant_fk",
-    }).onDelete("restrict"),
+    }).onDelete("cascade"),
   ],
 );
 

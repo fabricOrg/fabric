@@ -26,6 +26,13 @@ import {
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { AutoTopupService } from "./auto-topup.service.js";
 
+// Pin the env fallback so payment resolution cannot fail for a reason this suite is not testing.
+// plugin_instances is GLOBAL control-plane state on a database every integration spec shares, so a
+// concurrent spec enabling or disabling the Paystack instance would otherwise make resolvePaymentContext
+// throw payments_not_configured — which maybeAutoTopUp catches and logs, leaving zero charges and a
+// failure that only appears in a full run and never in isolation.
+process.env.PAYSTACK_SECRET_KEY ??= "sk_test_auto_topup_concurrency";
+
 const superUrl = process.env.DATABASE_URL_SUPER;
 const appUrl = process.env.DATABASE_URL_APP ?? superUrl;
 const describeDb = superUrl ? describe : describe.skip;

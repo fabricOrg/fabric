@@ -24,6 +24,7 @@ import { SendReviewSidebar } from "@/components/send/send-review-sidebar";
 import { getConsent, type OptOut } from "@/lib/client/consent-api";
 import {
   getMessagingSettings,
+  getSandboxAllowances,
   getWallet,
   sendSms,
 } from "@/lib/client/dashboard-api";
@@ -40,6 +41,12 @@ const CURRENCY: Currency = "GHS";
 
 interface SendContext {
   readonly balanceMinor: bigint;
+  /**
+   * Segments left in today's sandbox allowance, or null when this workspace is on live delivery and
+   * has no allowance to spend. Mirrors `balanceMinor`: whichever one funds the send is the one that
+   * has to be checked BEFORE the button is enabled.
+   */
+  readonly smsAllowanceRemaining: bigint | null;
   readonly senders: readonly SenderId[];
   readonly optOuts: readonly OptOut[];
   readonly settings: MessagingSettings;
@@ -87,23 +94,32 @@ export default function SendPage() {
       listSmsTemplates(),
     ])
       .then(async ([senders, consent, settings, templates]) => {
-        const balances =
-          settings.delivery_mode === "live" ? await getWallet() : [];
-        return { balances, senders, consent, settings, templates };
+        // Fetch only what actually funds this workspace's sends — the wallet on live, the daily
+        // allowance on virtual. The other one is not merely unused, it does not apply.
+        const live = settings.delivery_mode === "live";
+        const balances = live ? await getWallet() : [];
+        const allowances = live ? null : await getSandboxAllowances();
+        return { balances, allowances, senders, consent, settings, templates };
       })
-      .then(({ balances, senders, consent, settings, templates }) => {
-        if (!current) return;
-        const ghs = balances.find(
-          (balance) => balance.balance.currency === CURRENCY,
-        );
-        setContext({
-          balanceMinor: ghs ? BigInt(ghs.balance.minor) : 0n,
-          senders,
-          optOuts: consent.optOuts,
-          settings,
-          templates,
-        });
-      })
+      .then(
+        ({ balances, allowances, senders, consent, settings, templates }) => {
+          if (!current) return;
+          const ghs = balances.find(
+            (balance) => balance.balance.currency === CURRENCY,
+          );
+          const sms = allowances?.allowances.find(
+            (item) => item.channel === "sms",
+          );
+          setContext({
+            balanceMinor: ghs ? BigInt(ghs.balance.minor) : 0n,
+            smsAllowanceRemaining: sms ? BigInt(sms.remaining) : null,
+            senders,
+            optOuts: consent.optOuts,
+            settings,
+            templates,
+          });
+        },
+      )
       .catch(() => {
         if (current) setLoadFailed(true);
       });
@@ -179,6 +195,15 @@ export default function SendPage() {
       : 0n;
   const balanceAfterMinor = context ? context.balanceMinor - estimateMinor : 0n;
   const insufficient = deliveryMode === "live" && balanceAfterMinor < 0n;
+  // The sandbox counterpart to `insufficient`. Without it the API's 429 is the FIRST time a customer
+  // learns the send won't go through — after they've written it and pressed send.
+  const allowanceRemaining = context?.smsAllowanceRemaining ?? null;
+  const allowanceExceeded =
+    deliveryMode === "virtual" &&
+    allowanceRemaining !== null &&
+    recipient !== null &&
+    previewBody.trim().length > 0 &&
+    BigInt(segmentation.segments) > allowanceRemaining;
   const canSend = Boolean(
     context &&
       recipient &&
@@ -186,6 +211,7 @@ export default function SendPage() {
       previewBody.trim() &&
       !hasBlock &&
       !insufficient &&
+      !allowanceExceeded &&
       !sending,
   );
 
@@ -285,6 +311,8 @@ export default function SendPage() {
               estimateMinor={estimateMinor}
               balanceAfterMinor={balanceAfterMinor}
               insufficient={insufficient}
+              allowanceRemaining={allowanceRemaining}
+              allowanceExceeded={allowanceExceeded}
               hasBlock={hasBlock}
               canSend={canSend}
               sending={sending}

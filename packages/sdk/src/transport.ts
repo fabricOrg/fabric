@@ -15,6 +15,14 @@ const PROTECTED_HEADERS = new Set([
   "user-agent",
 ]);
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+/**
+ * Codes a backoff cannot clear, despite arriving on a normally-retryable status.
+ *
+ * A sandbox allowance is a DAILY quota, not a rate limit — it refills at midnight UTC, not in a few
+ * hundred milliseconds. Retrying it spends the caller's whole retry budget and adds seconds of
+ * latency to a request that was never going to succeed.
+ */
+const NON_RETRYABLE_CODES = new Set(["sandbox_daily_limit_exceeded"]);
 
 export interface FabricLogger {
   debug(
@@ -236,7 +244,8 @@ function mapApiError(
     statusCode: response.status,
     ...(resolvedRequestId ? { requestId: resolvedRequestId } : {}),
     details: body,
-    retryable: RETRYABLE_STATUSES.has(response.status),
+    retryable:
+      RETRYABLE_STATUSES.has(response.status) && !NON_RETRYABLE_CODES.has(code),
     ...(retryAfter !== undefined ? { retryAfter } : {}),
   });
 }

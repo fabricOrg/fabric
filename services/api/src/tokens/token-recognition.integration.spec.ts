@@ -78,7 +78,7 @@ describeDb("token revenue recognition", () => {
       senderId: "FABRIC",
       body,
       currency: "GHS",
-      deliveryMode: "virtual",
+      deliveryMode: "live",
     };
   }
 

@@ -34,6 +34,12 @@ export const VENDOR_CREDENTIAL_FIELDS: Record<
     required: boolean;
     /** Render masked. Set on anything that IS the secret, not just fields literally named apiKey. */
     secret?: boolean;
+    /**
+     * Render as a switch rather than a text box. The stored value stays the STRING "true"/"false",
+     * because that is what the adapter's configSchema declares — the control changes, not the
+     * contract.
+     */
+    boolean?: boolean;
     hint?: string;
   }[]
 > = {
@@ -41,9 +47,10 @@ export const VENDOR_CREDENTIAL_FIELDS: Record<
     { name: "apiKey", label: "API key", required: true, secret: true },
     {
       name: "sandbox",
-      label: "Sandbox",
+      label: "Sandbox mode",
       required: false,
-      hint: "'false' sends to real carriers and spends real money. Anything else stays sandboxed.",
+      boolean: true,
+      hint: "Off sends to real carriers and spends real money. A live instance requires this off.",
     },
     {
       name: "callbackUrl",

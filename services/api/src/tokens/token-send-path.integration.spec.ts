@@ -88,7 +88,11 @@ describeDb("send path: tokens first, then wallet", () => {
       senderId: "FABRIC",
       body,
       currency: "GHS",
-      deliveryMode: "virtual",
+      // LIVE, deliberately. This suite exists to prove tokens-XOR-wallet, and since sandbox
+      // allowances landed a `virtual` send claims neither — it draws on the daily allowance and
+      // returns before either layer is touched. Running it virtual would pass while asserting
+      // nothing about the invariant. The carrier is still FakeProvider, so nothing leaves.
+      deliveryMode: "live",
     };
   }
 
@@ -262,7 +266,7 @@ describeDb("send path: tokens first, then wallet", () => {
       senderId: "FABRIC",
       body: "hello",
       currency: "GHS",
-      deliveryMode: "virtual",
+      deliveryMode: "live",
     });
     const retry = await prepareSend(deps, {
       tenantId: tenant,
@@ -271,7 +275,7 @@ describeDb("send path: tokens first, then wallet", () => {
       senderId: "FABRIC",
       body: "hello",
       currency: "GHS",
-      deliveryMode: "virtual",
+      deliveryMode: "live",
     });
 
     expect(retry.messageId).toBe(first.messageId);

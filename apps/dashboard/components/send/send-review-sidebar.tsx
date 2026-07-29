@@ -31,6 +31,9 @@ interface Props {
   readonly estimateMinor: bigint;
   readonly balanceAfterMinor: bigint;
   readonly insufficient: boolean;
+  /** Segments left in today's sandbox allowance; null on live delivery, where it does not apply. */
+  readonly allowanceRemaining: bigint | null;
+  readonly allowanceExceeded: boolean;
   readonly hasBlock: boolean;
   readonly canSend: boolean;
   readonly sending: boolean;
@@ -84,14 +87,32 @@ export function SendReviewSidebar(props: Props) {
           />
           <Separator className="my-1" />
           {props.settings.delivery_mode === "virtual" ? (
-            <ConfirmRow
-              label="Sandbox usage"
-              value={
-                <span className="font-mono font-semibold tabular-nums">
-                  {props.segments} segment{props.segments === 1 ? "" : "s"}
-                </span>
-              }
-            />
+            <>
+              <ConfirmRow
+                label="Sandbox usage"
+                value={
+                  <span className="font-mono font-semibold tabular-nums">
+                    {props.segments} segment{props.segments === 1 ? "" : "s"}
+                  </span>
+                }
+              />
+              {props.allowanceRemaining === null ? null : (
+                <ConfirmRow
+                  label="Allowance left today"
+                  value={
+                    <span
+                      className={
+                        "font-mono tabular-nums " +
+                        (props.allowanceExceeded ? "text-destructive" : "")
+                      }
+                    >
+                      {props.allowanceRemaining.toString()} segment
+                      {props.allowanceRemaining === 1n ? "" : "s"}
+                    </span>
+                  }
+                />
+              )}
+            </>
           ) : (
             <>
               <ConfirmRow
@@ -148,12 +169,18 @@ function disabledReason(input: {
   senderId: string;
   body: string;
   insufficient: boolean;
+  allowanceExceeded: boolean;
   hasBlock: boolean;
 }): string {
   if (!input.recipient) return "Enter one valid, sendable recipient.";
   if (!input.senderId) return "Choose an active sender ID.";
   if (!input.body.trim()) return "Enter a message.";
   if (input.insufficient) return "Top up your wallet before sending.";
+  // Never "top up your wallet" here — a sandbox workspace has no wallet to top up, and the
+  // allowance refills on its own.
+  if (input.allowanceExceeded) {
+    return "This message needs more segments than today's sandbox allowance has left. It resets at midnight UTC.";
+  }
   if (input.hasBlock) return "Resolve the blocking preflight check.";
   return "Review the message before sending.";
 }
