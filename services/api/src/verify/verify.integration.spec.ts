@@ -14,6 +14,8 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashApiKey } from "../api-keys/api-key.crypto.js";
 import { AppModule } from "../app.module.js";
+import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
+import { effectivePricingStub } from "../testing/effective-pricing.stub.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
@@ -103,6 +105,7 @@ beforeAll(async () => {
     new FastifyAdapter(),
     { logger: false },
   );
+  Object.assign(app.get(EffectivePricingService), effectivePricingStub());
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
