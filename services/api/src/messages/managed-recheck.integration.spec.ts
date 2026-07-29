@@ -38,6 +38,8 @@ describeDb(
     const tenantId = randomUUID();
     const rawKey = `sk_test_${randomUUID().replace(/-/g, "")}${"0".repeat(8)}`;
     const CREDIT = 10_000n;
+    /** One GSM-7 segment at the compiled default GHS rate — what a single clean send commits. */
+    const SEGMENT_COST = 3n;
     let applicationId = "";
     let environmentId = "";
     let definitionId = "";
@@ -220,9 +222,12 @@ describeDb(
         deliveryMode: "live",
       });
       expect(["delivered", "sent", "accepted"]).toContain(result.status);
-      // Virtual traffic reserves through the real wallet path and refunds at the terminal —
-      // sandbox rehearses the money flow without charging for it.
-      expect(await customerBalance()).toBe(CREDIT);
+      // A send that actually goes out is BILLED — the reservation commits rather than refunding,
+      // which is the whole difference between this case and the blocked ones above. It used to read
+      // `toBe(CREDIT)` because a virtual send reserved and refunded at the terminal, rehearsing the
+      // money flow without charging; sandbox allowances replaced that rehearsal, so the assertion
+      // now has to state the real cost or it is asserting nothing.
+      expect(await customerBalance()).toBe(CREDIT - SEGMENT_COST);
     });
   },
 );
