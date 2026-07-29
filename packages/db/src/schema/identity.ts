@@ -1,5 +1,6 @@
 import {
   boolean,
+  char,
   jsonb,
   pgEnum,
   pgTable,
@@ -63,6 +64,12 @@ export const accounts = pgTable("accounts", {
   priceBookId: uuid("price_book_id").references(() => priceBooks.id, {
     onDelete: "set null",
   }),
+  // The wallet used for normal channel charges. Other currency balances may coexist, but callers do
+  // not choose a cheaper currency independently for each message.
+  billingCurrency: char("billing_currency", { length: 3 })
+    .$type<"GHS" | "NGN" | "USD">()
+    .notNull()
+    .default("GHS"),
   // data_region drives residency (COMPLIANCE doc); validated at the app boundary.
   dataRegion: text("data_region").notNull().default("eu-west-1"),
   settings: jsonb("settings").notNull().default({}),

@@ -206,7 +206,7 @@ export class PluginRegistryService {
    */
   async createLiveInstance(request: {
     vendor: string;
-    capability: "sms" | "whatsapp" | "payment" | "identity";
+    capability: "sms" | "email" | "whatsapp" | "payment" | "identity";
     label?: string | undefined;
   }): Promise<PluginInstanceDto> {
     const vendor = request.vendor.trim().toLowerCase();

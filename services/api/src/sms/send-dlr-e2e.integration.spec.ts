@@ -10,6 +10,8 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashApiKey } from "../api-keys/api-key.crypto.js";
 import { AppModule } from "../app.module.js";
+import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
+import { effectivePricingStub } from "../testing/effective-pricing.stub.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
@@ -21,7 +23,6 @@ if (!SUPER_URL || !APP_URL) {
 process.env.DATABASE_URL_APP = APP_URL;
 process.env.WEBHOOK_INGRESS_TOKEN = "integration-webhook-token";
 process.env.REDIS_QUEUE_URL = "";
-
 const TENANT = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
 const APPLICATION = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeee01";
 const ENVIRONMENT = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeee11";
@@ -30,16 +31,14 @@ const OTHER_ENVIRONMENT = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeee12";
 const ACTIVE_RAW = `sk_live_${"e".repeat(40)}`;
 const OTHER_RAW = `sk_live_${"f".repeat(40)}`;
 const CURRENCY = "GHS";
-const FUNDING_MINOR = 100_000n; // 1,000.00 GHS in pesewas — plenty for a few 3-pesewa segments
+const FUNDING_MINOR = 100_000n;
 
 const owner = postgres(SUPER_URL, { max: 2 }); // superuser: seed + read balances (bypasses FORCE RLS)
 const db = createAppDb(APP_URL, { max: 2 }); // app_runtime: RLS-enforced (used to fund via withTenant)
 let app: NestFastifyApplication;
-
 interface BalRow {
   b: string;
 }
-/** A ledger account's cached balance for this tenant+currency (0 if the account doesn't exist yet). */
 async function balance(kind: string): Promise<bigint> {
   const rows = (await owner.unsafe(
     "SELECT COALESCE(balance_minor, 0)::text AS b FROM ledger_accounts WHERE tenant_id = $1 AND kind = $2 AND currency = $3",
@@ -49,7 +48,6 @@ async function balance(kind: string): Promise<bigint> {
 }
 
 beforeAll(async () => {
-  // 2. tenant + active key. key_hash uses the SAME hashApiKey the service computes → possession match.
   await owner.unsafe(
     "INSERT INTO accounts (id, name, slug) VALUES ($1, 'Tenant E', 'tenant-e') ON CONFLICT (id) DO NOTHING",
     [TENANT],
@@ -107,6 +105,7 @@ beforeAll(async () => {
     new FastifyAdapter(),
     { logger: false },
   );
+  Object.assign(app.get(EffectivePricingService), effectivePricingStub());
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

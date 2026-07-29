@@ -750,6 +750,20 @@
       "when": 1785331977057,
       "tag": "0106_wonderful_captain_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1785337765934,
+      "tag": "0107_legal_weapon_omega",
+      "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1785339853117,
+      "tag": "0108_clean_zombie",
+      "breakpoints": true
     }
   ]
 }

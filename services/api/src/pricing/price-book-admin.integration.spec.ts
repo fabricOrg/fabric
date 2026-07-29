@@ -5,8 +5,10 @@ import {
   auditEvents,
   createProvisioningDb,
   priceBooks,
+  priceBookVersions,
+  pricingSellRules,
 } from "@app/db";
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { AuditService } from "../audit/audit.service.js";
 import { PriceBookAdminService } from "./price-book-admin.service.js";
@@ -62,6 +64,22 @@ describeDb("price-book admin", () => {
   afterAll(async () => {
     for (const id of accountIds) {
       await db.db.delete(accounts).where(eq(accounts.id, id as never));
+    }
+    const versions =
+      bookIds.length > 0
+        ? await db.db
+            .select({ id: priceBookVersions.id })
+            .from(priceBookVersions)
+            .where(inArray(priceBookVersions.priceBookId, bookIds))
+        : [];
+    if (versions.length > 0) {
+      const versionIds = versions.map((version) => version.id);
+      await db.db
+        .delete(pricingSellRules)
+        .where(inArray(pricingSellRules.versionId, versionIds));
+      await db.db
+        .delete(priceBookVersions)
+        .where(inArray(priceBookVersions.id, versionIds));
     }
     for (const id of bookIds) {
       await db.db.delete(priceBooks).where(eq(priceBooks.id, id));

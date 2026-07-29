@@ -4,8 +4,12 @@ import {
   type AssignPriceBookRequest,
   type ListPriceBooksResponse,
   listPriceBooksResponseSchema,
+  listProviderCostRatesResponseSchema,
   type PriceBookDto,
+  type ProviderCostRateDto,
+  type ProviderCostRateInput,
   priceBookDtoSchema,
+  providerCostRateDtoSchema,
   type UpsertPriceBookRequest,
 } from "@app/contracts";
 
@@ -117,4 +121,37 @@ export async function assignPriceBook(
     const payload = (await response.json().catch(() => null)) as unknown;
     throw new PriceBookApiError(response.status, payload);
   }
+}
+
+export async function listProviderCostRates(): Promise<ProviderCostRateDto[]> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL("/internal/admin/price-books/provider-costs", baseUrl),
+    {
+      cache: "no-store",
+      headers: { "x-bff-token": bffToken },
+    },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw new PriceBookApiError(response.status, payload);
+  return listProviderCostRatesResponseSchema.parse(payload).rates;
+}
+
+export async function publishProviderCostRate(
+  request: ProviderCostRateInput,
+  actor: Actor,
+): Promise<ProviderCostRateDto> {
+  const { baseUrl, bffToken } = backendConfiguration();
+  const response = await fetch(
+    new URL("/internal/admin/price-books/provider-costs", baseUrl),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: actorHeaders(actor, bffToken),
+      body: JSON.stringify(request),
+    },
+  );
+  const payload = (await response.json()) as unknown;
+  if (!response.ok) throw new PriceBookApiError(response.status, payload);
+  return providerCostRateDtoSchema.parse(payload);
 }

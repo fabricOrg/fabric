@@ -4,7 +4,13 @@
  * the api's /internal/plugins, backed by plugin_instances). A non-2xx body is the shared F8.3
  * envelope — thrown for toastApiError (parseApiError never throws). See docs/PI-5/PLUGIN-REGISTRY.md.
  */
-export const CAPABILITIES = ["sms", "whatsapp", "payment", "identity"] as const;
+export const CAPABILITIES = [
+  "sms",
+  "email",
+  "whatsapp",
+  "payment",
+  "identity",
+] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 export interface PluginInstance {
@@ -72,6 +78,42 @@ export const VENDOR_CREDENTIAL_FIELDS: Record<
     },
     // Public by design; masking it would imply a confidentiality it does not have.
     { name: "publicKey", label: "Public key", required: false },
+  ],
+  "aws-ses": [
+    {
+      name: "accessKeyId",
+      label: "AWS access key ID",
+      required: true,
+      secret: true,
+    },
+    {
+      name: "secretAccessKey",
+      label: "AWS secret access key",
+      required: true,
+      secret: true,
+    },
+    { name: "region", label: "AWS region", required: true },
+    {
+      name: "configurationSet",
+      label: "SES configuration set",
+      required: true,
+    },
+    {
+      name: "fromDomain",
+      label: "Verified From domain",
+      required: true,
+    },
+    {
+      name: "snsTopicArn",
+      label: "SNS event topic ARN",
+      required: true,
+    },
+    {
+      name: "sesMode",
+      label: "SES mode (sandbox or live)",
+      required: true,
+      hint: "Must match this plugin instance's mode.",
+    },
   ],
 };
 

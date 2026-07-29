@@ -18,6 +18,7 @@ import { SmsService } from "../sms/sms.service.js";
 import { SMS_SEND_QUEUE } from "../sms/sms-send.job.js";
 import { SmsSendWorker } from "../sms/sms-send.worker.js";
 import type { VirtualPhoneService } from "../sms/virtual-phone.service.js";
+import { effectivePricingStub } from "../testing/effective-pricing.stub.js";
 import { QueueService } from "./queue.service.js";
 
 // E10-S4: sender enforcement has its own spec — these flows always pass the gate.
@@ -81,6 +82,7 @@ describeDb("queued send pipeline (BullMQ)", () => {
     liveMode,
     vault,
     new PricingService(provisioning),
+    effectivePricingStub(),
   );
   const smsInline = new SmsService(
     appDb,
@@ -92,6 +94,7 @@ describeDb("queued send pipeline (BullMQ)", () => {
     liveMode,
     vault,
     new PricingService(provisioning),
+    effectivePricingStub(),
   );
 
   const tenantId = randomUUID() as TenantId;

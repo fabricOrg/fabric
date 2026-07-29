@@ -1,4 +1,4 @@
-import type { AppDb, TenantTx } from "@app/db";
+import type { AppDb, PricingSnapshot, TenantTx } from "@app/db";
 import type { RateTable } from "@app/domain";
 import type { Creds, MessageStatus, SmsSenderPlugin } from "@app/integrations";
 import type { ManagedSendContext } from "./managed-send.js";
@@ -65,6 +65,15 @@ export interface SendInput {
   subjectId?: string;
   bodyPiiId?: string;
   deliveryMode?: "virtual" | "live";
+  /**
+   * Immutable live-plane quote resolved before tx1. Virtual sends omit it because their daily
+   * allowance never touches pricing or the wallet.
+   */
+  pricing?: {
+    readonly currency: string;
+    readonly costMinor: bigint;
+    readonly snapshot: PricingSnapshot;
+  };
   managed?: ManagedSendContext;
 }
 

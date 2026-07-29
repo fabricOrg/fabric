@@ -60,6 +60,16 @@ export const CATALOG: NewPluginInstance[] = [
     priority: 100,
   },
   {
+    capability: "email",
+    vendor: "aws-ses",
+    label: "AWS SES",
+    enabled: false,
+    isDefault: false,
+    mode: "sandbox",
+    status: "available",
+    priority: 0,
+  },
+  {
     capability: "payment",
     vendor: "paystack",
     label: "Paystack",

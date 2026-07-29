@@ -22,6 +22,7 @@ import { accounts } from "./identity.js";
 
 export const pluginCapability = pgEnum("plugin_capability", [
   "sms",
+  "email",
   "whatsapp",
   "payment",
   "identity",

@@ -3,14 +3,14 @@ import { invalidRequest } from "../http/api-error.js";
 
 type Row = Record<string, unknown>;
 
-export async function assertEmailSandboxEnvironment(
+export async function resolveEmailEnvironment(
   db: AppDb,
   context: {
     tenantId: string;
     applicationId: string;
     environmentId: string;
   },
-): Promise<void> {
+): Promise<"sandbox" | "live"> {
   const rows = (await db.withTenant(
     context.tenantId,
     (tx) => tx`
@@ -26,10 +26,27 @@ export async function assertEmailSandboxEnvironment(
       "The API key environment is unavailable.",
     );
   }
-  if (environment.type !== "sandbox") {
+  if (environment.type !== "sandbox" && environment.type !== "live") {
     throw invalidRequest(
-      "live_email_not_configured",
-      "Live Email requires an approved sending domain and configured provider.",
+      "environment_unavailable",
+      "The API key environment has an unsupported type.",
     );
   }
+  return environment.type;
+}
+
+/** Compatibility gate for sandbox-only managed paths while their live reservation is prepared. */
+export async function assertEmailSandboxEnvironment(
+  db: AppDb,
+  context: {
+    tenantId: string;
+    applicationId: string;
+    environmentId: string;
+  },
+): Promise<void> {
+  if ((await resolveEmailEnvironment(db, context)) === "sandbox") return;
+  throw invalidRequest(
+    "live_email_not_configured",
+    "Live Email requires an approved sending domain and configured provider.",
+  );
 }

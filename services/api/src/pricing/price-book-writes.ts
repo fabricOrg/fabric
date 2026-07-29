@@ -9,8 +9,10 @@ import {
   type ProvisioningDb,
   priceBookRates,
   priceBooks,
+  priceBookVersions,
+  pricingSellRules,
 } from "@app/db";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 /**
  * Admin write helpers for price books (ADR-0010 slice 3). Pure DB operations against the provisioning
@@ -26,7 +28,11 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export async function listPriceBooks(db: Db): Promise<PriceBookDto[]> {
   const books = await db.select().from(priceBooks).orderBy(priceBooks.name);
   const rates = await db.select().from(priceBookRates);
-  return books.map((book) => toDto(book, rates));
+  const versions = await db
+    .select()
+    .from(priceBookVersions)
+    .orderBy(desc(priceBookVersions.version));
+  return books.map((book) => toDto(book, rates, versions));
 }
 
 /**
@@ -111,6 +117,52 @@ export async function upsertPriceBook(
       })),
     );
 
+    const [latest] = await tx
+      .select({ version: priceBookVersions.version })
+      .from(priceBookVersions)
+      .where(eq(priceBookVersions.priceBookId, bookId))
+      .orderBy(desc(priceBookVersions.version))
+      .limit(1);
+    await tx
+      .update(priceBookVersions)
+      .set({
+        status: "retired",
+        // The database owns effective_from. Keep the whole window on its clock and
+        // advance one microsecond when an earlier app clock would invert the range.
+        effectiveTo: sql`greatest(clock_timestamp(), ${priceBookVersions.effectiveFrom} + interval '1 microsecond')`,
+        updatedAt: sql`clock_timestamp()`,
+      })
+      .where(
+        and(
+          eq(priceBookVersions.priceBookId, bookId),
+          eq(priceBookVersions.status, "published"),
+        ),
+      );
+    const [published] = await tx
+      .insert(priceBookVersions)
+      .values({
+        priceBookId: bookId,
+        version: (latest?.version ?? 0) + 1,
+        status: "published",
+        minimumMarginBps: req.minimum_margin_bps ?? 2_000,
+        sourceSnapshot: {
+          rates: req.rates,
+          minimum_margin_bps: req.minimum_margin_bps ?? 2_000,
+        },
+      })
+      .returning({ id: priceBookVersions.id });
+    if (!published)
+      throw new Error("Price-book version insert returned no row.");
+    await tx.insert(pricingSellRules).values(
+      req.rates.map((rate) => ({
+        versionId: published.id,
+        channel: rate.channel,
+        currency: rate.currency,
+        unitBasis: rate.channel === "sms" ? "segment" : "recipient",
+        unitPriceMinor: BigInt(rate.unit_price_minor) as MinorUnits,
+      })),
+    );
+
     return readBook(tx, bookId);
   });
 }
@@ -160,13 +212,23 @@ async function readBook(db: Tx, id: string): Promise<PriceBookDto | null> {
     .select()
     .from(priceBookRates)
     .where(eq(priceBookRates.priceBookId, id));
-  return toDto(book, rates);
+  const versions = await db
+    .select()
+    .from(priceBookVersions)
+    .where(eq(priceBookVersions.priceBookId, id))
+    .orderBy(desc(priceBookVersions.version));
+  return toDto(book, rates, versions);
 }
 
 function toDto(
   book: PriceBook,
   allRates: (typeof priceBookRates.$inferSelect)[],
+  versions: (typeof priceBookVersions.$inferSelect)[],
 ): PriceBookDto {
+  const currentVersion = versions.find(
+    (version) =>
+      version.priceBookId === book.id && version.status === "published",
+  );
   return {
     id: book.id,
     name: book.name,
@@ -174,6 +236,7 @@ function toDto(
     description: book.description,
     is_default: book.isDefault,
     is_public: book.isPublic,
+    minimum_margin_bps: currentVersion?.minimumMarginBps ?? 0,
     rates: allRates
       .filter((r) => r.priceBookId === book.id)
       .map((r) => ({

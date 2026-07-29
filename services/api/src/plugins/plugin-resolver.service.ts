@@ -7,10 +7,15 @@ import {
 } from "@app/db";
 import type {
   Creds,
+  EmailSenderPlugin,
   PaymentProviderPlugin,
   SmsSenderPlugin,
 } from "@app/integrations";
-import { paymentAdapterFor, smsAdapterFor } from "@app/integrations";
+import {
+  emailAdapterFor,
+  paymentAdapterFor,
+  smsAdapterFor,
+} from "@app/integrations";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { and, asc, eq, isNull } from "drizzle-orm";
@@ -41,8 +46,20 @@ export interface ResolvedPaymentProvider {
   readonly credentialVersion: number;
 }
 
+export interface ResolvedEmailProvider {
+  readonly vendor: string;
+  readonly instanceId: string;
+  readonly provider: EmailSenderPlugin;
+  readonly creds: Creds;
+  readonly credentialVersion: number;
+}
+
 interface CacheEntry {
-  readonly resolved: ResolvedProvider | ResolvedPaymentProvider | null;
+  readonly resolved:
+    | ResolvedProvider
+    | ResolvedPaymentProvider
+    | ResolvedEmailProvider
+    | null;
   readonly at: number;
 }
 
@@ -101,15 +118,26 @@ export class PluginResolverService {
     ) as Promise<ResolvedPaymentProvider | null>;
   }
 
+  async resolveEmail(
+    mode: "sandbox" | "live",
+  ): Promise<ResolvedEmailProvider | null> {
+    return this.resolveCached(
+      "email",
+      mode,
+    ) as Promise<ResolvedEmailProvider | null>;
+  }
+
   /**
    * The shared cache + failure posture for every capability. Identical rules whichever provider you
    * are resolving: short TTL so the control plane stays off the hot path, last-known-good on a blip,
    * and FAIL CLOSED with nothing cached rather than guessing a provider.
    */
   private async resolveCached(
-    capability: "sms" | "payment",
+    capability: "sms" | "email" | "payment",
     mode: "sandbox" | "live",
-  ): Promise<ResolvedProvider | ResolvedPaymentProvider | null> {
+  ): Promise<
+    ResolvedProvider | ResolvedEmailProvider | ResolvedPaymentProvider | null
+  > {
     const key = `${capability}:${mode}`;
     const cached = this.cache.get(key);
     if (cached && Date.now() - cached.at < TTL_MS) return cached.resolved;
@@ -154,9 +182,11 @@ export class PluginResolverService {
   }
 
   private async read(
-    capability: "sms" | "payment",
+    capability: "sms" | "email" | "payment",
     mode: "sandbox" | "live",
-  ): Promise<ResolvedProvider | ResolvedPaymentProvider | null> {
+  ): Promise<
+    ResolvedProvider | ResolvedEmailProvider | ResolvedPaymentProvider | null
+  > {
     // Enabled instances for this capability+mode, primary (priority 0) first — the failover chain.
     // The first one with a usable adapter AND readable credentials wins; a misconfigured primary
     // falls through to its backup rather than taking sending down.
@@ -185,7 +215,9 @@ export class PluginResolverService {
       const factory =
         capability === "sms"
           ? smsAdapterFor(row.vendor)
-          : paymentAdapterFor(row.vendor);
+          : capability === "email"
+            ? emailAdapterFor(row.vendor)
+            : paymentAdapterFor(row.vendor);
       if (!factory) {
         // Enabled in the control plane, but this build has no adapter. Skip rather than throw: a
         // catalog row for a vendor we cannot dispatch must not block a working fallback.
@@ -207,7 +239,7 @@ export class PluginResolverService {
         provider: factory(),
         creds,
         credentialVersion: version,
-      } as ResolvedProvider | ResolvedPaymentProvider;
+      } as ResolvedProvider | ResolvedEmailProvider | ResolvedPaymentProvider;
     }
     return null;
   }

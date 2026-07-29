@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "uniq_active_provider_cost_rate" ON "provider_cost_rates" USING btree ("provider_vendor","channel","currency",coalesce("destination_country", ''),coalesce("traffic_class", '')) WHERE "provider_cost_rates"."effective_to" is null;

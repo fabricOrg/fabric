@@ -1,6 +1,11 @@
 import { ArkeselSmsProvider } from "./arkesel/provider.js";
+import { AwsSesEmailProvider } from "./aws-ses/provider.js";
 import { PaystackProvider } from "./paystack/provider.js";
-import type { PaymentProviderPlugin, SmsSenderPlugin } from "./plugin.js";
+import type {
+  EmailSenderPlugin,
+  PaymentProviderPlugin,
+  SmsSenderPlugin,
+} from "./plugin.js";
 import { FakeProvider } from "./testing/fake-provider.js";
 import { VirtualPhoneProvider } from "./virtual-phone/provider.js";
 
@@ -79,6 +84,20 @@ export function supportedSmsVendors(): readonly string[] {
   return Object.keys(SMS_ADAPTERS);
 }
 
+export type EmailAdapterFactory = () => EmailSenderPlugin;
+
+const EMAIL_ADAPTERS: Readonly<Record<string, EmailAdapterFactory>> = {
+  "aws-ses": () => new AwsSesEmailProvider(),
+};
+
+export function emailAdapterFor(vendor: string): EmailAdapterFactory | null {
+  return EMAIL_ADAPTERS[vendor.trim().toLowerCase()] ?? null;
+}
+
+export function supportedEmailVendors(): readonly string[] {
+  return Object.keys(EMAIL_ADAPTERS);
+}
+
 /**
  * VENDOR → PAYMENT ADAPTER. Deliberately the same contract as SMS: the plugin system has to behave
  * identically whichever capability you configure, or staff learn a different set of rules per vendor.
@@ -121,6 +140,9 @@ export function adapterConfigSchemaFor(
   }
   if (capability === "payment") {
     return paymentAdapterFor(vendor)?.().configSchema ?? null;
+  }
+  if (capability === "email") {
+    return emailAdapterFor(vendor)?.().configSchema ?? null;
   }
   return null;
 }
@@ -167,6 +189,13 @@ export function credentialModeViolation(
     }
     if (mode === "sandbox" && !secret.startsWith("sk_test_")) {
       return "A sandbox instance requires a test secret key (sk_test_…).";
+    }
+    return null;
+  }
+  if (capability === "email" && key === "aws-ses") {
+    const sesMode = credential.sesMode;
+    if (sesMode !== mode) {
+      return `An AWS SES ${mode} instance requires sesMode='${mode}'.`;
     }
     return null;
   }

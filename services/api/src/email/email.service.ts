@@ -6,27 +6,30 @@ import type {
 import type { AppDb } from "@app/db";
 import { STATUS_RANK } from "@app/integrations";
 import { FakeEmailProvider } from "@app/integrations/testing/email";
+import { commit, refund } from "@app/wallet";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, newRequestId } from "../http/api-error.js";
 import type { PageInput } from "../http/cursor.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
+import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.service.js";
-import { isTerminalEmailStatus, parseEmailContent } from "./email-content.js";
+import { isTerminalEmailStatus } from "./email-content.js";
 import {
   emailDispatchBlockReason,
   sweepManagedEmailExpired,
 } from "./email-dispatch-recovery.js";
-import { assertEmailSandboxEnvironment } from "./email-environment.js";
-import {
-  acceptManagedEmail,
-  type ManagedEmailAcceptInput,
-} from "./email-managed-accept.js";
+import { loadStoredEmail } from "./email-load.js";
+import type { ManagedEmailAcceptInput } from "./email-managed-accept.js";
+import { prepareManagedEmail } from "./email-managed-prepare.js";
 import { reconcileManagedEmailTerminal } from "./email-managed-resolve.js";
+import { prepareEmail } from "./email-prepare.js";
 import { type EmailPageResult, getEmail, listEmails } from "./email-reads.js";
+import { EmailRuntimeService } from "./email-runtime.service.js";
 import { EMAIL_SEND_QUEUE, type EmailSendJob } from "./email-send.job.js";
+import { ingestSesEvent } from "./ses-event-ingest.js";
 
 type Row = Record<string, unknown>;
 
@@ -44,6 +47,12 @@ export class EmailService {
     @Optional()
     @Inject(SandboxAllowanceService)
     sandboxAllowance?: SandboxAllowanceService,
+    @Optional()
+    @Inject(EmailRuntimeService)
+    private readonly runtime?: EmailRuntimeService,
+    @Optional()
+    @Inject(EffectivePricingService)
+    private readonly effectivePricing?: EffectivePricingService,
   ) {
     this.sandboxAllowance = sandboxAllowance ?? new SandboxAllowanceService();
   }
@@ -62,53 +71,21 @@ export class EmailService {
         "Email sending is temporarily paused.",
       );
     }
-    await assertEmailSandboxEnvironment(this.db, context);
-    const subjectId = await this.vault.subjectForEmail(
-      context.tenantId,
-      input.to,
-    );
-    const contentPiiId = await this.vault.put(
-      context.tenantId,
-      subjectId,
-      "body",
-      JSON.stringify(input),
-    );
-    const messageId = await this.db.withTenant(context.tenantId, async (tx) => {
-      const rows = (await tx`
-        INSERT INTO email_messages (
-          tenant_id, application_id, environment_id, subject_id, content_pii_id,
-          status, status_rank, backing, provider_slug
-        ) VALUES (
-          current_setting('app.tenant_id')::uuid, ${context.applicationId},
-          ${context.environmentId}, ${subjectId}, ${contentPiiId}, 'queued',
-          ${STATUS_RANK.queued}, 'sandbox_allowance', ${this.provider.slug}
-        ) RETURNING id`) as Row[];
-      const id = String(rows[0]?.id);
-      await this.sandboxAllowance.consume(tx, {
-        channel: "email",
-        units: 1n,
-        referenceId: id,
-        applicationId: context.applicationId,
-        environmentId: context.environmentId,
-      });
-      await tx`
-        INSERT INTO email_dispatches (message_id, tenant_id)
-        VALUES (${id}, current_setting('app.tenant_id')::uuid)`;
-      await tx`
-        INSERT INTO outbox_events (
-          tenant_id, application_id, environment_id, event_type, payload
-        ) VALUES (
-          current_setting('app.tenant_id')::uuid, ${context.applicationId},
-          ${context.environmentId}, 'message.created',
-          ${JSON.stringify({ message_id: id, channel: "email", status: "queued" })}::jsonb
-        )`;
-      return id;
+    const messageId = await prepareEmail({
+      db: this.db,
+      vault: this.vault,
+      sandboxAllowance: this.sandboxAllowance,
+      sandboxProvider: this.provider,
+      context,
+      content: input,
+      ...(this.runtime ? { runtime: this.runtime } : {}),
+      ...(this.effectivePricing
+        ? { effectivePricing: this.effectivePricing }
+        : {}),
     });
 
     let status: SendEmailApiResponse["status"] = "queued";
     if (this.queue.enabled) {
-      // A queue outage must not fail the accepted send — the row is persisted and the maintenance
-      // sweep recovers it. Log the deferral (SMS logs the equivalent) so a Redis outage is observable
       await this.enqueue(context.tenantId, messageId).catch(
         (error: unknown) => {
           this.logger.warn(
@@ -129,22 +106,26 @@ export class EmailService {
         "Email sending is temporarily paused.",
       );
     }
-    await acceptManagedEmail(
-      {
-        db: this.db,
-        vault: this.vault,
-        providerSlug: this.provider.slug,
-        assertSandbox: (context) =>
-          assertEmailSandboxEnvironment(this.db, context),
-        consumeSandboxAllowance: (tx, context) =>
-          this.sandboxAllowance.consume(tx, context),
-      },
-      input,
-    );
+    await prepareManagedEmail({
+      db: this.db,
+      vault: this.vault,
+      sandboxAllowance: this.sandboxAllowance,
+      sandboxProvider: this.provider,
+      message: input,
+      ...(this.runtime ? { runtime: this.runtime } : {}),
+      ...(this.effectivePricing
+        ? { effectivePricing: this.effectivePricing }
+        : {}),
+    });
   }
 
   async process(job: EmailSendJob): Promise<SendEmailApiResponse["status"]> {
-    const stored = await this.load(job.tenantId, job.messageId);
+    const stored = await loadStoredEmail(
+      this.db,
+      this.vault,
+      job.tenantId,
+      job.messageId,
+    );
     if (stored.kind === "skip") return stored.status;
     if (stored.kind === "unreadable") {
       return this.resolve(job.tenantId, job.messageId, "failed", {
@@ -157,7 +138,24 @@ export class EmailService {
         errorCode: blocked,
       });
     }
-    const result = await this.provider.send(
+    const mode = stored.backing === "sandbox_allowance" ? "sandbox" : "live";
+    const runtime =
+      this.runtime ??
+      (mode === "sandbox"
+        ? { resolve: async () => ({ provider: this.provider, creds: {} }) }
+        : undefined);
+    if (!runtime) {
+      return this.resolve(job.tenantId, job.messageId, "failed", {
+        errorCode: "live_email_not_configured",
+      });
+    }
+    const resolved = await runtime.resolve(mode);
+    if (resolved.provider.slug !== stored.providerSlug) {
+      return this.resolve(job.tenantId, job.messageId, "failed", {
+        errorCode: "email_provider_selection_changed",
+      });
+    }
+    const result = await resolved.provider.send(
       {
         messageId: job.messageId,
         to: stored.content.to,
@@ -169,7 +167,7 @@ export class EmailService {
           ? { replyTo: stored.content.reply_to }
           : {}),
       },
-      {},
+      resolved.creds,
     );
     return this.resolve(job.tenantId, job.messageId, result.status, {
       providerRef: result.providerRef,
@@ -217,6 +215,16 @@ export class EmailService {
     );
   }
 
+  async ingestSesEvent(body: unknown): Promise<{ status: string }> {
+    return ingestSesEvent({
+      db: this.db,
+      runtime: this.runtime,
+      body,
+      resolve: (tenantId, messageId, status, detail) =>
+        this.resolve(tenantId, messageId, status, detail),
+    });
+  }
+
   private async enqueue(tenantId: string, messageId: string): Promise<void> {
     await this.queue
       .queue(EMAIL_SEND_QUEUE)
@@ -229,35 +237,6 @@ export class EmailService {
       });
   }
 
-  private async load(
-    tenantId: string,
-    messageId: string,
-  ): Promise<
-    | { kind: "skip"; status: SendEmailApiResponse["status"] }
-    | { kind: "unreadable" }
-    | { kind: "ready"; content: SendEmailRequest }
-  > {
-    const rows = (await this.db.withTenant(
-      tenantId,
-      (tx) => tx`
-        SELECT m.status::text, m.content_pii_id, d.completed_at
-        FROM email_messages m JOIN email_dispatches d ON d.message_id = m.id
-        WHERE m.id = ${messageId} LIMIT 1`,
-    )) as Row[];
-    const row = rows[0];
-    if (!row) return { kind: "skip", status: "failed" };
-    const status = String(row.status) as SendEmailApiResponse["status"];
-    if (row.completed_at || isTerminalEmailStatus(status)) {
-      return { kind: "skip", status };
-    }
-    const raw = row.content_pii_id
-      ? await this.vault.read(tenantId, String(row.content_pii_id))
-      : null;
-    if (!raw) return { kind: "unreadable" };
-    const content = parseEmailContent(raw);
-    return content ? { kind: "ready", content } : { kind: "unreadable" };
-  }
-
   private async resolve(
     tenantId: string,
     messageId: string,
@@ -266,12 +245,28 @@ export class EmailService {
   ): Promise<SendEmailApiResponse["status"]> {
     return this.db.withTenant(tenantId, async (tx) => {
       const rows = (await tx`
-        SELECT status::text, application_id, environment_id
+        SELECT status::text, status_rank, backing, application_id, environment_id
         FROM email_messages WHERE id = ${messageId} FOR UPDATE`) as Row[];
       const current = rows[0];
       if (!current) return "failed";
       const prior = String(current.status) as SendEmailApiResponse["status"];
       if (isTerminalEmailStatus(prior)) return prior;
+      if (String(current.backing) === "wallet") {
+        const reachedBillable =
+          Number(current.status_rank) >= STATUS_RANK.accepted ||
+          STATUS_RANK[status] >= STATUS_RANK.accepted;
+        if (reachedBillable) {
+          await commit(tx, {
+            referenceId: messageId,
+            idempotencyKey: `commit:${messageId}`,
+          });
+        } else if (isTerminalEmailStatus(status)) {
+          await refund(tx, {
+            referenceId: messageId,
+            idempotencyKey: `refund:${messageId}`,
+          });
+        }
+      }
       await tx`
         UPDATE email_messages SET status = ${status}, status_rank = ${STATUS_RANK[status]},
           provider_ref = COALESCE(${detail.providerRef ?? null}, provider_ref),
