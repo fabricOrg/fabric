@@ -21,10 +21,15 @@ export async function measureCoverage(db: SqlExecutor): Promise<{
 }> {
   const { rows } = await db.query(`
     SELECT
+      -- EXISTS, mirroring the comparison's own scope exactly. A join here would count a corrected
+      -- movement's legs twice and overstate the coverage the comparison actually achieved.
       (SELECT count(*) FROM ledger_entries e
         JOIN ledger_accounts a ON a.id = e.account_id
-        JOIN gl_journals gj ON gj.source_kind = 'ledger_txn' AND gj.source_ref = e.txn_id::text
-       WHERE a.currency IN ${CURRENCY_LIST})                       AS subledger_legs,
+       WHERE a.currency IN ${CURRENCY_LIST}
+         AND EXISTS (
+           SELECT 1 FROM gl_journals gj
+           WHERE gj.source_kind = 'ledger_txn' AND gj.source_ref = e.txn_id::text
+         ))                                                        AS subledger_legs,
       -- Counted WITHOUT touching any RLS table, which is the whole point: the gl_ tables carry no row
       -- security, so this number is visible to every caller. Comparing it against the subledger scan is
       -- what exposes a caller RLS has blinded; counting ledger_entries would be filtered to zero right

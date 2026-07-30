@@ -85,6 +85,30 @@ function assertBalanced(
 }
 
 /**
+ * The idempotency key for a mirrored movement, and for a CORRECTION of one.
+ *
+ * The drain only ever writes the unsuffixed form, so normal exactly-once posting is untouched. A
+ * correction — reverse the bad journal, re-post from the live subledger legs — needs its own key
+ * because the unsuffixed one is taken and globally UNIQUE, so it appends `#{n}`. `source_kind` and
+ * `source_ref` stay the movement's, which keeps the correction inside the reconciliation's scope and
+ * keeps the key reconstructible from the stored columns plus a sequence number.
+ *
+ * Defined here, once, so the format cannot drift between the drain and the correction service.
+ */
+export function correctionKey(
+  ledgerTxnId: string,
+  correctionSequence?: number,
+): string {
+  if (correctionSequence === undefined) return `ledger_txn:${ledgerTxnId}`;
+  if (!Number.isInteger(correctionSequence) || correctionSequence < 2) {
+    throw new RangeError(
+      `correctionSequence must be an integer >= 2 (the original posting is the unsuffixed key); got ${correctionSequence}`,
+    );
+  }
+  return `ledger_txn:${ledgerTxnId}#${correctionSequence}`;
+}
+
+/**
  * Mirror a tenant subledger movement into the company's books.
  *
  * Phase 1's GL is a CONSOLIDATED MIRROR (ADR-0013 #5): each subledger leg becomes one journal line
@@ -98,6 +122,7 @@ function assertBalanced(
  */
 export function deriveJournalFromSubledgerEvent(
   event: SubledgerPostingEvent,
+  options: { readonly correctionSequence?: number } = {},
 ): GlJournalSpec {
   const lines: GlJournalLineSpec[] = event.legs.map((leg) => ({
     account_code: SUBLEDGER_KIND_TO_GL_ACCOUNT[leg.account_kind],
@@ -110,7 +135,10 @@ export function deriveJournalFromSubledgerEvent(
   assertBalanced(lines, `journal for ledger_txn ${event.ledger_txn_id}`);
 
   return {
-    idempotency_key: `ledger_txn:${event.ledger_txn_id}`,
+    idempotency_key: correctionKey(
+      event.ledger_txn_id,
+      options.correctionSequence,
+    ),
     source_kind: "ledger_txn",
     source_ref: event.ledger_txn_id,
     currency: event.currency,

@@ -8,8 +8,8 @@ import {
 import { commit, credit, reserve } from "@app/wallet";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { correctGlPosting } from "./gl-correction.js";
 import { drainGlPostingRequests } from "./gl-posting.worker.js";
-import { reverseGlJournal } from "./gl-reversal.js";
 
 /**
  * The PHASE 1 EXIT GATE (ADR-0013 #15, roadmap FIN-004): the two ledgers must AGREE, not merely each
@@ -42,6 +42,23 @@ const executor = {
     rows: (await owner.unsafe(q)) as unknown as Row[],
   }),
 };
+
+/**
+ * The stable error code out of an F8.3 envelope. `invalidRequest`/`notFound` throw a Nest
+ * HttpException whose body carries the code, so asserting on `.code` of the exception itself would
+ * silently match nothing.
+ */
+async function errorCodeOf(fn: () => Promise<unknown>): Promise<string> {
+  try {
+    await fn();
+    return "(no error thrown)";
+  } catch (error) {
+    const body = (error as { getResponse?: () => unknown }).getResponse?.() as
+      | { error?: { code?: string } }
+      | undefined;
+    return body?.error?.code ?? "(no code in envelope)";
+  }
+}
 
 describe("subledger to control-account reconciliation", () => {
   beforeAll(async () => {
@@ -201,10 +218,11 @@ describe("subledger to control-account reconciliation", () => {
     );
 
     /**
-     * NOW CORRECT IT THE ONLY WAY THE BOOKS ALLOW. The bad journal cannot be edited or deleted — the
-     * immutability triggers refuse it for every role, including the owner — so the correction is a
-     * REVERSAL, which is exactly what an operator would have to do. Proving the recovery path is as
-     * important as proving the detection.
+     * NOW CORRECT IT. The bad journal cannot be edited or deleted — the immutability triggers refuse it
+     * for every role including the owner — so a correction is two postings: reverse the wrong one, and
+     * re-post the movement from the LIVE subledger legs under a correction key. Proving the recovery
+     * path matters as much as proving the detection, because a gate with no remedy just teaches people
+     * to bypass gates.
      */
     const badJournals = (await owner`
       SELECT id FROM gl_journals
@@ -215,43 +233,89 @@ describe("subledger to control-account reconciliation", () => {
       owner`DELETE FROM gl_journals WHERE id = ${badJournalId}`,
     ).rejects.toThrow(/append-only/);
 
-    const reversal = await reverseGlJournal(provisioning.db, {
+    const corrected = await correctGlPosting(provisioning.db, {
       journalId: badJournalId,
-      memo: "mis-mirrored amount from a tampered payload",
+      reason: "payload mirrored the wrong amount",
       requestedBy: "recon-integration-spec",
     });
-    expect(reversal.alreadyReversed).toBe(false);
-    // Reversing twice must not double-correct.
-    expect(
-      (
-        await reverseGlJournal(provisioning.db, {
-          journalId: badJournalId,
-          memo: "retry",
-          requestedBy: "recon-integration-spec",
-        })
-      ).alreadyReversed,
-    ).toBe(true);
+    expect(corrected.correctionSequence).toBe(2);
 
-    // The books are now back to zero for that movement — but the SUBLEDGER still holds it, so the
-    // ledgers still disagree. That is honest: an un-posted movement is a real divergence.
-    const afterReversal = await checkGlReconciliation(executor);
-    expect(afterReversal.ok).toBe(false);
-    // BOTH legs must have flipped back, not just the one: a reversal that flipped only the credits
-    // would leave gateway_clearing wrong and still pass a customer-only assertion.
-    const afterByAccount = Object.fromEntries(
-      afterReversal.discrepancies.map((d) => [
-        `${d.kind}/${d.currency}`,
-        d.differenceMinor,
-      ]),
+    // The whole point: the ledgers agree again, with the wrong entry still visible in the books.
+    const afterCorrection = await checkGlReconciliation(executor);
+    expect(formatReconciliation(afterCorrection)).toContain("reconciles");
+    expect(afterCorrection.ok).toBe(true);
+
+    // Three journals now exist for this one movement, and the legs are counted ONCE — the semi-join
+    // scope, not a join. A fan-out here would double the subledger side and reopen the discrepancy.
+    const mirrors = (await owner`
+      SELECT count(*)::int AS n FROM gl_journals
+      WHERE source_kind = 'ledger_txn' AND source_ref = ${movement.txnId}`) as Row[];
+    // original + correction; the reversal carries source_kind 'reversal', so it is not a third mirror.
+    expect(Number(mirrors[0]?.n)).toBe(2);
+    expect(afterCorrection.coverage.subledgerLegs).toBeGreaterThan(0);
+
+    // The correction carries the right amount and the reversal cancelled the wrong one.
+    const net = (await owner`
+      SELECT a.code, SUM(CASE l.direction WHEN 'credit' THEN l.amount_minor
+                                          ELSE -l.amount_minor END)::text AS net
+      FROM gl_journal_lines l
+      JOIN gl_journals j ON j.id = l.journal_id
+      JOIN gl_accounts a ON a.id = l.account_id
+      WHERE j.source_ref = ${movement.txnId} OR j.reverses_journal_id = ${badJournalId}
+      GROUP BY a.code ORDER BY a.code`) as Row[];
+    expect(net.map((r) => [String(r.code), String(r.net)])).toEqual([
+      ["1100", "-1000"],
+      ["2100", "1000"],
+    ]);
+  });
+
+  it("refuses to correct a journal that is not a mirror", async () => {
+    const movement = await app.withTenant(TENANT, (tx) =>
+      credit(tx, {
+        currency: CCY,
+        amountMinor: 600n,
+        idempotencyKey: `topup:${randomUUID()}`,
+      }),
     );
-    expect(afterByAccount[`customer/${CCY}`]).toBe("-1000");
-    expect(afterByAccount[`gateway_clearing/${CCY}`]).toBe("1000");
+    await drainGlPostingRequests(provisioning.db);
+    const rows = (await owner`
+      SELECT id FROM gl_journals
+      WHERE idempotency_key = ${`ledger_txn:${movement.txnId}`}`) as Row[];
+    const journalId = String(rows[0]?.id);
 
-    // Removing the movement itself is what finally squares them, and is only possible because this is
-    // fabricated test data — in production the movement is real and the corrected journal would be
-    // re-posted instead.
-    await owner`DELETE FROM ledger_entries WHERE txn_id = ${movement.txnId}`;
-    await owner`DELETE FROM ledger_transactions WHERE id = ${movement.txnId}`;
+    const first = await correctGlPosting(provisioning.db, {
+      journalId,
+      reason: "first correction",
+      requestedBy: "recon-integration-spec",
+    });
+
+    // A reversal has no subledger movement to re-derive from, so it is corrected by its own reversal,
+    // not by this path.
+    expect(
+      await errorCodeOf(() =>
+        correctGlPosting(provisioning.db, {
+          journalId: first.reversalJournalId,
+          reason: "nonsense",
+          requestedBy: "recon-integration-spec",
+        }),
+      ),
+    ).toBe("gl_journal_not_a_mirror");
+
+    /**
+     * And correcting the ORIGINAL again is refused. This is the assertion that caught a real double-post:
+     * without the guard, the already-reversed original got a SECOND correction and the books recorded the
+     * movement twice over. Correct the journal that superseded it instead.
+     */
+    expect(
+      await errorCodeOf(() =>
+        correctGlPosting(provisioning.db, {
+          journalId,
+          reason: "again",
+          requestedBy: "recon-integration-spec",
+        }),
+      ),
+    ).toBe("gl_journal_already_corrected");
+
     expect((await checkGlReconciliation(executor)).ok).toBe(true);
   });
 });

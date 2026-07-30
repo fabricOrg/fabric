@@ -200,10 +200,46 @@ isolation that protects customer data.
 11. **Exactly-once by idempotency key, not by delivery guarantee.** A journal's key is
     `{source_kind}:{source_ref}` — for this phase, `ledger_txn:{ledger_transactions.id}`, which is
     globally `UNIQUE` on `gl_journals`. Drain is at-least-once; the key makes the effect
-    exactly-once, and it gives the audit a direct answer: every subledger transaction has zero or one
-    GL journal. A reversal keys as `reversal:{reversed journal id}` — the same rule, with no
+    exactly-once. A reversal keys as `reversal:{reversed journal id}` — the same rule, with no
     exception, so a key is always reconstructible from the stored columns and a poster can ask "have I
-    already posted this?" rather than discovering it as a constraint violation.
+    already posted this?" rather than discovering it as a constraint violation. A correction extends the
+    rule with a `#{n}` suffix (decision 11a), which is the one place a key is not purely
+    `{source_kind}:{source_ref}`.
+
+    So the audit's answer is "every subledger transaction has one mirror journal, plus one journal per
+    correction" — not "zero or one", once corrections exist.
+
+11a. **Correcting a mis-posted mirror is reverse-plus-re-post, keyed `ledger_txn:{id}#{n}`.**
+
+    Reversal alone cannot fix a mis-posting: it un-posts the wrong amount, but the movement is still in
+    the subledger with nothing correctly mirroring it, so the ledgers still disagree. And the obvious
+    re-post is impossible — `ledger_txn:{id}` is taken and globally UNIQUE. So a correction appends
+    `#{n}`, starting at 2, while `source_kind` and `source_ref` stay the movement's. That keeps the
+    correction inside the reconciliation's scope, keeps the key reconstructible from stored columns plus
+    a sequence, and leaves the drain's own key — always unsuffixed — untouched, so normal exactly-once
+    posting is unaffected.
+
+    **Both halves run in ONE transaction.** Otherwise the books sit observably in a
+    reversed-but-uncorrected state and the hourly reconciliation fires on a discrepancy somebody is
+    midway through fixing.
+
+    **The corrected lines come from the LIVE subledger legs, not the queued payload — an inversion of
+    decision 10, on purpose.** The payload is evidence of what the drain saw, which makes it precisely
+    the thing to distrust once the posting turns out wrong. The subledger is the source of truth for
+    what the movement was, and `app_provisioner` can read it cross-tenant through the `provisioner_read`
+    policies in migration 0027.
+
+    **An already-reversed journal cannot be corrected again.** Re-posting against a superseded journal
+    would record the movement a second time — original reversed, first correction standing, second
+    correction added on top. Correcting a correction is legitimate and simply means naming that
+    journal, which is itself a mirror and gets its own reversal and its own next sequence. A ceiling on
+    the sequence stops a correction loop replacing an investigation.
+
+    Because the reconciliation counts every journal touching a control account, reverse + correction
+    nets to the right total with no change to the comparison. What the comparison *did* need is a
+    semi-join for its subledger scope: only `idempotency_key` is unique, so a movement with both a
+    mirror and a correction matches `(source_kind, source_ref)` twice, and a join would have counted
+    every one of its legs twice.
 
 12. **Posting rules are pure functions.** The mapping from a domain event to balanced journal lines
     lives in `@app/domain` with no I/O, over `bigint` only, validated by strict zod contracts at the

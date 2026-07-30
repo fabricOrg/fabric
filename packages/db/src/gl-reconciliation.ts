@@ -146,9 +146,16 @@ export async function findControlAccountDiscrepancies(
       FROM ledger_entries e
       JOIN ledger_accounts a ON a.id = e.account_id
       -- Only movements the books have actually seen; drain lag is invariant 3's business, not ours.
-      JOIN gl_journals gj
-        ON gj.source_kind = 'ledger_txn' AND gj.source_ref = e.txn_id::text
+      --
+      -- EXISTS, not a JOIN. Only idempotency_key is unique; nothing constrains
+      -- (source_kind, source_ref). So a movement carrying BOTH its mirror and a correction journal
+      -- matches twice, and a join would count every one of its legs twice. A semi-join asks the
+      -- question actually being asked: has this movement reached the books at all.
       WHERE a.currency IN ${CURRENCY_LIST}
+        AND EXISTS (
+          SELECT 1 FROM gl_journals gj
+          WHERE gj.source_kind = 'ledger_txn' AND gj.source_ref = e.txn_id::text
+        )
       GROUP BY 1, 2
     ),
     books AS (

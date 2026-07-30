@@ -3,7 +3,11 @@ import { glJournalLines, glJournals } from "@app/db";
 import { accountingDateFromEventTime } from "@app/domain";
 import { sql } from "drizzle-orm";
 import { invalidRequest, notFound } from "../http/api-error.js";
-import { type GlDb, isUniqueViolation } from "./gl-journal-writer.js";
+import {
+  type GlDb,
+  type GlTx,
+  isUniqueViolation,
+} from "./gl-journal-writer.js";
 
 /**
  * REVERSING A POSTED JOURNAL (ADR-0013 #9) — the only way to correct the company's books.
@@ -44,15 +48,31 @@ interface PostedLine {
  * `eventTime` is the reversal's OWN time, not the original's — a correction happens when it happens.
  * Back-dating one into a closed period is a decision for Phase 8's close controls, not a default here.
  */
+export interface ReverseArgs {
+  journalId: string;
+  memo: string;
+  /** The staff actor. Recorded in the journal's metadata — a correction needs a who, not just a why. */
+  requestedBy: string;
+  eventTime?: Date;
+}
+
 export async function reverseGlJournal(
   db: GlDb,
-  args: {
-    journalId: string;
-    memo: string;
-    /** The staff actor. Recorded in the journal's metadata — a correction needs a who, not just a why. */
-    requestedBy: string;
-    eventTime?: Date;
-  },
+  args: ReverseArgs,
+): Promise<GlReversalResult> {
+  return await db.transaction((tx) => reverseGlJournalInTx(tx, args));
+}
+
+/**
+ * The reversal itself, participating in a CALLER'S transaction.
+ *
+ * Exported because a correction must reverse and re-post atomically: a caller that did them in two
+ * transactions would leave the books in a reversed-but-uncorrected state, which the reconciliation
+ * would correctly report as a discrepancy while someone is midway through fixing one.
+ */
+export async function reverseGlJournalInTx(
+  tx: GlTx,
+  args: ReverseArgs,
 ): Promise<GlReversalResult> {
   if (!UUID_PATTERN.test(args.journalId)) {
     // Otherwise the first query fails with a raw 22P02 from Postgres, before the existence check.
@@ -62,7 +82,7 @@ export async function reverseGlJournal(
       "journalId",
     );
   }
-  return await db.transaction(async (tx) => {
+  {
     const existing = (await tx.execute(sql`
       SELECT id FROM gl_journals WHERE reverses_journal_id = ${args.journalId}
     `)) as unknown as Array<{ id: string }>;
@@ -173,5 +193,5 @@ export async function reverseGlJournal(
     );
 
     return { reversalJournalId: reversalId, alreadyReversed: false };
-  });
+  }
 }

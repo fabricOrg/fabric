@@ -591,19 +591,19 @@ defect.
   tax presentation, breakage, period length, and the named Finance approver.
 - `FIN-002` Define the corporate chart of accounts and dimensions. — **done** (migration 0112 seeds
   the six accounts Phase 1 posts to; later phases add their own).
-- `FIN-003` Implement idempotent corporate posting and reversal contracts. — **posting done**; reversal
-  **partial**. Every wallet and token movement enqueues in its own transaction and drains into a balanced
+- `FIN-003` Implement idempotent corporate posting and reversal contracts. — **posting and correction
+  done**; the staff-facing caller **remains open**. Every wallet and token movement enqueues in its own transaction and drains into a balanced
   journal keyed `ledger_txn:{id}`, so redelivery and crash recovery both post exactly once (1b). Reversal
-  exists as a service that reads the POSTED lines back and flips them, idempotent on
-  `reverses_journal_id` (1c) — but it has **no production caller**: no admin endpoint, no CLI. Wiring one
-  needs the maker-checker control the ADR requires for price- and money-affecting staff actions, so it is
-  deliberately not bolted on here. Until then a reversal is an engineer running the function directly.
-  The adjustment half of this item is not started.
+  reads the POSTED lines back and flips them, idempotent on `reverses_journal_id`, and `correctGlPosting`
+  composes it with a re-post from the live subledger legs so a mis-posting can actually be fixed (1c).
+  What remains is the **caller**: no admin endpoint, no CLI. Wiring one needs the maker-checker control
+  the ADR requires for money-affecting staff actions, so it is deliberately not bolted on here — until
+  then a correction is an engineer invoking the function. The generic adjustment journal is not started.
 - `FIN-004` Reconcile tenant wallet liabilities to corporate control accounts. — **done** (1c), driven in
   both directions: a real lifecycle reconciles, and a journal posted with the wrong amount is detected.
-  Note what the detection test then shows rather than hides — reversing the bad journal does **not**
-  restore agreement, because the movement is still in the subledger with nothing correctly mirroring it.
-  See the corrected-re-post gap below.
+  The recovery path is proven too: a mis-posted journal is reversed and the movement re-posted from the
+  live subledger legs under a correction key, after which the ledgers agree again with the wrong entry
+  still visible in the books (ADR-0013 #11a).
 - `FIN-005` Capture billable usage and customer charge snapshots.
 - `FIN-006` Capture provider-rated cost and payable accruals.
 - `FIN-007` Ingest and reconcile provider invoices/statements.

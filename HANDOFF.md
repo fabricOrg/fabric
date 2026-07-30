@@ -302,15 +302,31 @@ privilege check exempts, so divergence there means a check can behave differentl
 - Excluded rows are **counted and reported**, not silently dropped — and a mirror journal with no tenant
   is a failure rather than residue.
 
-### A gap this slice exposed and did NOT close
+### The correction path — a gap 1c exposed, now closed (ADR-0013 #11a)
 
-**There is no path to re-post a corrected mirror journal.** A mis-posted journal can be reversed, but
-the corrected re-post has no key available — `ledger_txn:{id}` is already taken and globally UNIQUE. So
-today the recovery is: reverse (books go to zero for that movement), and the movement then reads as
-unposted. Closing this needs a key with a correction component (e.g. `ledger_txn:{id}#2`) and a
-deliberate decision about whether reconciliation sums them, which is an ADR-level change rather than
-something to slip in. Not urgent — nothing produces a mis-posting today, and both the invariant and the
-reconciliation now report one loudly.
+Reversal alone never fixed a mis-posting: it un-posts the wrong amount, but the movement is still in the
+subledger with nothing correctly mirroring it, so the ledgers still disagree. And the obvious re-post was
+impossible, because `ledger_txn:{id}` is taken and globally UNIQUE.
+
+`correctGlPosting` (`services/api/src/accounting/gl-correction.ts`) reverses the bad journal and re-posts
+the movement as `ledger_txn:{id}#{n}`, both in ONE transaction so the books are never observably
+reversed-but-uncorrected. `source_kind`/`source_ref` stay the movement's, so the correction remains in
+the reconciliation's scope and nets the total right with no change to the comparison.
+
+Three things worth knowing before touching it:
+
+1. **The corrected lines come from the LIVE subledger legs, not the queued payload** — an inversion of
+   ADR-0013 #10, on purpose. The payload is evidence of what the drain saw, which makes it exactly what
+   to distrust once the posting turned out wrong.
+2. **The reconciliation's subledger scope had to become a semi-join.** Only `idempotency_key` is unique,
+   so a movement with both a mirror and a correction matches `(source_kind, source_ref)` twice and a
+   `JOIN` counted every leg twice. That was a latent fan-out that corrections would have triggered.
+3. **An already-reversed journal cannot be corrected again**, and a test caught that as a real
+   double-post: without the guard, the superseded original got a second correction and the books recorded
+   the movement twice. Correct the journal that superseded it instead — it is a mirror too.
+
+Still no production caller: invoking a correction is a staff money action and needs the maker-checker
+control ADR-0013 requires. That is the remaining half of `FIN-003`.
 
 ### TEST MIGRATIONS FROM AN EMPTY DATABASE BEFORE PUSHING
 
@@ -355,7 +371,6 @@ Phase 1's exit gate is met. What remains from its original scope, neither blocki
   is compared on replay, so an extra key turns an in-flight retry across a deploy into an
   `IdempotencyConflictError`). It needs to reach the ledger as its own column. A reporting dimension,
   not a correctness gap.
-- **The corrected-re-post key gap** described above.
 - The two pre-existing `0105` issues (grant drift + table ownership).
 
 Then Phase 3 — purchase and exact entitlement accounting — which is where the Phase 2 offer schema and
