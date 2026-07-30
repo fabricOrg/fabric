@@ -5,9 +5,13 @@ _Snapshot: 2026-07-30. Point-in-time; verify against code/git before asserting a
 
 ## START HERE (2026-07-30): money roadmap Phase 1 slice 1a — corporate general ledger
 
-Branch `feature/fin-accounting-boundary`, worktree `D:/work/jojo-worktrees/fin-ledger`, branched off
-`dev` at `d80325a`. **Uncommitted at the time of writing.** Phase 2 (commercial offers, PR #222) is
+Branch `feature/ops-accounting-boundary` at `232e183`, worktree `D:/work/jojo-worktrees/fin-ledger`,
+branched off `dev` at `d80325a`. **Committed, not pushed.** Phase 2 (commercial offers, PR #222) is
 already on `dev`; this is Phase 1, which #222 deliberately ran ahead of.
+
+(The branch-name validator only accepts `f<n>` / `e<n>` / `gh-<n>` / `ops` as the scope token — `fin`
+is rejected, so roadmap `FIN-*` work uses the `ops` scope, as Phase 2's
+`feature/ops-commercial-offers` did.)
 
 Ratified as [ADR-0013](./docs/decisions/0013-corporate-accounting-boundary.md). Phase 1 is sliced into
 1a (this: the boundary, nothing posts yet), 1b (the posting airlock + drain worker), 1c
@@ -51,9 +55,14 @@ privileges to `app_provisioner` ONLY; it never grants to `app_runtime`. So:
 | `0107`, `0110` pricing/offers | full DML | yes |
 
 Every revoke aimed at **`app_runtime`** holds — that is the tenant-isolation boundary and it is not
-touched. What lapses is any attempt to keep `app_provisioner` *narrower* than full DML. **`0105` is a
-live instance**: staff-path code can currently write sandbox allowance buckets in testing, contrary to
-its migration. Worth a follow-up; not fixed here to keep this slice reviewable.
+touched. What lapses is any attempt to keep `app_provisioner` *narrower* than full DML.
+
+**OPEN FOLLOW-UP — `0105` is a live instance.** Staff-path code can currently write
+`sandbox_usage_buckets` / `sandbox_usage_events` in testing, contrary to what `0105` intends
+(`SELECT` only). Deliberately not fixed in slice 1a to keep that diff reviewable. The fix is NOT
+another `REVOKE` migration — that would lapse again on the next deploy for exactly the same reason.
+It has to be a re-assertion in `checkSecurityLayerApplied`, the same shape as the `gl_*` block added
+here, so `db:assert` fails the deploy when the grant drifts back.
 
 Two fixes, and both were needed:
 
