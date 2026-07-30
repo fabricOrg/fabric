@@ -132,11 +132,14 @@ export function deriveJournalFromSubledgerEvent(
  * UNIQUE on `reverses_journal_id` means a retried correction cannot double-reverse and overstate the
  * books in the opposite direction.
  *
- * NOTE for slice 1c: `original` is a re-derived spec, not the rows actually in `gl_journal_lines`. That
- * is safe only while the kind→account mapping is unchanged between posting and reversing. The reversal
- * SERVICE must read the posted lines back and reverse those, or a later mapping change would credit an
- * account the original never touched — netting to zero, so no invariant would fire, while two control
- * accounts silently went wrong.
+ * NOT USED BY THE POSTING PATH, and deliberately so. `services/api/src/accounting/gl-reversal.ts` is
+ * what production calls, and it reads the POSTED lines back instead of re-deriving them: this function
+ * would reverse whatever the CURRENT mapping produces, so a mapping change between posting and
+ * reversing would credit an account the original never touched — netting to zero, so no invariant would
+ * fire, while two control accounts silently went wrong.
+ *
+ * It survives as the executable statement of what a reversal IS (flip every direction, keep every
+ * amount), which its unit tests pin. If the key format ever changes, change it in both places.
  *
  * `eventTimeIso` is the reversal's OWN event time, not the original's: a correction happens when it
  * happens, and back-dating one into a closed period is a decision for the Phase 8 close controls, not

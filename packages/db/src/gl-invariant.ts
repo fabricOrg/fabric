@@ -167,8 +167,12 @@ export async function findUnpostedMovements(
 
 /**
  * An account's balance is `Σ credits − Σ debits` over its lines, per currency — there is no stored
- * projection to read (see the schema header). This is the one definition of a GL balance, shared by
- * the reconciliation and by reporting so the two cannot disagree.
+ * projection to read (see the schema header).
+ *
+ * The reconciliation in gl-reconciliation.ts deliberately does NOT call this: it aggregates by control
+ * account and tenant scope, not by account and currency, so it states the same sign convention in its
+ * own terms. Two statements of one convention is a drift risk, and the guard against it is that both
+ * are asserted against fixed magnitudes by integration tests rather than against each other.
  */
 export async function glAccountBalances(
   db: SqlExecutor,

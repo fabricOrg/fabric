@@ -1,4 +1,9 @@
-import { glAccountCodeSchema, ledgerAccountKindSchema } from "@app/contracts";
+import {
+  currency,
+  glAccountCodeSchema,
+  ledgerAccountKindSchema,
+} from "@app/contracts";
+import { ENABLED_CURRENCIES } from "@app/db";
 import { SUBLEDGER_KIND_TO_GL_ACCOUNT } from "@app/domain";
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
@@ -39,6 +44,15 @@ describe("general-ledger chart of accounts agrees with the shared types", () => 
       SELECT code FROM gl_accounts ORDER BY code`;
     expect([...glAccountCodeSchema.options].sort()).toEqual(
       rows.map((r) => r.code).sort(),
+    );
+  });
+
+  it("reconciles over exactly the currencies the contract enables", async () => {
+    // `@app/db` cannot import the contract (it does not depend on it), so the reconciliation keeps its
+    // own copy of the enabled currency set. A currency in one list and not the other would silently drop
+    // every movement in it out of the reconciliation — a hole that reports as green.
+    expect([...ENABLED_CURRENCIES].sort()).toEqual(
+      [...currency.options].sort(),
     );
   });
 

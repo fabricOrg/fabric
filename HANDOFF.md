@@ -233,16 +233,110 @@ carry too little entropy to stay private across *accumulated* runs (journals are
 **never assert a fixed absolute balance**. Assert either the run's own journal rows, or the reported
 balance against an independently computed aggregate.
 
-### Next: slice 1c
+## Slice 1c (also 2026-07-30): the exit gate has an assertion behind it
 
-Subledger-to-control-account reconciliation (the Phase 1 exit gate): for every subledger kind `k` and
-currency `c`, GL balance of `map(k)` in `c` must equal the sum of that kind's subledger balances across
-all tenants. Both sides are append-only and share the sign convention, so it is a direct comparison.
-Then the reversal/adjustment service — which **must reverse the POSTED lines, not a re-derived spec**
-(see the note in `deriveReversalJournal`) — and channel attribution on journal lines.
+`checkGlReconciliation` (`packages/db/src/gl-reconciliation.ts`) compares, per subledger kind and
+currency, the sum of movements that already have a posted journal against the mapped GL control
+account. Exposed as `db:assert recon`, and in the hourly invariant pass. Plus `reverseGlJournal` — the
+only way to correct posted books.
 
-One `outbox_events` reminder that stays true: do **not** reuse it for accounting. It is the customer
-webhook outbox, and an accounting event landing on a tenant endpoint is a disclosure bug.
+**Completeness and accuracy are separate invariants, on purpose.** The drain lags by seconds, so a
+single combined check would sit permanently amber and stop being read. `checkGlInvariants` invariant 3
+asks "has everything reached the books?"; reconciliation asks "for what has, do the totals agree?".
+Together they are the exit gate; alone neither is. There is a test asserting that normal drain lag is
+NOT reported as a discrepancy.
+
+### Two scope decisions in the reconciliation that need defending
+
+"Exclude rows you find inconvenient" is how reconciliations go quietly wrong, so both exclusions are
+argued in the code rather than assumed:
+
+1. **Only the enabled currencies (GHS/NGN/USD).** `gl_journals.currency` is a bare `char(3)` with no
+   constraint — the contract's enum is the only narrowing. A journal in another currency is a defect,
+   but a *different* one, and absorbing it into a control-account total would hide it.
+2. **Only workspaces that still exist.** Journal lines are immutable; subledger movements are not.
+   Deleting a tenant requires deleting its ledger rows first (RESTRICT), and the journal lines they
+   produced survive by design — leaving a remainder that is un-reconcilable in principle. Holding it
+   against every future comparison would leave the gate permanently red, which equals no gate. Near
+   unreachable in production (no application role can delete ledger history); routine in tests, where
+   every spec tears down its own tenant.
+
+**Every journal kind counts**, though — mirrors, reversals and future manual adjustments alike. A
+reversal moves a control account as surely as a mirror does, so excluding it by `source_kind` would let
+real divergence hide. That means a reversal DOES show as a discrepancy until a compensating correction
+lands, which is correct: the ledgers genuinely disagree in that interval and an accountant should see it.
+
+### The defect the review caught that mattered most
+
+**"No discrepancies" is not "agreement".** `db:assert` connects as `DATABASE_URL_OWNER` — a superuser
+locally, but the **non-superuser `app_migrator`** in the cloud. `ledger_entries`, `ledger_accounts` and
+`accounts` are all FORCE RLS with permissive policies naming `app_provisioner` only, so in the deployed
+configuration the reconciliation would have scanned **zero rows and printed "reconciles"**. The exit-gate
+check was vacuous in exactly the environment it exists for, and invisible locally because the local role
+is a superuser.
+
+Fixing it took two attempts, and the first was wrong in an instructive way. Comparing "legs scanned"
+against a count of `ledger_entries` does nothing — **RLS zeroes the count too**. Nor does comparing
+against the visible books side, which false-positives on the orphan residue every test teardown leaves.
+The reliable signal is not data at all but **capability**: superuser, or a member of `app_provisioner`.
+That is RLS-immune and independent of how much data happens to exist. Gated by a test that runs the check
+under `SET ROLE app_migrator` — reproducing the deployed role exactly, since `app_runtime` holds no
+privilege on `gl_journals` and errors instead of going quietly blind.
+
+Migration 0115 also pins ownership of the three remaining `gl_*` tables to `app_migrator`, for the same
+local-vs-cloud reason 0114 did it for the airlock — ownership decides whether FORCE RLS binds and who a
+privilege check exempts, so divergence there means a check can behave differently deployed.
+
+### Also corrected from the review
+
+- The subledger side now joins `gl_journals` on **`(source_kind, source_ref)`**, the structural indexed
+  columns, not on a reconstructed `'ledger_txn:' || txn_id`. Nothing constrains the idempotency key to
+  equal `{source_kind}:{source_ref}`, so key-matching would let an adjustment keyed `ledger_txn:{uuid}`
+  masquerade as a movement's mirror — and the concatenation is not indexable.
+- **Every journal kind counts** in the comparison. Excluding reversals or adjustments by `source_kind`
+  would let real divergence hide behind a label.
+- Reversal: races settle on the DB constraint and return the winner instead of leaking a raw `23505`;
+  structured errors with stable codes instead of bare `Error`; refuses a journal whose actual line count
+  differs from its declared one (that journal already violates GL invariant 2); records the requesting
+  actor in metadata, since a correction needs a who and not just a why.
+- Excluded rows are **counted and reported**, not silently dropped — and a mirror journal with no tenant
+  is a failure rather than residue.
+
+### A gap this slice exposed and did NOT close
+
+**There is no path to re-post a corrected mirror journal.** A mis-posted journal can be reversed, but
+the corrected re-post has no key available — `ledger_txn:{id}` is already taken and globally UNIQUE. So
+today the recovery is: reverse (books go to zero for that movement), and the movement then reads as
+unposted. Closing this needs a key with a correction component (e.g. `ledger_txn:{id}#2`) and a
+deliberate decision about whether reconciliation sums them, which is an ADR-level change rather than
+something to slip in. Not urgent — nothing produces a mis-posting today, and both the invariant and the
+reconciliation now report one loudly.
+
+### Test-suite note
+
+`services/api/src/payments/auto-topup-concurrency.integration.spec.ts` is **flaky under full-suite
+load** — it asserts a mocked `fetch` was called once and intermittently sees zero. Observed twice in one
+session; passes 3/3 in isolation both times, with no code change. Do not chase it as a regression from
+accounting work; it touches auto top-up and Paystack mocking only.
+
+### Next — Phase 1 is done; Phase 2 is the offer work already on `dev`
+
+Phase 1's exit gate is met. What remains from its original scope, neither blocking:
+
+- **Channel attribution** on journal lines. `gl_journal_lines.channel` is always NULL because no ledger
+  movement carries a channel, and it must NOT be added via the idempotency fingerprint (the fingerprint
+  is compared on replay, so an extra key turns an in-flight retry across a deploy into an
+  `IdempotencyConflictError`). It needs to reach the ledger as its own column. A reporting dimension,
+  not a correctness gap.
+- **The corrected-re-post key gap** described above.
+- The two pre-existing `0105` issues (grant drift + table ownership).
+
+Then Phase 3 — purchase and exact entitlement accounting — which is where the Phase 2 offer schema and
+this accounting foundation finally meet.
+
+Two reminders that stay true: do **not** reuse `outbox_events` for accounting (it is the customer
+webhook outbox, and an accounting event on a tenant endpoint is a disclosure bug), and do **not** trust
+a migration's `REVOKE` to survive a deploy.
 
 ### Local DB housekeeping done along the way
 

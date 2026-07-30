@@ -19,6 +19,10 @@
 import postgres from "postgres";
 import { checkGlInvariants, formatGlViolations } from "../src/gl-invariant.js";
 import {
+  checkGlReconciliation,
+  formatReconciliation,
+} from "../src/gl-reconciliation.js";
+import {
   checkLedgerInvariants,
   formatViolations,
 } from "../src/ledger-invariant.js";
@@ -38,9 +42,9 @@ if (!OWNER_URL) {
 // Which gate(s) to run — lets `db:assert:security` / `db:assert:ledger` target one without a second
 // runner. Unknown arg fails loud rather than silently running nothing.
 const which = process.argv[2] ?? "all";
-if (!["all", "security", "ledger", "gl"].includes(which)) {
+if (!["all", "security", "ledger", "gl", "recon"].includes(which)) {
   console.error(
-    `unknown gate '${which}' — expected: security | ledger | gl | (none for all)`,
+    `unknown gate '${which}' — expected: security | ledger | gl | recon | (none for all)`,
   );
   process.exit(2);
 }
@@ -74,6 +78,13 @@ async function main(): Promise<void> {
   if (which === "all" || which === "gl") {
     const r = await checkGlInvariants(db);
     console.log(formatGlViolations(r));
+    if (!r.ok) failed = true;
+  }
+
+  // The Phase 1 exit gate: the two ledgers must agree, not merely each be internally consistent.
+  if (which === "all" || which === "recon") {
+    const r = await checkGlReconciliation(db);
+    console.log(formatReconciliation(r));
     if (!r.ok) failed = true;
   }
 

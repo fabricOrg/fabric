@@ -99,7 +99,8 @@ export function toPostingSpec(row: RequestRow): GlJournalSpec {
   }
 }
 
-function isUniqueViolation(error: unknown, constraint: string): boolean {
+/** Shared with the reversal service, which settles its own races on the same constraint machinery. */
+export function isUniqueViolation(error: unknown, constraint: string): boolean {
   if (!error || typeof error !== "object") return false;
   const e = error as {
     code?: unknown;

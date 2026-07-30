@@ -1,7 +1,9 @@
 import {
   checkGlInvariants,
+  checkGlReconciliation,
   checkLedgerInvariants,
   formatGlViolations,
+  formatReconciliation,
   formatViolations,
   type LedgerInvariantResult,
   type ProvisioningDb,
@@ -48,9 +50,17 @@ export async function runLedgerInvariants(input: {
       );
     }
 
-    // The subledger result is returned for the existing callers/tests; the GL result is reported
-    // through the log because nothing branches on it yet. Slice 1c's reconciliation is what turns the
-    // pair into a single answer about whether the two ledgers agree.
+    // Each ledger being internally consistent does not mean they AGREE — that is this third check, and
+    // it is the Phase 1 exit gate (ADR-0013 #15).
+    const reconciliation = await checkGlReconciliation(executor);
+    if (!reconciliation.ok) {
+      input.logger.error(
+        `LEDGER RECONCILIATION FAILURE\n${formatReconciliation(reconciliation)}`,
+      );
+    }
+
+    // The subledger result is what existing callers and tests consume; the GL and reconciliation
+    // results are reported through the log because nothing branches on them yet.
     return subledger;
   });
 }
