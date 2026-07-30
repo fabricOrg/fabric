@@ -312,6 +312,33 @@ deliberate decision about whether reconciliation sums them, which is an ADR-leve
 something to slip in. Not urgent — nothing produces a mis-posting today, and both the invariant and the
 reconciliation now report one loudly.
 
+### TEST MIGRATIONS FROM AN EMPTY DATABASE BEFORE PUSHING
+
+CI caught a defect on this PR that every local gate passed, and it would have broken **first-time
+production provisioning**, not just CI. Postgres refuses to *use* an enum value in the same transaction
+that `ALTER TYPE ... ADD VALUE` added it, and drizzle's migrator runs the **entire migration set in one
+transaction** — so `gl_accounts.control_for_kind`, typed as `ledger_account_kind`, could not be seeded
+with `token_deferred_revenue` on a database migrated from scratch. An incrementally-migrated local
+database committed that `ADD VALUE` long ago, so the seed was legal and `pnpm db:migrate` was green.
+
+**`drizzle-kit migrate` reports the failure as literally `undefined`.** To see the real error, apply
+through the library:
+
+```js
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+try { await migrate(drizzle(sql), { migrationsFolder: 'packages/db/migrations' }); }
+catch (e) { console.log(e.message, e.cause?.message); }
+```
+
+So: `CREATE DATABASE` a scratch one and run the full journal against it before pushing any migration.
+Roles are cluster-level and already exist. A green `db:migrate` against your working database proves
+nothing about the path CI and fresh provisioning take. This is the second time in one session that
+"works on my incrementally-migrated DB" hid a real defect — the first was table ownership.
+
+A fix-up migration cannot repair this class of problem, since the seed and the `ADD VALUE` share a
+transaction; the offending migration and its snapshots have to be edited in place, verified with
+`db:assert:drift`.
+
 ### Test-suite note
 
 `services/api/src/payments/auto-topup-concurrency.integration.spec.ts` is **flaky under full-suite
