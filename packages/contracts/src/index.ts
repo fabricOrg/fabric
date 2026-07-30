@@ -25,6 +25,8 @@ export * from "./email.js";
 export * from "./errors.js";
 // Lighthouse flow (Transactions explorer) — verify → charge → notify, one reconciled record.
 export * from "./flows.js";
+// Corporate general ledger — the company's books, distinct from the per-tenant wallet subledger.
+export * from "./general-ledger.js";
 export * from "./identity.js";
 // Staff impersonation — time-boxed, audited "view as tenant".
 export * from "./impersonation.js";

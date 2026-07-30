@@ -17,6 +17,7 @@ export * from "./auto-topup.js";
 export * from "./commercial-offers.js";
 export * from "./email.js";
 export * from "./flows.js";
+export * from "./general-ledger.js";
 export * from "./identity.js";
 export * from "./integrations.js";
 export * from "./kill-switches.js";

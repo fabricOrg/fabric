@@ -173,6 +173,16 @@ export async function checkSecurityLayerApplied(
   const REQUIRED_TRIGGERS = [
     "trg_ledger_txn_balanced",
     "trg_ledger_apply_entry",
+    // Corporate general ledger (ADR-0013, migration 0112). These carry MORE weight than the
+    // subledger's: GL immutability is enforced by trigger ALONE, because `prepareRoles()` re-grants
+    // full DML to app_provisioner on every deploy, so a privilege-based guarantee would not survive.
+    // If one of these is missing or disabled, posted company history is rewritable.
+    "trg_gl_journal_complete",
+    "trg_gl_journal_filled",
+    "trg_gl_journals_immutable",
+    "trg_gl_journal_lines_immutable",
+    "trg_gl_journals_no_truncate",
+    "trg_gl_journal_lines_no_truncate",
   ];
   const trigs = await db.query(
     `SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgname IN (${REQUIRED_TRIGGERS.map((t) => `'${t}'`).join(", ")})`,
@@ -181,8 +191,39 @@ export async function checkSecurityLayerApplied(
   for (const t of REQUIRED_TRIGGERS) {
     if (!trigNames.has(t))
       violations.push(
-        `ledger enforcement trigger '${t}' is missing — write-time invariant (0007) not applied`,
+        `ledger enforcement trigger '${t}' is missing — a write-time invariant (0007 / 0112) is not applied`,
       );
+  }
+
+  // 7. (ADR-0013 #2) The corporate general ledger is COMPANY data. The tenant-facing role must hold
+  // nothing on it, and the control plane must hold no way to rewrite it.
+  //
+  // WHY THIS IS ASSERTED ON EVERY DEPLOY rather than trusted from the migration: `prepareRoles()` in
+  // src/cloud-migrate.ts runs BEFORE migrate() on every deploy and unconditionally issues
+  // `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_provisioner`.
+  // Migration 0112 revokes those, but it is journaled and so runs exactly once. Without this check,
+  // deploy N would leave the correct state and deploy N+1 would silently re-grant, with nothing
+  // failing. `has_table_privilege` is used rather than `role_table_grants` so privileges inherited via
+  // role membership are counted too.
+  for (const table of ["gl_accounts", "gl_journals", "gl_journal_lines"]) {
+    const runtimeReach = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
+      WHERE has_table_privilege('${RUNTIME_ROLE}', '${table}', p)
+    `);
+    for (const r of runtimeReach.rows) {
+      violations.push(
+        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — the tenant-facing role must not reach the company books at all`,
+      );
+    }
+    const provisionerRewrite = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['UPDATE','DELETE','TRUNCATE']) AS p
+      WHERE has_table_privilege('app_provisioner', '${table}', p)
+    `);
+    for (const r of provisionerRewrite.rows) {
+      violations.push(
+        `'app_provisioner' holds ${r.priv} on ${table} — posted company history must be append-only (did prepareRoles re-grant?)`,
+      );
+    }
   }
 
   return { ok: violations.length === 0, violations };

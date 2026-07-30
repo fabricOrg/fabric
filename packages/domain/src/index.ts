@@ -10,6 +10,7 @@
 export * from "./billing.js";
 export * from "./commercial-offers.js";
 export * from "./email-render.js";
+export * from "./general-ledger-postings.js";
 export * from "./message-definition-compatibility.js";
 export * from "./message-preview.js";
 export * from "./message-render.js";

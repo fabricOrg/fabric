@@ -458,13 +458,23 @@ Exit gate: Product, Finance, Security, and Engineering sign off the invariants a
 
 ### Phase 1 — establish the corporate accounting boundary
 
+Ratified as [ADR 0013](./decisions/0013-corporate-accounting-boundary.md) and delivered in three
+slices, because the boundary, the wiring, and the reconciliation each carry different risk.
+
 - define corporate ledger accounts and dimensions;
 - add idempotent posting contracts from wallet/token domain events;
 - preserve transactional-outbox delivery;
 - implement reversal/adjustment entries;
 - produce tenant-subledger-to-corporate-control-account reconciliation.
 
+| Slice | Scope | Status |
+| --- | --- | --- |
+| 1a | GL schema, write-time enforcement, privilege boundary, seeded chart of accounts, pure posting rules, invariant module | **done** — nothing posts to it yet, so the slice carries no runtime risk |
+| 1b | The posting airlock (`INSERT`-only from the tenant transaction), its drain worker and production caller, wired to the wallet and token primitives | not started |
+| 1c | Subledger-to-control-account reconciliation, reversal/adjustment service, the standing invariant in the gate | not started |
+
 Exit gate: every supported wallet event produces balanced, replay-safe postings and reconciles.
+Reached at the end of 1c, not 1a.
 
 ### Phase 2 — fixed bundle offer foundation
 
@@ -547,10 +557,15 @@ defect.
 
 ### Money-accounting foundation
 
-- `FIN-001` Ratify accounting policies, terms, and posting matrix.
-- `FIN-002` Define the corporate chart of accounts and dimensions.
-- `FIN-003` Implement idempotent corporate posting and reversal contracts.
-- `FIN-004` Reconcile tenant wallet liabilities to corporate control accounts.
+- `FIN-001` Ratify accounting policies, terms, and posting matrix. — **engineering half done** in
+  ADR-0013 (the posting matrix is now executable, pinned by a unit test). The policy half stays open:
+  tax presentation, breakage, period length, and the named Finance approver.
+- `FIN-002` Define the corporate chart of accounts and dimensions. — **done** (migration 0112 seeds
+  the six accounts Phase 1 posts to; later phases add their own).
+- `FIN-003` Implement idempotent corporate posting and reversal contracts. — **contracts and pure
+  derivation done**; the airlock and drain worker that call them are slice 1b.
+- `FIN-004` Reconcile tenant wallet liabilities to corporate control accounts. — slice 1c. The
+  control-account mapping it compares is in place and pinned to the database.
 - `FIN-005` Capture billable usage and customer charge snapshots.
 - `FIN-006` Capture provider-rated cost and payable accruals.
 - `FIN-007` Ingest and reconcile provider invoices/statements.

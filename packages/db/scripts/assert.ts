@@ -12,11 +12,12 @@
 // security-layer.integration.spec.ts. Runs as the OWNER url because the checks read pg_roles /
 // pg_class / pg_policies / role_table_grants / pg_trigger.
 //
-// USAGE:  tsx scripts/assert.ts [security|ledger]      (no arg = run both)
+// USAGE:  tsx scripts/assert.ts [security|ledger|gl]    (no arg = run all)
 // EXIT:   0 = all pass · 1 = a violation (or runtime error) · 2 = misconfigured (no DATABASE_URL_OWNER)
 // ============================================================================================
 
 import postgres from "postgres";
+import { checkGlInvariants, formatGlViolations } from "../src/gl-invariant.js";
 import {
   checkLedgerInvariants,
   formatViolations,
@@ -37,9 +38,9 @@ if (!OWNER_URL) {
 // Which gate(s) to run — lets `db:assert:security` / `db:assert:ledger` target one without a second
 // runner. Unknown arg fails loud rather than silently running nothing.
 const which = process.argv[2] ?? "all";
-if (!["all", "security", "ledger"].includes(which)) {
+if (!["all", "security", "ledger", "gl"].includes(which)) {
   console.error(
-    `unknown gate '${which}' — expected: security | ledger | (none for both)`,
+    `unknown gate '${which}' — expected: security | ledger | gl | (none for all)`,
   );
   process.exit(2);
 }
@@ -65,6 +66,14 @@ async function main(): Promise<void> {
   if (which === "all" || which === "ledger") {
     const r = await checkLedgerInvariants(db);
     console.log(formatViolations(r));
+    if (!r.ok) failed = true;
+  }
+
+  // The corporate general ledger (ADR-0013). Separate from `ledger` because they are two ledgers with
+  // two definitions of correct, and a deploy needs to know WHICH one broke.
+  if (which === "all" || which === "gl") {
+    const r = await checkGlInvariants(db);
+    console.log(formatGlViolations(r));
     if (!r.ok) failed = true;
   }
 

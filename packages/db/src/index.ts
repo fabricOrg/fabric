@@ -3,6 +3,7 @@
 // from deep paths, so the package boundary stays a single, stable surface.
 
 export * from "./client.js";
+export * from "./gl-invariant.js";
 export * from "./ledger-invariant.js";
 export * from "./pagination.js";
 export * from "./pii-envelope.js";

@@ -1,7 +1,136 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-07-25. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-07-30. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
+
+## START HERE (2026-07-30): money roadmap Phase 1 slice 1a — corporate general ledger
+
+Branch `feature/fin-accounting-boundary`, worktree `D:/work/jojo-worktrees/fin-ledger`, branched off
+`dev` at `d80325a`. **Uncommitted at the time of writing.** Phase 2 (commercial offers, PR #222) is
+already on `dev`; this is Phase 1, which #222 deliberately ran ahead of.
+
+Ratified as [ADR-0013](./docs/decisions/0013-corporate-accounting-boundary.md). Phase 1 is sliced into
+1a (this: the boundary, nothing posts yet), 1b (the posting airlock + drain worker), 1c
+(reconciliation + reversals + the standing gate).
+
+### What 1a establishes
+
+A **tenant-neutral** corporate GL — `gl_accounts`, `gl_journals`, `gl_journal_lines` (0111) plus
+write-time enforcement, privileges, and the seeded chart of accounts (0112). Six accounts, one per
+subledger account kind, so reconciliation is a 1:1 mapping. `tenant_id` on a journal line is a nullable
+reporting **dimension**, not tenancy.
+
+Two separate mechanisms, and the split matters:
+
+- **Who can see the books = privilege.** `REVOKE ALL ... FROM PUBLIC, app_runtime`; only
+  `app_provisioner` gets `SELECT, INSERT`. Load-bearing per CLAUDE.md §9 — default privileges would
+  otherwise hand `app_runtime` DML on every new table.
+- **Whether history can be rewritten = TRIGGER.** `BEFORE UPDATE OR DELETE` (plus `BEFORE TRUNCATE`)
+  on both tables, always raising, for every role *including the owner*. See the BLOCKER below for why
+  privilege was not enough.
+
+Posting policy is a pure function in `@app/domain` over a `Record<LedgerAccountKind, GlAccountCode>`
+that is **exhaustive by type** — a seventh subledger kind will not compile until it is mapped.
+
+### The BLOCKER the independent review found — read this before trusting any REVOKE in this repo
+
+**`prepareRoles()` in `packages/db/src/cloud-migrate.ts:121` re-grants `SELECT, INSERT, UPDATE, DELETE
+ON ALL TABLES IN SCHEMA public TO app_provisioner` on EVERY deploy, and it runs BEFORE `migrate()`
+(line 203 vs 211).** A migration's `REVOKE` runs once because it is journaled; that grant runs forever.
+So deploy N ends in the intended state and **deploy N+1 silently undoes it**, with nothing failing —
+`db:assert` runs in the same job and did not look at these tables.
+
+**Scope it precisely** — I checked, and it is narrower than it first looks. `prepareRoles` grants table
+privileges to `app_provisioner` ONLY; it never grants to `app_runtime`. So:
+
+| migration | intent for `app_provisioner` | survives a redeploy? |
+| --- | --- | --- |
+| `0105` sandbox allowances | `SELECT` only | **no** — regains INSERT/UPDATE/DELETE |
+| `0112` general ledger | `SELECT, INSERT` | **no** — regains UPDATE/DELETE (now trigger-guarded + asserted) |
+| `0096` plugin credentials | full DML | yes (intent is full DML) |
+| `0107`, `0110` pricing/offers | full DML | yes |
+
+Every revoke aimed at **`app_runtime`** holds — that is the tenant-isolation boundary and it is not
+touched. What lapses is any attempt to keep `app_provisioner` *narrower* than full DML. **`0105` is a
+live instance**: staff-path code can currently write sandbox allowance buckets in testing, contrary to
+its migration. Worth a follow-up; not fixed here to keep this slice reviewable.
+
+Two fixes, and both were needed:
+
+1. **Prevention** — immutability moved off privilege onto triggers, which do not consult grants.
+   Verified: with `UPDATE`/`DELETE` re-granted exactly as `prepareRoles` does it, the rewrite is still
+   refused (`general ledger history is append-only: UPDATE on gl_journal_lines`).
+2. **Detection** — `checkSecurityLayerApplied` now asserts `gl_*` privileges (via
+   `has_table_privilege`, so inherited grants count) and the six GL triggers are present. Verified by
+   simulating the re-grant: `db:assert` exits 1 naming all six drifted grants; after restoring, exit 0.
+   `checkGlInvariants` is now wired into that gate too, as `db:assert gl`.
+
+### The other MAJOR: "balanced" is not enough to close a journal
+
+A journal only ever asserted that its lines net to zero. A **second balanced pair inserted in a later
+transaction also nets to zero** — so an append would have committed, writing fabricated revenue into a
+closed period while every invariant still reported healthy. Closed by a declared `line_count` on the
+journal, asserted from both sides at COMMIT: a journal must carry exactly the lines it said it would,
+so it can be neither under-filled nor appended to. That also strengthened the standing invariant, which
+now catches a deleted *balanced subset* of lines — the old "has ≥2 lines" check could not.
+
+### Two things the gates caught that are worth remembering
+
+1. **`security-layer.check.ts` pins `ALLOWED_SECURITY_DEFINERS` at empty**, and my first draft needed a
+   `SECURITY DEFINER` trigger to maintain a `gl_account_balances` projection that no application role
+   could write. That forced the right question: *why* does the subledger store a balance? Because the
+   send path locks it `FOR UPDATE` to fail closed on an overdraw. **The GL has no hot path** — nothing
+   gates on a company balance. So the projection table was dropped entirely; a balance is
+   `Σ credits − Σ debits` over the append-only lines. Fewer tables, no drift class, policy intact.
+   The lesson is generic: *copying a shape from the subledger without copying its reason.*
+2. **Local `DATABASE_URL_PROVISIONER` connects as `app_owner`, a SUPERUSER** — not as
+   `app_provisioner`. A denial test written over that connection **succeeds** and so reports a correct
+   migration as broken (it cost a full diagnosis cycle). Privilege assertions must use
+   `has_table_privilege('<role>', ...)` on the named role. `DATABASE_URL_APP` is the only URL that
+   connects as the role its name implies, so live-connection denial tests are still valid for
+   `app_runtime`.
+
+### Other review findings worth carrying forward
+
+- **`tenant_id` on a journal line is no longer a foreign key.** It could not be: lines are undeletable
+  by trigger, so `RESTRICT` would make any tenant that ever appeared in a posting permanently
+  undeletable — which would have broken the ~30 integration specs that delete their own tenant in
+  teardown, the moment slice 1b started posting. `SET NULL`/`CASCADE` need an UPDATE the immutability
+  trigger refuses. A dimension is a recorded fact, not a live relationship.
+- **The exhaustiveness claim was overstated.** `Record<LedgerAccountKind, GlAccountCode>` is exhaustive
+  over the *zod* enum in `@app/contracts`; adding a value to the `ledger_account_kind` **pgEnum** alone
+  still compiles, because contracts is browser-safe and cannot import the schema package. The real gate
+  is `gl-chart-agreement.integration.spec.ts`, which needs a live migrated Postgres. Comment corrected
+  rather than the claim quietly left standing.
+- **Slice 1c must reverse the POSTED lines, not a re-derived spec.** `deriveReversalJournal` takes a
+  `GlJournalSpec`. If the kind→account mapping changes between posting and reversing, re-deriving would
+  credit an account the original never touched — netting to zero, so no invariant fires, while two
+  control accounts silently go wrong. Noted in the function.
+
+### Verified, not reported
+
+Migrations applied to local Postgres as the non-super owner, then checked against the database:
+6 chart-of-accounts rows all nominated as control accounts, every `ledger_account_kind` mapped, all
+6 triggers installed, `app_runtime` holding zero of 7 privileges on every `gl_*` table, and
+unbalanced / short / empty / single-line / zero-amount / replayed / appended-to / self-reversed /
+double-reversed journals all rejected — plus UPDATE, DELETE and TRUNCATE refused even as owner.
+`@app/db` integration: 11 files / 75 tests. `@app/domain`: 22 new unit tests. `db:assert` green, and
+proven to go red on a simulated `prepareRoles` re-grant. Guards, biome and typecheck clean.
+
+### Next: slice 1b
+
+`gl_posting_requests` written in the SAME transaction as the subledger movement, `app_runtime` granted
+`INSERT` only with an RLS `WITH CHECK` binding the row to the ambient tenant; a drain worker running as
+`app_provisioner` maps each request through `deriveJournalFromSubledgerEvent` and posts it, keyed
+`ledger_txn:{txnId}`. It needs a real production caller and a kill-switch — a queued job that exists
+only as library code plus a test is not shipped. Do **not** reuse `outbox_events`: that is the customer
+webhook outbox and an accounting event landing on a tenant endpoint is a disclosure bug.
+
+### Local DB housekeeping done along the way
+
+Three orphaned test rows from 2026-07-13 (`email_dispatches`, `email_messages`, `inbound_messages`)
+were blocking tenant-cleanup hooks in three isolation specs — pre-existing, reproduced on untouched
+`dev`, unrelated to this change. Deleted; that suite is green again.
 
 ## NEW BUG (2026-07-28): customer-dashboard member invite sends no email
 
