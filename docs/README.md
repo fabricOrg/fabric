@@ -18,6 +18,7 @@ All design, product, and process docs live here. Code/config stays at the repo r
 
 ## Product & delivery
 - [SMS-FEATURES-AND-POSITIONING.md](SMS-FEATURES-AND-POSITIONING.md) — features + competitive wedge
+- [MONEY-ACCOUNTING-AND-COMMERCIAL-PRICING-ROADMAP.md](MONEY-ACCOUNTING-AND-COMMERCIAL-PRICING-ROADMAP.md) — proposed accounting progression and fixed-price bundle scope
 - [WALKING-SKELETON.md](WALKING-SKELETON.md) — the thin-thread PI-1 scope
 - [PI-1-BACKLOG.md](PI-1-BACKLOG.md) — research-grounded backlog
 - [PI-1/](PI-1/README.md) — per-feature user stories (48 files, 9 epics)
