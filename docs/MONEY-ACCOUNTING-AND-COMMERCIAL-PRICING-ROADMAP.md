@@ -1,6 +1,6 @@
 # Money accounting and commercial pricing roadmap
 
-Status: **proposed — product, finance, and engineering ratification required before implementation**
+Status: **product-approved for phased implementation — finance, security, and live-launch gates remain**
 
 Owner: Product and Engineering
 Last updated: 2026-07-30
@@ -8,12 +8,13 @@ Last updated: 2026-07-30
 ## Purpose
 
 This document defines the development path from Fabric's current wallet and token accounting to a
-reconcilable production money system. It also scopes a commercial-pricing capability that can sell
-fixed-price SMS bundles, account-specific offers, and later volume incentives without weakening
-the underlying per-segment accounting.
+reconcilable production money system. It also scopes a channel-agnostic commercial-pricing
+capability that can sell fixed-price bundles, account-specific offers, and later volume incentives
+without weakening each channel's natural-unit accounting.
 
-This proposal extends ADR-0010. It does not silently reinterpret the accepted unit-price model:
-the bundle changes below require an ADR amendment before code is merged.
+This roadmap extends ADR-0010 through the accepted
+[ADR 0012](./decisions/0012-channel-agnostic-commercial-offers.md). Finance and Security approval
+remain explicit exit gates before live commercial use.
 
 ## Executive decision
 
@@ -34,7 +35,7 @@ point value, or charge an amount different from the published offer.
 The recommended first commercial extension is therefore:
 
 - preserve the existing unit-rate model for pay-as-you-go;
-- add immutable, fixed-price prepaid bundle offers;
+- add immutable, fixed-price prepaid bundle offers for every registered channel;
 - allow a public/default catalog and workspace-specific catalog assignment;
 - defer generic discounts, coupons, recurring plans, and arbitrary pricing formulae until the
   fixed-bundle model is proven.
@@ -163,7 +164,7 @@ A bundle is a versioned offer with:
 
 - stable offer code and display name;
 - price-book/catalog membership;
-- channel and natural unit;
+- registry-backed channel and natural unit;
 - currency;
 - paid units;
 - promotional units, initially zero;
@@ -183,6 +184,12 @@ Examples:
 | Starter SMS | 100 segments | GHS 3.00 | Allocate 300 pesewas across 100 delivered segments |
 | Growth SMS | 200 segments | GHS 3.00 | Allocate 300 pesewas exactly across 200 delivered segments |
 | Nigeria SMS | 100 segments | NGN 500.00 | Only usable for the offer's compatible Nigeria route |
+| Transactional email | 10,000 recipients | USD 12.00 | Allocate 1,200 cents across delivered recipients |
+| Future voice | 3,600 seconds | GHS 25.00 | Uses the same allocation after voice is registered and live-ready |
+
+The offer model is not an SMS subsystem. SMS, email, voice, WhatsApp, push, and later channels use
+the same quantity-and-consideration structure while defining their own natural unit, eligibility,
+provider-cost evidence, and runtime readiness.
 
 The customer buys one or more complete packs. The API accepts `offer_version_id` and `pack_count`;
 it never accepts a client-supplied price or arbitrary amount. The server snapshots the exact
@@ -601,18 +608,19 @@ At minimum:
 - cross-currency token consumption;
 - live provider enablement or deployment.
 
-## Decisions required before implementation starts
+## Ratified direction and remaining gates
 
-1. Approve fixed-price, fixed-quantity bundles as the first pricing extension.
-2. Approve cumulative integer allocation as the accounting treatment for indivisible prices.
-3. Confirm initial bundles have no bonus units, expiry, or partial refunds.
-4. Confirm SMS bundles are route/destination constrained when provider costs differ.
-5. Confirm customer `owner | admin` may purchase and other customer roles are read-only.
-6. Name the Finance approver for posting policy, tax presentation, and close controls.
-7. Decide whether bundle implementation begins after the corporate posting boundary or proceeds in
-   parallel behind a disabled feature flag, with no live sale until reconciliation gates pass.
+Product ratified the following on 2026-07-30:
 
-The recommended sequence is to ratify decisions 1–7, implement `FIN-001` plus `COM-001`, then deliver
-Phases 2–4 behind a disabled feature flag while the corporate accounting and reconciliation
-foundation progresses. No bundle should be available for live purchase until Phases 5–8 satisfy
-their launch gates.
+- fixed-price, fixed-quantity bundles are the first pricing extension;
+- offers apply to all registered channels, not only SMS;
+- cumulative integer allocation governs indivisible prices;
+- the initial release has no bonus units, expiry, partial refunds, or generic discounts;
+- eligibility constrains any channel where provider cost differs by route or service;
+- customer `owner | admin` may purchase while other customer roles remain read-only; and
+- implementation may proceed behind a disabled feature flag while accounting and reconciliation
+  foundations progress.
+
+Before live commercial use, name the Finance approver and ratify posting policy, tax presentation,
+provider-cost evidence, close controls, and the Phase 5–8 launch record. No offer is available for
+live purchase until those gates pass.

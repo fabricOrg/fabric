@@ -15,6 +15,7 @@ export * from "./admin.js";
 export * from "./applications.js";
 // Audit log — append-only record of consequential staff actions.
 export * from "./audit.js";
+export * from "./commercial-offers.js";
 export * from "./definition-catalog.js";
 // Dev-portal DTOs (F8.6/F2.3) — API keys, webhook endpoints, request logs.
 export * from "./dev-portal.js";

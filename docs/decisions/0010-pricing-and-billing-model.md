@@ -5,6 +5,10 @@ is still required before/alongside implementation — it is money-adjacent. Shap
 owner in session; supersedes nothing but extends the wallet money semantics of
 [ADR 0006](./0006-managed-delivery-acceptance-and-execution.md).
 
+Amendment: [ADR 0012](./0012-channel-agnostic-commercial-offers.md) supersedes the assumption that
+prepaid commercial offers are SMS-specific or must have a whole-minor-unit price per unit. The
+underlying natural-unit, entitlement, deferred-revenue, and tokens-first invariants remain.
+
 ## Context
 
 Fabric bills today as pure prepaid pay-as-you-go against a per-`(tenant, currency)` double-entry
