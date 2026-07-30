@@ -133,8 +133,9 @@ describe("corporate general ledger invariants", () => {
       const unmapped = await owner<{ kind: string }[]>`
         SELECT k::text AS kind
         FROM unnest(enum_range(NULL::ledger_account_kind)) AS k
-        WHERE k NOT IN (
-          SELECT control_for_kind FROM gl_accounts WHERE control_for_kind IS NOT NULL)`;
+        WHERE k::text NOT IN (
+          SELECT control_for_kind::text FROM gl_accounts
+          WHERE control_for_kind IS NOT NULL)`;
       expect(unmapped.map((r) => r.kind)).toEqual([]);
     });
 

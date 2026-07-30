@@ -7,7 +7,7 @@ CREATE TABLE "gl_accounts" (
 	"name" text NOT NULL,
 	"type" "gl_account_type" NOT NULL,
 	"normal_balance" "gl_normal_balance" NOT NULL,
-	"control_for_kind" "ledger_account_kind",
+	"control_for_kind" text,
 	"description" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,

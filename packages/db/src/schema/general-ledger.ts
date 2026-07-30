@@ -16,7 +16,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { moneyMinor, type TenantId, timestamps } from "./_shared.js";
-import { ledgerAccountKind, ledgerDirection } from "./wallet.js";
+import { ledgerDirection } from "./wallet.js";
 
 /**
  * CORPORATE GENERAL LEDGER (ADR-0013, roadmap Phase 1) — the company's books, as distinct from the
@@ -96,11 +96,22 @@ export const glAccounts = pgTable(
     normalBalance: glNormalBalance("normal_balance").notNull(),
     /**
      * Set when this account is the CONSOLIDATED CONTROL ACCOUNT for a subledger account kind — the
-     * bridge ADR-0013 #4 defines. Typed as the subledger's own enum so the database itself rejects a
-     * kind that does not exist; the partial unique index below stops a seed mistake nominating two
+     * bridge ADR-0013 #4 defines. The partial unique index below stops a seed mistake nominating two
      * control accounts for one kind, which would silently split the reconciliation.
+     *
+     * TEXT, NOT THE `ledger_account_kind` ENUM, and that is not a preference. Postgres forbids USING an
+     * enum value in the same transaction that `ALTER TYPE ... ADD VALUE` added it, and drizzle's migrator
+     * runs the entire migration set in ONE transaction. `token_deferred_revenue` was added to that enum
+     * by the token work, so an enum-typed column here made the chart-of-accounts seed fail with
+     * "unsafe use of new value" on any FRESH database — CI and first-time production provisioning alike,
+     * while passing forever on an incrementally-migrated local DB.
+     *
+     * What replaces the type constraint: the partial unique index (no two accounts per kind), the
+     * exhaustive `Record<LedgerAccountKind, GlAccountCode>` in `@app/domain`, and an integration test
+     * asserting every value of the real enum has a control account. A typo therefore still fails a gate;
+     * it just fails it a step later than the database would have.
      */
-    controlForKind: ledgerAccountKind("control_for_kind"),
+    controlForKind: text("control_for_kind"),
     description: text("description"),
     ...timestamps,
   },

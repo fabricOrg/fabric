@@ -1811,8 +1811,7 @@
         },
         "control_for_kind": {
           "name": "control_for_kind",
-          "type": "ledger_account_kind",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
