@@ -7,9 +7,17 @@
 // and the Vitest integration test import the SAME assertions — one definition of "the company's books
 // are correct". Framework-agnostic: takes a query executor.
 //
-// THE TWO INVARIANTS:
+// THE THREE INVARIANTS:
 //   1. Per-journal trial balance:  for every journal,  Σ(credit) − Σ(debit) = 0.
 //   2. Declared completeness:      every journal's actual line count equals its `line_count`.
+//   3. Nothing unposted:           no posting request is parked `failed`, and none has sat `pending`
+//                                  past the staleness threshold.
+//
+// Invariant 3 is what makes "every movement reaches the books" an assertion rather than a claim.
+// Invariants 1 and 2 only check journals against THEMSELVES, so a movement that never posted at all is
+// invisible to them: a request parked `failed` is skipped by the drain's `WHERE status = 'pending'`
+// forever, every drain counter reads zero, and the books quietly understate revenue. The one error log
+// at the moment of parking is not a standing signal — it ages out.
 //
 // There is deliberately no projection-integrity check, because there is no cached balance table to
 // drift (see the schema header): a balance IS the signed sum of the lines.
@@ -38,10 +46,21 @@ export interface GlIncompleteJournal {
   actualLines: string;
 }
 
+export interface GlUnpostedMovement {
+  requestId: string;
+  ledgerTxnId: string;
+  status: string;
+  attempts: string;
+  ageMinutes: string;
+  lastError: string | null;
+}
+
 export interface GlInvariantResult {
   ok: boolean;
   imbalancedJournals: GlJournalImbalance[];
   incompleteJournals: GlIncompleteJournal[];
+  /** Movements that have not reached the books: parked, or pending past the threshold. */
+  unpostedMovements: GlUnpostedMovement[];
   /** GL tables the queries need but that are absent (unmigrated / partial migration). */
   missingTables: string[];
 }
@@ -50,7 +69,14 @@ const REQUIRED_GL_TABLES = [
   "gl_accounts",
   "gl_journals",
   "gl_journal_lines",
+  "gl_posting_requests",
 ] as const;
+
+/**
+ * How long a request may sit `pending` before it counts as unposted. Generous relative to the
+ * per-minute drain: this should catch a stuck or disabled drain, not a busy one.
+ */
+const DEFAULT_STALE_PENDING_MINUTES = 60;
 
 // Σ credits − Σ debits, the uniform sign convention shared with the subledger (ADR-0013 #7).
 const SIGNED_LINE = `CASE l.direction WHEN 'credit' THEN l.amount_minor ELSE -l.amount_minor END`;
@@ -108,6 +134,38 @@ export async function findIncompleteGlJournals(
 }
 
 /**
+ * Invariant 3 — every subledger movement must have reached the books. Reports requests parked `failed`
+ * and requests still `pending` past `stalePendingMinutes`.
+ *
+ * Both are "the books are incomplete", which is why they are one invariant rather than a metric: a
+ * parked request is permanent until someone acts, and there is deliberately no automatic requeue —
+ * silently retrying a payload a human has not looked at is how a real defect gets buried.
+ */
+export async function findUnpostedMovements(
+  db: SqlExecutor,
+  stalePendingMinutes: number = DEFAULT_STALE_PENDING_MINUTES,
+): Promise<GlUnpostedMovement[]> {
+  const { rows } = await db.query(`
+    SELECT id, ledger_txn_id, status::text AS status, attempts::text AS attempts,
+           (EXTRACT(EPOCH FROM (now() - created_at)) / 60)::bigint::text AS age_minutes,
+           last_error
+    FROM gl_posting_requests
+    WHERE status = 'failed'
+       OR (status = 'pending'
+           AND created_at < now() - interval '${Number(stalePendingMinutes)} minutes')
+    ORDER BY created_at
+  `);
+  return rows.map((r) => ({
+    requestId: String(r.id),
+    ledgerTxnId: String(r.ledger_txn_id),
+    status: String(r.status),
+    attempts: String(r.attempts),
+    ageMinutes: String(r.age_minutes),
+    lastError: r.last_error === null ? null : String(r.last_error),
+  }));
+}
+
+/**
  * An account's balance is `Σ credits − Σ debits` over its lines, per currency — there is no stored
  * projection to read (see the schema header). This is the one definition of a GL balance, shared by
  * the reconciliation and by reporting so the two cannot disagree.
@@ -136,6 +194,7 @@ export async function glAccountBalances(
  */
 export async function checkGlInvariants(
   db: SqlExecutor,
+  options: { stalePendingMinutes?: number } = {},
 ): Promise<GlInvariantResult> {
   // Fail CLEAN (not a 42P01 crash) if the GL schema isn't there — a gate run against an unmigrated
   // DB must report "migration did not apply", parity with checkLedgerInvariants.
@@ -145,17 +204,24 @@ export async function checkGlInvariants(
       ok: false,
       imbalancedJournals: [],
       incompleteJournals: [],
+      unpostedMovements: [],
       missingTables,
     };
   }
-  const [imbalancedJournals, incompleteJournals] = await Promise.all([
-    findImbalancedGlJournals(db),
-    findIncompleteGlJournals(db),
-  ]);
+  const [imbalancedJournals, incompleteJournals, unpostedMovements] =
+    await Promise.all([
+      findImbalancedGlJournals(db),
+      findIncompleteGlJournals(db),
+      findUnpostedMovements(db, options.stalePendingMinutes),
+    ]);
   return {
-    ok: imbalancedJournals.length === 0 && incompleteJournals.length === 0,
+    ok:
+      imbalancedJournals.length === 0 &&
+      incompleteJournals.length === 0 &&
+      unpostedMovements.length === 0,
     imbalancedJournals,
     incompleteJournals,
+    unpostedMovements,
     missingTables,
   };
 }
@@ -163,7 +229,7 @@ export async function checkGlInvariants(
 /** Human-readable failure report for CI logs / test messages. */
 export function formatGlViolations(r: GlInvariantResult): string {
   if (r.ok) {
-    return "general-ledger invariants OK (trial balance + declared completeness)";
+    return "general-ledger invariants OK (trial balance + declared completeness + nothing unposted)";
   }
   const lines: string[] = [];
   for (const t of r.missingTables) {
@@ -176,6 +242,16 @@ export function formatGlViolations(r: GlInvariantResult): string {
     for (const j of r.imbalancedJournals) {
       lines.push(
         `    ${j.idempotencyKey} (${j.journalId}): net ${j.netMinor} minor`,
+      );
+    }
+  }
+  if (r.unpostedMovements.length) {
+    lines.push(
+      `✗ ${r.unpostedMovements.length} subledger movement(s) have NOT reached the books:`,
+    );
+    for (const m of r.unpostedMovements) {
+      lines.push(
+        `    ledger_txn ${m.ledgerTxnId}: ${m.status}, ${m.attempts} attempt(s), ${m.ageMinutes}m old — ${m.lastError ?? "no error recorded"}`,
       );
     }
   }

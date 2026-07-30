@@ -57,12 +57,14 @@ privileges to `app_provisioner` ONLY; it never grants to `app_runtime`. So:
 Every revoke aimed at **`app_runtime`** holds — that is the tenant-isolation boundary and it is not
 touched. What lapses is any attempt to keep `app_provisioner` *narrower* than full DML.
 
-**OPEN FOLLOW-UP — `0105` is a live instance.** Staff-path code can currently write
+**OPEN FOLLOW-UP — `0105` is a live instance, on two counts.** Staff-path code can currently write
 `sandbox_usage_buckets` / `sandbox_usage_events` in testing, contrary to what `0105` intends
-(`SELECT` only). Deliberately not fixed in slice 1a to keep that diff reviewable. The fix is NOT
-another `REVOKE` migration — that would lapse again on the next deploy for exactly the same reason.
-It has to be a re-assertion in `checkSecurityLayerApplied`, the same shape as the `gl_*` block added
-here, so `db:assert` fails the deploy when the grant drifts back.
+(`SELECT` only), AND those tables are owned by the local superuser rather than `app_migrator`, so FORCE
+RLS does not bite the owner there as it does in prod. Deliberately not fixed in slices 1a/1b to keep
+those diffs reviewable. The grant fix is NOT another `REVOKE` migration — that lapses again on the next
+deploy for exactly the same reason. It has to be a re-assertion in `checkSecurityLayerApplied` (the same
+shape as the `gl_*` and airlock blocks added here) plus adding both tables to `TENANT_TABLES`, so
+`db:assert` fails the deploy when either drifts.
 
 Two fixes, and both were needed:
 
@@ -126,14 +128,121 @@ double-reversed journals all rejected — plus UPDATE, DELETE and TRUNCATE refus
 `@app/db` integration: 11 files / 75 tests. `@app/domain`: 22 new unit tests. `db:assert` green, and
 proven to go red on a simulated `prepareRoles` re-grant. Guards, biome and typecheck clean.
 
-### Next: slice 1b
+## Slice 1b (also 2026-07-30): the airlock is live — movements now reach the books
 
-`gl_posting_requests` written in the SAME transaction as the subledger movement, `app_runtime` granted
-`INSERT` only with an RLS `WITH CHECK` binding the row to the ambient tenant; a drain worker running as
-`app_provisioner` maps each request through `deriveJournalFromSubledgerEvent` and posts it, keyed
-`ledger_txn:{txnId}`. It needs a real production caller and a kill-switch — a queued job that exists
-only as library code plus a test is not shipped. Do **not** reuse `outbox_events`: that is the customer
-webhook outbox and an accounting event landing on a tenant endpoint is a disclosure bug.
+`gl_posting_requests` (0113) + RLS/grants/enqueue trigger (0114), the drain worker
+(`services/api/src/accounting/`), a per-minute cron caller, and both ledgers' invariants in the
+scheduled pass. **Every wallet and token movement now mirrors into a corporate journal.**
+
+The seam, concretely: `app_runtime` holds `INSERT` and nothing else on the queue — no `SELECT`, so it
+is write-only from the tenant side even before RLS — with a `WITH CHECK` binding the row to the ambient
+tenant. The drain runs as `app_provisioner`. Verified: runtime is denied SELECT/UPDATE/DELETE (42501)
+and a cross-tenant enqueue is refused.
+
+### Three design decisions worth not re-litigating
+
+1. **The enqueue is a deferred TRIGGER on `ledger_transactions`, not a call in each primitive.** A
+   primitive that forgot would produce money movement with no counterpart in the books and nothing
+   would fail. It must be `DEFERRABLE INITIALLY DEFERRED` because it builds its payload from the legs,
+   which do not exist at statement time (`openIdempotentTxn` inserts the envelope, `postLegs` follows).
+2. **The request carries its payload, not a pointer.** `provisioner_all` policies exist only on
+   `accounts`/`users`/`memberships` — NOT the FORCE-RLS ledger tables. A pointer-only row would have
+   required granting the provisioning role cross-tenant read of every customer's money movements.
+3. **`ledger_txn_id` is `ON DELETE CASCADE`, not RESTRICT.** In production `ledger_transactions` is
+   never deleted, so it never fires there; RESTRICT would have broken the ~30 specs that tear down
+   their own ledger rows. The durable audit does not need it — the journal records the same
+   `ledger_txn_id` in its own immutable `source_ref`.
+
+### Two defects my own verification caught (neither was visible by reading)
+
+1. **`ON CONFLICT DO NOTHING` needs `SELECT` privilege.** The trigger's insert failed 42501, and the
+   "obvious" fix — grant `app_runtime` SELECT — would have destroyed the write-only seam. The clause
+   protected against nothing (a constraint trigger fires once per row; `ledger_txn_id` is UNIQUE), so
+   it was removed. For money, a loud failure beats a silent skip.
+2. **A raw `execute()` returns timestamptz as a STRING, not a `Date`.** `row.event_time.toISOString()`
+   threw, the drain classified it transient, and **every** request retried forever while
+   `posted: 0, failed: 0` — the error visible only in `last_error`. Fixed by coercing, and the wider
+   lesson is now in the code: the drain reports a `retrying` count and the maintenance job logs it at
+   error level. A silent retry loop is the same failure mode as a swallowed error, just slower.
+
+### What the independent review changed (all fixed, not deferred)
+
+- **A parked request was a permanent silent hole.** `failed` rows are skipped by the drain's
+  `WHERE status = 'pending'` forever, so after the single error log at parking time nothing surfaced
+  them and the books quietly understated revenue with every gate green. `checkGlInvariants` now has a
+  **third invariant** — no request parked `failed`, none `pending` past 60 minutes — so "every movement
+  reaches the books" is an assertion instead of a claim. Gated by a test that parks a request and
+  asserts the invariant goes red.
+- **A missing chart-of-accounts row was classified permanent.** That is deploy skew, not a bad payload:
+  this repo builds one image and promotes it, with migrations as a separate pre-deploy task, so an image
+  briefly ahead of its migrations is NORMAL. Parking those would strand every movement of a new account
+  kind until someone ran SQL by hand. Now transient, as is an unknown `account_kind` (the pgEnum reaches
+  the DB before the widened zod enum reaches the API).
+- **My stated reason for carrying the payload was factually wrong.** `0027_provisioner_maintenance_read`
+  already gives `app_provisioner` cross-tenant SELECT on `ledger_entries` and `ledger_accounts`, so the
+  "a pointer would require granting cross-tenant read" argument was false — in the schema comment, the
+  ADR, and this file. The design stands on its real merits (the payload is evidence captured in the
+  movement's own transaction; no per-request join into FORCE-RLS tables) and the honest trade-off is now
+  stated: a snapshot can go stale.
+- **`gl_posting_requests` was absent from the security gate.** Nothing asserted FORCE RLS, a policy, or
+  INSERT-only for `app_runtime` — the slice's headline property rested on a one-off manual observation.
+  It is now in `TENANT_TABLES` plus an explicit privilege loop (including `TRUNCATE`/`REFERENCES`, and
+  `app_provisioner` must not hold DELETE, since deleting a pending request destroys a movement's only
+  path to the books).
+- **The seam was never exercised adversarially.** Every assertion read through the superuser owner,
+  which bypasses RLS — so deleting `REVOKE ALL ... FROM app_runtime` would have left the suite green.
+  New `gl-posting-seam.integration.spec.ts` drives runtime denial, cross-tenant rejection, rollback
+  safety, and the production caller including its kill path.
+- Smaller: `recordFailure` now guards `AND status = 'pending'` (a lost connection at COMMIT could
+  otherwise rewrite a `posted` row); `attempts` counts only failures, not successes; the enqueue trigger
+  asserts single-currency itself rather than depending on 0007 silently; the balance-sign test asserts
+  exact magnitudes on a currency it owns instead of comparing a function to a transcription of its own
+  SQL.
+
+### A prod-fidelity gap the gate surfaced — and it is not only mine
+
+`gl_posting_requests` was owned by `app_owner` (the local superuser) because `drizzle-kit migrate`
+connects as `DATABASE_URL_OWNER`. FORCE RLS binds the table OWNER, and a superuser bypasses RLS
+wholesale — so locally the isolation was weaker than production, where `app_migrator` owns tables and is
+deliberately non-superuser. 0114 now pins ownership explicitly (idempotent, a no-op in the cloud).
+
+**`sandbox_usage_buckets` has the same problem** and is not in `TENANT_TABLES`, so nothing reports it.
+Same follow-up as its grant drift below.
+
+### Known gap, deliberately left
+
+`gl_journal_lines.channel` is **always NULL today**. `ledger_transactions.metadata` is the idempotency
+FINGERPRINT (`{op, currency, amount, ref}`) and no primitive writes a channel. Guessing from the ledger
+reason is not acceptable — `message_reserve` is channel-neutral and backs both SMS and email, so a
+guess would attribute email revenue to SMS. **Do not fix it by widening the fingerprint**: the
+fingerprint is compared on replay, so an extra key turns a retried in-flight movement across a deploy
+boundary into an `IdempotencyConflictError`. The channel needs to reach the ledger as its own column.
+
+### Operating it
+
+`GL_POSTING_ENABLED=false` stops the drain without a deploy. Safe to leave off: the enqueue trigger is
+unaffected, so nothing is lost — the queue grows and drains when re-enabled. Default is ON, because
+withholding posting leaves the books incomplete, which is the worse failure. Requests park as `failed`
+after a permanent error or 5 attempts; `last_error` says why.
+
+### Test-isolation lesson for anyone adding GL specs
+
+GL journals are immutable by trigger, so **a spec cannot clean up after itself** — its rows stay, like
+production rows. The GL spec therefore uses a run-scoped `X__` currency, but note that 3 characters
+carry too little entropy to stay private across *accumulated* runs (journals are never deleted), so
+**never assert a fixed absolute balance**. Assert either the run's own journal rows, or the reported
+balance against an independently computed aggregate.
+
+### Next: slice 1c
+
+Subledger-to-control-account reconciliation (the Phase 1 exit gate): for every subledger kind `k` and
+currency `c`, GL balance of `map(k)` in `c` must equal the sum of that kind's subledger balances across
+all tenants. Both sides are append-only and share the sign convention, so it is a direct comparison.
+Then the reversal/adjustment service — which **must reverse the POSTED lines, not a re-derived spec**
+(see the note in `deriveReversalJournal`) — and channel attribution on journal lines.
+
+One `outbox_events` reminder that stays true: do **not** reuse it for accounting. It is the customer
+webhook outbox, and an accounting event landing on a tenant endpoint is a disclosure bug.
 
 ### Local DB housekeeping done along the way
 

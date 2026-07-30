@@ -144,18 +144,58 @@ isolation that protects customer data.
    original is never touched.
 
 10. **Postings cross the tenant boundary through an INSERT-only airlock, not the webhook outbox.**
-    A domain write enqueues a `gl_posting_requests` row in the **same transaction** as the subledger
-    write. `app_runtime` is granted `INSERT` only — no `SELECT`, `UPDATE`, or `DELETE` — with an RLS
+    A `gl_posting_requests` row is written in the **same transaction** as the subledger movement.
+    `app_runtime` is granted `INSERT` only — no `SELECT`, `UPDATE`, or `DELETE` — with an RLS
     `WITH CHECK` binding the row to the ambient tenant. A worker running as `app_provisioner` drains
     the queue and posts the journal.
 
     The tenant path can therefore say *"this happened"* and nothing more: it cannot read the company
-    books, cannot alter a posting request, and cannot post a journal. Writing the journal inline
-    would require giving `app_runtime` write access to the GL, which decision 2 forbids.
+    books, cannot read or alter the queue, and cannot post a journal. Writing the journal inline would
+    require giving `app_runtime` write access to the GL, which decision 2 forbids.
+
+    **The enqueue is a TRIGGER, not a call in each wallet primitive.** A primitive that forgot to
+    enqueue would produce money movement with no counterpart in the company's books, and nothing would
+    fail. A deferred constraint trigger on `ledger_transactions` cannot be forgotten by a future
+    primitive and is inside the movement's own transaction by construction — the two properties the
+    exit gate needs. It must be `DEFERRABLE INITIALLY DEFERRED` because it builds its payload from the
+    movement's legs, which do not exist at statement time: `openIdempotentTxn` inserts the envelope
+    first and `postLegs` adds the legs after.
+
+    **The request carries its payload, not just a pointer to the subledger transaction.** Not for
+    privilege reasons — `app_provisioner` can already read `ledger_entries` and `ledger_accounts`
+    cross-tenant via the `provisioner_read` policies in migration 0027. The reasons are that the
+    payload is *evidence* (the journal derives from what the movement was when it happened, captured in
+    its own transaction, rather than from a later re-read) and that the drain then needs no per-request
+    join into FORCE-RLS tenant tables.
+
+    The trade-off is that a snapshot can go stale: legs INSERTed against an already-committed
+    transaction are invisible to it, because `ledger_transactions` has no closed-set guard (no
+    equivalent of `gl_journals.line_count`) and 0007's balance trigger accepts a balanced append.
+    Re-reading at drain time would not close that either — only a subledger closed-set guard would.
+    Slice 1c's reconciliation is what detects it, and it is recorded as follow-up work.
+
+    Amounts travel as JSON strings, never numbers, because jsonb numbers are IEEE-754 doubles and would
+    silently round a large minor-unit amount.
+
+    A legless transaction envelope enqueues nothing: it moved no money, so there is nothing to post.
 
     The existing `outbox_events` table is deliberately **not** reused. It is the *customer webhook*
     outbox, with application and environment containment, and its rows are delivered to customer
     endpoints. Company accounting events must never be deliverable to a tenant endpoint.
+
+    **Recovery is a lookup, not an error path.** Before inserting, the drain asks whether the journal
+    already exists — the state a crash between the journal insert and the bookkeeping update leaves
+    behind. Deciding that deterministically beats pattern-matching a driver's error shape, since drizzle
+    wraps the postgres.js error and `constraint_name` is not reliably where you expect it; the unique
+    violation remains as a backstop for the narrow race.
+
+    **A payload the policy can never accept is parked; anything that resolves itself retries.** Deploy
+    skew is the case that matters: this repo promotes one image with migrations as a separate pre-deploy
+    task, so a missing chart-of-accounts row or an `account_kind` the image's zod enum does not yet know
+    are NORMAL transient states, not bad payloads — parking them would strand every movement of a new
+    kind until someone ran SQL by hand. A genuinely malformed payload parks, and **a parked request is a
+    movement that never reached the books**, so decision 14's invariant reports it. A drain that retries
+    silently is the same defect as a swallowed error, so `retrying` is counted and logged separately.
 
 11. **Exactly-once by idempotency key, not by delivery guarantee.** A journal's key is
     `{source_kind}:{source_ref}` — for this phase, `ledger_txn:{ledger_transactions.id}`, which is
@@ -175,7 +215,14 @@ isolation that protects customer data.
     avoids restating history later. Finance may later elect a different reporting timezone, which
     would be a forward-only policy change, never a retroactive restatement.
 
-14. **The reconciliation invariant is the phase's exit gate.** For every subledger kind `k` and
+14. **Nothing unposted is an invariant, not a metric.** A trial balance only checks journals against
+    themselves, so a movement that never posted is invisible to it. `checkGlInvariants` therefore also
+    fails when a posting request is parked `failed` or has sat `pending` past a staleness threshold —
+    otherwise the single log line at parking time is the only signal, it ages out, and the books
+    understate revenue permanently with every gate green. There is deliberately **no automatic
+    requeue**: silently retrying a payload no human has looked at is how a real defect gets buried.
+
+15. **The reconciliation invariant is the phase's exit gate.** For every subledger kind `k` and
     currency `c`, the GL balance of `map(k)` in `c` must equal the sum of that kind's subledger
     balances across all tenants. Both sides derive from append-only records, and the shared sign
     convention (decision 7) makes it a direct comparison. That reconciliation is slice 1c; the GL's own

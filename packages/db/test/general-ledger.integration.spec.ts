@@ -148,15 +148,56 @@ describe("corporate general ledger invariants", () => {
   });
 
   describe("write-time enforcement", () => {
-    it("posts a balanced journal, and the lines are the balance", async () => {
-      await post("balanced", TOP_UP);
-      const balances = (await glAccountBalances(executor)).filter(
-        (b) => b.currency === CCY,
+    it("posts a balanced journal whose lines are exactly the movement", async () => {
+      const journalId = await post("balanced", TOP_UP);
+      const lines = await owner<
+        { code: string; direction: string; amount_minor: string }[]
+      >`
+        SELECT a.code, l.direction, l.amount_minor::text
+        FROM gl_journal_lines l JOIN gl_accounts a ON a.id = l.account_id
+        WHERE l.journal_id = ${journalId} ORDER BY a.code`;
+      expect(lines).toEqual([
+        { code: "1100", direction: "debit", amount_minor: "5000" },
+        { code: "2100", direction: "credit", amount_minor: "5000" },
+      ]);
+    });
+
+    it("computes a balance as the signed sum of the lines, with the documented sign", async () => {
+      /**
+       * Asserted with EXACT MAGNITUDES against a fresh currency this test owns outright, so it actually
+       * pins the sign convention. Comparing the function against a hand-copied transcription of its own
+       * SQL would prove nothing: inverting the convention in gl-invariant.ts would invert both sides
+       * and still pass.
+       *
+       * A per-test currency, not the per-run one: the GL is append-only and shared, and three
+       * characters carry too little entropy for a run-scoped code to stay private across accumulated
+       * runs, so absolute totals are only safe on a currency nothing else has touched.
+       */
+      const ccy = `Y${RUN.slice(2, 4).toUpperCase()}`;
+      const cash = await accountId("1100");
+      const liability = await accountId("2100");
+      await owner.begin(async (tx) => {
+        const [j] = await tx<{ id: string }[]>`
+          INSERT INTO gl_journals
+            (idempotency_key, source_kind, source_ref, currency, event_time,
+             accounting_date, line_count)
+          VALUES (${key("sign")}, 'ledger_txn', 'sign', ${ccy}, now(), current_date, 2)
+          RETURNING id`;
+        const signJournal = j?.id;
+        if (!signJournal) throw new Error("journal insert returned no id");
+        await tx`
+          INSERT INTO gl_journal_lines (journal_id, account_id, direction, amount_minor)
+          VALUES (${signJournal}, ${cash}, 'debit', 700),
+                 (${signJournal}, ${liability}, 'credit', 700)`;
+      });
+
+      const reported = (await glAccountBalances(executor)).filter(
+        (b) => b.currency === ccy,
       );
-      // Σ credits − Σ debits: the asset account computes negative by design (ADR-0013 #7).
-      expect(balances).toEqual([
-        { code: "1100", currency: CCY, balanceMinor: "-5000" },
-        { code: "2100", currency: CCY, balanceMinor: "5000" },
+      // Σ credits − Σ debits: a debit-normal asset account computes NEGATIVE (ADR-0013 #7).
+      expect(reported).toEqual([
+        { code: "1100", currency: ccy, balanceMinor: "-700" },
+        { code: "2100", currency: ccy, balanceMinor: "700" },
       ]);
     });
 

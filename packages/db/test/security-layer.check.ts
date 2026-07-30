@@ -32,6 +32,10 @@ export const TENANT_TABLES = [
   "ledger_accounts",
   "ledger_transactions",
   "ledger_entries",
+  // The GL posting airlock (0114) — the one tenant-scoped table in the general-ledger domain, and the
+  // only one the tenant-facing role may write. It carries tenant_id, so it needs FORCE RLS and a policy
+  // like any other tenant table.
+  "gl_posting_requests",
   "api_keys",
   "messages",
 ] as const;
@@ -205,6 +209,37 @@ export async function checkSecurityLayerApplied(
   // deploy N would leave the correct state and deploy N+1 would silently re-grant, with nothing
   // failing. `has_table_privilege` is used rather than `role_table_grants` so privileges inherited via
   // role membership are counted too.
+  // The posting airlock (0114). The tenant-facing role may INSERT and nothing else — that asymmetry IS
+  // the seam, and like every other grant it is restored broadly by prepareRoles on each deploy, so it
+  // has to be re-asserted rather than trusted from the migration.
+  const airlockRuntime = await db.query(`
+    SELECT p AS priv FROM unnest(ARRAY['SELECT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
+    WHERE has_table_privilege('${RUNTIME_ROLE}', 'gl_posting_requests', p)
+  `);
+  for (const r of airlockRuntime.rows) {
+    violations.push(
+      `'${RUNTIME_ROLE}' holds ${r.priv} on gl_posting_requests — the posting airlock must be INSERT-only from the tenant side`,
+    );
+  }
+  const airlockInsert = await db.query(
+    `SELECT has_table_privilege('${RUNTIME_ROLE}', 'gl_posting_requests', 'INSERT') AS ok`,
+  );
+  if (airlockInsert.rows[0]?.ok !== true) {
+    violations.push(
+      `'${RUNTIME_ROLE}' cannot INSERT into gl_posting_requests — money movements cannot reach the books`,
+    );
+  }
+  // Deleting a still-pending request destroys a movement's only path to the books, and no reconciliation
+  // exists to notice. The FK cascade does not need this privilege (referential actions bypass it).
+  const airlockDelete = await db.query(
+    `SELECT has_table_privilege('app_provisioner', 'gl_posting_requests', 'DELETE') AS held`,
+  );
+  if (airlockDelete.rows[0]?.held === true) {
+    violations.push(
+      "'app_provisioner' holds DELETE on gl_posting_requests — a queued movement could be dropped before it posts (did prepareRoles re-grant?)",
+    );
+  }
+
   for (const table of ["gl_accounts", "gl_journals", "gl_journal_lines"]) {
     const runtimeReach = await db.query(`
       SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p

@@ -469,9 +469,9 @@ slices, because the boundary, the wiring, and the reconciliation each carry diff
 
 | Slice | Scope | Status |
 | --- | --- | --- |
-| 1a | GL schema, write-time enforcement, privilege boundary, seeded chart of accounts, pure posting rules, invariant module | **done** — nothing posts to it yet, so the slice carries no runtime risk |
-| 1b | The posting airlock (`INSERT`-only from the tenant transaction), its drain worker and production caller, wired to the wallet and token primitives | not started |
-| 1c | Subledger-to-control-account reconciliation, reversal/adjustment service, the standing invariant in the gate | not started |
+| 1a | GL schema, write-time enforcement, privilege boundary, seeded chart of accounts, pure posting rules, invariant module | **done** — nothing posted to it yet, so the slice carried no runtime risk |
+| 1b | The posting airlock (`INSERT`-only from the tenant transaction), the enqueue trigger, the drain worker and its cron caller, both ledgers' invariants in the scheduled pass | **done** — every wallet movement now mirrors into the books |
+| 1c | Subledger-to-control-account reconciliation, the reversal/adjustment service, channel attribution on journal lines | not started |
 
 Exit gate: every supported wallet event produces balanced, replay-safe postings and reconciles.
 Reached at the end of 1c, not 1a.
@@ -562,10 +562,13 @@ defect.
   tax presentation, breakage, period length, and the named Finance approver.
 - `FIN-002` Define the corporate chart of accounts and dimensions. — **done** (migration 0112 seeds
   the six accounts Phase 1 posts to; later phases add their own).
-- `FIN-003` Implement idempotent corporate posting and reversal contracts. — **contracts and pure
-  derivation done**; the airlock and drain worker that call them are slice 1b.
+- `FIN-003` Implement idempotent corporate posting and reversal contracts. — **posting done** (slice
+  1b): every wallet and token movement enqueues in its own transaction and drains into a balanced
+  journal, keyed `ledger_txn:{id}` so redelivery and crash recovery both post exactly once. The
+  reversal *service* is still slice 1c; only its pure derivation exists.
 - `FIN-004` Reconcile tenant wallet liabilities to corporate control accounts. — slice 1c. The
-  control-account mapping it compares is in place and pinned to the database.
+  control-account mapping it compares is in place and pinned to the database, and both ledgers'
+  invariants already run in the scheduled pass.
 - `FIN-005` Capture billable usage and customer charge snapshots.
 - `FIN-006` Capture provider-rated cost and payable accruals.
 - `FIN-007` Ingest and reconcile provider invoices/statements.

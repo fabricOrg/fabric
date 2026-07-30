@@ -1,19 +1,17 @@
-import {
-  checkLedgerInvariants,
-  formatViolations,
-  type LedgerInvariantResult,
-  type ProvisioningDb,
-} from "@app/db";
+import type { LedgerInvariantResult, ProvisioningDb } from "@app/db";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { sql } from "drizzle-orm";
+import type { GlDrainResult } from "../accounting/gl-posting.worker.js";
 import { EmailService } from "../email/email.service.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { runtimeRoleEnabled } from "../runtime/runtime-role.js";
 import { SmsService } from "../sms/sms.service.js";
 import { VirtualPhoneService } from "../sms/virtual-phone.service.js";
 import { runEmailSweep } from "./maintenance-email-sweep.js";
+import { runGlPostingDrain } from "./maintenance-gl-posting.js";
+import { runLedgerInvariants } from "./maintenance-invariants.js";
 import {
   runDeliveryRetention,
   runLogRetention,
@@ -111,6 +109,11 @@ export class MaintenanceService {
   @Cron(CronExpression.EVERY_MINUTE)
   async dispatchTick(): Promise<void> {
     return this.tick("dispatch recovery", () => this.runDispatchRecovery());
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async glPostingTick(): Promise<void> {
+    return this.tick("gl posting drain", () => this.runGlPosting());
   }
 
   /** Recover dispatch intents that committed but were not durably accepted by Redis. */
@@ -265,30 +268,24 @@ export class MaintenanceService {
     );
   }
 
+  /** Drain the GL posting airlock (ADR-0013 slice 1b). See maintenance-gl-posting.ts. */
+  async runGlPosting(): Promise<GlDrainResult | null> {
+    return runGlPostingDrain({
+      db: this.provisioning.db,
+      enabled: this.config.get<string>("GL_POSTING_ENABLED") !== "false",
+      logger: this.logger,
+    });
+  }
+
   /**
-   * One global invariant pass (also the test entry point). Returns the result, or null when
-   * another runner holds the lock. Drift = page-worthy error log.
+   * One global invariant pass over BOTH ledgers (also the test entry point). Returns the subledger
+   * result, or null when another runner holds the lock. See maintenance-invariants.ts.
    */
   async runInvariant(): Promise<LedgerInvariantResult | null> {
-    return this.provisioning.db.transaction(async (tx) => {
-      const lockRows = (await tx.execute(
-        sql`SELECT pg_try_advisory_xact_lock(${MaintenanceService.INVARIANT_LOCK_KEY}) AS locked`,
-      )) as Array<{ locked: boolean }>;
-      if (lockRows[0]?.locked !== true) return null;
-
-      const invariant = await checkLedgerInvariants({
-        query: async (q: string) => ({
-          rows: (await tx.execute(sql.raw(q))) as Array<
-            Record<string, unknown>
-          >,
-        }),
-      });
-      if (!invariant.ok) {
-        this.logger.error(
-          `LEDGER INVARIANT VIOLATION\n${formatViolations(invariant)}`,
-        );
-      }
-      return invariant;
+    return runLedgerInvariants({
+      db: this.provisioning.db,
+      lockKey: MaintenanceService.INVARIANT_LOCK_KEY,
+      logger: this.logger,
     });
   }
 }
