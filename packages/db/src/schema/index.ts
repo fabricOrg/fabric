@@ -14,6 +14,7 @@ export * from "./api-keys.js";
 export * from "./applications.js";
 export * from "./audit.js";
 export * from "./auto-topup.js";
+export * from "./commercial-offers.js";
 export * from "./email.js";
 export * from "./flows.js";
 export * from "./identity.js";

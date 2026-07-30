@@ -771,6 +771,13 @@
       "when": 1785345154177,
       "tag": "0109_neon_ledger_privileges",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1785401598554,
+      "tag": "0110_acoustic_the_fury",
+      "breakpoints": true
     }
   ]
 }
