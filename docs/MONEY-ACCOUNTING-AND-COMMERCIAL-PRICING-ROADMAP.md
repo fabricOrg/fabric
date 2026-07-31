@@ -458,13 +458,52 @@ Exit gate: Product, Finance, Security, and Engineering sign off the invariants a
 
 ### Phase 1 — establish the corporate accounting boundary
 
+Ratified as [ADR 0013](./decisions/0013-corporate-accounting-boundary.md) and delivered in three
+slices, because the boundary, the wiring, and the reconciliation each carry different risk.
+
 - define corporate ledger accounts and dimensions;
 - add idempotent posting contracts from wallet/token domain events;
 - preserve transactional-outbox delivery;
 - implement reversal/adjustment entries;
 - produce tenant-subledger-to-corporate-control-account reconciliation.
 
+| Slice | Scope | Status |
+| --- | --- | --- |
+| 1a | GL schema, write-time enforcement, privilege boundary, seeded chart of accounts, pure posting rules, invariant module | **done** — nothing posted to it yet, so the slice carried no runtime risk |
+| 1b | The posting airlock (`INSERT`-only from the tenant transaction), the enqueue trigger, the drain worker and its cron caller, both ledgers' invariants in the scheduled pass | **done** — every wallet movement now mirrors into the books |
+| 1c | Subledger-to-control-account reconciliation, the reversal service | **done** — the exit gate now has an assertion behind it |
+
 Exit gate: every supported wallet event produces balanced, replay-safe postings and reconciles.
+**Met**, and asserted rather than claimed, by three separate checks that compose:
+
+| check | question | where |
+| --- | --- | --- |
+| `checkLedgerInvariants` | is the subledger internally consistent? | `db:assert ledger` |
+| `checkGlInvariants` | are the books internally consistent, and has everything reached them? | `db:assert gl` |
+| `checkGlReconciliation` | do the two ledgers AGREE? | `db:assert recon` |
+
+Splitting completeness from accuracy is deliberate: the drain's normal lag means the books trail the
+subledger by seconds, so a single combined check would sit permanently amber and stop being read.
+
+### What these three checks do NOT cover
+
+Stated explicitly, because a gate that is trusted beyond its reach is worse than one nobody trusts:
+
+- **Period attribution.** The reconciliation is period-blind: a movement posted to the wrong
+  `accounting_date` still reconciles in total. Phase 8's close controls need a per-period check.
+- **A subledger that is itself wrong.** If a send is rated at the wrong price, both ledgers agree on the
+  wrong number. That is a pricing/rating defect, not an accounting one, and no reconciliation can see it.
+- **Journals in a currency outside the enabled set**, and **control-account lines for a workspace that no
+  longer exists** — both deliberately out of scope, argued in `gl-reconciliation.ts`. The subledger is
+  separately checked for out-of-set money, since that is where money enters.
+- **Whether a caller could see anything.** Covered now, but only because it is checked explicitly: the
+  reconciliation refuses to report success from a role RLS has blinded. It does not infer this from row
+  counts, which RLS zeroes just as thoroughly as the rows themselves.
+
+**Still open from Phase 1's original scope:** channel attribution on journal lines
+(`gl_journal_lines.channel` is always NULL — the ledger does not carry a channel, and it must not be
+added via the idempotency fingerprint), and a production caller for reversal. Both tracked in HANDOFF;
+neither is a correctness gap in the books, so neither holds the exit gate.
 
 ### Phase 2 — fixed bundle offer foundation
 
@@ -547,10 +586,24 @@ defect.
 
 ### Money-accounting foundation
 
-- `FIN-001` Ratify accounting policies, terms, and posting matrix.
-- `FIN-002` Define the corporate chart of accounts and dimensions.
-- `FIN-003` Implement idempotent corporate posting and reversal contracts.
-- `FIN-004` Reconcile tenant wallet liabilities to corporate control accounts.
+- `FIN-001` Ratify accounting policies, terms, and posting matrix. — **engineering half done** in
+  ADR-0013 (the posting matrix is now executable, pinned by a unit test). The policy half stays open:
+  tax presentation, breakage, period length, and the named Finance approver.
+- `FIN-002` Define the corporate chart of accounts and dimensions. — **done** (migration 0112 seeds
+  the six accounts Phase 1 posts to; later phases add their own).
+- `FIN-003` Implement idempotent corporate posting and reversal contracts. — **posting and correction
+  done**; the staff-facing caller **remains open**. Every wallet and token movement enqueues in its own transaction and drains into a balanced
+  journal keyed `ledger_txn:{id}`, so redelivery and crash recovery both post exactly once (1b). Reversal
+  reads the POSTED lines back and flips them, idempotent on `reverses_journal_id`, and `correctGlPosting`
+  composes it with a re-post from the live subledger legs so a mis-posting can actually be fixed (1c).
+  What remains is the **caller**: no admin endpoint, no CLI. Wiring one needs the maker-checker control
+  the ADR requires for money-affecting staff actions, so it is deliberately not bolted on here — until
+  then a correction is an engineer invoking the function. The generic adjustment journal is not started.
+- `FIN-004` Reconcile tenant wallet liabilities to corporate control accounts. — **done** (1c), driven in
+  both directions: a real lifecycle reconciles, and a journal posted with the wrong amount is detected.
+  The recovery path is proven too: a mis-posted journal is reversed and the movement re-posted from the
+  live subledger legs under a correction key, after which the ledgers agree again with the wrong entry
+  still visible in the books (ADR-0013 #11a).
 - `FIN-005` Capture billable usage and customer charge snapshots.
 - `FIN-006` Capture provider-rated cost and payable accruals.
 - `FIN-007` Ingest and reconcile provider invoices/statements.

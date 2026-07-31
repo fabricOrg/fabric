@@ -13,6 +13,7 @@ All design, product, and process docs live here. Code/config stays at the repo r
 - [WORKOS-INFISICAL-SETUP.md](WORKOS-INFISICAL-SETUP.md) - local WorkOS customer realm and Infisical secrets setup
 - [decisions/0001-workos-tenant-resolution.md](decisions/0001-workos-tenant-resolution.md) - WorkOS organization to tenant trust boundary
 - [decisions/0012-channel-agnostic-commercial-offers.md](decisions/0012-channel-agnostic-commercial-offers.md) - fixed-total offers across registered channels
+- [decisions/0013-corporate-accounting-boundary.md](decisions/0013-corporate-accounting-boundary.md) - the corporate general ledger and its posting boundary
 - [INTEGRATIONS-PLUGIN-ARCHITECTURE.md](INTEGRATIONS-PLUGIN-ARCHITECTURE.md) — vendor plugin framework + failover
 - [CONTROL-PLANE-ADMIN.md](CONTROL-PLANE-ADMIN.md) — the admin / control plane
 - [COMPLIANCE-AND-DATA-PROTECTION.md](COMPLIANCE-AND-DATA-PROTECTION.md) — processor/controller, PII vault, residency

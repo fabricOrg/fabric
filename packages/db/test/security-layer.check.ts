@@ -32,6 +32,10 @@ export const TENANT_TABLES = [
   "ledger_accounts",
   "ledger_transactions",
   "ledger_entries",
+  // The GL posting airlock (0114) — the one tenant-scoped table in the general-ledger domain, and the
+  // only one the tenant-facing role may write. It carries tenant_id, so it needs FORCE RLS and a policy
+  // like any other tenant table.
+  "gl_posting_requests",
   "api_keys",
   "messages",
 ] as const;
@@ -173,6 +177,16 @@ export async function checkSecurityLayerApplied(
   const REQUIRED_TRIGGERS = [
     "trg_ledger_txn_balanced",
     "trg_ledger_apply_entry",
+    // Corporate general ledger (ADR-0013, migration 0112). These carry MORE weight than the
+    // subledger's: GL immutability is enforced by trigger ALONE, because `prepareRoles()` re-grants
+    // full DML to app_provisioner on every deploy, so a privilege-based guarantee would not survive.
+    // If one of these is missing or disabled, posted company history is rewritable.
+    "trg_gl_journal_complete",
+    "trg_gl_journal_filled",
+    "trg_gl_journals_immutable",
+    "trg_gl_journal_lines_immutable",
+    "trg_gl_journals_no_truncate",
+    "trg_gl_journal_lines_no_truncate",
   ];
   const trigs = await db.query(
     `SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgname IN (${REQUIRED_TRIGGERS.map((t) => `'${t}'`).join(", ")})`,
@@ -181,8 +195,70 @@ export async function checkSecurityLayerApplied(
   for (const t of REQUIRED_TRIGGERS) {
     if (!trigNames.has(t))
       violations.push(
-        `ledger enforcement trigger '${t}' is missing — write-time invariant (0007) not applied`,
+        `ledger enforcement trigger '${t}' is missing — a write-time invariant (0007 / 0112) is not applied`,
       );
+  }
+
+  // 7. (ADR-0013 #2) The corporate general ledger is COMPANY data. The tenant-facing role must hold
+  // nothing on it, and the control plane must hold no way to rewrite it.
+  //
+  // WHY THIS IS ASSERTED ON EVERY DEPLOY rather than trusted from the migration: `prepareRoles()` in
+  // src/cloud-migrate.ts runs BEFORE migrate() on every deploy and unconditionally issues
+  // `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_provisioner`.
+  // Migration 0112 revokes those, but it is journaled and so runs exactly once. Without this check,
+  // deploy N would leave the correct state and deploy N+1 would silently re-grant, with nothing
+  // failing. `has_table_privilege` is used rather than `role_table_grants` so privileges inherited via
+  // role membership are counted too.
+  // The posting airlock (0114). The tenant-facing role may INSERT and nothing else — that asymmetry IS
+  // the seam, and like every other grant it is restored broadly by prepareRoles on each deploy, so it
+  // has to be re-asserted rather than trusted from the migration.
+  const airlockRuntime = await db.query(`
+    SELECT p AS priv FROM unnest(ARRAY['SELECT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
+    WHERE has_table_privilege('${RUNTIME_ROLE}', 'gl_posting_requests', p)
+  `);
+  for (const r of airlockRuntime.rows) {
+    violations.push(
+      `'${RUNTIME_ROLE}' holds ${r.priv} on gl_posting_requests — the posting airlock must be INSERT-only from the tenant side`,
+    );
+  }
+  const airlockInsert = await db.query(
+    `SELECT has_table_privilege('${RUNTIME_ROLE}', 'gl_posting_requests', 'INSERT') AS ok`,
+  );
+  if (airlockInsert.rows[0]?.ok !== true) {
+    violations.push(
+      `'${RUNTIME_ROLE}' cannot INSERT into gl_posting_requests — money movements cannot reach the books`,
+    );
+  }
+  // Deleting a still-pending request destroys a movement's only path to the books, and no reconciliation
+  // exists to notice. The FK cascade does not need this privilege (referential actions bypass it).
+  const airlockDelete = await db.query(
+    `SELECT has_table_privilege('app_provisioner', 'gl_posting_requests', 'DELETE') AS held`,
+  );
+  if (airlockDelete.rows[0]?.held === true) {
+    violations.push(
+      "'app_provisioner' holds DELETE on gl_posting_requests — a queued movement could be dropped before it posts (did prepareRoles re-grant?)",
+    );
+  }
+
+  for (const table of ["gl_accounts", "gl_journals", "gl_journal_lines"]) {
+    const runtimeReach = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
+      WHERE has_table_privilege('${RUNTIME_ROLE}', '${table}', p)
+    `);
+    for (const r of runtimeReach.rows) {
+      violations.push(
+        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — the tenant-facing role must not reach the company books at all`,
+      );
+    }
+    const provisionerRewrite = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['UPDATE','DELETE','TRUNCATE']) AS p
+      WHERE has_table_privilege('app_provisioner', '${table}', p)
+    `);
+    for (const r of provisionerRewrite.rows) {
+      violations.push(
+        `'app_provisioner' holds ${r.priv} on ${table} — posted company history must be append-only (did prepareRoles re-grant?)`,
+      );
+    }
   }
 
   return { ok: violations.length === 0, violations };
