@@ -39,6 +39,10 @@
       "**",
       "!**/dist",
       "!**/.next",
+      // Turbo's build cache. It sits beside the other build outputs above but was missed, and it is
+      // written by `pnpm build` — which `verify:push` runs BEFORE `pnpm lint`. So a local push could
+      // fail on ~80 formatting errors in turbo's own manifests, with nothing wrong in the diff.
+      "!**/.turbo",
       "!**/.astro",
       "!**/.vercel",
       // .astro components are linted/formatted by `astro check` — biome only sees the frontmatter in
