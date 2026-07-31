@@ -261,6 +261,53 @@ export async function checkSecurityLayerApplied(
     }
   }
 
+  // 8. (ADR-0012) Commercial configuration — the catalog, its offers, and which catalog a workspace
+  // buys from — is staff-authored control-plane state. The tenant-facing role must not reach it: read
+  // access leaks other workspaces' negotiated prices, and write access would let a workspace author
+  // its own. Migrations 0110 and 0117 revoke it; asserted here because `ALTER DEFAULT PRIVILEGES`
+  // (0001) grants app_runtime DML on every table the migrator creates, so the REVOKE is the only thing
+  // standing between a new commercial table and the tenant role — and a journaled migration runs once.
+  for (const table of [
+    "commercial_offer_channels",
+    "pricing_offers",
+    "pricing_offer_versions",
+    "offer_catalog_assignments",
+  ]) {
+    const runtimeReach = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
+      WHERE has_table_privilege('${RUNTIME_ROLE}', '${table}', p)
+    `);
+    for (const r of runtimeReach.rows) {
+      violations.push(
+        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — commercial catalog state must be unreachable from the tenant-facing role`,
+      );
+    }
+  }
+
+  // 9. (ADR-0012 §6/§8) Commercial write-time invariants. Unlike the grants above these survive a
+  // re-grant, but they are asserted for the same reason the GL triggers are: if one is missing, a
+  // published price is editable after purchase, or a workspace can be pointed at a catalog whose
+  // offers no purchase can ever resolve.
+  const COMMERCIAL_TRIGGERS = [
+    "protect_published_pricing_offer_version_trigger",
+    "assert_offer_catalog_assignment_mode_trigger",
+    "assert_pricing_offer_catalog_mode_trigger",
+    "protect_referenced_price_book_mode_trigger",
+  ];
+  const commercialTrigs = await db.query(
+    `SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgname IN (${COMMERCIAL_TRIGGERS.map((t) => `'${t}'`).join(", ")})`,
+  );
+  const commercialNames = new Set(
+    commercialTrigs.rows.map((r) => String(r.tgname)),
+  );
+  for (const t of COMMERCIAL_TRIGGERS) {
+    if (!commercialNames.has(t)) {
+      violations.push(
+        `commercial-offer trigger '${t}' is missing — a published-price or catalog-mode invariant (0110 / 0117) is not applied`,
+      );
+    }
+  }
+
   return { ok: violations.length === 0, violations };
 }
 

@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   commercialChannelCodeSchema,
+  commercialOfferCostSnapshotSchema,
   createCommercialOfferRequestSchema,
   createCommercialOfferVersionRequestSchema,
   purchaseCommercialOfferRequestSchema,
 } from "./commercial-offers.js";
+import {
+  assignOfferCatalogRequestSchema,
+  previewCommercialOfferMarginRequestSchema,
+  publishCommercialOfferVersionRequestSchema,
+} from "./commercial-offers-admin.js";
 
 const VERSION = {
   currency: "GHS",
@@ -87,6 +93,73 @@ describe("commercial offer contracts", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("records both ends of the permitted-route cost range, and no invented average", () => {
+    const snapshot = commercialOfferCostSnapshotSchema.parse({
+      best_case_cost_minor: "180",
+      worst_case_cost_minor: "240",
+      best_case_margin_minor: "120",
+      worst_case_margin_minor: "60",
+      worst_case_margin_bps: 2_000,
+      minimum_margin_bps: 2_000,
+      minimum_margin_source: "catalog_version",
+      route_count: 3,
+      calculated_at: "2026-07-31T09:00:00.000Z",
+      source_references: ["arkesel-2026-07"],
+    });
+
+    expect(snapshot.worst_case_cost_minor).toBe("240");
+    expect("expected_cost_minor" in snapshot).toBe(false);
+  });
+
+  it("rejects an unknown cost-snapshot field rather than storing unvalidated evidence", () => {
+    const result = commercialOfferCostSnapshotSchema.safeParse({
+      best_case_cost_minor: "180",
+      worst_case_cost_minor: "240",
+      best_case_margin_minor: "120",
+      worst_case_margin_minor: "60",
+      worst_case_margin_bps: 2_000,
+      minimum_margin_bps: 2_000,
+      minimum_margin_source: "platform_default",
+      route_count: 3,
+      calculated_at: "2026-07-31T09:00:00.000Z",
+      source_references: [],
+      assumed_route: "GH/transactional",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("requires a reason on the price-affecting publish", () => {
+    expect(
+      publishCommercialOfferVersionRequestSchema.safeParse({ reason: "" })
+        .success,
+    ).toBe(false);
+    expect(
+      publishCommercialOfferVersionRequestSchema.parse({
+        reason: "Margin verified against the July Arkesel rate card.",
+      }).reason,
+    ).toContain("Margin verified");
+  });
+
+  it("previews margin for unsaved terms against a known offer", () => {
+    const result = previewCommercialOfferMarginRequestSchema.parse({
+      ...VERSION,
+      offer_id: "00000000-0000-4000-8000-000000000003",
+    });
+
+    expect(result.offer_id).toBe("00000000-0000-4000-8000-000000000003");
+    // The channel is never client-supplied: it comes from the offer the preview targets.
+    expect("channel_code" in result).toBe(false);
+  });
+
+  it("clears a workspace catalog assignment with an explicit null", () => {
+    expect(
+      assignOfferCatalogRequestSchema.parse({ offer_catalog_id: null })
+        .offer_catalog_id,
+    ).toBeNull();
+    expect(assignOfferCatalogRequestSchema.safeParse({}).success).toBe(false);
   });
 
   it("purchases a published version by id and pack count without a client price", () => {

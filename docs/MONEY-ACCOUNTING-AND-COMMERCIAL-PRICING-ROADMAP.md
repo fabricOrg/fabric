@@ -507,13 +507,39 @@ neither is a correctness gap in the books, so neither holds the exit gate.
 
 ### Phase 2 — fixed bundle offer foundation
 
-- add offer and immutable version schema;
-- add validation/publish service and strict contracts;
-- add admin draft, preview, publish, clone, retire, and history UI;
-- add catalog/workspace eligibility;
-- protect publication with cost/margin validation and audit.
+| Slice | Scope | Status |
+| --- | --- | --- |
+| COM-002 | Offer + immutable version schema, contracts, allocation math (migration 0110) | **done** (#222) — schema and contracts only; nothing could write to them |
+| COM-003 | Validation, version lifecycle, publish-time margin gate, audit | **done** — service + controller on `internal/admin/commercial-offers` |
+| COM-004 | Admin draft, margin preview, publish, clone, retire, history UI | **done** — admin-console `/pricing/offers` |
+| COM-011 | Workspace catalog assignment (migrations 0116 + 0117) | **done** — own control-plane table, not a column on `accounts` |
 
-Exit gate: staff can publish a valid offer, but no customer can yet buy it.
+Exit gate: staff can publish a valid offer, but no customer can yet buy it. **Met** — and the gates
+that matter are the refusals, each proven against real Postgres:
+
+| refusal | why it exists |
+| --- | --- |
+| `offer_publish_self_approval` | the version's author cannot publish it; a DB CHECK (`approved_by <> created_by`) says the same thing underneath |
+| `offer_cost_basis_missing` | every route the eligibility PERMITS must be priced — an unrestricted offer needs a rate that genuinely covers every destination, not the one country the table happens to know |
+| `offer_vendor_eligibility_required` | providers must be named. `provider_cost_rates.provider_vendor` is NOT NULL, so no wildcard-vendor rate can exist — an empty list could only be priced against vendors holding a rate *right now*, which silently narrows instead of failing closed |
+| `offer_margin_below_floor` | the gate is the WORST permitted route, since a bundle is spendable on all of them |
+| `commercial_channel_inactive` | a registry entry is not proof of deliverability (ADR-0012 §2) |
+| `offer_version_window_conflict` | two published versions of one offer+currency can never be effective at once |
+| `offer_catalog_invalid_mode` | prepaid offers live in token-mode catalogs; a trigger refuses it too |
+
+**The margin snapshot deliberately has no "expected" figure.** Which permitted route a customer will
+use is unknowable at publish time, so the evidence records the best AND worst case, and the floor is
+enforced against the worst. An average would have read as measured when nothing measured it.
+
+**Where the floor comes from is recorded, not assumed.** A token catalog created before price-book
+versioning has no published version to read; the platform default (2000 bps) applies and the snapshot
+stamps `minimum_margin_source: "platform_default"` so the number is never mistaken for an approved
+catalog figure.
+
+Still open on this thread, both deliberate: **`service_classes` eligibility is refused at publish**
+(`offer_eligibility_unpriceable`) because provider costs are not recorded per service class, so a
+service-class restriction cannot be margin-checked; and **eligibility permitting more than 500 routes
+is refused** (`offer_eligibility_too_broad`) rather than cost-checking a subset.
 
 ### Phase 3 — purchase and exact entitlement accounting
 
@@ -619,16 +645,16 @@ defect.
 ### Fixed bundle capability
 
 - `COM-001` Amend ADR-0010 with fixed-total bundle semantics.
-- `COM-002` Add offer/version contracts, schema, constraints, and migration strategy.
-- `COM-003` Implement offer validation, version lifecycle, audit, and margin preview.
-- `COM-004` Build the admin offer-authoring and history experience.
+- `COM-002` Add offer/version contracts, schema, constraints, and migration strategy. **DONE.**
+- `COM-003` Implement offer validation, version lifecycle, audit, and margin preview. **DONE.**
+- `COM-004` Build the admin offer-authoring and history experience. **DONE.**
 - `COM-005` Initiate purchase from a published offer snapshot.
 - `COM-006` Reconcile payment and grant an offer-backed lot exactly once.
 - `COM-007` Implement cumulative integer revenue allocation.
 - `COM-008` Enforce destination/traffic/service compatibility during token holds.
 - `COM-009` Build eligible customer catalog, checkout, receipt, and balance surfaces.
 - `COM-010` Reconcile bundle deferred revenue, consumption, and remaining entitlement.
-- `COM-011` Add workspace-specific catalog assignment.
+- `COM-011` Add workspace-specific catalog assignment. **DONE** (`offer_catalog_assignments`).
 - `COM-012` Add volume tiers or promotional units only after a separate approved scope.
 
 ## Required tests and evidence

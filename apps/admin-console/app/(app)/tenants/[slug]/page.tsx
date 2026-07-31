@@ -22,11 +22,11 @@ import {
   TableRow,
 } from "@app/ui/components/ui/table";
 import { notFound } from "next/navigation";
-import { AccountPriceBookAssign } from "@/components/account-price-book-assign";
 import { SetBreadcrumbTitle } from "@/components/breadcrumb-title";
 import { InviteTenantMemberDialog } from "@/components/forms/invite-tenant-member-dialog";
 import { SandboxAllowancePolicyEditor } from "@/components/sandbox-allowance-policy";
 import { TenantMemberRowActions } from "@/components/tenant-member-row-actions";
+import { TenantPricingCards } from "@/components/tenant-pricing-cards";
 import { TenantStatusActions } from "@/components/tenant-status-actions";
 import { requireAdminSession } from "@/lib/server/auth";
 import { listPriceBooks } from "@/lib/server/price-book-client";
@@ -86,14 +86,14 @@ export default async function TenantDetailPage({
 
   // Price books drive the assignment control below; a failure just hides the picker (non-critical).
   let books: PriceBookDto[] = [];
+  let booksUnavailable = false;
   try {
     books = (await listPriceBooks()).books;
   } catch {
-    books = [];
+    // Distinguish "could not load" from "nothing assigned": the cards below state a workspace's
+    // commercial terms, so an empty list must not be rendered as "Default".
+    booksUnavailable = true;
   }
-  const assignedBook =
-    books.find((b) => b.id === tenant.price_book_id)?.name ??
-    "Default (by mode)";
   let sandboxPolicy: SandboxAllowancePolicy | null = null;
   try {
     sandboxPolicy = await getSandboxAllowancePolicy(tenant.tenant_id);
@@ -128,28 +128,12 @@ export default async function TenantDetailPage({
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pricing</CardTitle>
-          <CardDescription>
-            The rate plan this tenant is billed against. Default resolves by
-            mode. Changes are audited.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm">
-            Current: <span className="font-medium">{assignedBook}</span>
-          </span>
-          {canManage && books.length > 0 ? (
-            <AccountPriceBookAssign
-              accountId={tenant.tenant_id}
-              currentBookId={tenant.price_book_id}
-              currentBillingCurrency={tenant.billing_currency}
-              books={books}
-            />
-          ) : null}
-        </CardContent>
-      </Card>
+      <TenantPricingCards
+        tenant={tenant}
+        books={books}
+        booksUnavailable={booksUnavailable}
+        canManage={canManage}
+      />
 
       <Card>
         <CardHeader>

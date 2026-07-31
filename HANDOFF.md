@@ -1,7 +1,164 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-07-30. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-07-31. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
+
+## START HERE (2026-07-31): money roadmap Phase 2 COMPLETE — commercial offers are publishable
+
+Branch `feature/com-phase2-offers` off `dev` @ `5e92473`. **Not pushed, not merged** — no PR yet.
+
+Phase 2's exit gate ("staff can publish a valid offer, no customer can buy yet") is **met**. #222 had
+shipped only COM-002 (contracts + schema + allocation math), which is why the previous "Next" section
+was wrong to call Phase 2 done: there was no service, no controller, and no UI, so **nothing could
+write to any of it**.
+
+### What landed
+
+| item | where |
+| --- | --- |
+| COM-003 lifecycle + publish gate | `services/api/src/pricing/commercial-offer{-cost,-margin.service,-publish.service,-reads,-writes,-mapping}.ts`, `commercial-offers.{service,controller}.ts` |
+| COM-003 margin math (pure, bigint) | `packages/domain/src/commercial-offer-margin.ts` |
+| COM-004 admin authoring + history | `apps/admin-console` — `/pricing/offers`, `components/{commercial-offers-manager,offer-version-history,offer-margin-verdict,offer-reason-prompt}.tsx`, `components/forms/{new-offer-dialog,offer-terms-dialog}.tsx` |
+| COM-011 workspace catalog | migrations `0116` + `0117`, `offer-catalog.service.ts`, `components/offer-catalog-assign.tsx` |
+
+### The design calls worth not re-litigating
+
+- **The margin gate is the WORST permitted route, and there is deliberately no "expected" cost.** A
+  bundle is spendable on every route its eligibility allows, so the cheapest route proves nothing, and
+  an average of the routes would read as measured when nothing measured it. The snapshot stores best
+  AND worst case; the floor is enforced against worst. `cost_snapshot`'s field names were changed from
+  #222's `estimated_/expected_` accordingly — safe because **nothing had ever written one** (0110 is
+  not even applied on Neon yet).
+- **An unrestricted offer needs a rate that genuinely covers everything.** Empty eligibility means the
+  permitted-value set is the values the cost table names PLUS a wildcard route standing for everything
+  it does not. So "sell anywhere" with only a Ghana rate is refused (`offer_cost_basis_missing`)
+  instead of being priced as if Ghana were the world. This is the single most important refusal here.
+- **Where the margin floor came from is recorded.** A token catalog predating price-book versioning has
+  no published version; the platform default (2000 bps) applies and the snapshot stamps
+  `minimum_margin_source: "platform_default"` so it is never mistaken for an approved catalog figure.
+- **Maker-checker is real here, unlike the plugin path.** `pricing_offer_versions_approval_chk` (from
+  0110) requires `approved_by <> created_by`, so publication genuinely needs a second staff admin. That
+  is demoable: **hosted has two active staff admins** (`fabricservices8@`, `dacsolo10@`). The plugin-era
+  "a single operator would be blocked" concession does NOT apply.
+- **COM-011 is its own control-plane table, NOT a column on `accounts`.** `app_runtime` holds
+  table-level `UPDATE` on `accounts`, and **Postgres will not let a column-level `REVOKE` override a
+  table-level grant** — so a negotiated-catalog column there would have sat inside the tenant's own
+  writable row. `offer_catalog_assignments` grants the runtime role nothing at all.
+- **Window conflicts are checked in a transaction under a row lock on the offer**, not by a constraint:
+  the constraint form needs `btree_gist`, which we do not require on managed Postgres.
+
+### Verified, not reported
+
+- **Migrations tested against an EMPTY database** (`app_coldtest`, created and dropped): 0000→0117
+  applied clean, then all four triggers and the grant posture read back from the DB. The trigger
+  behaviour was exercised live — subscription catalog refused, token catalog accepted, mode change on a
+  referenced book refused, offer in a subscription book refused.
+- **The new `db:assert security` checks were proven to have teeth** (the null hypothesis, §9): granting
+  `SELECT` on `offer_catalog_assignments` to `app_runtime` on the scratch DB made the gate FAIL with the
+  exact intended violation. A privilege assertion that has never been seen to fail is not evidence.
+- api pricing integration **25/25**, contracts 21 offer tests, domain 9 margin tests, cost-basis unit
+  8/8, `pnpm guard` clean, all typechecks 0.
+
+### The defect my own review found: a TOCTOU between the margin gate and the write
+
+`publish` evaluated the margin from the version row **as read**, then updated only the lifecycle columns
+— so a draft edited in that window would have gone live carrying a `cost_snapshot` describing DIFFERENT
+terms, at a price no gate ever approved. The reservation/ledger invariants could not catch this: nothing
+about it is unbalanced, it is simply the wrong price.
+
+The fix re-reads the row inside the publish transaction (already under the offer's `FOR UPDATE` lock)
+and refuses with `offer_version_changed` unless the gate-relevant fields still match — currency,
+paid/bonus/total units, total price, pack limits, the effective window, and **eligibility**, since
+eligibility decides which routes were priced.
+
+**The first attempt at this was wrong in an instructive way.** `WHERE updated_at = $1` looks like the
+obvious optimistic-concurrency predicate, and it made every honest publish fail: `timestamptz` keeps
+MICROSECONDS while the JavaScript `Date` read back is millisecond-truncated, so the equality matched
+nothing. Same root cause as the keyset-cursor bug in `[[postgres-timestamptz-cast-gotcha]]`. Do not use
+a round-tripped timestamp as a row fingerprint through drizzle.
+
+The regression test drives the race deterministically rather than hoping for a scheduling window: a stub
+margin service edits the draft *while evaluating* and returns the genuine verdict for the pre-edit
+terms, which is exactly the dangerous shape.
+
+### Independent review (subagent, 2026-07-31) — 13 findings, 1 rejected
+
+codex is out of quota until Aug 5, so the review ran as an opus subagent on the full diff. Every finding
+was verified against the code before acting.
+
+**The one that mattered — the vendor dimension could not fail closed.** Destinations and traffic classes
+are NULLABLE in `provider_cost_rates`, so "unrestricted" is provable safe by demanding a wildcard rate
+that genuinely covers everything. `provider_vendor` is **NOT NULL** — a wildcard vendor rate cannot
+exist — so an empty vendor list was priced against whichever vendors happened to hold an *effective*
+rate at that instant. An offer permitting a vendor whose rate had expired (or who is onboarded later)
+would publish having never been priced against it, while the stored snapshot claimed otherwise. Now
+refused at publish with `offer_vendor_eligibility_required`, and the authoring form says
+"Providers (required)" with the reason. The unit spec had the country and traffic-class gaps covered but
+not the vendor one, which is exactly why it survived my own review.
+
+Also fixed: a **stale margin verdict** stayed on screen after the terms were edited (a green
+"Publishable" badge describing numbers that no longer existed) — the verdict is now stored with a
+fingerprint of the terms it judged and replaced by a "check again" prompt when they diverge; the
+window-conflict error told staff to "close its window first", which **0110 makes impossible** (retiring
+is the only path); clearing a catalog on a nonexistent workspace returned `ok` and wrote an audit row for
+work it did not do; the browser→BFF leg parsed nothing (`payload as T`, and `null` on a non-JSON 2xx);
+path uuids were unvalidated so a malformed id surfaced as `22P02` inside a 500; quantity/amount strings
+were unbounded; `minorToDisplay` hardcoded two decimals while its inverse read `MINOR_PER_MAJOR`; and the
+tenant page rendered "Default prepaid catalog" as fact after a failed price-book fetch — three distinct
+states (unresolvable name / no assignment / resolved) now read differently.
+
+A cluster of **comments describing behaviour the code did not have** was corrected rather than left:
+three places claimed the UI branches on stable error codes (nothing does — it renders the API's
+message), one claimed a per-unit figure was "labelled as such" when only a `≈` glyph qualified it, and
+the new concurrency spec described the `updated_at` predicate that was explicitly rejected.
+
+**Rejected:** "the file-length guard fails, `verify:push` will reject this branch." The guard only walks
+`<group>/<pkg>/src` (`scripts/architecture/guard-file-length.mjs:14-24`), so Next.js `app/` directories
+are never scanned, and `verify:push` exited **0** before and after. The underlying observation was fair
+though — the tenant page had grown to 316 lines — so the two pricing cards were extracted to
+`components/tenant-pricing-cards.tsx` (page now 271). **Worth knowing: the length guard does not cover
+`apps/*/app/**` at all**, which is most of every frontend.
+
+**Carried forward, not fixed (all argued in the review):**
+- **Same-specificity provider-cost rates resolve arbitrarily.** `0108`'s unique index only covers
+  `effective_to IS NULL`, so two simultaneously-effective rates for one dimension key are
+  representable and neither the query nor `matchRate` has a tie-break. Pre-existing (the PAYG quote
+  shares the logic) but newly load-bearing as a *publish gate*.
+- **The floor and the cost rates are read before the transaction** and not re-validated under the lock;
+  only the version row is. Narrower than the race that was closed — staff-only, seconds wide, and the
+  snapshot records what was used — but a full fix means evaluating inside the transaction.
+- **`cost_snapshot`'s shape change has no data migration.** Verified safe: no code on `origin/dev` ever
+  wrote one, and 0110 is not applied on Neon. If a row were ever hand-seeded, `.strict()` would throw a
+  ZodError that `offer-route.ts` flattens to a 502 for the whole page.
+
+### Two traps this branch re-confirmed
+
+- **`verify:push` failed with 828 biome errors that were not mine** — biome formats `.turbo/cache/*.json`
+  build artifacts. `rm -rf .turbo/cache` first, or the true signal is buried. Also: a wrapping
+  `cmd; echo $?` in a background shell reported **exit 0 for a failed gate** — exactly §9's piping trap
+  in a new costume. Read the log, not the notification.
+- **`session.userId` in the admin console IS the `staff_users.id`** — verified by joining hosted
+  `audit_events.actor_staff_id` against `staff_users` (they match; `users.id` values are different).
+  That mattered because `created_by`/`approved_by` are real FKs, unlike the audit log's nullable column,
+  so a wrong actor id would have 400'd every write.
+
+### Still open on this thread (deliberate, not forgotten)
+
+- **`service_classes` eligibility is refused at publish** (`offer_eligibility_unpriceable`): provider
+  costs are not recorded per service class, so such a restriction cannot be margin-checked.
+- **Eligibility permitting >500 routes is refused** (`offer_eligibility_too_broad`) rather than
+  cost-checking a subset.
+- **No customer-facing surface, by design** — that is Phase 3/4. The purchase path still targets the
+  legacy unit-priced token flow; nothing reads `pricing_offer_versions` yet outside admin.
+- **`app_runtime` can still `UPDATE accounts.price_book_id` and `accounts.plan`** — a PRE-EXISTING hole
+  I did not widen and did not fix here. Fixing it means `REVOKE UPDATE ON accounts` then re-granting
+  the exact updatable column list (column REVOKE cannot override a table grant), which would silently
+  break any future column the runtime needs to write. Worth a dedicated change. Every current writer
+  goes through the provisioning connection — audited, not assumed.
+- **The review was a subagent, not codex.** codex is out of quota until **2026-08-05** (it exits 0 and
+  writes no report, so check the report file exists), gemini's free tier is gone, and `cursor-agent` is
+  not installed. A codex pass before merge would still be worth it — a different model family catches
+  different things.
 
 ## START HERE (2026-07-30): money roadmap Phase 1 slice 1a — corporate general ledger
 
@@ -362,7 +519,12 @@ load** — it asserts a mocked `fetch` was called once and intermittently sees z
 session; passes 3/3 in isolation both times, with no code change. Do not chase it as a regression from
 accounting work; it touches auto top-up and Paystack mocking only.
 
-### Next — Phase 1 is done; Phase 2 is the offer work already on `dev`
+### Next — Phase 1 done, Phase 2 now COMPLETE; Phase 3 (purchase) is next
+
+**Superseded (2026-07-31):** this section previously said Phase 2 was "the offer work already on `dev`".
+That was only COM-002 — #222 shipped contracts, schema, and allocation math with **no service, no
+controller, and no UI**, so nothing could write to any of it. COM-003, COM-004 and COM-011 are now
+done; see the top-of-file entry. Phase 3 is next.
 
 Phase 1's exit gate is met. What remains from its original scope, neither blocking:
 
