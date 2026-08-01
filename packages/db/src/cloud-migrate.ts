@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres, { type Sql } from "postgres";
+import { enforceRestrictedPrivileges } from "./cloud-migrate-privileges.js";
 import { synchronizeRole } from "./cloud-migrate-roles.js";
 
 // Re-exported so existing importers (and the spec) keep their entry point after the role helpers
@@ -209,6 +210,7 @@ export async function runCloudMigrations(
       "migrations",
     );
     await migrate(drizzle(owner), { migrationsFolder });
+    await enforceRestrictedPrivileges(owner);
   } finally {
     await owner.end();
   }

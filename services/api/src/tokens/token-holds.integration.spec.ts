@@ -63,6 +63,7 @@ describeDb("token holds", () => {
 
   afterAll(async () => {
     for (const id of tenants) {
+      await owner`DELETE FROM token_recognition_allocations WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM token_holds WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM ledger_entries WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM token_lots WHERE tenant_id = ${id}::uuid`;

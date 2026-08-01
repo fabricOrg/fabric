@@ -22,10 +22,11 @@ interface Row {
 }
 
 export interface TokenHoldAllocation {
+  readonly holdId: string;
   readonly lotId: string;
   readonly quantity: bigint;
   /** The lot's locked unit price — what slice 2c recognizes as revenue when this hold commits. */
-  readonly unitPriceMinorLocked: bigint;
+  readonly unitPriceMinorLocked: bigint | null;
   /** The lot's currency, so recognition posts against the right per-currency ledger accounts. */
   readonly currency: string;
 }
@@ -61,7 +62,7 @@ export async function holdTokens(
   // Replay guard first — a retried accept must not claim a second set of tokens. Mirrors
   // prepareSend's replay check preceding the wallet reserve.
   const existing = (await tx`
-    SELECT h.lot_id, h.quantity, h.currency, l.unit_price_minor_locked
+    SELECT h.id AS hold_id, h.lot_id, h.quantity, h.currency, l.unit_price_minor_locked
     FROM token_holds h
     JOIN token_lots l ON l.id = h.lot_id
     WHERE h.tenant_id = current_setting('app.tenant_id')::uuid
@@ -85,6 +86,22 @@ export async function holdTokens(
   const available = BigInt(String(counters[0]?.available ?? "0"));
   if (available < p.quantity) return NONE;
 
+  // The first replay probe can race another transaction. Re-check after acquiring the counter lock;
+  // otherwise the losing caller's hold INSERT conflicts but it still decrements the counter.
+  const concurrentExisting = (await tx`
+    SELECT h.id AS hold_id, h.lot_id, h.quantity, h.currency, l.unit_price_minor_locked
+    FROM token_holds h
+    JOIN token_lots l ON l.id = h.lot_id
+    WHERE h.tenant_id = current_setting('app.tenant_id')::uuid
+      AND h.reference_id = ${p.referenceId} AND h.status <> 'returned'`) as Row[];
+  if (concurrentExisting.length > 0) {
+    return {
+      held: true,
+      replayed: true,
+      allocations: concurrentExisting.map(toAllocation),
+    };
+  }
+
   // Draw lots expiry-soonest then oldest (FIFO). `remaining` subtracts live claims, so a lot cannot
   // be over-drawn even though the counter is the aggregate.
   const lots = (await tx`
@@ -107,9 +124,13 @@ export async function holdTokens(
     const remaining = BigInt(String(lot.remaining));
     const take = remaining < outstanding ? remaining : outstanding;
     allocations.push({
+      holdId: "",
       lotId: String(lot.id),
       quantity: take,
-      unitPriceMinorLocked: BigInt(String(lot.unit_price_minor_locked)),
+      unitPriceMinorLocked:
+        lot.unit_price_minor_locked === null
+          ? null
+          : BigInt(String(lot.unit_price_minor_locked)),
       currency: p.currency,
     });
     outstanding -= take;
@@ -119,8 +140,9 @@ export async function holdTokens(
   // the drift itself.
   if (outstanding > 0n) return NONE;
 
+  const persisted: TokenHoldAllocation[] = [];
   for (const allocation of allocations) {
-    await tx`
+    const inserted = (await tx`
       INSERT INTO token_holds (
         tenant_id, lot_id, channel, currency, quantity, reference_id, idempotency_key
       ) VALUES (
@@ -128,7 +150,13 @@ export async function holdTokens(
         ${allocation.quantity.toString()}::bigint, ${p.referenceId},
         ${`hold:${p.referenceId}:${allocation.lotId}`}
       )
-      ON CONFLICT (tenant_id, idempotency_key) DO NOTHING`;
+      ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+      RETURNING id`) as Row[];
+    const holdId = inserted[0]?.id;
+    if (typeof holdId !== "string") {
+      throw new Error("Token hold insert returned no row after replay lock.");
+    }
+    persisted.push({ ...allocation, holdId });
   }
 
   await tx`
@@ -137,7 +165,7 @@ export async function holdTokens(
     WHERE tenant_id = current_setting('app.tenant_id')::uuid
       AND channel = ${p.channel} AND currency = ${p.currency}`;
 
-  return { held: true, replayed: false, allocations };
+  return { held: true, replayed: false, allocations: persisted };
 }
 
 /**
@@ -161,7 +189,8 @@ export async function resolveTokenHolds(
       AND h.tenant_id = current_setting('app.tenant_id')::uuid
       AND h.reference_id = ${referenceId}
       AND h.status = 'pending'
-    RETURNING h.lot_id, h.quantity, h.channel, h.currency, l.unit_price_minor_locked`) as Row[];
+    RETURNING h.id AS hold_id, h.lot_id, h.quantity, h.channel, h.currency,
+      l.unit_price_minor_locked`) as Row[];
   if (rows.length === 0) return [];
 
   if (outcome === "returned") {
@@ -183,9 +212,13 @@ export async function resolveTokenHolds(
 
 function toAllocation(row: Row): TokenHoldAllocation {
   return {
+    holdId: String(row.hold_id),
     lotId: String(row.lot_id),
     quantity: BigInt(String(row.quantity)),
-    unitPriceMinorLocked: BigInt(String(row.unit_price_minor_locked)),
+    unitPriceMinorLocked:
+      row.unit_price_minor_locked === null
+        ? null
+        : BigInt(String(row.unit_price_minor_locked)),
     currency: String(row.currency),
   };
 }

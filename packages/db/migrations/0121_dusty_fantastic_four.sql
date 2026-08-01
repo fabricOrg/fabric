@@ -1,0 +1,1 @@
+ALTER TABLE "token_purchases" ADD CONSTRAINT "token_purchases_provider_mode_chk" CHECK ("token_purchases"."provider_mode" is null or "token_purchases"."provider_mode" in ('sandbox', 'live'));
