@@ -44,6 +44,10 @@ export interface ManagedEmailAcceptDeps {
       messageId: string;
     },
   ) => Promise<void>;
+  holdTokens?: (
+    tx: TenantTx,
+    input: { currency: string; messageId: string },
+  ) => Promise<boolean>;
 }
 
 export interface ManagedEmailAcceptInput {
@@ -93,6 +97,17 @@ export async function acceptManagedEmail(
       environmentId: input.environmentId,
     });
     if (replay) return;
+    let backing: "wallet" | "tokens" | "sandbox_allowance" =
+      deps.preparation.backing;
+    if (
+      backing === "wallet" &&
+      (await deps.holdTokens?.(tx, {
+        currency: deps.preparation.currency,
+        messageId: input.deliveryId,
+      }))
+    ) {
+      backing = "tokens";
+    }
     await tx`
       INSERT INTO email_messages (
         id, tenant_id, application_id, environment_id, subject_id, content_pii_id,
@@ -100,12 +115,12 @@ export async function acceptManagedEmail(
       ) VALUES (
         ${input.deliveryId}, current_setting('app.tenant_id')::uuid,
         ${input.applicationId}, ${input.environmentId}, ${subjectId}, ${contentPiiId},
-        'queued', ${STATUS_RANK.queued}, ${deps.preparation.backing},
+        'queued', ${STATUS_RANK.queued}, ${backing},
         ${deps.preparation.providerSlug}, ${deps.preparation.costMinor.toString()}::bigint,
         ${deps.preparation.currency},
         ${deps.preparation.pricingSnapshot ? JSON.stringify(deps.preparation.pricingSnapshot) : null}::jsonb
       ) ON CONFLICT (id) DO NOTHING`;
-    if (deps.preparation.backing === "sandbox_allowance") {
+    if (backing === "sandbox_allowance") {
       await deps.consumeSandboxAllowance(tx, {
         channel: "email",
         units: 1n,
@@ -113,7 +128,7 @@ export async function acceptManagedEmail(
         applicationId: input.applicationId,
         environmentId: input.environmentId,
       });
-    } else {
+    } else if (backing === "wallet") {
       await deps.reserveWallet(tx, {
         currency: deps.preparation.currency,
         amountMinor: deps.preparation.costMinor,

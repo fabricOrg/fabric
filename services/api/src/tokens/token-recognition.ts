@@ -4,11 +4,9 @@ import { recognizeTokenConsumption } from "@app/wallet";
 import type { TokenHoldAllocation } from "./token-holds.js";
 
 interface LotRow {
-  readonly pricing_model: string;
   readonly quantity_total: string;
   readonly quantity_consumed: string;
-  readonly unit_price_minor_locked: string | null;
-  readonly total_price_minor_locked: string | null;
+  readonly total_price_minor_locked: string;
   readonly revenue_recognized_minor: string;
 }
 
@@ -26,8 +24,8 @@ export async function recognizeTokenAllocation(
   if (alreadyAllocated.length > 0) return;
 
   const rows = (await tx`
-    SELECT pricing_model, quantity_total, quantity_consumed,
-      unit_price_minor_locked, total_price_minor_locked, revenue_recognized_minor
+    SELECT quantity_total, quantity_consumed,
+      total_price_minor_locked, revenue_recognized_minor
     FROM token_lots
     WHERE tenant_id = current_setting('app.tenant_id')::uuid
       AND id = ${allocation.lotId}
@@ -89,19 +87,10 @@ function recognitionForLot(
     readonly quantity: bigint;
   },
 ): bigint {
-  if (lot.pricing_model === "fixed_bundle") {
-    if (lot.total_price_minor_locked === null) {
-      throw new Error("Fixed-total token lot has no locked total price.");
-    }
-    return allocateCommercialOfferRecognition({
-      totalPriceMinor: BigInt(lot.total_price_minor_locked),
-      totalUnits: position.totalUnits,
-      consumedBefore: position.consumedBefore,
-      quantity: position.quantity,
-    });
-  }
-  if (lot.unit_price_minor_locked === null) {
-    throw new Error("Unit-priced token lot has no locked unit price.");
-  }
-  return BigInt(lot.unit_price_minor_locked) * position.quantity;
+  return allocateCommercialOfferRecognition({
+    totalPriceMinor: BigInt(lot.total_price_minor_locked),
+    totalUnits: position.totalUnits,
+    consumedBefore: position.consumedBefore,
+    quantity: position.quantity,
+  });
 }

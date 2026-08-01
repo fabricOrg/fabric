@@ -15,6 +15,7 @@ export * from "./admin.js";
 export * from "./applications.js";
 // Audit log — append-only record of consequential staff actions.
 export * from "./audit.js";
+export * from "./commercial-offer-eligibility.js";
 export * from "./commercial-offers.js";
 export * from "./commercial-offers-admin.js";
 export * from "./customer-commercial-offers.js";

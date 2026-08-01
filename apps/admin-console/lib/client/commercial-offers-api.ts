@@ -5,9 +5,12 @@ import {
   type CommercialOfferVersionDto,
   type CreateCommercialOfferRequest,
   type CreateCommercialOfferVersionRequest,
+  type CreateCommercialPackageRequest,
+  type CreateCommercialPackageResponse,
   commercialOfferDtoSchema,
   commercialOfferMarginPreviewSchema,
   commercialOfferVersionDtoSchema,
+  createCommercialPackageResponseSchema,
   type PreviewCommercialOfferMarginRequest,
 } from "@app/contracts";
 import { type ZodType, z } from "zod";
@@ -67,6 +70,12 @@ export function createOffer(
   body: CreateCommercialOfferRequest,
 ): Promise<CommercialOfferDto> {
   return send("", "POST", commercialOfferDtoSchema, body);
+}
+
+export function createPackage(
+  body: CreateCommercialPackageRequest,
+): Promise<CreateCommercialPackageResponse> {
+  return send("/packages", "POST", createCommercialPackageResponseSchema, body);
 }
 
 export function createVersion(

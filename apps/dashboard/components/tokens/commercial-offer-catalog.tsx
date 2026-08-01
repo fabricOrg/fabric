@@ -55,17 +55,36 @@ export function CommercialOfferCatalog({
             role="group"
             aria-label="Token balances"
           >
-            {balances.map((balance) => (
-              <Badge
-                key={`${balance.channel}:${balance.currency}`}
-                variant="secondary"
-                className="font-mono tabular-nums"
-              >
-                <Coins aria-hidden="true" />
-                {BigInt(balance.available).toLocaleString("en")}{" "}
-                {balance.channel}
-              </Badge>
-            ))}
+            {balances.map((balance) => {
+              // Name the date rather than only the count: these credits can lapse, and an expiry the
+              // customer was never shown is one they cannot act on.
+              const expiry = balance.expires_next_at;
+              return (
+                <Badge
+                  key={`${balance.channel}:${balance.currency}`}
+                  variant="secondary"
+                  className="font-mono tabular-nums"
+                  title={
+                    expiry === null
+                      ? undefined
+                      : `Soonest expiry ${new Date(expiry).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`
+                  }
+                >
+                  <Coins aria-hidden="true" />
+                  {BigInt(balance.available).toLocaleString("en")}{" "}
+                  {balance.channel}
+                  {expiry !== null && (
+                    <span className="ml-1 font-normal opacity-80">
+                      · expires{" "}
+                      {new Date(expiry).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </span>
+                  )}
+                </Badge>
+              );
+            })}
           </div>
         ) : null}
       </div>
@@ -115,13 +134,7 @@ function OfferCard({
   const [packCount, setPackCount] = useState(offer.minimum_pack_count);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const totalUnits = BigInt(offer.total_units) * BigInt(packCount);
   const totalPrice = BigInt(offer.total_price_minor) * BigInt(packCount);
-  let bonusDescription = "";
-  if (BigInt(offer.bonus_units) > 0n) {
-    const bonus = BigInt(offer.bonus_units) * BigInt(packCount);
-    bonusDescription = ` (${bonus.toLocaleString("en")} bonus)`;
-  }
 
   async function purchase() {
     setSubmitting(true);
@@ -153,11 +166,12 @@ function OfferCard({
   return (
     <Card className="flex flex-col">
       <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <Badge variant="outline">{offer.channel_name}</Badge>
-          <span className="text-xs text-muted-foreground">
-            per {offer.unit_label}
-          </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {offer.items.map((item) => (
+            <Badge key={item.channel_code} variant="outline">
+              {item.channel_name}
+            </Badge>
+          ))}
         </div>
         <CardTitle>{offer.name}</CardTitle>
         <CardDescription>{offer.description}</CardDescription>
@@ -170,9 +184,24 @@ function OfferCard({
               minor: totalPrice.toString(),
             })}
           </p>
-          <p className="text-sm text-muted-foreground">
-            {totalUnits.toLocaleString("en")} {offer.unit_label}
-            {bonusDescription}
+          <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
+            {offer.items.map((item) => {
+              const quantity = BigInt(item.total_units) * BigInt(packCount);
+              const bonus = BigInt(item.bonus_units) * BigInt(packCount);
+              return (
+                <li key={item.channel_code}>
+                  {quantity.toLocaleString("en")} {item.unit_label}
+                  {bonus > 0n ? ` (${bonus.toLocaleString("en")} bonus)` : ""}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {offer.credit_validity_days === null
+              ? "Credits do not expire."
+              : `Credits expire ${offer.credit_validity_days} ${
+                  offer.credit_validity_days === 1 ? "day" : "days"
+                } after purchase.`}
           </p>
         </div>
         <div className="flex flex-wrap gap-1">
@@ -223,14 +252,23 @@ function OfferCard({
 
 function describeEligibility(offer: CustomerCommercialOffer): string[] {
   const labels: string[] = [];
-  if (offer.eligibility.destination_countries.length > 0) {
-    labels.push(offer.eligibility.destination_countries.join(", "));
-  }
-  if (offer.eligibility.traffic_classes.length > 0) {
-    labels.push(offer.eligibility.traffic_classes.join(", "));
-  }
-  if (offer.eligibility.service_classes.length > 0) {
-    labels.push(offer.eligibility.service_classes.join(", "));
+  for (const item of offer.items) {
+    const eligibility = item.eligibility;
+    if (eligibility.destination_countries.length > 0) {
+      labels.push(
+        `${item.channel_name}: ${eligibility.destination_countries.join(", ")}`,
+      );
+    }
+    if (eligibility.traffic_classes.length > 0) {
+      labels.push(
+        `${item.channel_name}: ${eligibility.traffic_classes.join(", ")}`,
+      );
+    }
+    if (eligibility.service_classes.length > 0) {
+      labels.push(
+        `${item.channel_name}: ${eligibility.service_classes.join(", ")}`,
+      );
+    }
   }
   if (labels.length === 0) labels.push("Standard eligibility");
   return labels;

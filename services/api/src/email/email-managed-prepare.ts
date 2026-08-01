@@ -5,6 +5,7 @@ import { invalidRequest } from "../http/api-error.js";
 import type { EffectivePricingService } from "../pricing/effective-pricing.service.js";
 import type { PiiVaultService } from "../privacy/pii-vault.service.js";
 import type { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.service.js";
+import { holdTokens } from "../tokens/token-holds.js";
 import { resolveEmailEnvironment } from "./email-environment.js";
 import {
   acceptManagedEmail,
@@ -72,6 +73,19 @@ export async function prepareManagedEmail(input: {
           idempotencyKey: `reserve:${walletInput.messageId}`,
           referenceId: walletInput.messageId,
         });
+      },
+      holdTokens: async (tx, tokenInput) => {
+        const held = await holdTokens(tx, {
+          channel: "email",
+          currency: tokenInput.currency,
+          quantity: 1n,
+          referenceId: tokenInput.messageId,
+          compatibility: {
+            providerVendor: resolved.provider.slug,
+            trafficClass: "transactional",
+          },
+        });
+        return held.held;
       },
     },
     input.message,

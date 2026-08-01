@@ -2,6 +2,7 @@ import {
   assignOfferCatalogRequestSchema,
   createCommercialOfferRequestSchema,
   createCommercialOfferVersionRequestSchema,
+  createCommercialPackageRequestSchema,
   previewCommercialOfferMarginRequestSchema,
   publishCommercialOfferVersionRequestSchema,
   retireCommercialOfferVersionRequestSchema,
@@ -59,6 +60,20 @@ export class CommercialOffersController {
   ) {
     const request = parse(createCommercialOfferRequestSchema, body, "offer");
     return this.offers.createOffer(request, actor(actorEmail, actorStaffId));
+  }
+
+  @Post("packages")
+  async createPackage(
+    @Body() body: unknown,
+    @Headers("x-actor-email") actorEmail?: string,
+    @Headers("x-actor-staff-id") actorStaffId?: string,
+  ) {
+    const request = parse(
+      createCommercialPackageRequestSchema,
+      body,
+      "commercial package",
+    );
+    return this.offers.createPackage(request, actor(actorEmail, actorStaffId));
   }
 
   @Post(":offerId/versions")

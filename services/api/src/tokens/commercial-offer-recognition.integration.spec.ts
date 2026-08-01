@@ -6,6 +6,7 @@ import {
   type MinorUnits,
   priceBooks,
   pricingOffers,
+  pricingOfferVersionItems,
   pricingOfferVersions,
   staffUsers,
   type TenantId,
@@ -74,7 +75,7 @@ describeDb("fixed-total commercial-offer recognition", () => {
       .values({
         offerId: offer.id,
         version: 1,
-        status: "published",
+        status: "draft",
         currency: "GHS",
         paidUnits: totalUnits,
         bonusUnits: 0n,
@@ -94,36 +95,56 @@ describeDb("fixed-total commercial-offer recognition", () => {
           sourceReferences: ["fixture"],
         },
         createdBy: author.id,
-        approvedBy: approver.id,
-        approvedAt: now,
       })
       .returning({ id: pricingOfferVersions.id });
     if (!version) throw new Error("version fixture failed");
+    const [versionItem] = await provisioning.db
+      .insert(pricingOfferVersionItems)
+      .values({
+        offerVersionId: version.id,
+        position: 0,
+        channelCode: "sms",
+        unitCode: "segment",
+        paidUnits: totalUnits,
+        totalUnits,
+        eligibility: { providerVendors: ["arkesel"] },
+        allocatedPriceMinor: totalPrice as MinorUnits,
+      })
+      .returning({ id: pricingOfferVersionItems.id });
+    if (!versionItem) throw new Error("version item fixture failed");
+    // Items attach while the version is a draft; publishing is what freezes them. Approval moves
+    // with the status because pricing_offer_versions_approval_chk forbids an approved draft.
+    await provisioning.db
+      .update(pricingOfferVersions)
+      .set({ status: "published", approvedBy: approver.id, approvedAt: now })
+      .where(eq(pricingOfferVersions.id, version.id));
     const reference = `token-${randomUUID()}`;
     const snapshot = {
       offerCode: "recognition",
       offerName: "Recognition bundle",
       offerVersion: 1,
-      channelCode: "sms",
-      unitCode: "segment",
-      paidUnits: totalUnits.toString(),
-      bonusUnits: "0",
-      totalUnits: totalUnits.toString(),
       totalPriceMinor: totalPrice.toString(),
-      eligibility: { providerVendors: ["arkesel"] },
+      creditValidityDays: null,
+      items: [
+        {
+          itemId: versionItem.id,
+          channelCode: "sms",
+          unitCode: "segment",
+          paidUnits: totalUnits.toString(),
+          bonusUnits: "0",
+          totalUnits: totalUnits.toString(),
+          allocatedPriceMinor: totalPrice.toString(),
+          eligibility: { providerVendors: ["arkesel"] },
+        },
+      ],
     };
     await provisioning.db.insert(tokenPurchases).values({
       tenantId: tenantId as TenantId,
       reference,
-      pricingModel: "fixed_bundle",
       offerVersionId: version.id,
       packCount: 1,
-      unitsPerPackLocked: totalUnits,
       pricePerPackMinorLocked: totalPrice as MinorUnits,
       offerSnapshot: snapshot,
-      channel: "sms",
-      quantity: totalUnits,
-      unitPriceMinorLocked: null,
       currency: "GHS",
       amountMinor: totalPrice as MinorUnits,
       email: "buyer@example.com",
@@ -132,7 +153,7 @@ describeDb("fixed-total commercial-offer recognition", () => {
       { provisioning, appDb },
       reference,
     );
-    return { tenantId, lotId: granted.lotId };
+    return { tenantId, lotId: granted.lots[0]?.lotId ?? "" };
   }
 
   async function consume(tenantId: string, quantity: bigint) {
@@ -174,6 +195,11 @@ describeDb("fixed-total commercial-offer recognition", () => {
       await owner`DELETE FROM accounts WHERE id = ${tenantId}::uuid`;
     }
     for (const offerId of offerIds) {
+      await owner`
+        DELETE FROM pricing_offer_version_items
+        WHERE offer_version_id IN (
+          SELECT id FROM pricing_offer_versions WHERE offer_id = ${offerId}::uuid
+        )`;
       await owner`DELETE FROM pricing_offer_versions WHERE offer_id = ${offerId}::uuid`;
       await owner`DELETE FROM pricing_offers WHERE id = ${offerId}::uuid`;
     }

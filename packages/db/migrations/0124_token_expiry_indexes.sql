@@ -1,0 +1,2 @@
+CREATE INDEX "idx_token_holds_lot_pending" ON "token_holds" USING btree ("lot_id") WHERE "token_holds"."status" = 'pending';--> statement-breakpoint
+CREATE INDEX "idx_token_lots_due_for_expiry" ON "token_lots" USING btree ("expires_at") WHERE "token_lots"."expiry_processed_at" is null and "token_lots"."expires_at" is not null;

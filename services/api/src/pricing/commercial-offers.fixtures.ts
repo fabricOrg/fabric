@@ -10,6 +10,7 @@ import {
   type ProvisioningDb,
   priceBooks,
   pricingOffers,
+  pricingOfferVersionItems,
   pricingOfferVersions,
   providerCostRates,
   staffUsers,
@@ -34,6 +35,12 @@ export interface OfferFixtures {
   staff(): Promise<StaffActor>;
   book(mode: "token" | "subscription"): Promise<string>;
   offer(author: StaffActor): Promise<CommercialOfferDto>;
+  /**
+   * Register an offer created directly through the service so teardown still reaches it. An
+   * untracked offer keeps its price book alive (`pricing_offers_price_book_id_price_books_id_fk`)
+   * and fails cleanup for the whole suite, not just its own test.
+   */
+  trackOffer(offerId: string): void;
   account(): Promise<string>;
   costRate(ratio: { numerator: bigint; denominator: bigint }): Promise<string>;
   cleanup(): Promise<void>;
@@ -63,22 +70,31 @@ export async function rejectionText(
 
 /** The roadmap's indivisible example: 200 segments for GHS 3.00, which no unit price can express. */
 export function versionRequest(
-  eligibility: Partial<CreateCommercialOfferVersionRequest["eligibility"]> = {},
+  eligibility: Partial<
+    CreateCommercialOfferVersionRequest["items"][number]["eligibility"]
+  > = {},
 ): CreateCommercialOfferVersionRequest {
   return {
     currency: "GHS",
-    paid_units: "200",
-    bonus_units: "0",
+    items: [
+      {
+        channel_code: "sms",
+        unit_code: "segment",
+        paid_units: "200",
+        bonus_units: "0",
+        eligibility: {
+          destination_countries: [],
+          traffic_classes: [],
+          provider_vendors: [],
+          service_classes: [],
+          ...eligibility,
+        },
+      },
+    ],
     total_price_minor: "300",
+    credit_validity_days: null,
     minimum_pack_count: 1,
     maximum_pack_count: 10,
-    eligibility: {
-      destination_countries: [],
-      traffic_classes: [],
-      provider_vendors: [],
-      service_classes: [],
-      ...eligibility,
-    },
     effective_from: new Date().toISOString(),
     effective_to: null,
   };
@@ -126,13 +142,15 @@ export function makeOfferFixtures(db: ProvisioningDb): OfferFixtures {
           code: `starter-${randomUUID().slice(0, 8)}`,
           name: "Starter SMS",
           description: "200 segments",
-          channel_code: "sms",
-          unit_code: "segment",
         },
         author,
       );
       offerIds.push(created.id);
       return created;
+    },
+
+    trackOffer(offerId) {
+      offerIds.push(offerId);
     },
 
     async account() {
@@ -177,6 +195,18 @@ export function makeOfferFixtures(db: ProvisioningDb): OfferFixtures {
           .where(inArray(accounts.id, accountIds as TenantId[]));
       }
       if (offerIds.length > 0) {
+        const versions = await db.db
+          .select({ id: pricingOfferVersions.id })
+          .from(pricingOfferVersions)
+          .where(inArray(pricingOfferVersions.offerId, offerIds));
+        if (versions.length > 0) {
+          await db.db.delete(pricingOfferVersionItems).where(
+            inArray(
+              pricingOfferVersionItems.offerVersionId,
+              versions.map(({ id }) => id),
+            ),
+          );
+        }
         await db.db
           .delete(pricingOfferVersions)
           .where(inArray(pricingOfferVersions.offerId, offerIds));

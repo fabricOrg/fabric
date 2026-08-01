@@ -3,7 +3,7 @@
 Status: **product-approved for phased implementation — finance, security, and live-launch gates remain**
 
 Owner: Product and Engineering
-Last updated: 2026-07-30
+Last updated: 2026-08-01
 
 ## Purpose
 
@@ -158,24 +158,28 @@ specific route and protects the provider-cost margin floor.
 
 This model should not be overloaded to represent a bundle.
 
-### 2. Fixed-price prepaid bundle — first implementation
+### 2. Fixed-price prepaid package — first implementation
 
-A bundle is a versioned offer with:
+A package is a versioned offer with:
 
 - stable offer code and display name;
 - price-book/catalog membership;
-- registry-backed channel and natural unit;
+- one or more registry-backed channel items, each with its own natural unit and quantity;
 - currency;
-- paid units;
-- promotional units, initially zero;
-- total deliverable units;
+- paid units and eligibility per item;
+- promotional units per item, initially zero;
 - fixed total price in minor units;
 - compatible destination countries, traffic classes, and service class where relevant;
 - minimum and maximum pack count per purchase;
 - effective start and optional end;
 - lifecycle: draft, published, retired;
 - estimated provider cost and resulting margin at publish time; and
-- customer-facing terms such as whether units expire or are refundable.
+- optional credit validity in days (null means no expiry); and
+- customer-facing refund and expiry terms.
+
+A single package can therefore sell 20 email messages plus 20 SMS segments for one GHS 50.00
+consideration. Channel composition belongs to the immutable version, not the stable offer identity,
+so a future version can change the package without rewriting purchase history.
 
 Examples:
 
@@ -274,7 +278,7 @@ Names are indicative; the migration design is part of implementation review.
 
 `pricing_offers`
 
-- stable identity: id, catalog/price-book id, code, name, description, channel;
+- stable identity: id, catalog/price-book id, code, name, description;
 - tenant-neutral control-plane data;
 - cannot be purchased directly without a published version.
 
@@ -282,8 +286,7 @@ Names are indicative; the migration design is part of implementation review.
 
 - immutable after publication;
 - offer id, version number, status;
-- currency, paid quantity, bonus quantity, total quantity, total price minor;
-- compatibility dimensions;
+- currency, total package price, optional credit-validity days, and aggregate legacy quantities;
 - purchase pack limits;
 - effective dates;
 - cost and margin evidence captured at approval;
@@ -292,31 +295,45 @@ Names are indicative; the migration design is part of implementation review.
 Published versions are never edited. A change clones a draft version, validates it, then publishes
 it while the previous version remains historical.
 
+`pricing_offer_version_items`
+
+- ordered channel/unit rows under one version;
+- paid, bonus, and total natural-unit quantities per channel;
+- item-specific compatibility dimensions; and
+- the exact share of package consideration frozen at publication.
+
+The item allocations use deterministic largest-remainder integer allocation weighted by worst-case
+provider cost. They are positive and sum exactly to the package price, so each channel lot can
+recognize revenue independently without inventing a floating-point unit rate.
+
 ### Purchase and entitlement
 
-Extend `token_purchases` to reference and snapshot the offer version:
+Extend `token_purchases` to reference and snapshot the whole package version:
 
 - `offer_version_id`;
 - `pack_count`;
-- `quantity_total`;
 - `total_price_minor_locked`;
-- offer code/name and eligibility snapshot where required for durable evidence.
+- every item id, channel/unit, quantity, allocation, and eligibility; and
+- optional credit validity.
 
 Replace the constraint `amount = quantity × unit price` with constraints that bind the purchase to
 the offer snapshot and exact pack multiplication:
 
 ```text
-purchase_quantity = offer_quantity × pack_count
 purchase_amount_minor = offer_total_price_minor × pack_count
 ```
 
 Extend `token_lots` with:
 
-- `offer_version_id`;
-- `total_price_minor_locked`;
+- `offer_version_id` and `offer_version_item_id`;
+- the item allocation multiplied by pack count as `total_price_minor_locked`;
 - `quantity_consumed`;
 - `revenue_recognized_minor`;
 - immutable compatibility snapshot.
+
+One cleared package purchase creates one lot per item inside the same tenant transaction and one
+balanced deferred-revenue purchase movement. The per-item lot allocations reconcile exactly to the
+single charged amount. Replay uniqueness is `(tenant, purchase reference, channel)`.
 
 The existing `unit_price_minor_locked` cannot remain the source of truth for bundle lots. It may be
 retained temporarily for legacy lots during a migration, with an explicit lot pricing model and
@@ -368,11 +385,12 @@ Server-side validation must enforce:
 
 Keep pay-as-you-go rates and prepaid offers on separate sections.
 
-Replace raw minor-unit authoring for bundle offers with:
+Replace raw minor-unit authoring for package offers with one workflow containing:
 
 - currency amount input in normal display units, such as `GHS 3.00`;
-- included SMS segments or email messages;
-- an effective-unit-price preview clearly marked as informational;
+- repeatable channel rows (for example SMS segments plus email messages) with natural-unit quantities;
+- one exact package price and an optional validity period;
+- exact per-item consideration allocations in the margin preview;
 - estimated provider cost and margin preview;
 - destination and traffic eligibility;
 - active period;
@@ -392,7 +410,7 @@ segments.
 The dashboard should show:
 
 - eligible package cards;
-- exact included units and total price;
+- every included channel/unit quantity, the total price, and whether credits expire;
 - effective comparison rate and savings against the relevant pay-as-you-go offer;
 - route restrictions and segment explanation;
 - pack count and exact checkout total;
@@ -672,6 +690,12 @@ defect.
 - `COM-010` Reconcile bundle deferred revenue, consumption, and remaining entitlement.
 - `COM-011` Add workspace-specific catalog assignment. **DONE** (`offer_catalog_assignments`).
 - `COM-012` Add volume tiers or promotional units only after a separate approved scope.
+- `COM-013` Generalize offers into multi-channel packages with atomic per-item grants. **IMPLEMENTED;
+  real-Postgres verification pending.**
+- `COM-014` Add optional expiry, lazy + scheduled processing, and double-entry breakage recognition.
+  **IMPLEMENTED; real-Postgres verification pending.**
+- `COM-015` Make live SMS and email consume their package lots before wallet funds. **IMPLEMENTED;
+  live-provider enablement remains human-gated.**
 
 ## Required tests and evidence
 
@@ -697,7 +721,7 @@ At minimum:
 - FX conversion;
 - coupons;
 - recurring subscriptions;
-- token expiry;
+- refundable credits or expiry extensions after purchase;
 - partial refunds;
 - bonus units;
 - cross-currency token consumption;
@@ -710,7 +734,8 @@ Product ratified the following on 2026-07-30:
 - fixed-price, fixed-quantity bundles are the first pricing extension;
 - offers apply to all registered channels, not only SMS;
 - cumulative integer allocation governs indivisible prices;
-- the initial release has no bonus units, expiry, partial refunds, or generic discounts;
+- the initial release has no bonus units, partial refunds, or generic discounts; expiry is optional
+  per published package and null means credits never expire;
 - eligibility constrains any channel where provider cost differs by route or service;
 - customer `owner | admin` may purchase while other customer roles remain read-only; and
 - implementation may proceed behind a disabled feature flag while accounting and reconciliation

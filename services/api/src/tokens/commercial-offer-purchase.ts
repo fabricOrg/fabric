@@ -1,4 +1,7 @@
-import type { PurchaseCommercialOfferRequest } from "@app/contracts";
+import {
+  type PurchaseCommercialOfferRequest,
+  unsupportedEligibilityDimensions,
+} from "@app/contracts";
 import {
   accounts,
   commercialOfferChannels,
@@ -7,6 +10,7 @@ import {
   type ProvisioningDb,
   priceBooks,
   pricingOffers,
+  pricingOfferVersionItems,
   pricingOfferVersions,
   type TenantId,
   type TokenOfferSnapshot,
@@ -21,7 +25,11 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export interface CommercialOfferPurchaseIntent {
   readonly offerVersionId: string;
   readonly packCount: number;
-  readonly quantity: bigint;
+  readonly items: readonly {
+    channelCode: string;
+    unitCode: string;
+    quantity: bigint;
+  }[];
   readonly amountMinor: bigint;
   readonly currency: string;
 }
@@ -55,7 +63,6 @@ export async function createCommercialOfferPurchaseIntent(
       .select({
         version: pricingOfferVersions,
         offer: pricingOffers,
-        channelActive: commercialOfferChannels.isActive,
         billingCurrency: accounts.billingCurrency,
         accountPlan: accounts.plan,
       })
@@ -63,13 +70,6 @@ export async function createCommercialOfferPurchaseIntent(
       .innerJoin(
         pricingOffers,
         eq(pricingOffers.id, pricingOfferVersions.offerId),
-      )
-      .innerJoin(
-        commercialOfferChannels,
-        and(
-          eq(commercialOfferChannels.code, pricingOffers.channelCode),
-          eq(commercialOfferChannels.unitCode, pricingOffers.unitCode),
-        ),
       )
       .innerJoin(accounts, eq(accounts.id, input.tenantId as TenantId))
       .where(
@@ -93,30 +93,75 @@ export async function createCommercialOfferPurchaseIntent(
         "offer_version_id",
       );
     }
-    if (!row.channelActive) {
-      throw invalidRequest(
-        "commercial_offer_channel_inactive",
-        "This offer's channel is not available.",
-      );
-    }
     if (row.accountPlan === "sandbox") {
       throw invalidRequest(
         "sandbox_token_purchase_denied",
         "Sandbox workspaces use daily channel allowances and cannot purchase tokens.",
       );
     }
-    // This is a capability gate, not a catalog enum. The offer and accounting models remain channel
-    // agnostic; a channel becomes purchasable when its send path can actually consume these lots.
-    if (row.offer.channelCode !== "sms") {
+    const items = await tx
+      .select({
+        item: pricingOfferVersionItems,
+        channelActive: commercialOfferChannels.isActive,
+      })
+      .from(pricingOfferVersionItems)
+      .innerJoin(
+        commercialOfferChannels,
+        and(
+          eq(
+            commercialOfferChannels.code,
+            pricingOfferVersionItems.channelCode,
+          ),
+          eq(
+            commercialOfferChannels.unitCode,
+            pricingOfferVersionItems.unitCode,
+          ),
+        ),
+      )
+      .where(eq(pricingOfferVersionItems.offerVersionId, row.version.id))
+      .orderBy(pricingOfferVersionItems.position);
+    if (
+      items.length === 0 ||
+      items.some(({ channelActive }) => !channelActive)
+    ) {
       throw invalidRequest(
-        "commercial_offer_consumption_unavailable",
-        `Prepaid ${row.offer.channelCode} consumption is not available yet.`,
+        "commercial_offer_channel_inactive",
+        "One or more channels in this package are not available.",
       );
     }
-    if ((row.version.eligibility.serviceClasses ?? []).length > 0) {
+    const consumableChannels = new Set(["sms", "email"]);
+    if (items.some(({ item }) => !consumableChannels.has(item.channelCode))) {
+      throw invalidRequest(
+        "commercial_offer_consumption_unavailable",
+        "One or more package channels cannot consume prepaid credits yet.",
+      );
+    }
+    if (
+      items.some(
+        ({ item }) => (item.eligibility.serviceClasses ?? []).length > 0,
+      )
+    ) {
       throw invalidRequest(
         "commercial_offer_consumption_unavailable",
         "This offer requires a service class that the send path cannot verify yet.",
+      );
+    }
+    // Last line of defence before money moves. An offer published before this rule existed would
+    // otherwise still sell credits its own send path can never match.
+    if (
+      items.some(
+        ({ item }) =>
+          unsupportedEligibilityDimensions(item.channelCode, {
+            destination_countries: item.eligibility.destinationCountries ?? [],
+            traffic_classes: item.eligibility.trafficClasses ?? [],
+            provider_vendors: item.eligibility.providerVendors ?? [],
+            service_classes: item.eligibility.serviceClasses ?? [],
+          }).length > 0,
+      )
+    ) {
+      throw invalidRequest(
+        "commercial_offer_consumption_unavailable",
+        "This offer restricts a channel by something its send path cannot match, so its credits could not be spent.",
       );
     }
     if (row.version.currency !== row.billingCurrency) {
@@ -132,7 +177,6 @@ export async function createCommercialOfferPurchaseIntent(
     );
 
     const packCount = BigInt(input.request.pack_count);
-    const quantity = row.version.totalUnits * packCount;
     const amountMinor = row.version.totalPriceMinor * packCount;
     if (amountMinor > BigInt(Number.MAX_SAFE_INTEGER)) {
       throw invalidRequest(
@@ -145,13 +189,26 @@ export async function createCommercialOfferPurchaseIntent(
       offerCode: row.offer.code,
       offerName: row.offer.name,
       offerVersion: row.version.version,
-      channelCode: row.offer.channelCode,
-      unitCode: row.offer.unitCode,
-      paidUnits: row.version.paidUnits.toString(),
-      bonusUnits: row.version.bonusUnits.toString(),
-      totalUnits: row.version.totalUnits.toString(),
       totalPriceMinor: row.version.totalPriceMinor.toString(),
-      eligibility: row.version.eligibility,
+      creditValidityDays: row.version.creditValidityDays,
+      items: items.map(({ item }) => {
+        if (item.allocatedPriceMinor === null) {
+          throw invalidRequest(
+            "commercial_offer_snapshot_invalid",
+            "This package has no published price allocation.",
+          );
+        }
+        return {
+          itemId: item.id,
+          channelCode: item.channelCode,
+          unitCode: item.unitCode,
+          paidUnits: item.paidUnits.toString(),
+          bonusUnits: item.bonusUnits.toString(),
+          totalUnits: item.totalUnits.toString(),
+          allocatedPriceMinor: item.allocatedPriceMinor.toString(),
+          eligibility: item.eligibility,
+        };
+      }),
     };
 
     await tx.insert(tokenPurchases).values({
@@ -160,15 +217,10 @@ export async function createCommercialOfferPurchaseIntent(
       providerMode: input.providerMode,
       pluginInstanceId: input.pluginInstanceId,
       credentialVersion: input.credentialVersion,
-      pricingModel: "fixed_bundle",
       offerVersionId: row.version.id,
       packCount: input.request.pack_count,
-      unitsPerPackLocked: row.version.totalUnits,
       pricePerPackMinorLocked: row.version.totalPriceMinor,
       offerSnapshot: snapshot,
-      channel: row.offer.channelCode,
-      quantity,
-      unitPriceMinorLocked: null,
       currency: row.version.currency,
       amountMinor: amountMinor as MinorUnits,
       email: input.request.email,
@@ -177,7 +229,11 @@ export async function createCommercialOfferPurchaseIntent(
     return {
       offerVersionId: row.version.id,
       packCount: input.request.pack_count,
-      quantity,
+      items: items.map(({ item }) => ({
+        channelCode: item.channelCode,
+        unitCode: item.unitCode,
+        quantity: item.totalUnits * packCount,
+      })),
       amountMinor,
       currency: row.version.currency,
     };

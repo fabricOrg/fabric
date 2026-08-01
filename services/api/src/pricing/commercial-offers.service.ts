@@ -4,6 +4,8 @@ import type {
   CommercialOfferVersionDto,
   CreateCommercialOfferRequest,
   CreateCommercialOfferVersionRequest,
+  CreateCommercialPackageRequest,
+  CreateCommercialPackageResponse,
   Currency,
   ListCommercialOffersResponse,
   PreviewCommercialOfferMarginRequest,
@@ -12,6 +14,7 @@ import {
   type MinorUnits,
   type ProvisioningDb,
   pricingOffers,
+  pricingOfferVersionItems,
   pricingOfferVersions,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
@@ -20,6 +23,11 @@ import { AuditService } from "../audit/audit.service.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import {
+  assertRegisteredOfferItems,
+  createOfferIdentity,
+  createPackageWithDraft,
+} from "./commercial-offer-create.js";
+import {
   toStoredEligibility,
   toVersionDto,
 } from "./commercial-offer-mapping.js";
@@ -27,29 +35,25 @@ import { CommercialOfferMarginService } from "./commercial-offer-margin.service.
 import {
   listChannelRegistry,
   listOffersWithVersions,
-  readChannel,
+  listRouteVocabulary,
 } from "./commercial-offer-reads.js";
 import {
   assertStaffExists,
-  assertTokenCatalog,
-  eligibilityOf,
   insertVersion,
   loadOfferForWrite,
   readStaffEmailMap,
   requireVersionContext,
-  toOfferRowDto,
 } from "./commercial-offer-writes.js";
 
-/** A staff actor is REQUIRED here: `created_by` / `approved_by` ARE the approval record. */
 export interface StaffActor {
   readonly email: string;
   readonly staffId: string;
 }
 
 /**
- * Commercial offer authoring (COM-003/COM-011, ADR-0012). Staff-only control plane, deliberately
- * separate from pay-as-you-go price books: a rate plan prices a unit, an offer is a PRODUCT with an
- * immutable promise attached. Publication — the price-affecting act — lives in
+ * Commercial offer authoring (COM-003/COM-011/COM-013, ADR-0012). Staff-only control plane,
+ * deliberately separate from pay-as-you-go price books: a rate plan prices a unit, an offer is a
+ * PRODUCT with an immutable promise attached. Publication — the price-affecting act — lives in
  * `CommercialOfferPublishService` with its gates.
  */
 @Injectable()
@@ -62,116 +66,95 @@ export class CommercialOffersService {
   ) {}
 
   async list(): Promise<ListCommercialOffersResponse> {
-    const [offers, channels] = await Promise.all([
+    const [offers, channels, routeVocabulary] = await Promise.all([
       listOffersWithVersions(this.provisioning.db),
       listChannelRegistry(this.provisioning.db),
+      listRouteVocabulary(this.provisioning.db),
     ]);
-    return { offers, channels };
+    return { offers, channels, route_vocabulary: routeVocabulary };
   }
 
+  /** A staff actor is REQUIRED here: `created_by` / `approved_by` ARE the approval record. */
   async createOffer(
     request: CreateCommercialOfferRequest,
     actor: StaffActor,
   ): Promise<CommercialOfferDto> {
-    await assertStaffExists(this.provisioning.db, actor.staffId);
-    await assertTokenCatalog(this.provisioning.db, request.price_book_id);
-    // A draft may target a REGISTERED channel that is not yet active (ADR-0012 §2) — deliverability is
-    // proven at publish. An unregistered pair has no natural unit at all, so it is refused here.
-    const channel = await readChannel(
+    return createOfferIdentity(
       this.provisioning.db,
-      request.channel_code,
-      request.unit_code,
+      this.audit,
+      request,
+      actor,
     );
-    if (!channel) {
-      throw invalidRequest(
-        "commercial_channel_not_registered",
-        `${request.channel_code}/${request.unit_code} is not a registered channel and unit pair.`,
-        "channel_code",
-      );
-    }
-
-    const [created] = await this.provisioning.db
-      .insert(pricingOffers)
-      .values({
-        priceBookId: request.price_book_id,
-        code: request.code,
-        name: request.name,
-        description: request.description,
-        channelCode: request.channel_code,
-        unitCode: request.unit_code,
-      })
-      .onConflictDoNothing({
-        target: [pricingOffers.priceBookId, pricingOffers.code],
-      })
-      .returning();
-    if (!created) {
-      throw invalidRequest(
-        "offer_code_taken",
-        "An offer with this code already exists in the catalog.",
-        "code",
-      );
-    }
-    await this.audit.record({
-      actorStaffId: actor.staffId,
-      actorEmail: actor.email,
-      action: "commercial_offer.create",
-      targetType: "pricing_offer",
-      targetId: created.id,
-      summary: `Offer "${created.name}" created`,
-      metadata: {
-        code: created.code,
-        channel_code: created.channelCode,
-        unit_code: created.unitCode,
-        price_book_id: created.priceBookId,
-      },
-    });
-    return toOfferRowDto(created);
   }
 
+  async createPackage(
+    request: CreateCommercialPackageRequest,
+    actor: StaffActor,
+  ): Promise<CreateCommercialPackageResponse> {
+    return createPackageWithDraft(
+      this.provisioning.db,
+      this.audit,
+      request,
+      actor,
+    );
+  }
+
+  /** Draft-only. A published version is financial evidence: it is cloned, never edited. */
   async createVersion(
     offerId: string,
     request: CreateCommercialOfferVersionRequest,
     actor: StaffActor,
   ): Promise<CommercialOfferVersionDto> {
     await assertStaffExists(this.provisioning.db, actor.staffId);
+    await assertRegisteredOfferItems(this.provisioning.db, request);
     const offer = await loadOfferForWrite(this.provisioning.db, offerId);
-    const [current] = await this.provisioning.db
-      .select({ highest: max(pricingOfferVersions.version) })
-      .from(pricingOfferVersions)
-      .where(eq(pricingOfferVersions.offerId, offerId));
-    const version = (current?.highest ?? 0) + 1;
-    const row = await insertVersion(
-      this.provisioning.db,
-      offer.id,
-      version,
-      request,
-      actor.staffId,
-    );
+    const inserted = await this.provisioning.db.transaction(async (tx) => {
+      await tx
+        .select({ id: pricingOffers.id })
+        .from(pricingOffers)
+        .where(eq(pricingOffers.id, offerId))
+        .for("update");
+      const [current] = await tx
+        .select({ highest: max(pricingOfferVersions.version) })
+        .from(pricingOfferVersions)
+        .where(eq(pricingOfferVersions.offerId, offerId));
+      return insertVersion(
+        tx,
+        offer.id,
+        (current?.highest ?? 0) + 1,
+        request,
+        actor.staffId,
+      );
+    });
     await this.audit.record({
       actorStaffId: actor.staffId,
       actorEmail: actor.email,
       action: "commercial_offer.draft_version",
       targetType: "pricing_offer_version",
-      targetId: row.id,
-      summary: `Draft v${version} authored for offer "${offer.name}"`,
+      targetId: inserted.version.id,
+      summary: `Draft v${inserted.version.version} authored for package "${offer.name}"`,
       metadata: {
         offer_id: offer.id,
-        version,
+        version: inserted.version.version,
         currency: request.currency,
-        total_units: row.totalUnits.toString(),
-        total_price_minor: row.totalPriceMinor.toString(),
+        item_count: inserted.items.length,
+        total_price_minor: inserted.version.totalPriceMinor.toString(),
       },
     });
-    return toVersionDto(row, await readStaffEmailMap(this.provisioning.db));
+    return toVersionDto(
+      inserted.version,
+      await readStaffEmailMap(this.provisioning.db),
+      inserted.items,
+    );
   }
 
-  /** Draft-only. A published version is financial evidence: it is cloned, never edited. */
   async updateVersion(
     versionId: string,
     request: CreateCommercialOfferVersionRequest,
     actor: StaffActor,
   ): Promise<CommercialOfferVersionDto> {
     await assertStaffExists(this.provisioning.db, actor.staffId);
+    await assertRegisteredOfferItems(this.provisioning.db, request);
     const context = await requireVersionContext(
       this.provisioning.db,
       versionId,
@@ -179,43 +162,73 @@ export class CommercialOffersService {
     if (context.version.status !== "draft") {
       throw invalidRequest(
         "offer_version_not_draft",
-        "Only a draft version can be edited. Clone it to change published terms.",
+        "Only a draft package version can be edited. Clone it to change published terms.",
       );
     }
-    const [updated] = await this.provisioning.db
-      .update(pricingOfferVersions)
-      .set({
-        currency: request.currency,
-        paidUnits: BigInt(request.paid_units),
-        bonusUnits: BigInt(request.bonus_units),
-        totalUnits: BigInt(request.paid_units) + BigInt(request.bonus_units),
-        totalPriceMinor: BigInt(request.total_price_minor) as MinorUnits,
-        minimumPackCount: request.minimum_pack_count,
-        maximumPackCount: request.maximum_pack_count,
-        eligibility: toStoredEligibility(request.eligibility),
-        effectiveFrom: new Date(request.effective_from),
-        effectiveTo: request.effective_to
-          ? new Date(request.effective_to)
-          : null,
-        updatedAt: new Date(),
-      })
-      .where(eq(pricingOfferVersions.id, versionId))
-      .returning();
-    if (!updated) throw notFound("offer_version_not_found", "Unknown version.");
+    const paidUnits = sum(request.items.map((item) => item.paid_units));
+    const bonusUnits = sum(request.items.map((item) => item.bonus_units));
+    const result = await this.provisioning.db.transaction(async (tx) => {
+      const [version] = await tx
+        .update(pricingOfferVersions)
+        .set({
+          currency: request.currency,
+          paidUnits,
+          bonusUnits,
+          totalUnits: paidUnits + bonusUnits,
+          totalPriceMinor: BigInt(request.total_price_minor) as MinorUnits,
+          creditValidityDays: request.credit_validity_days,
+          minimumPackCount: request.minimum_pack_count,
+          maximumPackCount: request.maximum_pack_count,
+          eligibility: {},
+          effectiveFrom: new Date(request.effective_from),
+          effectiveTo: request.effective_to
+            ? new Date(request.effective_to)
+            : null,
+          costSnapshot: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(pricingOfferVersions.id, versionId))
+        .returning();
+      if (!version) return null;
+      await tx
+        .delete(pricingOfferVersionItems)
+        .where(eq(pricingOfferVersionItems.offerVersionId, versionId));
+      const items = await tx
+        .insert(pricingOfferVersionItems)
+        .values(
+          request.items.map((item, position) => ({
+            offerVersionId: versionId,
+            position,
+            channelCode: item.channel_code,
+            unitCode: item.unit_code,
+            paidUnits: BigInt(item.paid_units),
+            bonusUnits: BigInt(item.bonus_units),
+            totalUnits: BigInt(item.paid_units) + BigInt(item.bonus_units),
+            eligibility: toStoredEligibility(item.eligibility),
+          })),
+        )
+        .returning();
+      return { version, items };
+    });
+    if (!result) throw notFound("offer_version_not_found", "Unknown version.");
     await this.audit.record({
       actorStaffId: actor.staffId,
       actorEmail: actor.email,
       action: "commercial_offer.edit_draft",
       targetType: "pricing_offer_version",
       targetId: versionId,
-      summary: `Draft v${updated.version} edited for offer "${context.offer.name}"`,
+      summary: `Draft v${result.version.version} edited for package "${context.offer.name}"`,
       metadata: {
         offer_id: context.offer.id,
-        total_units: updated.totalUnits.toString(),
-        total_price_minor: updated.totalPriceMinor.toString(),
+        item_count: result.items.length,
+        total_price_minor: result.version.totalPriceMinor.toString(),
       },
     });
-    return toVersionDto(updated, await readStaffEmailMap(this.provisioning.db));
+    return toVersionDto(
+      result.version,
+      await readStaffEmailMap(this.provisioning.db),
+      result.items,
+    );
   }
 
   /** Clone any version's terms into a fresh draft — the sanctioned way to change a published price. */
@@ -223,7 +236,7 @@ export class CommercialOffersService {
     versionId: string,
     actor: StaffActor,
   ): Promise<CommercialOfferVersionDto> {
-    const { version } = await requireVersionContext(
+    const { version, items } = await requireVersionContext(
       this.provisioning.db,
       versionId,
     );
@@ -231,12 +244,24 @@ export class CommercialOffersService {
       version.offerId,
       {
         currency: version.currency as Currency,
-        paid_units: version.paidUnits.toString(),
-        bonus_units: version.bonusUnits.toString(),
+        items: items.map((item) => ({
+          channel_code: item.channelCode,
+          unit_code: item.unitCode,
+          paid_units: item.paidUnits.toString(),
+          bonus_units: item.bonusUnits.toString(),
+          eligibility: {
+            destination_countries: [
+              ...(item.eligibility.destinationCountries ?? []),
+            ],
+            traffic_classes: [...(item.eligibility.trafficClasses ?? [])],
+            provider_vendors: [...(item.eligibility.providerVendors ?? [])],
+            service_classes: [...(item.eligibility.serviceClasses ?? [])],
+          },
+        })),
         total_price_minor: version.totalPriceMinor.toString(),
+        credit_validity_days: version.creditValidityDays,
         minimum_pack_count: version.minimumPackCount,
         maximum_pack_count: version.maximumPackCount,
-        eligibility: eligibilityOf(version),
         effective_from: version.effectiveFrom.toISOString(),
         effective_to: version.effectiveTo?.toISOString() ?? null,
       },
@@ -252,13 +277,21 @@ export class CommercialOffersService {
       this.provisioning.db,
       request.offer_id,
     );
+    await assertRegisteredOfferItems(this.provisioning.db, request);
     return this.margin.evaluate({
-      channelCode: offer.channelCode,
       priceBookId: offer.priceBookId,
       currency: request.currency,
-      totalUnits: BigInt(request.paid_units) + BigInt(request.bonus_units),
       totalPriceMinor: BigInt(request.total_price_minor),
-      eligibility: request.eligibility,
+      items: request.items.map((item) => ({
+        channelCode: item.channel_code,
+        unitCode: item.unit_code,
+        totalUnits: BigInt(item.paid_units) + BigInt(item.bonus_units),
+        eligibility: item.eligibility,
+      })),
     });
   }
+}
+
+function sum(values: readonly string[]): bigint {
+  return values.reduce((total, value) => total + BigInt(value), 0n);
 }

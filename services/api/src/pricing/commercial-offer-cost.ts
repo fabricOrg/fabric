@@ -1,4 +1,7 @@
-import type { CommercialOfferEligibility } from "@app/contracts";
+import {
+  type CommercialOfferEligibility,
+  unsupportedEligibilityDimensions,
+} from "@app/contracts";
 import type { CommercialOfferRouteRate } from "@app/domain";
 
 /**
@@ -50,6 +53,7 @@ export interface CostBasisFailure {
   readonly code:
     | "offer_channel_not_costable"
     | "offer_eligibility_unpriceable"
+    | "offer_eligibility_unspendable"
     | "offer_eligibility_too_broad"
     | "offer_vendor_eligibility_required"
     | "offer_cost_basis_missing";
@@ -141,6 +145,22 @@ export function resolveOfferCostBasis(
         code: "offer_eligibility_unpriceable",
         detail:
           "Provider costs are not recorded per service class, so a service-class restriction cannot be margin-checked.",
+      },
+    };
+  }
+  // Defence in depth behind the same check in the version contract: publication is the last gate
+  // before an offer becomes sellable, and a restriction this channel's send path cannot supply
+  // yields credits that are charged for but can never be drawn.
+  const unspendable = unsupportedEligibilityDimensions(
+    channelCode,
+    eligibility,
+  );
+  if (unspendable.length > 0) {
+    return {
+      ok: false,
+      failure: {
+        code: "offer_eligibility_unspendable",
+        detail: `A ${channelCode} send cannot be matched on ${unspendable.join(" or ").replace(/_/g, " ")}, so credits carrying that restriction could never be spent.`,
       },
     };
   }

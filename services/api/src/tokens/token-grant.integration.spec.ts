@@ -3,12 +3,17 @@ import {
   accounts,
   createAppDb,
   createProvisioningDb,
-  type MinorUnits,
   type TenantId,
   tokenPurchases,
 } from "@app/db";
+import { eq } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
+import {
+  cleanupPackages,
+  type PackageTrack,
+  seedPackagePurchase,
+} from "./package-fixtures.js";
 import { grantTokensForPurchase, readTokenBalance } from "./token-grant.js";
 
 const superUrl = process.env.DATABASE_URL_SUPER;
@@ -28,6 +33,7 @@ describeDb("token grant", () => {
   const deps = { provisioning, appDb };
 
   const tenants: string[] = [];
+  const packages: PackageTrack = { bookIds: [], offerIds: [], staffIds: [] };
 
   async function makeTenant(): Promise<string> {
     const id = randomUUID();
@@ -52,19 +58,24 @@ describeDb("token grant", () => {
   ): Promise<string> {
     const quantity = over.quantity ?? 100n;
     const unitPrice = over.unitPrice ?? 4n;
-    const reference = `token-${randomUUID()}`;
-    await provisioning.db.insert(tokenPurchases).values({
-      tenantId: tenantId as TenantId,
-      reference,
+    const { reference } = await seedPackagePurchase(provisioning, packages, {
+      tenantId,
       channel: over.channel ?? "sms",
       quantity,
-      unitPriceMinorLocked: unitPrice as MinorUnits,
-      currency: over.currency ?? "GHS",
-      // The DB CHECK ties these together; compute it the same way a real initiate would.
-      amountMinor: (quantity * unitPrice) as MinorUnits,
-      email: "buyer@example.com",
-      ...(over.status ? { status: over.status } : {}),
+      totalPriceMinor: quantity * unitPrice,
     });
+    if (over.currency && over.currency !== "GHS") {
+      await provisioning.db
+        .update(tokenPurchases)
+        .set({ currency: over.currency })
+        .where(eq(tokenPurchases.reference, reference));
+    }
+    if (over.status) {
+      await provisioning.db
+        .update(tokenPurchases)
+        .set({ status: over.status })
+        .where(eq(tokenPurchases.reference, reference));
+    }
     return reference;
   }
 
@@ -95,6 +106,7 @@ describeDb("token grant", () => {
       await owner`DELETE FROM token_purchases WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM accounts WHERE id = ${id}::uuid`;
     }
+    await cleanupPackages(owner, packages);
     await owner.end();
     await provisioning.end();
     await appDb.sql.end();
@@ -109,7 +121,7 @@ describeDb("token grant", () => {
 
     const result = await grantTokensForPurchase(deps, reference);
     expect(result.granted).toBe(true);
-    expect(result.quantity).toBe(100n);
+    expect(result.lots[0]?.quantity).toBe(100n);
 
     const balance = await appDb.withTenant(tenant, (tx) =>
       readTokenBalance(tx, "sms", "GHS"),
@@ -139,7 +151,7 @@ describeDb("token grant", () => {
     expect(second.granted).toBe(false);
     expect(third.granted).toBe(false);
     // Same lot, same ledger txn — the replays resolved to the original, they did not create one.
-    expect(second.lotId).toBe(first.lotId);
+    expect(second.lots[0]?.lotId).toBe(first.lots[0]?.lotId);
     expect(second.txnId).toBe(first.txnId);
 
     const lots = (await owner`
@@ -214,15 +226,15 @@ describeDb("token grant", () => {
 
   it("rejects at the DB when the charge and the entitlement disagree", async () => {
     const tenant = await makeTenant();
-    // Charge for 10 tokens, try to grant 1000 — the class of bug the CHECK exists to make impossible.
+    // A purchase with no offer provenance at all — the class of bug the CHECK exists to make
+    // impossible now that every purchase must descend from a published package.
     // Inserted on the raw connection so the assertion sees the DB's own constraint name; drizzle
     // wraps the driver error in a generic "Failed query" message that would hide which guard fired.
     const violation = await owner`
       INSERT INTO token_purchases (
-        tenant_id, reference, channel, quantity, unit_price_minor_locked,
-        currency, amount_minor, email
+        tenant_id, reference, currency, amount_minor, email
       ) VALUES (
-        ${tenant}::uuid, ${`token-${randomUUID()}`}, 'sms', 1000, 4, 'GHS', 40, 'buyer@example.com'
+        ${tenant}::uuid, ${`token-${randomUUID()}`}, 'GHS', 40, 'buyer@example.com'
       )`.catch((error: { constraint_name?: string }) => error);
     expect(violation).toMatchObject({
       constraint_name: "token_purchases_amount_chk",

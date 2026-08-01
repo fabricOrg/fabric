@@ -3,9 +3,7 @@ import {
   accounts,
   createAppDb,
   createProvisioningDb,
-  type MinorUnits,
   type TenantId,
-  tokenPurchases,
 } from "@app/db";
 import { FakeProvider } from "@app/integrations/testing";
 import {
@@ -16,6 +14,11 @@ import {
 } from "@app/sms-engine";
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
+import {
+  cleanupPackages,
+  type PackageTrack,
+  seedPackagePurchase,
+} from "./package-fixtures.js";
 import { grantTokensForPurchase } from "./token-grant.js";
 import { holdTokens } from "./token-holds.js";
 import { settleTokenHolds } from "./token-settlement.js";
@@ -36,6 +39,7 @@ describeDb("token revenue recognition", () => {
   const appDb = createAppDb(appUrl ?? "", { max: 4 });
   const owner = postgres(superUrl ?? "", { max: 1 });
   const tenants: string[] = [];
+  const packages: PackageTrack = { bookIds: [], offerIds: [], staffIds: [] };
 
   const deps = {
     db: appDb,
@@ -57,16 +61,10 @@ describeDb("token revenue recognition", () => {
     quantity: bigint,
     unitPrice: bigint,
   ): Promise<void> {
-    const reference = `token-${randomUUID()}`;
-    await provisioning.db.insert(tokenPurchases).values({
-      tenantId: tenantId as TenantId,
-      reference,
-      channel: "sms",
+    const { reference } = await seedPackagePurchase(provisioning, packages, {
+      tenantId,
       quantity,
-      unitPriceMinorLocked: unitPrice as MinorUnits,
-      currency: "GHS",
-      amountMinor: (quantity * unitPrice) as MinorUnits,
-      email: "buyer@example.com",
+      totalPriceMinor: quantity * unitPrice,
     });
     await grantTokensForPurchase({ provisioning, appDb }, reference);
   }
@@ -115,6 +113,7 @@ describeDb("token revenue recognition", () => {
       await owner`DELETE FROM token_purchases WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM accounts WHERE id = ${id}::uuid`;
     }
+    await cleanupPackages(owner, packages);
     await owner.end();
     await provisioning.end();
     await appDb.sql.end();

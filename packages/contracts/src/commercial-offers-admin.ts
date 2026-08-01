@@ -53,6 +53,9 @@ export type PreviewCommercialOfferMarginRequest = z.infer<
 
 /** One priced route the offer's eligibility permits. Present in every margin evaluation. */
 export const commercialOfferRouteCostSchema = z.object({
+  item_index: z.number().int().nonnegative(),
+  channel_code: z.string(),
+  unit_code: z.string(),
   provider_vendor: z.string(),
   destination_country: z.string().nullable(),
   traffic_class: z.string().nullable(),
@@ -68,6 +71,16 @@ export type CommercialOfferRouteCost = z.infer<
   typeof commercialOfferRouteCostSchema
 >;
 
+export const commercialOfferMarginItemSchema = z.object({
+  item_index: z.number().int().nonnegative(),
+  channel_code: z.string(),
+  unit_code: z.string(),
+  total_units: positiveIntegerString,
+  best_case_cost_minor: nonNegativeIntegerString,
+  worst_case_cost_minor: nonNegativeIntegerString,
+  allocated_price_minor: positiveIntegerString,
+});
+
 /**
  * Publish-time margin evidence, also served as an un-saved preview so staff see the verdict BEFORE
  * committing a price. A preview that cannot be calculated fails closed rather than reporting an
@@ -76,10 +89,9 @@ export type CommercialOfferRouteCost = z.infer<
  */
 export const commercialOfferMarginPreviewSchema = z.object({
   currency,
-  total_units: positiveIntegerString,
   total_price_minor: positiveIntegerString,
   /** Informational only — a fixed total need not divide evenly by its units. */
-  effective_unit_price_minor_display: z.string(),
+  items: z.array(commercialOfferMarginItemSchema),
   cost_snapshot: commercialOfferCostSnapshotSchema.nullable(),
   routes: z.array(commercialOfferRouteCostSchema),
   publishable: z.boolean(),

@@ -3,6 +3,7 @@
 import type {
   CommercialOfferChannelDto,
   CommercialOfferWithVersions,
+  CommercialRouteVocabulary,
   PriceBookDto,
 } from "@app/contracts";
 import { Badge } from "@app/ui/components/ui/badge";
@@ -28,12 +29,14 @@ import { OfferVersionHistory } from "@/components/offer-version-history";
 export function CommercialOffersManager({
   offers,
   channels,
+  routeVocabulary,
   catalogs,
   canManage,
   actorStaffId,
 }: {
   offers: readonly CommercialOfferWithVersions[];
   channels: readonly CommercialOfferChannelDto[];
+  routeVocabulary: CommercialRouteVocabulary;
   catalogs: readonly PriceBookDto[];
   canManage: boolean;
   actorStaffId: string;
@@ -80,9 +83,6 @@ export function CommercialOffersManager({
                 <Badge variant="outline" className="font-mono text-[10px]">
                   {offer.code}
                 </Badge>
-                <Badge variant="outline" className="text-[10px] uppercase">
-                  {offer.channel_code} / {offer.unit_code}
-                </Badge>
               </CardTitle>
               <CardDescription>
                 {offer.catalog_name}
@@ -94,6 +94,8 @@ export function CommercialOffersManager({
                 offer={offer}
                 canManage={canManage}
                 actorStaffId={actorStaffId}
+                channels={activeChannels}
+                routeVocabulary={routeVocabulary}
               />
               {canManage ? (
                 <div>
@@ -121,6 +123,8 @@ export function CommercialOffersManager({
         <OfferTermsDialog
           offer={draftingFor}
           version={null}
+          channels={activeChannels}
+          routeVocabulary={routeVocabulary}
           open={draftingFor !== null}
           onOpenChange={(open) => {
             if (!open) setDraftingFor(null);
