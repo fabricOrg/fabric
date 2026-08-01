@@ -4,8 +4,11 @@ import {
   createAppDb,
   createProvisioningDb,
   type MinorUnits,
-  priceBookRates,
+  offerCatalogAssignments,
   priceBooks,
+  pricingOffers,
+  pricingOfferVersions,
+  staffUsers,
   type TenantId,
   tokenPurchases,
 } from "@app/db";
@@ -14,6 +17,8 @@ import { eq } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
+import type { PluginResolverService } from "../plugins/plugin-resolver.service.js";
+import { TokenCatalogService } from "./token-catalog.service.js";
 import { readTokenBalance } from "./token-grant.js";
 import { TokenPurchaseService } from "./token-purchase.service.js";
 
@@ -21,11 +26,6 @@ const superUrl = process.env.DATABASE_URL_SUPER;
 const appUrl = process.env.DATABASE_URL_APP;
 const describeDb = superUrl && appUrl ? describe : describe.skip;
 
-/**
- * Real-Postgres coverage for token purchase (ADR-0010 slice 2c-iii). The security property under
- * test: the price and the granted quantity come from SERVER state — the token price book at initiate,
- * and the stored intent at grant — never from the caller or the webhook payload.
- */
 class FakeCheckout {
   initCharge(params: { reference: string }) {
     return Promise.resolve({
@@ -35,12 +35,14 @@ class FakeCheckout {
   }
 }
 
-describeDb("token purchase", () => {
+describeDb("commercial-offer token purchase", () => {
   const provisioning = createProvisioningDb(superUrl ?? "", { max: 1 });
   const appDb = createAppDb(appUrl ?? "", { max: 2 });
   const owner = postgres(superUrl ?? "", { max: 1 });
-  const tenants: string[] = [];
-  const books: string[] = [];
+  const tenantIds: string[] = [];
+  const bookIds: string[] = [];
+  const offerIds: string[] = [];
+  const staffIds: string[] = [];
 
   const config = {
     get: (key: string) =>
@@ -54,253 +56,292 @@ describeDb("token purchase", () => {
     appDb,
     config,
     killSwitch,
+    {
+      resolvePayment: async () => ({
+        provider: new FakeCheckout(),
+        creds: { secretKey: "sk_test_dummy" },
+        instanceId: null,
+        credentialVersion: 1,
+      }),
+    } as unknown as PluginResolverService,
   );
-  // Swap the real Paystack client for a stub — no network in tests. Mirrors the payments/flows specs;
-  // readonly at compile-time only. The WEBHOOK half is driven directly via completeFromWebhook, which
-  // is the code the signature-verified controller calls.
-  (service as unknown as { provider: FakeCheckout }).provider =
-    new FakeCheckout();
+  const catalogService = new TokenCatalogService(provisioning);
 
-  async function makeTenant(): Promise<string> {
+  async function makeTenant(
+    currency: "GHS" | "NGN" = "GHS",
+    plan: "free" | "sandbox" = "free",
+  ) {
     const id = randomUUID();
-    await provisioning.db
-      .insert(accounts)
-      .values({ id: id as TenantId, name: "Buy test", slug: `buy-${id}` });
-    tenants.push(id);
+    await provisioning.db.insert(accounts).values({
+      id: id as TenantId,
+      name: "Bundle buyer",
+      slug: `bundle-${id}`,
+      billingCurrency: currency,
+      plan,
+    });
+    tenantIds.push(id);
     return id;
   }
 
-  /**
-   * The DEFAULT token price book initiate resolves from. Created ONCE and reused: the partial index
-   * `uniq_default_price_book_per_mode` permits exactly one default per mode, so a per-test book would
-   * collide. Scoped to the token mode, so the subscription default other specs read is undisturbed.
-   */
-  let tokenBookId: string | null = null;
-  async function ensureTokenBook(unitPrice: bigint): Promise<void> {
-    if (tokenBookId) return;
+  async function makePublishedOffer(
+    tenantId: string,
+    terms: {
+      minimum?: number;
+      maximum?: number | null;
+      serviceClasses?: string[];
+    } = {},
+  ) {
+    const [author, approver] = await provisioning.db
+      .insert(staffUsers)
+      .values([
+        { email: `${randomUUID()}@author.test`, role: "admin" },
+        { email: `${randomUUID()}@approver.test`, role: "admin" },
+      ])
+      .returning({ id: staffUsers.id });
+    if (!author || !approver) throw new Error("staff fixtures failed");
+    staffIds.push(author.id, approver.id);
+
     const [book] = await provisioning.db
       .insert(priceBooks)
-      .values({
-        name: `Token — ${randomUUID()}`,
-        mode: "token",
-        isDefault: true,
-      })
+      .values({ name: `Bundle ${randomUUID()}`, mode: "token" })
       .returning({ id: priceBooks.id });
-    tokenBookId = book?.id ?? "";
-    books.push(tokenBookId);
-    await provisioning.db.insert(priceBookRates).values({
-      priceBookId: tokenBookId,
-      channel: "sms",
-      currency: "GHS",
-      unitPriceMinor: unitPrice as MinorUnits,
+    if (!book) throw new Error("book fixture failed");
+    bookIds.push(book.id);
+    const [offer] = await provisioning.db
+      .insert(pricingOffers)
+      .values({
+        priceBookId: book.id,
+        code: `bundle-${randomUUID().slice(0, 8)}`,
+        name: "200 SMS segments",
+        channelCode: "sms",
+        unitCode: "segment",
+      })
+      .returning({ id: pricingOffers.id });
+    if (!offer) throw new Error("offer fixture failed");
+    offerIds.push(offer.id);
+    const now = new Date();
+    const [version] = await provisioning.db
+      .insert(pricingOfferVersions)
+      .values({
+        offerId: offer.id,
+        version: 1,
+        status: "published",
+        currency: "GHS",
+        paidUnits: 200n,
+        bonusUnits: 0n,
+        totalUnits: 200n,
+        totalPriceMinor: 300n as MinorUnits,
+        minimumPackCount: terms.minimum ?? 1,
+        maximumPackCount: terms.maximum ?? 10,
+        eligibility: {
+          providerVendors: ["arkesel"],
+          serviceClasses: terms.serviceClasses ?? [],
+        },
+        costSnapshot: {
+          bestCaseCostMinor: "100",
+          worstCaseCostMinor: "120",
+          bestCaseMarginMinor: "200",
+          worstCaseMarginMinor: "180",
+          worstCaseMarginBps: 6_000,
+          minimumMarginBps: 2_000,
+          minimumMarginSource: "platform_default",
+          routeCount: 1,
+          calculatedAt: now.toISOString(),
+          sourceReferences: ["fixture"],
+        },
+        createdBy: author.id,
+        approvedBy: approver.id,
+        approvedAt: now,
+        effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+      })
+      .returning({ id: pricingOfferVersions.id });
+    if (!version) throw new Error("version fixture failed");
+    await provisioning.db.insert(offerCatalogAssignments).values({
+      tenantId: tenantId as TenantId,
+      priceBookId: book.id,
+      assignedBy: approver.id,
+      reason: "purchase test",
     });
+    return version.id;
   }
 
   afterAll(async () => {
-    for (const id of tenants) {
-      await owner`DELETE FROM token_holds WHERE tenant_id = ${id}::uuid`;
-      await owner`DELETE FROM ledger_entries WHERE tenant_id = ${id}::uuid`;
-      await owner`DELETE FROM token_lots WHERE tenant_id = ${id}::uuid`;
-      await owner`DELETE FROM ledger_transactions WHERE tenant_id = ${id}::uuid`;
-      await owner`DELETE FROM ledger_accounts WHERE tenant_id = ${id}::uuid`;
-      await owner`DELETE FROM token_counters WHERE tenant_id = ${id}::uuid`;
-      await owner`DELETE FROM token_purchases WHERE tenant_id = ${id}::uuid`;
-      await owner`DELETE FROM accounts WHERE id = ${id}::uuid`;
+    for (const tenantId of tenantIds) {
+      await owner`DELETE FROM token_recognition_allocations WHERE tenant_id = ${tenantId}::uuid`;
+      await owner`DELETE FROM token_holds WHERE tenant_id = ${tenantId}::uuid`;
+      await owner`DELETE FROM ledger_entries WHERE tenant_id = ${tenantId}::uuid`;
+      await owner`DELETE FROM token_lots WHERE tenant_id = ${tenantId}::uuid`;
+      await owner`DELETE FROM ledger_transactions WHERE tenant_id = ${tenantId}::uuid`;
+      await owner`DELETE FROM ledger_accounts WHERE tenant_id = ${tenantId}::uuid`;
+      await owner`DELETE FROM token_counters WHERE tenant_id = ${tenantId}::uuid`;
+      await owner`DELETE FROM token_purchases WHERE tenant_id = ${tenantId}::uuid`;
+      await owner`DELETE FROM offer_catalog_assignments WHERE tenant_id = ${tenantId}::uuid`;
+      await owner`DELETE FROM accounts WHERE id = ${tenantId}::uuid`;
     }
-    for (const id of books) {
-      await owner`DELETE FROM price_book_rates WHERE price_book_id = ${id}::uuid`;
-      await owner`DELETE FROM price_books WHERE id = ${id}::uuid`;
+    for (const offerId of offerIds) {
+      await owner`DELETE FROM pricing_offer_versions WHERE offer_id = ${offerId}::uuid`;
+      await owner`DELETE FROM pricing_offers WHERE id = ${offerId}::uuid`;
+    }
+    for (const bookId of bookIds) {
+      await owner`DELETE FROM price_books WHERE id = ${bookId}::uuid`;
+    }
+    for (const staffId of staffIds) {
+      await owner`DELETE FROM staff_users WHERE id = ${staffId}::uuid`;
     }
     await owner.end();
     await provisioning.end();
     await appDb.sql.end();
   });
 
-  // MUST run first: it asserts the state before any default token book exists in this file.
-  it("refuses to sell when no token price book is configured", async () => {
-    const tenant = await makeTenant();
-    // No seeded default token book exists by design — inventing a token price would be a fabricated
-    // rate (ADR-0010 §11). Selling must fail closed until staff configure one.
-    await expect(
-      service.initiate(tenant, {
-        channel: "sms",
-        quantity: 100,
-        currency: "GHS",
-        email: "buyer@example.com",
-      }),
-    ).rejects.toMatchObject({
-      response: { error: { code: "token_price_unavailable" } },
-    });
-
-    const rows = (await owner`
-      SELECT count(*)::int AS n FROM token_purchases
-      WHERE tenant_id = ${tenant}::uuid`) as { n: number }[];
-    // Nothing recorded — a refused sale leaves no intent behind.
-    expect(rows[0]?.n).toBe(0);
-  });
-
-  it("grants only after the webhook confirms, at the price the SERVER set", async () => {
-    const tenant = await makeTenant();
-    await ensureTokenBook(7n);
-
-    const quote = await service.initiate(tenant, {
-      channel: "sms",
-      quantity: 100,
-      currency: "GHS",
+  it("snapshots exact fixed-total terms and grants only after matching payment", async () => {
+    const tenantId = await makeTenant();
+    const versionId = await makePublishedOffer(tenantId);
+    const checkout = await service.initiate(tenantId, {
+      offer_version_id: versionId,
+      pack_count: 2,
       email: "buyer@example.com",
     });
-    // The price came from the book, not the caller: 100 × 7.
-    expect(quote.unit_price_minor).toBe("7");
-    expect(quote.amount_minor).toBe("700");
-    expect(quote.reference.startsWith("token-")).toBe(true);
-    // Nothing is owned until the money clears.
+
+    expect(checkout).toMatchObject({
+      offer_version_id: versionId,
+      pack_count: 2,
+      quantity: "400",
+      amount_minor: "600",
+      currency: "GHS",
+    });
     expect(
-      await appDb.withTenant(tenant, (tx) =>
+      await appDb.withTenant(tenantId, (tx) =>
         readTokenBalance(tx, "sms", "GHS"),
       ),
     ).toBe(0n);
 
-    await service.completeFromWebhook(quote.reference, {
-      amountMinor: 700n,
+    await service.completeFromWebhook(checkout.reference, {
+      amountMinor: 600n,
       currency: "GHS",
+      verifiedMode: "live",
     });
-
     expect(
-      await appDb.withTenant(tenant, (tx) =>
+      await appDb.withTenant(tenantId, (tx) =>
         readTokenBalance(tx, "sms", "GHS"),
       ),
-    ).toBe(100n);
-    const [row] = await provisioning.db
+    ).toBe(400n);
+    const [purchase] = await provisioning.db
       .select()
       .from(tokenPurchases)
-      .where(eq(tokenPurchases.reference, quote.reference));
-    expect(row?.status).toBe("success");
+      .where(eq(tokenPurchases.reference, checkout.reference));
+    expect(purchase).toMatchObject({
+      pricingModel: "fixed_bundle",
+      offerVersionId: versionId,
+      packCount: 2,
+      quantity: 400n,
+      amountMinor: 600n,
+      unitPriceMinorLocked: null,
+      status: "success",
+    });
   });
 
-  it("refuses a webhook whose amount disagrees with the stored intent", async () => {
-    const tenant = await makeTenant();
-    await ensureTokenBook(7n);
-    const quote = await service.initiate(tenant, {
-      channel: "sms",
-      quantity: 100,
-      currency: "GHS",
+  it("reconciles webhook amount and grants exactly once on replay", async () => {
+    const tenantId = await makeTenant();
+    const versionId = await makePublishedOffer(tenantId);
+    const rejected = await service.initiate(tenantId, {
+      offer_version_id: versionId,
+      pack_count: 1,
       email: "buyer@example.com",
     });
-
-    // A forged/tampered callback claiming a smaller payment must not mint the entitlement.
-    await service.completeFromWebhook(quote.reference, {
-      amountMinor: 1n,
+    await service.completeFromWebhook(rejected.reference, {
+      amountMinor: 299n,
       currency: "GHS",
+      verifiedMode: "live",
     });
-
     expect(
-      await appDb.withTenant(tenant, (tx) =>
+      await appDb.withTenant(tenantId, (tx) =>
         readTokenBalance(tx, "sms", "GHS"),
       ),
     ).toBe(0n);
-    const [row] = await provisioning.db
-      .select()
-      .from(tokenPurchases)
-      .where(eq(tokenPurchases.reference, quote.reference));
-    expect(row?.status).toBe("failed");
-  });
 
-  it("grants exactly once when the webhook is replayed", async () => {
-    const tenant = await makeTenant();
-    await ensureTokenBook(7n);
-    const quote = await service.initiate(tenant, {
-      channel: "sms",
-      quantity: 10,
-      currency: "GHS",
+    const accepted = await service.initiate(tenantId, {
+      offer_version_id: versionId,
+      pack_count: 1,
       email: "buyer@example.com",
     });
-
-    const event = { amountMinor: 70n, currency: "GHS" };
-    await service.completeFromWebhook(quote.reference, event);
-    await service.completeFromWebhook(quote.reference, event);
-    await service.completeFromWebhook(quote.reference, event);
-
+    const event = {
+      amountMinor: 300n,
+      currency: "GHS",
+      verifiedMode: "live" as const,
+    };
+    await Promise.all([
+      service.completeFromWebhook(accepted.reference, event),
+      service.completeFromWebhook(accepted.reference, event),
+    ]);
     expect(
-      await appDb.withTenant(tenant, (tx) =>
+      await appDb.withTenant(tenantId, (tx) =>
         readTokenBalance(tx, "sms", "GHS"),
       ),
-    ).toBe(10n);
+    ).toBe(200n);
     const lots = (await owner`
-      SELECT count(*)::int AS n FROM token_lots
-      WHERE tenant_id = ${tenant}::uuid`) as { n: number }[];
-    expect(lots[0]?.n).toBe(1);
+      SELECT count(*)::int AS count FROM token_lots
+      WHERE tenant_id = ${tenantId}::uuid`) as { count: number }[];
+    expect(lots[0]?.count).toBe(1);
   });
 
-  it("refuses a charge too large to represent exactly, before taking money", async () => {
-    const tenant = await makeTenant();
-    await ensureTokenBook(7n);
-    // Push the total past 2^53 via a deliberately absurd configured price. The provider coerces the
-    // amount through Number(), so a rounded charge would later mismatch the stored intent and strand
-    // the buyer: charged, no tokens. The sale must stop first.
-    await owner`
-      UPDATE price_book_rates SET unit_price_minor = 9007199254740993
-      WHERE price_book_id = ${tokenBookId}::uuid AND channel = 'sms' AND currency = 'GHS'`;
-
+  it("fails closed on catalog, currency, and pack-count mismatches", async () => {
+    const noCatalogTenant = await makeTenant();
     await expect(
-      service.initiate(tenant, {
-        channel: "sms",
-        quantity: 1000,
-        currency: "GHS",
+      service.initiate(noCatalogTenant, {
+        offer_version_id: randomUUID(),
+        pack_count: 1,
         email: "buyer@example.com",
       }),
     ).rejects.toMatchObject({
-      response: { error: { code: "token_amount_too_large" } },
+      response: { error: { code: "offer_catalog_unavailable" } },
     });
 
-    const rows = (await owner`
-      SELECT count(*)::int AS n FROM token_purchases
-      WHERE tenant_id = ${tenant}::uuid`) as { n: number }[];
-    // No intent written — nothing to reconcile against later.
-    expect(rows[0]?.n).toBe(0);
-
-    await owner`
-      UPDATE price_book_rates SET unit_price_minor = 7
-      WHERE price_book_id = ${tokenBookId}::uuid AND channel = 'sms' AND currency = 'GHS'`;
-  });
-
-  it("refuses to sell EMAIL tokens, which no send path can spend", async () => {
-    const tenant = await makeTenant();
-    await ensureTokenBook(7n);
-
-    // Only the sms engine holds/settles tokens; the email accept path still reserves from the
-    // wallet. Selling an email token would take money for an entitlement that can never be
-    // consumed — an undischargeable liability, and the customer pays twice.
-    await expect(
-      service.initiate(tenant, {
-        channel: "email",
-        quantity: 100,
-        currency: "GHS",
-        email: "buyer@example.com",
-      }),
-    ).rejects.toMatchObject({
-      response: { error: { code: "token_channel_unavailable" } },
+    const ngnTenant = await makeTenant("NGN");
+    const versionId = await makePublishedOffer(ngnTenant, {
+      minimum: 2,
+      maximum: 4,
     });
-
-    // No intent, so no webhook can later grant against it.
-    const rows = (await owner`
-      SELECT count(*)::int AS n FROM token_purchases
-      WHERE tenant_id = ${tenant}::uuid`) as { n: number }[];
-    expect(rows[0]?.n).toBe(0);
-  });
-
-  it("refuses a currency the token book does not price", async () => {
-    const tenant = await makeTenant();
-    await ensureTokenBook(7n); // GHS only
-
     await expect(
-      service.initiate(tenant, {
-        channel: "sms",
-        quantity: 5,
-        currency: "NGN",
+      service.initiate(ngnTenant, {
+        offer_version_id: versionId,
+        pack_count: 1,
         email: "buyer@example.com",
       }),
     ).rejects.toMatchObject({
-      response: { error: { code: "token_price_unavailable" } },
+      response: { error: { code: "commercial_offer_currency_mismatch" } },
+    });
+  });
+
+  it("never creates a paid token purchase for a sandbox workspace", async () => {
+    const tenantId = await makeTenant("GHS", "sandbox");
+    const versionId = await makePublishedOffer(tenantId);
+    await expect(
+      service.initiate(tenantId, {
+        offer_version_id: versionId,
+        pack_count: 1,
+        email: "buyer@example.com",
+      }),
+    ).rejects.toMatchObject({
+      response: { error: { code: "sandbox_token_purchase_denied" } },
+    });
+  });
+
+  it("does not sell an offer whose service-class restriction cannot be consumed yet", async () => {
+    const tenantId = await makeTenant();
+    const versionId = await makePublishedOffer(tenantId, {
+      serviceClasses: ["priority"],
+    });
+    expect((await catalogService.catalog(tenantId)).offers).toEqual([]);
+    await expect(
+      service.initiate(tenantId, {
+        offer_version_id: versionId,
+        pack_count: 1,
+        email: "buyer@example.com",
+      }),
+    ).rejects.toMatchObject({
+      response: {
+        error: { code: "commercial_offer_consumption_unavailable" },
+      },
     });
   });
 });

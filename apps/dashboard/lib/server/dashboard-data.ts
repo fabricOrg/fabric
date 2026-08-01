@@ -2,9 +2,12 @@ import "server-only";
 
 import {
   autoTopupResponseSchema,
+  commercialOfferPurchaseReceiptSchema,
+  customerCommercialOfferCatalogSchema,
   messageDetailResponse,
   messageListResponse,
   paymentMethodResponseSchema,
+  tokenBalancesResponseSchema,
   walletSnapshot,
 } from "@app/contracts";
 import { BffError, dashboardApi } from "./api-client";
@@ -33,6 +36,29 @@ export async function getSavedPaymentMethod() {
 export async function getAutoTopup() {
   return autoTopupResponseSchema.parse(
     await unwrap(dashboardApi("/v1/wallet/auto-topup", "wallet:read")),
+  );
+}
+
+export async function getCommercialOfferCatalog() {
+  return customerCommercialOfferCatalogSchema.parse(
+    await unwrap(dashboardApi("/v1/tokens/catalog", "wallet:read")),
+  );
+}
+
+export async function getTokenBalances() {
+  return tokenBalancesResponseSchema.parse(
+    await unwrap(dashboardApi("/v1/tokens", "wallet:read")),
+  );
+}
+
+export async function getCommercialOfferPurchaseReceipt(reference: string) {
+  return commercialOfferPurchaseReceiptSchema.parse(
+    await unwrap(
+      dashboardApi(
+        `/v1/tokens/purchases/${encodeURIComponent(reference)}`,
+        "wallet:read",
+      ),
+    ),
   );
 }
 

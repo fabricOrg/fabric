@@ -45,6 +45,9 @@ export const tenantSummaryDtoSchema = z.object({
   workos_organization_id: z.string().nullable(),
   // Assigned price book (ADR-0010); null → the account resolves to the mode default.
   price_book_id: z.string().nullable(),
+  // Assigned PREPAID catalog (ADR-0012 / COM-011); null → the default token catalog. Independent of
+  // `price_book_id`: one prices a unit as it is sent, the other is the bundle catalogue on offer.
+  offer_catalog_id: z.string().nullable(),
   billing_currency: z.enum(["GHS", "NGN", "USD"]),
   created_at: z.string(),
 });

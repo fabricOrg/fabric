@@ -15,6 +15,9 @@ export * from "./admin.js";
 export * from "./applications.js";
 // Audit log — append-only record of consequential staff actions.
 export * from "./audit.js";
+export * from "./commercial-offers.js";
+export * from "./commercial-offers-admin.js";
+export * from "./customer-commercial-offers.js";
 export * from "./definition-catalog.js";
 // Dev-portal DTOs (F8.6/F2.3) — API keys, webhook endpoints, request logs.
 export * from "./dev-portal.js";
@@ -24,6 +27,8 @@ export * from "./email.js";
 export * from "./errors.js";
 // Lighthouse flow (Transactions explorer) — verify → charge → notify, one reconciled record.
 export * from "./flows.js";
+// Corporate general ledger — the company's books, distinct from the per-tenant wallet subledger.
+export * from "./general-ledger.js";
 export * from "./identity.js";
 // Staff impersonation — time-boxed, audited "view as tenant".
 export * from "./impersonation.js";

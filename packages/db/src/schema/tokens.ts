@@ -2,90 +2,20 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   check,
+  foreignKey,
   index,
+  jsonb,
   pgTable,
   text,
   timestamp,
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
-import {
-  moneyMinor,
-  type TenantId,
-  tenantIdCol,
-  timestamps,
-} from "./_shared.js";
+import { moneyMinor, tenantIdCol, timestamps } from "./_shared.js";
+import { pricingOfferVersions } from "./commercial-offers.js";
 import { accounts } from "./identity.js";
+import type { TokenOfferSnapshot } from "./token-purchases.js";
 import { ledgerTransactions } from "./wallet.js";
-
-/**
- * TOKENS (ADR-0010 Phase 2, slice 2a) — count-based per-channel entitlements bought as a one-off
- * quantity, with NO wallet. See `docs/decisions/0010-token-subsystem-wallet-security-review.md`.
- *
- * THE SPLIT THAT MAKES THIS SAFE: these tables hold **counts, never money**. Financial truth stays in
- * the ONE existing double-entry ledger — a purchase posts
- * `debit gateway_clearing / credit token_deferred_revenue` (cash received becomes a LIABILITY: we owe
- * N sends), and consumption later recognizes revenue at the lot's locked price (slice 2c). Because no
- * column here is money-bearing, a bug in the count layer can mis-state entitlement but **cannot mint
- * or lose cash**.
- *
- * `quantity` columns are therefore plain `bigint`, deliberately NOT the branded `MinorUnits` — the
- * brand exists precisely so "a count of sends" can never be passed where "an amount of money" is
- * expected (see _shared.ts). Only `unit_price_minor_locked` / `amount_minor` are money.
- *
- * Slice 2a is ADDITIVE AND INVISIBLE: it ships the schema plus the idempotent grant. Tokens are not
- * yet spendable (send-path consumption is 2b), so NO purchase endpoint is exposed — selling a send we
- * cannot yet deliver would be dishonest. The grant's production caller (initiate + the Paystack
- * webhook branch) lands with 2c, once tokens can actually be spent.
- */
-
-/**
- * A token purchase INTENT. Platform-level (no tenant/RLS) for exactly the reason `payments` is: the
- * provider webhook carries no tenant context and must read the intent by `reference` to learn which
- * tenant to grant. Access is api-only, always filtered by reference/tenant.
- *
- * SECURITY: the granted quantity and locked unit price come from THIS row, never from the webhook
- * payload, so a forged/replayed callback cannot inflate a grant. The `amount_minor` CHECK below makes
- * the charged amount and the entitlement arithmetically inseparable at the DB.
- */
-export const tokenPurchases = pgTable(
-  "token_purchases",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    tenantId: uuid("tenant_id").notNull().$type<TenantId>(),
-    /** Our idempotency key AND the provider reference, e.g. `token-{uuid}`. */
-    reference: text("reference").notNull().unique(),
-    provider: text("provider").notNull().default("paystack"),
-    providerRef: text("provider_ref"),
-    channel: text("channel").notNull(), // sms | email
-    /** How many sends this purchase buys. A COUNT, not money. */
-    quantity: bigint("quantity", { mode: "bigint" }).notNull(),
-    /** The token book's unit price at purchase time — locked into the lot on grant (ADR-0010 #3). */
-    unitPriceMinorLocked: moneyMinor("unit_price_minor_locked").notNull(),
-    currency: text("currency").notNull(), // ISO 4217
-    /** What the provider charges = quantity × unit_price_minor_locked (enforced below). */
-    amountMinor: moneyMinor("amount_minor").notNull(),
-    email: text("email").notNull(),
-    status: text("status").notNull().default("pending"), // pending | success | failed
-    ...timestamps,
-  },
-  (t) => [
-    check("token_purchases_channel_chk", sql`${t.channel} in ('sms', 'email')`),
-    check(
-      "token_purchases_status_chk",
-      sql`${t.status} in ('pending', 'success', 'failed')`,
-    ),
-    check("token_purchases_quantity_chk", sql`${t.quantity} > 0`),
-    check("token_purchases_price_chk", sql`${t.unitPriceMinorLocked} > 0`),
-    // Correct-by-construction: the cash charged and the entitlement granted can never drift apart,
-    // whatever the calling code does. Closes the "charge for 10, grant 1000" class of bug outright.
-    check(
-      "token_purchases_amount_chk",
-      sql`${t.amountMinor} = ${t.quantity} * ${t.unitPriceMinorLocked}`,
-    ),
-    index("idx_token_purchases_tenant").on(t.tenantId, t.createdAt),
-  ],
-);
 
 /**
  * A granted batch of tokens — the append-only record of "this tenant owns N sends on this channel at
@@ -103,12 +33,29 @@ export const tokenLots = pgTable(
     tenantId: tenantIdCol().references(() => accounts.id, {
       onDelete: "restrict",
     }),
-    channel: text("channel").notNull(), // sms | email
+    channel: text("channel").notNull(),
     currency: text("currency").notNull(),
+    pricingModel: text("pricing_model").notNull().default("unit"),
+    offerVersionId: uuid("offer_version_id").references(
+      () => pricingOfferVersions.id,
+      { onDelete: "restrict" },
+    ),
+    compatibilitySnapshot: jsonb(
+      "compatibility_snapshot",
+    ).$type<TokenOfferSnapshot>(),
     /** The purchased count. A COUNT, not money. */
     quantityTotal: bigint("quantity_total", { mode: "bigint" }).notNull(),
     /** Price locked at purchase — later price-book edits never touch tokens already bought. */
-    unitPriceMinorLocked: moneyMinor("unit_price_minor_locked").notNull(),
+    unitPriceMinorLocked: moneyMinor("unit_price_minor_locked"),
+    /** Authoritative fixed consideration for the whole lot; null only for legacy unit-priced lots. */
+    totalPriceMinorLocked: moneyMinor("total_price_minor_locked"),
+    /** Cumulative allocation position, serialized under a row lock during committed consumption. */
+    quantityConsumed: bigint("quantity_consumed", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
+    revenueRecognizedMinor: moneyMinor("revenue_recognized_minor")
+      .notNull()
+      .default(sql`0`),
     /** The originating `token_purchases.reference`; the grant-once key (unique per tenant below). */
     purchaseReference: text("purchase_reference").notNull(),
     /** The ledger txn that recognized the cash as deferred revenue — the reconciliation link. */
@@ -121,9 +68,33 @@ export const tokenLots = pgTable(
   (t) => [
     // Grant-once at the DB: a replayed webhook cannot mint a second lot for the same purchase.
     unique("uniq_token_lot_purchase").on(t.tenantId, t.purchaseReference),
-    check("token_lots_channel_chk", sql`${t.channel} in ('sms', 'email')`),
+    unique("uniq_token_lot_tenant_id").on(t.tenantId, t.id),
     check("token_lots_quantity_chk", sql`${t.quantityTotal} > 0`),
-    check("token_lots_price_chk", sql`${t.unitPriceMinorLocked} > 0`),
+    check(
+      "token_lots_pricing_model_chk",
+      sql`(${t.pricingModel} = 'unit'
+          and ${t.unitPriceMinorLocked} > 0
+          and ${t.totalPriceMinorLocked} is null
+          and ${t.offerVersionId} is null
+          and ${t.compatibilitySnapshot} is null)
+        or (${t.pricingModel} = 'fixed_bundle'
+          and ${t.unitPriceMinorLocked} is null
+          and ${t.totalPriceMinorLocked} > 0
+          and ${t.offerVersionId} is not null
+          and ${t.compatibilitySnapshot} is not null)`,
+    ),
+    check(
+      "token_lots_allocation_position_chk",
+      sql`${t.quantityConsumed} >= 0
+        and ${t.quantityConsumed} <= ${t.quantityTotal}
+        and ${t.revenueRecognizedMinor} >= 0
+        and ((${t.pricingModel} = 'unit'
+            and ${t.revenueRecognizedMinor} = ${t.quantityConsumed} * ${t.unitPriceMinorLocked})
+          or (${t.pricingModel} = 'fixed_bundle'
+            and ${t.revenueRecognizedMinor} <= ${t.totalPriceMinorLocked}
+            and (${t.quantityConsumed} < ${t.quantityTotal}
+              or ${t.revenueRecognizedMinor} = ${t.totalPriceMinorLocked})))`,
+    ),
     index("idx_token_lots_tenant_channel").on(
       t.tenantId,
       t.channel,
@@ -152,7 +123,7 @@ export const tokenCounters = pgTable(
     tenantId: tenantIdCol().references(() => accounts.id, {
       onDelete: "restrict",
     }),
-    channel: text("channel").notNull(), // sms | email
+    channel: text("channel").notNull(),
     currency: text("currency").notNull(),
     /** Sends still owned and spendable. A COUNT, not money. */
     available: bigint("available", { mode: "bigint" })
@@ -162,7 +133,6 @@ export const tokenCounters = pgTable(
   },
   (t) => [
     unique("uniq_token_counter").on(t.tenantId, t.channel, t.currency),
-    check("token_counters_channel_chk", sql`${t.channel} in ('sms', 'email')`),
     // The no-negative-entitlement floor. Mirrors the wallet's overdraw rejection, enforced at the DB.
     check("token_counters_available_chk", sql`${t.available} >= 0`),
   ],
@@ -188,10 +158,8 @@ export const tokenHolds = pgTable(
       onDelete: "restrict",
     }),
     // RESTRICT: a lot is history for anything held against it; it must never vanish underneath.
-    lotId: uuid("lot_id")
-      .notNull()
-      .references(() => tokenLots.id, { onDelete: "restrict" }),
-    channel: text("channel").notNull(), // sms | email
+    lotId: uuid("lot_id").notNull(),
+    channel: text("channel").notNull(),
     currency: text("currency").notNull(),
     /** Tokens claimed from THIS lot. A COUNT, not money. */
     quantity: bigint("quantity", { mode: "bigint" }).notNull(),
@@ -205,11 +173,16 @@ export const tokenHolds = pgTable(
   (t) => [
     // Exactly-once per (send, lot): a retried accept cannot claim the same tokens twice.
     unique("uniq_token_hold_idempotency").on(t.tenantId, t.idempotencyKey),
+    unique("uniq_token_hold_tenant_id").on(t.tenantId, t.id),
+    foreignKey({
+      columns: [t.tenantId, t.lotId],
+      foreignColumns: [tokenLots.tenantId, tokenLots.id],
+      name: "token_holds_tenant_lot_fk",
+    }).onDelete("restrict"),
     check(
       "token_holds_status_chk",
       sql`${t.status} in ('pending', 'committed', 'returned')`,
     ),
-    check("token_holds_channel_chk", sql`${t.channel} in ('sms', 'email')`),
     check("token_holds_quantity_chk", sql`${t.quantity} > 0`),
     // Find every hold for a send (commit/return) and sweep stuck pendings.
     index("idx_token_holds_reference").on(t.tenantId, t.referenceId),
@@ -217,11 +190,71 @@ export const tokenHolds = pgTable(
   ],
 );
 
-export type TokenPurchase = typeof tokenPurchases.$inferSelect;
-export type NewTokenPurchase = typeof tokenPurchases.$inferInsert;
+/**
+ * Append-only bridge from one committed lot hold to the exact revenue it recognized. The lot stores
+ * the current cumulative position for serialization; these rows make every increment independently
+ * reconcilable to its entitlement, message, and double-entry ledger transaction.
+ */
+export const tokenRecognitionAllocations = pgTable(
+  "token_recognition_allocations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: tenantIdCol().references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    lotId: uuid("lot_id").notNull(),
+    holdId: uuid("hold_id").notNull(),
+    referenceId: uuid("reference_id").notNull(),
+    quantity: bigint("quantity", { mode: "bigint" }).notNull(),
+    consumedBefore: bigint("consumed_before", { mode: "bigint" }).notNull(),
+    consumedAfter: bigint("consumed_after", { mode: "bigint" }).notNull(),
+    recognizedBeforeMinor: moneyMinor("recognized_before_minor").notNull(),
+    recognizedAfterMinor: moneyMinor("recognized_after_minor").notNull(),
+    recognitionMinor: moneyMinor("recognition_minor").notNull(),
+    ledgerTxnId: uuid("ledger_txn_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("uniq_token_recognition_hold").on(t.holdId),
+    unique("uniq_token_recognition_ledger_txn").on(t.ledgerTxnId),
+    foreignKey({
+      columns: [t.tenantId, t.lotId],
+      foreignColumns: [tokenLots.tenantId, tokenLots.id],
+      name: "token_recognition_tenant_lot_fk",
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [t.tenantId, t.holdId],
+      foreignColumns: [tokenHolds.tenantId, tokenHolds.id],
+      name: "token_recognition_tenant_hold_fk",
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [t.tenantId, t.ledgerTxnId],
+      foreignColumns: [ledgerTransactions.tenantId, ledgerTransactions.id],
+      name: "token_recognition_tenant_ledger_txn_fk",
+    }).onDelete("restrict"),
+    check("token_recognition_quantity_chk", sql`${t.quantity} > 0`),
+    check(
+      "token_recognition_position_chk",
+      sql`${t.consumedBefore} >= 0
+        and ${t.consumedAfter} = ${t.consumedBefore} + ${t.quantity}
+        and ${t.recognizedBeforeMinor} >= 0
+        and ${t.recognizedAfterMinor} = ${t.recognizedBeforeMinor} + ${t.recognitionMinor}
+        and ${t.recognitionMinor} >= 0`,
+    ),
+    index("idx_token_recognition_lot").on(t.tenantId, t.lotId, t.createdAt),
+    index("idx_token_recognition_reference").on(t.tenantId, t.referenceId),
+  ],
+);
+
 export type TokenLot = typeof tokenLots.$inferSelect;
 export type NewTokenLot = typeof tokenLots.$inferInsert;
 export type TokenCounter = typeof tokenCounters.$inferSelect;
 export type NewTokenCounter = typeof tokenCounters.$inferInsert;
 export type TokenHold = typeof tokenHolds.$inferSelect;
 export type NewTokenHold = typeof tokenHolds.$inferInsert;
+export type TokenRecognitionAllocation =
+  typeof tokenRecognitionAllocations.$inferSelect;
+export type NewTokenRecognitionAllocation =
+  typeof tokenRecognitionAllocations.$inferInsert;

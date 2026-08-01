@@ -32,6 +32,14 @@ export const TENANT_TABLES = [
   "ledger_accounts",
   "ledger_transactions",
   "ledger_entries",
+  // The GL posting airlock (0114) — the one tenant-scoped table in the general-ledger domain, and the
+  // only one the tenant-facing role may write. It carries tenant_id, so it needs FORCE RLS and a policy
+  // like any other tenant table.
+  "gl_posting_requests",
+  "token_lots",
+  "token_counters",
+  "token_holds",
+  "token_recognition_allocations",
   "api_keys",
   "messages",
 ] as const;
@@ -173,6 +181,16 @@ export async function checkSecurityLayerApplied(
   const REQUIRED_TRIGGERS = [
     "trg_ledger_txn_balanced",
     "trg_ledger_apply_entry",
+    // Corporate general ledger (ADR-0013, migration 0112). These carry MORE weight than the
+    // subledger's: GL immutability is enforced by trigger ALONE, because `prepareRoles()` re-grants
+    // full DML to app_provisioner on every deploy, so a privilege-based guarantee would not survive.
+    // If one of these is missing or disabled, posted company history is rewritable.
+    "trg_gl_journal_complete",
+    "trg_gl_journal_filled",
+    "trg_gl_journals_immutable",
+    "trg_gl_journal_lines_immutable",
+    "trg_gl_journals_no_truncate",
+    "trg_gl_journal_lines_no_truncate",
   ];
   const trigs = await db.query(
     `SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgname IN (${REQUIRED_TRIGGERS.map((t) => `'${t}'`).join(", ")})`,
@@ -181,8 +199,144 @@ export async function checkSecurityLayerApplied(
   for (const t of REQUIRED_TRIGGERS) {
     if (!trigNames.has(t))
       violations.push(
-        `ledger enforcement trigger '${t}' is missing — write-time invariant (0007) not applied`,
+        `ledger enforcement trigger '${t}' is missing — a write-time invariant (0007 / 0112) is not applied`,
       );
+  }
+
+  // 7. (ADR-0013 #2) The corporate general ledger is COMPANY data. The tenant-facing role must hold
+  // nothing on it, and the control plane must hold no way to rewrite it.
+  //
+  // WHY THIS IS ASSERTED ON EVERY DEPLOY rather than trusted from the migration: `prepareRoles()` in
+  // src/cloud-migrate.ts runs BEFORE migrate() on every deploy and unconditionally issues
+  // `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_provisioner`.
+  // Migration 0112 revokes those, but it is journaled and so runs exactly once. Without this check,
+  // deploy N would leave the correct state and deploy N+1 would silently re-grant, with nothing
+  // failing. `has_table_privilege` is used rather than `role_table_grants` so privileges inherited via
+  // role membership are counted too.
+  // The posting airlock (0114). The tenant-facing role may INSERT and nothing else — that asymmetry IS
+  // the seam, and like every other grant it is restored broadly by prepareRoles on each deploy, so it
+  // has to be re-asserted rather than trusted from the migration.
+  const airlockRuntime = await db.query(`
+    SELECT p AS priv FROM unnest(ARRAY['SELECT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
+    WHERE has_table_privilege('${RUNTIME_ROLE}', 'gl_posting_requests', p)
+  `);
+  for (const r of airlockRuntime.rows) {
+    violations.push(
+      `'${RUNTIME_ROLE}' holds ${r.priv} on gl_posting_requests — the posting airlock must be INSERT-only from the tenant side`,
+    );
+  }
+  const airlockInsert = await db.query(
+    `SELECT has_table_privilege('${RUNTIME_ROLE}', 'gl_posting_requests', 'INSERT') AS ok`,
+  );
+  if (airlockInsert.rows[0]?.ok !== true) {
+    violations.push(
+      `'${RUNTIME_ROLE}' cannot INSERT into gl_posting_requests — money movements cannot reach the books`,
+    );
+  }
+  // Deleting a still-pending request destroys a movement's only path to the books, and no reconciliation
+  // exists to notice. The FK cascade does not need this privilege (referential actions bypass it).
+  const airlockDelete = await db.query(
+    `SELECT has_table_privilege('app_provisioner', 'gl_posting_requests', 'DELETE') AS held`,
+  );
+  if (airlockDelete.rows[0]?.held === true) {
+    violations.push(
+      "'app_provisioner' holds DELETE on gl_posting_requests — a queued movement could be dropped before it posts (did prepareRoles re-grant?)",
+    );
+  }
+
+  for (const table of ["gl_accounts", "gl_journals", "gl_journal_lines"]) {
+    const runtimeReach = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
+      WHERE has_table_privilege('${RUNTIME_ROLE}', '${table}', p)
+    `);
+    for (const r of runtimeReach.rows) {
+      violations.push(
+        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — the tenant-facing role must not reach the company books at all`,
+      );
+    }
+    const provisionerRewrite = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['UPDATE','DELETE','TRUNCATE']) AS p
+      WHERE has_table_privilege('app_provisioner', '${table}', p)
+    `);
+    for (const r of provisionerRewrite.rows) {
+      violations.push(
+        `'app_provisioner' holds ${r.priv} on ${table} — posted company history must be append-only (did prepareRoles re-grant?)`,
+      );
+    }
+  }
+
+  // 8. (ADR-0012) Commercial configuration — the catalog, its offers, and which catalog a workspace
+  // buys from — is staff-authored control-plane state. The tenant-facing role must not reach it: read
+  // access leaks other workspaces' negotiated prices, and write access would let a workspace author
+  // its own. Migrations 0110 and 0117 revoke it; asserted here because `ALTER DEFAULT PRIVILEGES`
+  // (0001) grants app_runtime DML on every table the migrator creates, so the REVOKE is the only thing
+  // standing between a new commercial table and the tenant role — and a journaled migration runs once.
+  for (const table of [
+    "commercial_offer_channels",
+    "pricing_offers",
+    "pricing_offer_versions",
+    "offer_catalog_assignments",
+  ]) {
+    const runtimeReach = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
+      WHERE has_table_privilege('${RUNTIME_ROLE}', '${table}', p)
+    `);
+    for (const r of runtimeReach.rows) {
+      violations.push(
+        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — commercial catalog state must be unreachable from the tenant-facing role`,
+      );
+    }
+  }
+
+  // 9. (ADR-0012 §6/§8) Commercial write-time invariants. Unlike the grants above these survive a
+  // re-grant, but they are asserted for the same reason the GL triggers are: if one is missing, a
+  // published price is editable after purchase, or a workspace can be pointed at a catalog whose
+  // offers no purchase can ever resolve.
+  const COMMERCIAL_TRIGGERS = [
+    "protect_published_pricing_offer_version_trigger",
+    "assert_offer_catalog_assignment_mode_trigger",
+    "assert_pricing_offer_catalog_mode_trigger",
+    "protect_referenced_price_book_mode_trigger",
+  ];
+  const commercialTrigs = await db.query(
+    `SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgname IN (${COMMERCIAL_TRIGGERS.map((t) => `'${t}'`).join(", ")})`,
+  );
+  const commercialNames = new Set(
+    commercialTrigs.rows.map((r) => String(r.tgname)),
+  );
+  for (const t of COMMERCIAL_TRIGGERS) {
+    if (!commercialNames.has(t)) {
+      violations.push(
+        `commercial-offer trigger '${t}' is missing — a published-price or catalog-mode invariant (0110 / 0117) is not applied`,
+      );
+    }
+  }
+
+  // 10. Recognition allocations are financial evidence. The data-plane may append them in the same
+  // transaction as settlement, but neither application role may rewrite/delete them and the control
+  // plane may not fabricate them. `prepareRoles()` broadens provisioner grants before each deploy, so
+  // cloud-migrate restores this posture after migrations and this assertion proves it stayed restored.
+  const allocationInsert = await db.query(
+    `SELECT has_table_privilege('${RUNTIME_ROLE}', 'token_recognition_allocations', 'INSERT') AS ok`,
+  );
+  if (allocationInsert.rows[0]?.ok !== true) {
+    violations.push(
+      `'${RUNTIME_ROLE}' cannot INSERT token_recognition_allocations — committed usage cannot reach exact revenue recognition`,
+    );
+  }
+  for (const [roleName, forbidden] of [
+    [RUNTIME_ROLE, ["UPDATE", "DELETE", "TRUNCATE"]],
+    ["app_provisioner", ["INSERT", "UPDATE", "DELETE", "TRUNCATE"]],
+  ] as const) {
+    const held = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY[${forbidden.map((privilege) => `'${privilege}'`).join(", ")}]) AS p
+      WHERE has_table_privilege('${roleName}', 'token_recognition_allocations', p)
+    `);
+    for (const row of held.rows) {
+      violations.push(
+        `'${roleName}' holds ${row.priv} on token_recognition_allocations — recognition history must be append-only`,
+      );
+    }
   }
 
   return { ok: violations.length === 0, violations };

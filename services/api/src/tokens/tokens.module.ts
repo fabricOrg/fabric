@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
 import { ProvisioningDbModule } from "../identity/provisioning-db.module.js";
 import { KillSwitchModule } from "../kill-switches/kill-switches.module.js";
+import { PluginsModule } from "../plugins/plugins.module.js";
+import { TokenCatalogService } from "./token-catalog.service.js";
 import { TokenPurchaseService } from "./token-purchase.service.js";
 import { TokensController } from "./tokens.controller.js";
 
@@ -13,9 +15,14 @@ import { TokensController } from "./tokens.controller.js";
  * PaymentsModule imports this to branch the Paystack webhook on a `token-` reference.
  */
 @Module({
-  imports: [ApiKeysModule, ProvisioningDbModule, KillSwitchModule],
+  imports: [
+    ApiKeysModule,
+    ProvisioningDbModule,
+    KillSwitchModule,
+    PluginsModule,
+  ],
   controllers: [TokensController],
-  providers: [TokenPurchaseService],
+  providers: [TokenCatalogService, TokenPurchaseService],
   exports: [TokenPurchaseService],
 })
 export class TokensModule {}

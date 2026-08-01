@@ -1,7 +1,552 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-07-25. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-07-31. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
+
+## START HERE (2026-07-31): money roadmap Phase 2 COMPLETE — commercial offers are publishable
+
+Branch `feature/com-phase2-offers` off `dev` @ `5e92473`. **Not pushed, not merged** — no PR yet.
+
+Phase 2's exit gate ("staff can publish a valid offer, no customer can buy yet") is **met**. #222 had
+shipped only COM-002 (contracts + schema + allocation math), which is why the previous "Next" section
+was wrong to call Phase 2 done: there was no service, no controller, and no UI, so **nothing could
+write to any of it**.
+
+### What landed
+
+| item | where |
+| --- | --- |
+| COM-003 lifecycle + publish gate | `services/api/src/pricing/commercial-offer{-cost,-margin.service,-publish.service,-reads,-writes,-mapping}.ts`, `commercial-offers.{service,controller}.ts` |
+| COM-003 margin math (pure, bigint) | `packages/domain/src/commercial-offer-margin.ts` |
+| COM-004 admin authoring + history | `apps/admin-console` — `/pricing/offers`, `components/{commercial-offers-manager,offer-version-history,offer-margin-verdict,offer-reason-prompt}.tsx`, `components/forms/{new-offer-dialog,offer-terms-dialog}.tsx` |
+| COM-011 workspace catalog | migrations `0116` + `0117`, `offer-catalog.service.ts`, `components/offer-catalog-assign.tsx` |
+
+### The design calls worth not re-litigating
+
+- **The margin gate is the WORST permitted route, and there is deliberately no "expected" cost.** A
+  bundle is spendable on every route its eligibility allows, so the cheapest route proves nothing, and
+  an average of the routes would read as measured when nothing measured it. The snapshot stores best
+  AND worst case; the floor is enforced against worst. `cost_snapshot`'s field names were changed from
+  #222's `estimated_/expected_` accordingly — safe because **nothing had ever written one** (0110 is
+  not even applied on Neon yet).
+- **An unrestricted offer needs a rate that genuinely covers everything.** Empty eligibility means the
+  permitted-value set is the values the cost table names PLUS a wildcard route standing for everything
+  it does not. So "sell anywhere" with only a Ghana rate is refused (`offer_cost_basis_missing`)
+  instead of being priced as if Ghana were the world. This is the single most important refusal here.
+- **Where the margin floor came from is recorded.** A token catalog predating price-book versioning has
+  no published version; the platform default (2000 bps) applies and the snapshot stamps
+  `minimum_margin_source: "platform_default"` so it is never mistaken for an approved catalog figure.
+- **Maker-checker is real here, unlike the plugin path.** `pricing_offer_versions_approval_chk` (from
+  0110) requires `approved_by <> created_by`, so publication genuinely needs a second staff admin. That
+  is demoable: **hosted has two active staff admins** (`fabricservices8@`, `dacsolo10@`). The plugin-era
+  "a single operator would be blocked" concession does NOT apply.
+- **COM-011 is its own control-plane table, NOT a column on `accounts`.** `app_runtime` holds
+  table-level `UPDATE` on `accounts`, and **Postgres will not let a column-level `REVOKE` override a
+  table-level grant** — so a negotiated-catalog column there would have sat inside the tenant's own
+  writable row. `offer_catalog_assignments` grants the runtime role nothing at all.
+- **Window conflicts are checked in a transaction under a row lock on the offer**, not by a constraint:
+  the constraint form needs `btree_gist`, which we do not require on managed Postgres.
+
+### Verified, not reported
+
+- **Migrations tested against an EMPTY database** (`app_coldtest`, created and dropped): 0000→0117
+  applied clean, then all four triggers and the grant posture read back from the DB. The trigger
+  behaviour was exercised live — subscription catalog refused, token catalog accepted, mode change on a
+  referenced book refused, offer in a subscription book refused.
+- **The new `db:assert security` checks were proven to have teeth** (the null hypothesis, §9): granting
+  `SELECT` on `offer_catalog_assignments` to `app_runtime` on the scratch DB made the gate FAIL with the
+  exact intended violation. A privilege assertion that has never been seen to fail is not evidence.
+- api pricing integration **25/25**, contracts 21 offer tests, domain 9 margin tests, cost-basis unit
+  8/8, `pnpm guard` clean, all typechecks 0.
+
+### The defect my own review found: a TOCTOU between the margin gate and the write
+
+`publish` evaluated the margin from the version row **as read**, then updated only the lifecycle columns
+— so a draft edited in that window would have gone live carrying a `cost_snapshot` describing DIFFERENT
+terms, at a price no gate ever approved. The reservation/ledger invariants could not catch this: nothing
+about it is unbalanced, it is simply the wrong price.
+
+The fix re-reads the row inside the publish transaction (already under the offer's `FOR UPDATE` lock)
+and refuses with `offer_version_changed` unless the gate-relevant fields still match — currency,
+paid/bonus/total units, total price, pack limits, the effective window, and **eligibility**, since
+eligibility decides which routes were priced.
+
+**The first attempt at this was wrong in an instructive way.** `WHERE updated_at = $1` looks like the
+obvious optimistic-concurrency predicate, and it made every honest publish fail: `timestamptz` keeps
+MICROSECONDS while the JavaScript `Date` read back is millisecond-truncated, so the equality matched
+nothing. Same root cause as the keyset-cursor bug in `[[postgres-timestamptz-cast-gotcha]]`. Do not use
+a round-tripped timestamp as a row fingerprint through drizzle.
+
+The regression test drives the race deterministically rather than hoping for a scheduling window: a stub
+margin service edits the draft *while evaluating* and returns the genuine verdict for the pre-edit
+terms, which is exactly the dangerous shape.
+
+### Independent review (subagent, 2026-07-31) — 13 findings, 1 rejected
+
+codex is out of quota until Aug 5, so the review ran as an opus subagent on the full diff. Every finding
+was verified against the code before acting.
+
+**The one that mattered — the vendor dimension could not fail closed.** Destinations and traffic classes
+are NULLABLE in `provider_cost_rates`, so "unrestricted" is provable safe by demanding a wildcard rate
+that genuinely covers everything. `provider_vendor` is **NOT NULL** — a wildcard vendor rate cannot
+exist — so an empty vendor list was priced against whichever vendors happened to hold an *effective*
+rate at that instant. An offer permitting a vendor whose rate had expired (or who is onboarded later)
+would publish having never been priced against it, while the stored snapshot claimed otherwise. Now
+refused at publish with `offer_vendor_eligibility_required`, and the authoring form says
+"Providers (required)" with the reason. The unit spec had the country and traffic-class gaps covered but
+not the vendor one, which is exactly why it survived my own review.
+
+Also fixed: a **stale margin verdict** stayed on screen after the terms were edited (a green
+"Publishable" badge describing numbers that no longer existed) — the verdict is now stored with a
+fingerprint of the terms it judged and replaced by a "check again" prompt when they diverge; the
+window-conflict error told staff to "close its window first", which **0110 makes impossible** (retiring
+is the only path); clearing a catalog on a nonexistent workspace returned `ok` and wrote an audit row for
+work it did not do; the browser→BFF leg parsed nothing (`payload as T`, and `null` on a non-JSON 2xx);
+path uuids were unvalidated so a malformed id surfaced as `22P02` inside a 500; quantity/amount strings
+were unbounded; `minorToDisplay` hardcoded two decimals while its inverse read `MINOR_PER_MAJOR`; and the
+tenant page rendered "Default prepaid catalog" as fact after a failed price-book fetch — three distinct
+states (unresolvable name / no assignment / resolved) now read differently.
+
+A cluster of **comments describing behaviour the code did not have** was corrected rather than left:
+three places claimed the UI branches on stable error codes (nothing does — it renders the API's
+message), one claimed a per-unit figure was "labelled as such" when only a `≈` glyph qualified it, and
+the new concurrency spec described the `updated_at` predicate that was explicitly rejected.
+
+**Rejected:** "the file-length guard fails, `verify:push` will reject this branch." The guard only walks
+`<group>/<pkg>/src` (`scripts/architecture/guard-file-length.mjs:14-24`), so Next.js `app/` directories
+are never scanned, and `verify:push` exited **0** before and after. The underlying observation was fair
+though — the tenant page had grown to 316 lines — so the two pricing cards were extracted to
+`components/tenant-pricing-cards.tsx` (page now 271). **Worth knowing: the length guard does not cover
+`apps/*/app/**` at all**, which is most of every frontend.
+
+**Carried forward, not fixed (all argued in the review):**
+- **Same-specificity provider-cost rates resolve arbitrarily.** `0108`'s unique index only covers
+  `effective_to IS NULL`, so two simultaneously-effective rates for one dimension key are
+  representable and neither the query nor `matchRate` has a tie-break. Pre-existing (the PAYG quote
+  shares the logic) but newly load-bearing as a *publish gate*.
+- **The floor and the cost rates are read before the transaction** and not re-validated under the lock;
+  only the version row is. Narrower than the race that was closed — staff-only, seconds wide, and the
+  snapshot records what was used — but a full fix means evaluating inside the transaction.
+- **`cost_snapshot`'s shape change has no data migration.** Verified safe: no code on `origin/dev` ever
+  wrote one, and 0110 is not applied on Neon. If a row were ever hand-seeded, `.strict()` would throw a
+  ZodError that `offer-route.ts` flattens to a 502 for the whole page.
+
+### Two traps this branch re-confirmed
+
+- **`verify:push` failed with 828 biome errors that were not mine** — biome formats `.turbo/cache/*.json`
+  build artifacts. `rm -rf .turbo/cache` first, or the true signal is buried. Also: a wrapping
+  `cmd; echo $?` in a background shell reported **exit 0 for a failed gate** — exactly §9's piping trap
+  in a new costume. Read the log, not the notification.
+- **`session.userId` in the admin console IS the `staff_users.id`** — verified by joining hosted
+  `audit_events.actor_staff_id` against `staff_users` (they match; `users.id` values are different).
+  That mattered because `created_by`/`approved_by` are real FKs, unlike the audit log's nullable column,
+  so a wrong actor id would have 400'd every write.
+
+### Still open on this thread (deliberate, not forgotten)
+
+- **`service_classes` eligibility is refused at publish** (`offer_eligibility_unpriceable`): provider
+  costs are not recorded per service class, so such a restriction cannot be margin-checked.
+- **Eligibility permitting >500 routes is refused** (`offer_eligibility_too_broad`) rather than
+  cost-checking a subset.
+- **No customer-facing surface, by design** — that is Phase 3/4. The purchase path still targets the
+  legacy unit-priced token flow; nothing reads `pricing_offer_versions` yet outside admin.
+- **`app_runtime` can still `UPDATE accounts.price_book_id` and `accounts.plan`** — a PRE-EXISTING hole
+  I did not widen and did not fix here. Fixing it means `REVOKE UPDATE ON accounts` then re-granting
+  the exact updatable column list (column REVOKE cannot override a table grant), which would silently
+  break any future column the runtime needs to write. Worth a dedicated change. Every current writer
+  goes through the provisioning connection — audited, not assumed.
+- **The review was a subagent, not codex.** codex is out of quota until **2026-08-05** (it exits 0 and
+  writes no report, so check the report file exists), gemini's free tier is gone, and `cursor-agent` is
+  not installed. A codex pass before merge would still be worth it — a different model family catches
+  different things.
+
+## START HERE (2026-07-30): money roadmap Phase 1 slice 1a — corporate general ledger
+
+Branch `feature/ops-accounting-boundary` at `232e183`, worktree `D:/work/jojo-worktrees/fin-ledger`,
+branched off `dev` at `d80325a`. **Committed, not pushed.** Phase 2 (commercial offers, PR #222) is
+already on `dev`; this is Phase 1, which #222 deliberately ran ahead of.
+
+(The branch-name validator only accepts `f<n>` / `e<n>` / `gh-<n>` / `ops` as the scope token — `fin`
+is rejected, so roadmap `FIN-*` work uses the `ops` scope, as Phase 2's
+`feature/ops-commercial-offers` did.)
+
+Ratified as [ADR-0013](./docs/decisions/0013-corporate-accounting-boundary.md). Phase 1 is sliced into
+1a (this: the boundary, nothing posts yet), 1b (the posting airlock + drain worker), 1c
+(reconciliation + reversals + the standing gate).
+
+### What 1a establishes
+
+A **tenant-neutral** corporate GL — `gl_accounts`, `gl_journals`, `gl_journal_lines` (0111) plus
+write-time enforcement, privileges, and the seeded chart of accounts (0112). Six accounts, one per
+subledger account kind, so reconciliation is a 1:1 mapping. `tenant_id` on a journal line is a nullable
+reporting **dimension**, not tenancy.
+
+Two separate mechanisms, and the split matters:
+
+- **Who can see the books = privilege.** `REVOKE ALL ... FROM PUBLIC, app_runtime`; only
+  `app_provisioner` gets `SELECT, INSERT`. Load-bearing per CLAUDE.md §9 — default privileges would
+  otherwise hand `app_runtime` DML on every new table.
+- **Whether history can be rewritten = TRIGGER.** `BEFORE UPDATE OR DELETE` (plus `BEFORE TRUNCATE`)
+  on both tables, always raising, for every role *including the owner*. See the BLOCKER below for why
+  privilege was not enough.
+
+Posting policy is a pure function in `@app/domain` over a `Record<LedgerAccountKind, GlAccountCode>`
+that is **exhaustive by type** — a seventh subledger kind will not compile until it is mapped.
+
+### The BLOCKER the independent review found — read this before trusting any REVOKE in this repo
+
+**`prepareRoles()` in `packages/db/src/cloud-migrate.ts:121` re-grants `SELECT, INSERT, UPDATE, DELETE
+ON ALL TABLES IN SCHEMA public TO app_provisioner` on EVERY deploy, and it runs BEFORE `migrate()`
+(line 203 vs 211).** A migration's `REVOKE` runs once because it is journaled; that grant runs forever.
+So deploy N ends in the intended state and **deploy N+1 silently undoes it**, with nothing failing —
+`db:assert` runs in the same job and did not look at these tables.
+
+**Scope it precisely** — I checked, and it is narrower than it first looks. `prepareRoles` grants table
+privileges to `app_provisioner` ONLY; it never grants to `app_runtime`. So:
+
+| migration | intent for `app_provisioner` | survives a redeploy? |
+| --- | --- | --- |
+| `0105` sandbox allowances | `SELECT` only | **no** — regains INSERT/UPDATE/DELETE |
+| `0112` general ledger | `SELECT, INSERT` | **no** — regains UPDATE/DELETE (now trigger-guarded + asserted) |
+| `0096` plugin credentials | full DML | yes (intent is full DML) |
+| `0107`, `0110` pricing/offers | full DML | yes |
+
+Every revoke aimed at **`app_runtime`** holds — that is the tenant-isolation boundary and it is not
+touched. What lapses is any attempt to keep `app_provisioner` *narrower* than full DML.
+
+**OPEN FOLLOW-UP — `0105` is a live instance, on two counts.** Staff-path code can currently write
+`sandbox_usage_buckets` / `sandbox_usage_events` in testing, contrary to what `0105` intends
+(`SELECT` only), AND those tables are owned by the local superuser rather than `app_migrator`, so FORCE
+RLS does not bite the owner there as it does in prod. Deliberately not fixed in slices 1a/1b to keep
+those diffs reviewable. The grant fix is NOT another `REVOKE` migration — that lapses again on the next
+deploy for exactly the same reason. It has to be a re-assertion in `checkSecurityLayerApplied` (the same
+shape as the `gl_*` and airlock blocks added here) plus adding both tables to `TENANT_TABLES`, so
+`db:assert` fails the deploy when either drifts.
+
+Two fixes, and both were needed:
+
+1. **Prevention** — immutability moved off privilege onto triggers, which do not consult grants.
+   Verified: with `UPDATE`/`DELETE` re-granted exactly as `prepareRoles` does it, the rewrite is still
+   refused (`general ledger history is append-only: UPDATE on gl_journal_lines`).
+2. **Detection** — `checkSecurityLayerApplied` now asserts `gl_*` privileges (via
+   `has_table_privilege`, so inherited grants count) and the six GL triggers are present. Verified by
+   simulating the re-grant: `db:assert` exits 1 naming all six drifted grants; after restoring, exit 0.
+   `checkGlInvariants` is now wired into that gate too, as `db:assert gl`.
+
+### The other MAJOR: "balanced" is not enough to close a journal
+
+A journal only ever asserted that its lines net to zero. A **second balanced pair inserted in a later
+transaction also nets to zero** — so an append would have committed, writing fabricated revenue into a
+closed period while every invariant still reported healthy. Closed by a declared `line_count` on the
+journal, asserted from both sides at COMMIT: a journal must carry exactly the lines it said it would,
+so it can be neither under-filled nor appended to. That also strengthened the standing invariant, which
+now catches a deleted *balanced subset* of lines — the old "has ≥2 lines" check could not.
+
+### Two things the gates caught that are worth remembering
+
+1. **`security-layer.check.ts` pins `ALLOWED_SECURITY_DEFINERS` at empty**, and my first draft needed a
+   `SECURITY DEFINER` trigger to maintain a `gl_account_balances` projection that no application role
+   could write. That forced the right question: *why* does the subledger store a balance? Because the
+   send path locks it `FOR UPDATE` to fail closed on an overdraw. **The GL has no hot path** — nothing
+   gates on a company balance. So the projection table was dropped entirely; a balance is
+   `Σ credits − Σ debits` over the append-only lines. Fewer tables, no drift class, policy intact.
+   The lesson is generic: *copying a shape from the subledger without copying its reason.*
+2. **Local `DATABASE_URL_PROVISIONER` connects as `app_owner`, a SUPERUSER** — not as
+   `app_provisioner`. A denial test written over that connection **succeeds** and so reports a correct
+   migration as broken (it cost a full diagnosis cycle). Privilege assertions must use
+   `has_table_privilege('<role>', ...)` on the named role. `DATABASE_URL_APP` is the only URL that
+   connects as the role its name implies, so live-connection denial tests are still valid for
+   `app_runtime`.
+
+### Other review findings worth carrying forward
+
+- **`tenant_id` on a journal line is no longer a foreign key.** It could not be: lines are undeletable
+  by trigger, so `RESTRICT` would make any tenant that ever appeared in a posting permanently
+  undeletable — which would have broken the ~30 integration specs that delete their own tenant in
+  teardown, the moment slice 1b started posting. `SET NULL`/`CASCADE` need an UPDATE the immutability
+  trigger refuses. A dimension is a recorded fact, not a live relationship.
+- **The exhaustiveness claim was overstated.** `Record<LedgerAccountKind, GlAccountCode>` is exhaustive
+  over the *zod* enum in `@app/contracts`; adding a value to the `ledger_account_kind` **pgEnum** alone
+  still compiles, because contracts is browser-safe and cannot import the schema package. The real gate
+  is `gl-chart-agreement.integration.spec.ts`, which needs a live migrated Postgres. Comment corrected
+  rather than the claim quietly left standing.
+- **Slice 1c must reverse the POSTED lines, not a re-derived spec.** `deriveReversalJournal` takes a
+  `GlJournalSpec`. If the kind→account mapping changes between posting and reversing, re-deriving would
+  credit an account the original never touched — netting to zero, so no invariant fires, while two
+  control accounts silently go wrong. Noted in the function.
+
+### Verified, not reported
+
+Migrations applied to local Postgres as the non-super owner, then checked against the database:
+6 chart-of-accounts rows all nominated as control accounts, every `ledger_account_kind` mapped, all
+6 triggers installed, `app_runtime` holding zero of 7 privileges on every `gl_*` table, and
+unbalanced / short / empty / single-line / zero-amount / replayed / appended-to / self-reversed /
+double-reversed journals all rejected — plus UPDATE, DELETE and TRUNCATE refused even as owner.
+`@app/db` integration: 11 files / 75 tests. `@app/domain`: 22 new unit tests. `db:assert` green, and
+proven to go red on a simulated `prepareRoles` re-grant. Guards, biome and typecheck clean.
+
+## Slice 1b (also 2026-07-30): the airlock is live — movements now reach the books
+
+`gl_posting_requests` (0113) + RLS/grants/enqueue trigger (0114), the drain worker
+(`services/api/src/accounting/`), a per-minute cron caller, and both ledgers' invariants in the
+scheduled pass. **Every wallet and token movement now mirrors into a corporate journal.**
+
+The seam, concretely: `app_runtime` holds `INSERT` and nothing else on the queue — no `SELECT`, so it
+is write-only from the tenant side even before RLS — with a `WITH CHECK` binding the row to the ambient
+tenant. The drain runs as `app_provisioner`. Verified: runtime is denied SELECT/UPDATE/DELETE (42501)
+and a cross-tenant enqueue is refused.
+
+### Three design decisions worth not re-litigating
+
+1. **The enqueue is a deferred TRIGGER on `ledger_transactions`, not a call in each primitive.** A
+   primitive that forgot would produce money movement with no counterpart in the books and nothing
+   would fail. It must be `DEFERRABLE INITIALLY DEFERRED` because it builds its payload from the legs,
+   which do not exist at statement time (`openIdempotentTxn` inserts the envelope, `postLegs` follows).
+2. **The request carries its payload, not a pointer.** `provisioner_all` policies exist only on
+   `accounts`/`users`/`memberships` — NOT the FORCE-RLS ledger tables. A pointer-only row would have
+   required granting the provisioning role cross-tenant read of every customer's money movements.
+3. **`ledger_txn_id` is `ON DELETE CASCADE`, not RESTRICT.** In production `ledger_transactions` is
+   never deleted, so it never fires there; RESTRICT would have broken the ~30 specs that tear down
+   their own ledger rows. The durable audit does not need it — the journal records the same
+   `ledger_txn_id` in its own immutable `source_ref`.
+
+### Two defects my own verification caught (neither was visible by reading)
+
+1. **`ON CONFLICT DO NOTHING` needs `SELECT` privilege.** The trigger's insert failed 42501, and the
+   "obvious" fix — grant `app_runtime` SELECT — would have destroyed the write-only seam. The clause
+   protected against nothing (a constraint trigger fires once per row; `ledger_txn_id` is UNIQUE), so
+   it was removed. For money, a loud failure beats a silent skip.
+2. **A raw `execute()` returns timestamptz as a STRING, not a `Date`.** `row.event_time.toISOString()`
+   threw, the drain classified it transient, and **every** request retried forever while
+   `posted: 0, failed: 0` — the error visible only in `last_error`. Fixed by coercing, and the wider
+   lesson is now in the code: the drain reports a `retrying` count and the maintenance job logs it at
+   error level. A silent retry loop is the same failure mode as a swallowed error, just slower.
+
+### What the independent review changed (all fixed, not deferred)
+
+- **A parked request was a permanent silent hole.** `failed` rows are skipped by the drain's
+  `WHERE status = 'pending'` forever, so after the single error log at parking time nothing surfaced
+  them and the books quietly understated revenue with every gate green. `checkGlInvariants` now has a
+  **third invariant** — no request parked `failed`, none `pending` past 60 minutes — so "every movement
+  reaches the books" is an assertion instead of a claim. Gated by a test that parks a request and
+  asserts the invariant goes red.
+- **A missing chart-of-accounts row was classified permanent.** That is deploy skew, not a bad payload:
+  this repo builds one image and promotes it, with migrations as a separate pre-deploy task, so an image
+  briefly ahead of its migrations is NORMAL. Parking those would strand every movement of a new account
+  kind until someone ran SQL by hand. Now transient, as is an unknown `account_kind` (the pgEnum reaches
+  the DB before the widened zod enum reaches the API).
+- **My stated reason for carrying the payload was factually wrong.** `0027_provisioner_maintenance_read`
+  already gives `app_provisioner` cross-tenant SELECT on `ledger_entries` and `ledger_accounts`, so the
+  "a pointer would require granting cross-tenant read" argument was false — in the schema comment, the
+  ADR, and this file. The design stands on its real merits (the payload is evidence captured in the
+  movement's own transaction; no per-request join into FORCE-RLS tables) and the honest trade-off is now
+  stated: a snapshot can go stale.
+- **`gl_posting_requests` was absent from the security gate.** Nothing asserted FORCE RLS, a policy, or
+  INSERT-only for `app_runtime` — the slice's headline property rested on a one-off manual observation.
+  It is now in `TENANT_TABLES` plus an explicit privilege loop (including `TRUNCATE`/`REFERENCES`, and
+  `app_provisioner` must not hold DELETE, since deleting a pending request destroys a movement's only
+  path to the books).
+- **The seam was never exercised adversarially.** Every assertion read through the superuser owner,
+  which bypasses RLS — so deleting `REVOKE ALL ... FROM app_runtime` would have left the suite green.
+  New `gl-posting-seam.integration.spec.ts` drives runtime denial, cross-tenant rejection, rollback
+  safety, and the production caller including its kill path.
+- Smaller: `recordFailure` now guards `AND status = 'pending'` (a lost connection at COMMIT could
+  otherwise rewrite a `posted` row); `attempts` counts only failures, not successes; the enqueue trigger
+  asserts single-currency itself rather than depending on 0007 silently; the balance-sign test asserts
+  exact magnitudes on a currency it owns instead of comparing a function to a transcription of its own
+  SQL.
+
+### A prod-fidelity gap the gate surfaced — and it is not only mine
+
+`gl_posting_requests` was owned by `app_owner` (the local superuser) because `drizzle-kit migrate`
+connects as `DATABASE_URL_OWNER`. FORCE RLS binds the table OWNER, and a superuser bypasses RLS
+wholesale — so locally the isolation was weaker than production, where `app_migrator` owns tables and is
+deliberately non-superuser. 0114 now pins ownership explicitly (idempotent, a no-op in the cloud).
+
+**`sandbox_usage_buckets` has the same problem** and is not in `TENANT_TABLES`, so nothing reports it.
+Same follow-up as its grant drift below.
+
+### Known gap, deliberately left
+
+`gl_journal_lines.channel` is **always NULL today**. `ledger_transactions.metadata` is the idempotency
+FINGERPRINT (`{op, currency, amount, ref}`) and no primitive writes a channel. Guessing from the ledger
+reason is not acceptable — `message_reserve` is channel-neutral and backs both SMS and email, so a
+guess would attribute email revenue to SMS. **Do not fix it by widening the fingerprint**: the
+fingerprint is compared on replay, so an extra key turns a retried in-flight movement across a deploy
+boundary into an `IdempotencyConflictError`. The channel needs to reach the ledger as its own column.
+
+### Operating it
+
+`GL_POSTING_ENABLED=false` stops the drain without a deploy. Safe to leave off: the enqueue trigger is
+unaffected, so nothing is lost — the queue grows and drains when re-enabled. Default is ON, because
+withholding posting leaves the books incomplete, which is the worse failure. Requests park as `failed`
+after a permanent error or 5 attempts; `last_error` says why.
+
+### Test-isolation lesson for anyone adding GL specs
+
+GL journals are immutable by trigger, so **a spec cannot clean up after itself** — its rows stay, like
+production rows. The GL spec therefore uses a run-scoped `X__` currency, but note that 3 characters
+carry too little entropy to stay private across *accumulated* runs (journals are never deleted), so
+**never assert a fixed absolute balance**. Assert either the run's own journal rows, or the reported
+balance against an independently computed aggregate.
+
+## Slice 1c (also 2026-07-30): the exit gate has an assertion behind it
+
+`checkGlReconciliation` (`packages/db/src/gl-reconciliation.ts`) compares, per subledger kind and
+currency, the sum of movements that already have a posted journal against the mapped GL control
+account. Exposed as `db:assert recon`, and in the hourly invariant pass. Plus `reverseGlJournal` — the
+only way to correct posted books.
+
+**Completeness and accuracy are separate invariants, on purpose.** The drain lags by seconds, so a
+single combined check would sit permanently amber and stop being read. `checkGlInvariants` invariant 3
+asks "has everything reached the books?"; reconciliation asks "for what has, do the totals agree?".
+Together they are the exit gate; alone neither is. There is a test asserting that normal drain lag is
+NOT reported as a discrepancy.
+
+### Two scope decisions in the reconciliation that need defending
+
+"Exclude rows you find inconvenient" is how reconciliations go quietly wrong, so both exclusions are
+argued in the code rather than assumed:
+
+1. **Only the enabled currencies (GHS/NGN/USD).** `gl_journals.currency` is a bare `char(3)` with no
+   constraint — the contract's enum is the only narrowing. A journal in another currency is a defect,
+   but a *different* one, and absorbing it into a control-account total would hide it.
+2. **Only workspaces that still exist.** Journal lines are immutable; subledger movements are not.
+   Deleting a tenant requires deleting its ledger rows first (RESTRICT), and the journal lines they
+   produced survive by design — leaving a remainder that is un-reconcilable in principle. Holding it
+   against every future comparison would leave the gate permanently red, which equals no gate. Near
+   unreachable in production (no application role can delete ledger history); routine in tests, where
+   every spec tears down its own tenant.
+
+**Every journal kind counts**, though — mirrors, reversals and future manual adjustments alike. A
+reversal moves a control account as surely as a mirror does, so excluding it by `source_kind` would let
+real divergence hide. That means a reversal DOES show as a discrepancy until a compensating correction
+lands, which is correct: the ledgers genuinely disagree in that interval and an accountant should see it.
+
+### The defect the review caught that mattered most
+
+**"No discrepancies" is not "agreement".** `db:assert` connects as `DATABASE_URL_OWNER` — a superuser
+locally, but the **non-superuser `app_migrator`** in the cloud. `ledger_entries`, `ledger_accounts` and
+`accounts` are all FORCE RLS with permissive policies naming `app_provisioner` only, so in the deployed
+configuration the reconciliation would have scanned **zero rows and printed "reconciles"**. The exit-gate
+check was vacuous in exactly the environment it exists for, and invisible locally because the local role
+is a superuser.
+
+Fixing it took two attempts, and the first was wrong in an instructive way. Comparing "legs scanned"
+against a count of `ledger_entries` does nothing — **RLS zeroes the count too**. Nor does comparing
+against the visible books side, which false-positives on the orphan residue every test teardown leaves.
+The reliable signal is not data at all but **capability**: superuser, or a member of `app_provisioner`.
+That is RLS-immune and independent of how much data happens to exist. Gated by a test that runs the check
+under `SET ROLE app_migrator` — reproducing the deployed role exactly, since `app_runtime` holds no
+privilege on `gl_journals` and errors instead of going quietly blind.
+
+Migration 0115 also pins ownership of the three remaining `gl_*` tables to `app_migrator`, for the same
+local-vs-cloud reason 0114 did it for the airlock — ownership decides whether FORCE RLS binds and who a
+privilege check exempts, so divergence there means a check can behave differently deployed.
+
+### Also corrected from the review
+
+- The subledger side now joins `gl_journals` on **`(source_kind, source_ref)`**, the structural indexed
+  columns, not on a reconstructed `'ledger_txn:' || txn_id`. Nothing constrains the idempotency key to
+  equal `{source_kind}:{source_ref}`, so key-matching would let an adjustment keyed `ledger_txn:{uuid}`
+  masquerade as a movement's mirror — and the concatenation is not indexable.
+- **Every journal kind counts** in the comparison. Excluding reversals or adjustments by `source_kind`
+  would let real divergence hide behind a label.
+- Reversal: races settle on the DB constraint and return the winner instead of leaking a raw `23505`;
+  structured errors with stable codes instead of bare `Error`; refuses a journal whose actual line count
+  differs from its declared one (that journal already violates GL invariant 2); records the requesting
+  actor in metadata, since a correction needs a who and not just a why.
+- Excluded rows are **counted and reported**, not silently dropped — and a mirror journal with no tenant
+  is a failure rather than residue.
+
+### The correction path — a gap 1c exposed, now closed (ADR-0013 #11a)
+
+Reversal alone never fixed a mis-posting: it un-posts the wrong amount, but the movement is still in the
+subledger with nothing correctly mirroring it, so the ledgers still disagree. And the obvious re-post was
+impossible, because `ledger_txn:{id}` is taken and globally UNIQUE.
+
+`correctGlPosting` (`services/api/src/accounting/gl-correction.ts`) reverses the bad journal and re-posts
+the movement as `ledger_txn:{id}#{n}`, both in ONE transaction so the books are never observably
+reversed-but-uncorrected. `source_kind`/`source_ref` stay the movement's, so the correction remains in
+the reconciliation's scope and nets the total right with no change to the comparison.
+
+Three things worth knowing before touching it:
+
+1. **The corrected lines come from the LIVE subledger legs, not the queued payload** — an inversion of
+   ADR-0013 #10, on purpose. The payload is evidence of what the drain saw, which makes it exactly what
+   to distrust once the posting turned out wrong.
+2. **The reconciliation's subledger scope had to become a semi-join.** Only `idempotency_key` is unique,
+   so a movement with both a mirror and a correction matches `(source_kind, source_ref)` twice and a
+   `JOIN` counted every leg twice. That was a latent fan-out that corrections would have triggered.
+3. **An already-reversed journal cannot be corrected again**, and a test caught that as a real
+   double-post: without the guard, the superseded original got a second correction and the books recorded
+   the movement twice. Correct the journal that superseded it instead — it is a mirror too.
+
+Still no production caller: invoking a correction is a staff money action and needs the maker-checker
+control ADR-0013 requires. That is the remaining half of `FIN-003`.
+
+### TEST MIGRATIONS FROM AN EMPTY DATABASE BEFORE PUSHING
+
+CI caught a defect on this PR that every local gate passed, and it would have broken **first-time
+production provisioning**, not just CI. Postgres refuses to *use* an enum value in the same transaction
+that `ALTER TYPE ... ADD VALUE` added it, and drizzle's migrator runs the **entire migration set in one
+transaction** — so `gl_accounts.control_for_kind`, typed as `ledger_account_kind`, could not be seeded
+with `token_deferred_revenue` on a database migrated from scratch. An incrementally-migrated local
+database committed that `ADD VALUE` long ago, so the seed was legal and `pnpm db:migrate` was green.
+
+**`drizzle-kit migrate` reports the failure as literally `undefined`.** To see the real error, apply
+through the library:
+
+```js
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+try { await migrate(drizzle(sql), { migrationsFolder: 'packages/db/migrations' }); }
+catch (e) { console.log(e.message, e.cause?.message); }
+```
+
+So: `CREATE DATABASE` a scratch one and run the full journal against it before pushing any migration.
+Roles are cluster-level and already exist. A green `db:migrate` against your working database proves
+nothing about the path CI and fresh provisioning take. This is the second time in one session that
+"works on my incrementally-migrated DB" hid a real defect — the first was table ownership.
+
+A fix-up migration cannot repair this class of problem, since the seed and the `ADD VALUE` share a
+transaction; the offending migration and its snapshots have to be edited in place, verified with
+`db:assert:drift`.
+
+### Test-suite note
+
+`services/api/src/payments/auto-topup-concurrency.integration.spec.ts` is **flaky under full-suite
+load** — it asserts a mocked `fetch` was called once and intermittently sees zero. Observed twice in one
+session; passes 3/3 in isolation both times, with no code change. Do not chase it as a regression from
+accounting work; it touches auto top-up and Paystack mocking only.
+
+### Next — Phase 1 done, Phase 2 now COMPLETE; Phase 3 (purchase) is next
+
+**Superseded (2026-07-31):** this section previously said Phase 2 was "the offer work already on `dev`".
+That was only COM-002 — #222 shipped contracts, schema, and allocation math with **no service, no
+controller, and no UI**, so nothing could write to any of it. COM-003, COM-004 and COM-011 are now
+done; see the top-of-file entry. Phase 3 is next.
+
+Phase 1's exit gate is met. What remains from its original scope, neither blocking:
+
+- **Channel attribution** on journal lines. `gl_journal_lines.channel` is always NULL because no ledger
+  movement carries a channel, and it must NOT be added via the idempotency fingerprint (the fingerprint
+  is compared on replay, so an extra key turns an in-flight retry across a deploy into an
+  `IdempotencyConflictError`). It needs to reach the ledger as its own column. A reporting dimension,
+  not a correctness gap.
+- The two pre-existing `0105` issues (grant drift + table ownership).
+
+Then Phase 3 — purchase and exact entitlement accounting — which is where the Phase 2 offer schema and
+this accounting foundation finally meet.
+
+Two reminders that stay true: do **not** reuse `outbox_events` for accounting (it is the customer
+webhook outbox, and an accounting event on a tenant endpoint is a disclosure bug), and do **not** trust
+a migration's `REVOKE` to survive a deploy.
+
+### Local DB housekeeping done along the way
+
+Three orphaned test rows from 2026-07-13 (`email_dispatches`, `email_messages`, `inbound_messages`)
+were blocking tenant-cleanup hooks in three isolation specs — pre-existing, reproduced on untouched
+`dev`, unrelated to this change. Deleted; that suite is green again.
 
 ## NEW BUG (2026-07-28): customer-dashboard member invite sends no email
 

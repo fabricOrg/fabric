@@ -63,6 +63,24 @@ export async function grantTokensForPurchase(
       "This token purchase was not completed.",
     );
   }
+  if (
+    purchase.pricingModel === "unit" &&
+    purchase.unitPriceMinorLocked === null
+  ) {
+    throw invalidRequest(
+      "token_purchase_snapshot_invalid",
+      "The stored unit-priced purchase is incomplete.",
+    );
+  }
+  if (
+    purchase.pricingModel === "fixed_bundle" &&
+    (!purchase.offerVersionId || !purchase.offerSnapshot)
+  ) {
+    throw invalidRequest(
+      "token_purchase_snapshot_invalid",
+      "The stored commercial-offer purchase is incomplete.",
+    );
+  }
 
   return deps.appDb.withTenant(purchase.tenantId, async (tx) => {
     // 1. Money: cash in against the token liability. Idempotent on the purchase reference.
@@ -77,16 +95,21 @@ export async function grantTokensForPurchase(
     // an empty RETURNING means this purchase was already granted.
     const inserted = (await tx`
       INSERT INTO token_lots (
-        tenant_id, channel, currency, quantity_total, unit_price_minor_locked,
-        purchase_reference, purchase_txn_id
+        tenant_id, channel, currency, pricing_model, offer_version_id,
+        compatibility_snapshot, quantity_total, unit_price_minor_locked,
+        total_price_minor_locked, purchase_reference, purchase_txn_id
       )
       VALUES (
         current_setting('app.tenant_id')::uuid, ${purchase.channel}, ${purchase.currency},
-        ${purchase.quantity.toString()}::bigint, ${purchase.unitPriceMinorLocked.toString()}::bigint,
+        ${purchase.pricingModel}, ${purchase.offerVersionId},
+        ${purchase.offerSnapshot ? JSON.stringify(purchase.offerSnapshot) : null}::jsonb,
+        ${purchase.quantity.toString()}::bigint,
+        ${purchase.unitPriceMinorLocked?.toString() ?? null}::bigint,
+        ${purchase.pricingModel === "fixed_bundle" ? purchase.amountMinor.toString() : null}::bigint,
         ${purchase.reference}, ${movement.txnId}
       )
       ON CONFLICT (tenant_id, purchase_reference) DO NOTHING
-      RETURNING id`) as { id: string }[];
+      RETURNING id`) as unknown as { id: string }[];
 
     const lotRow = inserted[0];
     if (!lotRow) {

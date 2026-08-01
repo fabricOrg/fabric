@@ -1,10 +1,11 @@
-import { purchaseTokensRequestSchema } from "@app/contracts";
+import { purchaseCommercialOfferRequestSchema } from "@app/contracts";
 import type { AppDb } from "@app/db";
 import {
   Body,
   Controller,
   Get,
   Inject,
+  Param,
   Post,
   Req,
   UseGuards,
@@ -15,7 +16,8 @@ import {
   requireScope,
 } from "../api-keys/api-key.guard.js";
 import { APP_DB } from "../db/db.module.js";
-import { invalidRequest } from "../http/api-error.js";
+import { forbidden, invalidRequest } from "../http/api-error.js";
+import { TokenCatalogService } from "./token-catalog.service.js";
 import { listTokenBalances } from "./token-grant.js";
 import { TokenPurchaseService } from "./token-purchase.service.js";
 
@@ -24,11 +26,9 @@ interface AuthedRequest {
 }
 
 /**
- * Tenant-facing token entitlements (ADR-0010 Phase 2). Scoped to `wallet:read` like the top-up
- * endpoints — tokens are the other half of how an account pays for sends, so the same billing
- * authority governs both.
- *
- * There is no dashboard buy-flow yet (that is Phase 3); this is the API surface it will call.
+ * Tenant-facing token entitlements and commercial-offer checkout. The BFF supplies a wildcard
+ * tenant token only after its owner/admin role gate; customer API keys remain limited to the closed
+ * public scope catalog. Phase 4 adds the dashboard purchase experience over this boundary.
  */
 @Controller("v1/tokens")
 @UseGuards(ApiKeyGuard)
@@ -37,6 +37,8 @@ export class TokensController {
     @Inject(TokenPurchaseService)
     private readonly purchases: TokenPurchaseService,
     @Inject(APP_DB) private readonly db: AppDb,
+    @Inject(TokenCatalogService)
+    private readonly catalog: TokenCatalogService,
   ) {}
 
   @Get()
@@ -49,16 +51,39 @@ export class TokensController {
     };
   }
 
+  @Get("catalog")
+  offers(@Req() req: AuthedRequest) {
+    const tenant = requireTokenSession(req.tenant);
+    return this.catalog.catalog(tenant.id);
+  }
+
+  @Get("purchases/:reference")
+  receipt(@Req() req: AuthedRequest, @Param("reference") reference: string) {
+    const tenant = requireTokenSession(req.tenant);
+    return this.catalog.receipt(tenant.id, reference);
+  }
+
   @Post("purchase")
   async purchase(@Req() req: AuthedRequest, @Body() body: unknown) {
-    const tenant = requireScope(req.tenant, "wallet:read");
-    const parsed = purchaseTokensRequestSchema.safeParse(body);
+    const tenant = requireTokenSession(req.tenant);
+    const parsed = purchaseCommercialOfferRequestSchema.safeParse(body);
     if (!parsed.success) {
       throw invalidRequest(
         "invalid_token_purchase",
-        "Provide channel, a positive quantity, currency and email.",
+        "Provide a published offer version, valid pack count, and email.",
       );
     }
     return this.purchases.initiate(tenant.id, parsed.data);
   }
+}
+
+function requireTokenSession(tenant: RequestTenant | undefined): RequestTenant {
+  const resolved = requireScope(tenant, "wallet:read");
+  if (!resolved.isSessionToken) {
+    throw forbidden(
+      "token_purchase_requires_session",
+      "Commercial offers can only be purchased from a dashboard session, not an API key.",
+    );
+  }
+  return resolved;
 }

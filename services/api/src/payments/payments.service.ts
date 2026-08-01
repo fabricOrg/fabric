@@ -196,6 +196,7 @@ export class PaymentsService {
     // intent inside the token service, as it is here.
     if (event.reference.startsWith("token-")) {
       await this.tokens.completeFromWebhook(event.reference, {
+        verifiedMode: verified.mode,
         ...(event.amountMinor !== undefined
           ? { amountMinor: event.amountMinor }
           : {}),
