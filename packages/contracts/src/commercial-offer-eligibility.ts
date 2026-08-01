@@ -78,11 +78,38 @@ export function unsupportedEligibilityDimensions(
  * to these values rather than free text, because a dimension with no matching rate is refused at
  * publish (`offer_cost_basis_missing`) — offering it as an option would only invite that failure.
  */
-export const commercialRouteVocabularySchema = z.object({
+export const channelRouteVocabularySchema = z.object({
   provider_vendors: z.array(eligibilityCode),
   destination_countries: z.array(z.string().regex(/^[A-Z]{2}$/)),
   traffic_classes: z.array(eligibilityCode),
 });
+export type ChannelRouteVocabulary = z.infer<
+  typeof channelRouteVocabularySchema
+>;
+
+/**
+ * Keyed BY CHANNEL, because provider cost rates are. Offering one flat list let an email item be
+ * restricted to an SMS carrier — a route that has no email rate, so the package could never satisfy
+ * its own cost basis and could never be published.
+ */
+export const commercialRouteVocabularySchema = z.record(
+  z.string(),
+  channelRouteVocabularySchema,
+);
 export type CommercialRouteVocabulary = z.infer<
   typeof commercialRouteVocabularySchema
 >;
+
+/** The vocabulary for one channel, empty when that channel has no recorded cost rates yet. */
+export function vocabularyForChannel(
+  vocabulary: CommercialRouteVocabulary,
+  channelCode: string,
+): ChannelRouteVocabulary {
+  return (
+    vocabulary[channelCode] ?? {
+      provider_vendors: [],
+      destination_countries: [],
+      traffic_classes: [],
+    }
+  );
+}

@@ -7,7 +7,10 @@ import type {
   CommercialRouteVocabulary,
   Currency,
 } from "@app/contracts";
-import { supportedEligibilityDimensions } from "@app/contracts";
+import {
+  supportedEligibilityDimensions,
+  vocabularyForChannel,
+} from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Dialog,
@@ -126,11 +129,14 @@ export function OfferTermsDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
-            {version ? `Edit draft v${version.version}` : "New package terms"}
+            {version
+              ? `Edit draft v${version.version}`
+              : `New version of ${offer.name}`}
           </DialogTitle>
           <DialogDescription>
-            {offer.name}. Add one or more channel credits, then set one price
-            for the complete package.
+            {version
+              ? "These terms are not yet published, so they can still change."
+              : "A new version replaces what this package sells from its effective date. Published versions are never edited — the existing ones stay exactly as sold."}
           </DialogDescription>
         </DialogHeader>
 
@@ -139,6 +145,10 @@ export function OfferTermsDialog({
             // Only offer the restrictions this channel's send path can actually match — anything
             // else would publish credits that can never be drawn against.
             const channelCode = item.channelKey.split(":")[0] ?? "";
+            const channelVocabulary = vocabularyForChannel(
+              routeVocabulary,
+              channelCode,
+            );
             const routable = supportedEligibilityDimensions(
               channelCode,
             ).includes("destination_countries");
@@ -219,7 +229,7 @@ export function OfferTermsDialog({
                   <FieldLabel>Providers (required)</FieldLabel>
                   <EligibilityChips
                     value={item.vendors}
-                    options={routeVocabulary.provider_vendors}
+                    options={channelVocabulary.provider_vendors}
                     onChange={(vendors) =>
                       form.updateItem(item.key, { vendors })
                     }
@@ -245,7 +255,7 @@ export function OfferTermsDialog({
                       <FieldLabel>Destinations</FieldLabel>
                       <EligibilityChips
                         value={item.countries}
-                        options={routeVocabulary.destination_countries}
+                        options={channelVocabulary.destination_countries}
                         onChange={(countries) =>
                           form.updateItem(item.key, { countries })
                         }
@@ -257,7 +267,7 @@ export function OfferTermsDialog({
                       <FieldLabel>Traffic classes</FieldLabel>
                       <EligibilityChips
                         value={item.trafficClasses}
-                        options={routeVocabulary.traffic_classes}
+                        options={channelVocabulary.traffic_classes}
                         onChange={(trafficClasses) =>
                           form.updateItem(item.key, { trafficClasses })
                         }
