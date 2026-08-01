@@ -228,3 +228,16 @@ export const purchaseCommercialOfferRequestSchema = z.object({
 export type PurchaseCommercialOfferRequest = z.infer<
   typeof purchaseCommercialOfferRequestSchema
 >;
+
+export const purchaseCommercialOfferResponseSchema = z.object({
+  authorization_url: z.string().url(),
+  reference: z.string(),
+  offer_version_id: z.string().uuid(),
+  pack_count: z.number().int().positive(),
+  quantity: positiveIntegerString,
+  amount_minor: positiveIntegerString,
+  currency,
+});
+export type PurchaseCommercialOfferResponse = z.infer<
+  typeof purchaseCommercialOfferResponseSchema
+>;

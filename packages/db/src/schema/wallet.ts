@@ -186,6 +186,9 @@ export const ledgerTransactions = pgTable(
   (t) => [
     // exactly-once for money: a retried request with the same key cannot open a second transaction.
     unique("uniq_ledger_txn_idempotency").on(t.tenantId, t.idempotencyKey),
+    // Composite target for tenant-bound references such as recognition allocations. A globally
+    // unique id is not enough to prove that a referencing tenant owns the transaction.
+    unique("uniq_ledger_txn_tenant_id").on(t.tenantId, t.id),
     // B8: reject an empty-string key at the DB — NOT NULL alone would let '' through as a wildcard.
     check(
       "ledger_txn_idempotency_key_non_empty",

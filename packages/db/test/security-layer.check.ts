@@ -36,6 +36,10 @@ export const TENANT_TABLES = [
   // only one the tenant-facing role may write. It carries tenant_id, so it needs FORCE RLS and a policy
   // like any other tenant table.
   "gl_posting_requests",
+  "token_lots",
+  "token_counters",
+  "token_holds",
+  "token_recognition_allocations",
   "api_keys",
   "messages",
 ] as const;
@@ -304,6 +308,33 @@ export async function checkSecurityLayerApplied(
     if (!commercialNames.has(t)) {
       violations.push(
         `commercial-offer trigger '${t}' is missing — a published-price or catalog-mode invariant (0110 / 0117) is not applied`,
+      );
+    }
+  }
+
+  // 10. Recognition allocations are financial evidence. The data-plane may append them in the same
+  // transaction as settlement, but neither application role may rewrite/delete them and the control
+  // plane may not fabricate them. `prepareRoles()` broadens provisioner grants before each deploy, so
+  // cloud-migrate restores this posture after migrations and this assertion proves it stayed restored.
+  const allocationInsert = await db.query(
+    `SELECT has_table_privilege('${RUNTIME_ROLE}', 'token_recognition_allocations', 'INSERT') AS ok`,
+  );
+  if (allocationInsert.rows[0]?.ok !== true) {
+    violations.push(
+      `'${RUNTIME_ROLE}' cannot INSERT token_recognition_allocations — committed usage cannot reach exact revenue recognition`,
+    );
+  }
+  for (const [roleName, forbidden] of [
+    [RUNTIME_ROLE, ["UPDATE", "DELETE", "TRUNCATE"]],
+    ["app_provisioner", ["INSERT", "UPDATE", "DELETE", "TRUNCATE"]],
+  ] as const) {
+    const held = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY[${forbidden.map((privilege) => `'${privilege}'`).join(", ")}]) AS p
+      WHERE has_table_privilege('${roleName}', 'token_recognition_allocations', p)
+    `);
+    for (const row of held.rows) {
+      violations.push(
+        `'${roleName}' holds ${row.priv} on token_recognition_allocations — recognition history must be append-only`,
       );
     }
   }

@@ -543,6 +543,12 @@ is refused** (`offer_eligibility_too_broad`) rather than cost-checking a subset.
 
 ### Phase 3 — purchase and exact entitlement accounting
 
+**Complete.** The API now resolves a published/effective offer from the workspace catalog, snapshots
+its fixed consideration and provider credential mode before checkout, reconciles the verified
+Paystack event, and grants one immutable lot. Committed holds allocate revenue cumulatively with an
+append-only allocation record, including valid zero-minor increments. Legacy unit-priced lots remain
+supported. Purchase initiation is session-token-only; Phase 4 supplies the owner/admin BFF and UI.
+
 - purchase by offer version and pack count;
 - persist the immutable purchase snapshot before payment;
 - reconcile Paystack amount/currency/reference to that snapshot;
@@ -648,9 +654,9 @@ defect.
 - `COM-002` Add offer/version contracts, schema, constraints, and migration strategy. **DONE.**
 - `COM-003` Implement offer validation, version lifecycle, audit, and margin preview. **DONE.**
 - `COM-004` Build the admin offer-authoring and history experience. **DONE.**
-- `COM-005` Initiate purchase from a published offer snapshot.
-- `COM-006` Reconcile payment and grant an offer-backed lot exactly once.
-- `COM-007` Implement cumulative integer revenue allocation.
+- `COM-005` Initiate purchase from a published offer snapshot. **DONE.**
+- `COM-006` Reconcile payment and grant an offer-backed lot exactly once. **DONE.**
+- `COM-007` Implement cumulative integer revenue allocation. **DONE.**
 - `COM-008` Enforce destination/traffic/service compatibility during token holds.
 - `COM-009` Build eligible customer catalog, checkout, receipt, and balance surfaces.
 - `COM-010` Reconcile bundle deferred revenue, consumption, and remaining entitlement.

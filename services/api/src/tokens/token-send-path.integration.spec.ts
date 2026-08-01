@@ -123,6 +123,7 @@ describeDb("send path: tokens first, then wallet", () => {
 
   afterAll(async () => {
     for (const id of tenants) {
+      await owner`DELETE FROM token_recognition_allocations WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM token_holds WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM message_dispatches WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM outbox_events WHERE tenant_id = ${id}::uuid`;
