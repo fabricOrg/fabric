@@ -11,6 +11,12 @@ import {
   previewCommercialOfferMarginRequestSchema,
   publishCommercialOfferVersionRequestSchema,
 } from "./commercial-offers-admin.js";
+import {
+  commercialOfferPurchaseReceiptSchema,
+  customerCommercialOfferCatalogSchema,
+  purchaseCommercialOfferClientRequestSchema,
+} from "./customer-commercial-offers.js";
+import { tokenBalancesResponseSchema } from "./price-books.js";
 
 const VERSION = {
   currency: "GHS",
@@ -65,6 +71,13 @@ describe("commercial offer contracts", () => {
 
     expect(result.channel_code).toBe("email");
     expect(result.unit_code).toBe("recipient");
+  });
+
+  it("keeps token balances registry-backed for future channels", () => {
+    const balances = tokenBalancesResponseSchema.parse({
+      balances: [{ channel: "voice", currency: "GHS", available: "120" }],
+    });
+    expect(balances.balances[0]?.channel).toBe("voice");
   });
 
   it("rejects bonus units until their accounting policy is enabled", () => {
@@ -171,5 +184,61 @@ describe("commercial offer contracts", () => {
 
     expect(result.pack_count).toBe(3);
     expect("amount_minor" in result).toBe(false);
+  });
+
+  it("keeps payer identity out of the browser purchase contract", () => {
+    const result = purchaseCommercialOfferClientRequestSchema.parse({
+      offer_version_id: "00000000-0000-4000-8000-000000000002",
+      pack_count: 2,
+      email: "forged@example.com",
+    });
+    expect("email" in result).toBe(false);
+  });
+
+  it("exposes customer offer terms without staff cost or margin evidence", () => {
+    const catalog = customerCommercialOfferCatalogSchema.parse({
+      catalog_name: "Ghana prepaid",
+      offers: [
+        {
+          offer_version_id: "00000000-0000-4000-8000-000000000002",
+          offer_code: "sms-200",
+          name: "200 segments",
+          description: "Ghana transactional SMS",
+          channel_code: "sms",
+          channel_name: "SMS",
+          unit_code: "segment",
+          unit_label: "segments",
+          paid_units: "200",
+          bonus_units: "0",
+          total_units: "200",
+          total_price_minor: "300",
+          currency: "GHS",
+          minimum_pack_count: 1,
+          maximum_pack_count: 10,
+          eligibility: VERSION.eligibility,
+          effective_to: null,
+          cost_snapshot: { worst_case_cost_minor: "240" },
+        },
+      ],
+    });
+    expect("cost_snapshot" in (catalog.offers[0] ?? {})).toBe(false);
+  });
+
+  it("parses the immutable purchase receipt status and exact quantities", () => {
+    const receipt = commercialOfferPurchaseReceiptSchema.parse({
+      reference: "token-ref",
+      status: "pending",
+      offer_version_id: "00000000-0000-4000-8000-000000000002",
+      offer_name: "200 segments",
+      channel_code: "sms",
+      unit_code: "segment",
+      pack_count: 2,
+      quantity: "400",
+      amount_minor: "600",
+      currency: "GHS",
+      created_at: "2026-08-01T00:00:00.000Z",
+      updated_at: "2026-08-01T00:00:00.000Z",
+    });
+    expect(receipt.quantity).toBe("400");
   });
 });

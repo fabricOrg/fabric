@@ -2,6 +2,7 @@ import type { AppDb } from "@app/db";
 import { HttpException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { RequestTenant } from "../api-keys/api-key.guard.js";
+import type { TokenCatalogService } from "./token-catalog.service.js";
 import type { TokenPurchaseService } from "./token-purchase.service.js";
 import { TokensController } from "./tokens.controller.js";
 
@@ -25,11 +26,14 @@ function tenant(isSessionToken: boolean): RequestTenant {
 
 function setup() {
   const initiate = vi.fn(async () => ({ reference: "token-ref" }));
+  const catalog = vi.fn(async () => ({ catalog_name: "Offers", offers: [] }));
+  const receipt = vi.fn(async () => ({ reference: "token-ref" }));
   const controller = new TokensController(
     { initiate } as unknown as TokenPurchaseService,
     {} as AppDb,
+    { catalog, receipt } as unknown as TokenCatalogService,
   );
-  return { controller, initiate };
+  return { controller, initiate, catalog, receipt };
 }
 
 const body = {
@@ -39,6 +43,14 @@ const body = {
 };
 
 describe("TokensController commercial-offer checkout", () => {
+  it("derives customer catalog and receipt reads from the session tenant", async () => {
+    const { controller, catalog, receipt } = setup();
+    await controller.offers({ tenant: tenant(true) });
+    await controller.receipt({ tenant: tenant(true) }, "token-ref");
+    expect(catalog).toHaveBeenCalledWith(TENANT_ID);
+    expect(receipt).toHaveBeenCalledWith(TENANT_ID, "token-ref");
+  });
+
   it("accepts the BFF session-token path and derives the tenant from it", async () => {
     const { controller, initiate } = setup();
     await controller.purchase({ tenant: tenant(true) }, body);

@@ -72,6 +72,18 @@ describe("channel-agnostic commercial offer invariants", () => {
     ]);
   });
 
+  it("does not hard-code token accounting tables to today's channels", async () => {
+    const constraints = await owner<{ conname: string }[]>`
+      SELECT conname FROM pg_constraint
+      WHERE conname IN (
+        'token_purchases_channel_chk',
+        'token_lots_channel_chk',
+        'token_counters_channel_chk',
+        'token_holds_channel_chk'
+      )`;
+    expect(constraints).toEqual([]);
+  });
+
   it("stores an indivisible fixed total without a rounded unit price", async () => {
     await owner`INSERT INTO pricing_offer_versions (
       id, offer_id, version, currency, paid_units, total_units,

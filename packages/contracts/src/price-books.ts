@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { commercialChannelCodeSchema } from "./commercial-offers.js";
 import { messageChannel } from "./message-definition-content.js";
 import { currency } from "./money.js";
 
@@ -163,7 +164,7 @@ export type PurchaseTokensResponse = z.infer<
 
 /** A tenant's spendable token counts, per channel and currency. */
 export const tokenBalanceDtoSchema = z.object({
-  channel: messageChannel,
+  channel: commercialChannelCodeSchema,
   currency: z.string(),
   available: z.string(),
 });

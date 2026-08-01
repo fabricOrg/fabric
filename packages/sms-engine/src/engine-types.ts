@@ -20,6 +20,12 @@ export interface TokenBackend {
       currency: string;
       quantity: bigint;
       referenceId: string;
+      compatibility?: {
+        providerVendor: string;
+        destinationCountry?: string;
+        trafficClass?: string;
+        serviceClass?: string;
+      };
     },
   ): Promise<{ held: boolean }>;
   /** Spend (`committed`) or give back (`returned`) the holds for a message. Idempotent. */

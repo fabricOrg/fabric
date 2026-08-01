@@ -52,13 +52,19 @@ import {
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AutoTopupDialog } from "@/components/forms/auto-topup-dialog";
 import { TopUpDialog } from "@/components/forms/top-up-dialog";
+import { CommercialOfferCatalog } from "@/components/tokens/commercial-offer-catalog";
 import { BalanceTrend } from "@/components/wallet/balance-trend";
 import { formatMoney, formatSigned } from "@/lib/money";
+import { requireDashboardSession } from "@/lib/server/auth";
 import {
   getAutoTopup,
+  getCommercialOfferCatalog,
+  getCommercialOfferPurchaseReceipt,
   getSavedPaymentMethod,
+  getTokenBalances,
   getWalletSnapshot,
 } from "@/lib/server/dashboard-data";
 
@@ -153,10 +159,42 @@ export default async function WalletPage({
   searchParams: Promise<{
     payment_return?: string;
     reference?: string;
+    tokens?: string;
     trxref?: string;
   }>;
 }) {
+  const session = await requireDashboardSession();
+  if (session.plan === "sandbox") redirect("/");
   const paymentParams = await searchParams;
+  const [catalogResult, tokenBalancesResult] = await Promise.allSettled([
+    getCommercialOfferCatalog(),
+    getTokenBalances(),
+  ]);
+  const canPurchase = session.role === "owner" || session.role === "admin";
+  const commercialSection =
+    catalogResult.status === "fulfilled" &&
+    tokenBalancesResult.status === "fulfilled" ? (
+      <CommercialOfferCatalog
+        catalog={catalogResult.value}
+        balances={tokenBalancesResult.value.balances}
+        canPurchase={canPurchase}
+      />
+    ) : (
+      <Alert variant="destructive">
+        <TriangleAlert />
+        <AlertTitle>Couldn&apos;t load prepaid offers</AlertTitle>
+        <AlertDescription>
+          Your wallet remains available. Refresh before attempting a token
+          purchase.
+        </AlertDescription>
+      </Alert>
+    );
+  const tokenReceipt =
+    paymentParams.tokens === "1" && paymentParams.reference
+      ? await getCommercialOfferPurchaseReceipt(paymentParams.reference).catch(
+          () => null,
+        )
+      : null;
   let balances: readonly WalletBalance[];
   let ledger: readonly LedgerEntry[];
   // Best-effort: a missing saved card just shows the Paystack fallback, never blocks the page.
@@ -177,6 +215,7 @@ export default async function WalletPage({
     return (
       <Shell>
         <PageHeader />
+        {commercialSection}
         <Alert variant="destructive">
           <TriangleAlert />
           <AlertTitle>Couldn&apos;t load your wallet</AlertTitle>
@@ -198,6 +237,8 @@ export default async function WalletPage({
     return (
       <Shell>
         <PageHeader />
+        {tokenReceipt ? <TokenPurchaseNotice receipt={tokenReceipt} /> : null}
+        {commercialSection}
         <Empty className="mx-auto max-w-2xl">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -261,6 +302,10 @@ export default async function WalletPage({
           </Button>
         </div>
       </div>
+
+      {tokenReceipt ? <TokenPurchaseNotice receipt={tokenReceipt} /> : null}
+
+      {commercialSection}
 
       {paymentParams.payment_return === "1" ? (
         <Alert>
@@ -554,5 +599,49 @@ export default async function WalletPage({
         </CardContent>
       </Card>
     </Shell>
+  );
+}
+
+function TokenPurchaseNotice({
+  receipt,
+}: {
+  readonly receipt: Awaited<
+    ReturnType<typeof getCommercialOfferPurchaseReceipt>
+  >;
+}) {
+  const confirmed = receipt.status === "success";
+  const failed = receipt.status === "failed";
+  let title = "Token purchase is processing";
+  let description =
+    "Returning from checkout does not grant tokens. We are waiting for Paystack's signed webhook.";
+  if (confirmed) {
+    title = "Token purchase confirmed";
+    description = `${BigInt(receipt.quantity).toLocaleString("en")} ${receipt.unit_code} were credited from ${receipt.offer_name}.`;
+  }
+  if (failed) {
+    title = "Token purchase failed";
+    description =
+      "Paystack did not confirm this purchase. No tokens were credited.";
+  }
+  return (
+    <Alert variant={failed ? "destructive" : "default"}>
+      {confirmed ? <CheckCircle2 /> : <Clock />}
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription>
+        <p>{description}</p>
+        <p className="mt-1 text-xs">
+          Reference: <code className="font-mono">{receipt.reference}</code>
+        </p>
+        {!confirmed && !failed ? (
+          <Button asChild variant="outline" size="sm" className="mt-3 w-fit">
+            <Link
+              href={`/wallet?tokens=1&reference=${encodeURIComponent(receipt.reference)}`}
+            >
+              Check again
+            </Link>
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
   );
 }

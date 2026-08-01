@@ -65,7 +65,6 @@ export const tokenPurchases = pgTable(
     ...timestamps,
   },
   (t) => [
-    check("token_purchases_channel_chk", sql`${t.channel} in ('sms', 'email')`),
     check(
       "token_purchases_status_chk",
       sql`${t.status} in ('pending', 'success', 'failed')`,

@@ -3,6 +3,7 @@ import { ApiKeysModule } from "../api-keys/api-keys.module.js";
 import { ProvisioningDbModule } from "../identity/provisioning-db.module.js";
 import { KillSwitchModule } from "../kill-switches/kill-switches.module.js";
 import { PluginsModule } from "../plugins/plugins.module.js";
+import { TokenCatalogService } from "./token-catalog.service.js";
 import { TokenPurchaseService } from "./token-purchase.service.js";
 import { TokensController } from "./tokens.controller.js";
 
@@ -21,7 +22,7 @@ import { TokensController } from "./tokens.controller.js";
     PluginsModule,
   ],
   controllers: [TokensController],
-  providers: [TokenPurchaseService],
+  providers: [TokenCatalogService, TokenPurchaseService],
   exports: [TokenPurchaseService],
 })
 export class TokensModule {}

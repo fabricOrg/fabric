@@ -28,6 +28,12 @@ async function chooseBacking(
     deliveryMode: "virtual" | "live";
     applicationId?: string | null;
     environmentId?: string | null;
+    tokenCompatibility?: {
+      providerVendor: string;
+      destinationCountry?: string;
+      trafficClass?: string;
+      serviceClass?: string;
+    };
   },
 ): Promise<Backing> {
   if (p.deliveryMode === "virtual") {
@@ -58,6 +64,7 @@ async function chooseBacking(
     currency: p.currency,
     quantity: BigInt(p.segments),
     referenceId: p.messageId,
+    ...(p.tokenCompatibility ? { compatibility: p.tokenCompatibility } : {}),
   });
   if (!outcome.held) return "wallet";
   await tx`UPDATE messages SET backing = 'tokens' WHERE id = ${p.messageId}`;
@@ -153,6 +160,22 @@ export async function prepareSend(
             : {}),
           ...(input.environmentId !== undefined
             ? { environmentId: input.environmentId }
+            : {}),
+          ...(input.pricing
+            ? {
+                tokenCompatibility: {
+                  providerVendor: input.pricing.snapshot.providerVendor,
+                  ...(input.pricing.snapshot.destinationCountry
+                    ? {
+                        destinationCountry:
+                          input.pricing.snapshot.destinationCountry,
+                      }
+                    : {}),
+                  ...(input.pricing.snapshot.trafficClass
+                    ? { trafficClass: input.pricing.snapshot.trafficClass }
+                    : {}),
+                },
+              }
             : {}),
         })
       : await readBacking(tx, messageId);

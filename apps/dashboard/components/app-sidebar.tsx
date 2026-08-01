@@ -27,6 +27,7 @@ import { canSeeNavItem, navGroups } from "@/lib/nav";
  *  the display-face name. */
 export function AppSidebar({
   role,
+  plan,
   permissions,
   email,
   name,
@@ -34,6 +35,7 @@ export function AppSidebar({
   workspaces,
 }: {
   role: string;
+  plan?: string;
   permissions: readonly string[];
   email?: string;
   name?: string;
@@ -48,7 +50,7 @@ export function AppSidebar({
     .map((group) => ({
       ...group,
       items: group.items.filter((item) =>
-        canSeeNavItem(item, { permissions, role }),
+        canSeeNavItem(item, { permissions, role, plan }),
       ),
     }))
     .filter((group) => group.items.length > 0);

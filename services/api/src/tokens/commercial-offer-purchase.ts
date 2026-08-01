@@ -57,6 +57,7 @@ export async function createCommercialOfferPurchaseIntent(
         offer: pricingOffers,
         channelActive: commercialOfferChannels.isActive,
         billingCurrency: accounts.billingCurrency,
+        accountPlan: accounts.plan,
       })
       .from(pricingOfferVersions)
       .innerJoin(
@@ -98,12 +99,24 @@ export async function createCommercialOfferPurchaseIntent(
         "This offer's channel is not available.",
       );
     }
+    if (row.accountPlan === "sandbox") {
+      throw invalidRequest(
+        "sandbox_token_purchase_denied",
+        "Sandbox workspaces use daily channel allowances and cannot purchase tokens.",
+      );
+    }
     // This is a capability gate, not a catalog enum. The offer and accounting models remain channel
     // agnostic; a channel becomes purchasable when its send path can actually consume these lots.
     if (row.offer.channelCode !== "sms") {
       throw invalidRequest(
         "commercial_offer_consumption_unavailable",
         `Prepaid ${row.offer.channelCode} consumption is not available yet.`,
+      );
+    }
+    if ((row.version.eligibility.serviceClasses ?? []).length > 0) {
+      throw invalidRequest(
+        "commercial_offer_consumption_unavailable",
+        "This offer requires a service class that the send path cannot verify yet.",
       );
     }
     if (row.version.currency !== row.billingCurrency) {

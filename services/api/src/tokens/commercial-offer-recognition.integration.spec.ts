@@ -143,6 +143,7 @@ describeDb("fixed-total commercial-offer recognition", () => {
         currency: "GHS",
         quantity,
         referenceId,
+        compatibility: { providerVendor: "arkesel" },
       });
       expect(held.held).toBe(true);
     });
@@ -229,6 +230,7 @@ describeDb("fixed-total commercial-offer recognition", () => {
           currency: "GHS",
           quantity: 100n,
           referenceId,
+          compatibility: { providerVendor: "arkesel" },
         }),
       );
     }
@@ -250,6 +252,31 @@ describeDb("fixed-total commercial-offer recognition", () => {
     });
     expect(await balance(tenantId, "revenue")).toBe(300n);
     expect(await balance(tenantId, "token_deferred_revenue")).toBe(0n);
+  });
+
+  it("uses fixed bundles only on routes allowed by their purchase snapshot", async () => {
+    const { tenantId } = await grantBundle(10n, 10n);
+    const incompatible = await appDb.withTenant(tenantId, (tx) =>
+      holdTokens(tx, {
+        channel: "sms",
+        currency: "GHS",
+        quantity: 1n,
+        referenceId: randomUUID(),
+        compatibility: { providerVendor: "another-provider" },
+      }),
+    );
+    expect(incompatible.held).toBe(false);
+
+    const compatible = await appDb.withTenant(tenantId, (tx) =>
+      holdTokens(tx, {
+        channel: "sms",
+        currency: "GHS",
+        quantity: 1n,
+        referenceId: randomUUID(),
+        compatibility: { providerVendor: "arkesel" },
+      }),
+    );
+    expect(compatible.held).toBe(true);
   });
 
   it("isolates allocation history and rejects a cross-tenant lot reference", async () => {
