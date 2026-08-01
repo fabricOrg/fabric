@@ -49,7 +49,7 @@ export function CommercialOffersManager({
   if (catalogs.length === 0) {
     return (
       <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-        Prepaid offers live in a token-mode price book. Create one on{" "}
+        Prepaid packages live in a token-mode price book. Create one on{" "}
         <span className="font-medium">Pricing</span> first — assigning a
         subscription (pay-as-you-go) rate book as a catalog is refused, because
         nothing in it could be purchased.
@@ -71,7 +71,7 @@ export function CommercialOffersManager({
       <div className="flex flex-col gap-3">
         {offers.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No prepaid offers yet.
+            No prepaid packages yet.
           </p>
         ) : null}
 
@@ -118,6 +118,7 @@ export function CommercialOffersManager({
         onOpenChange={setCreating}
         catalogs={catalogs}
         channels={activeChannels}
+        routeVocabulary={routeVocabulary}
       />
       {draftingFor ? (
         <OfferTermsDialog

@@ -36,7 +36,7 @@ export const navGroups: readonly NavGroup[] = [
       },
       { title: "Senders", href: "/senders", icon: Radio },
       { title: "Pricing", href: "/pricing", icon: Tags },
-      { title: "Prepaid offers", href: "/pricing/offers", icon: Package },
+      { title: "Prepaid packages", href: "/pricing/offers", icon: Package },
       { title: "Impersonation", href: "/impersonation", icon: UserCog },
       { title: "Kill-switch", href: "/kill-switch", icon: Power },
       { title: "Data requests", href: "/privacy", icon: ShieldOff },

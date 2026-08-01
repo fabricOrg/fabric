@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navGroups } from "@/lib/nav";
+import { activeNavHref } from "@/lib/nav-active";
 
 export function AppSidebar({
   role,
@@ -29,6 +30,7 @@ export function AppSidebar({
   name?: string;
 }) {
   const pathname = usePathname();
+  const activeHref = activeNavHref(navGroups, pathname);
 
   return (
     <Sidebar collapsible="icon">
@@ -44,10 +46,7 @@ export function AppSidebar({
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => {
-                  const active =
-                    item.href === "/"
-                      ? pathname === "/"
-                      : pathname.startsWith(item.href);
+                  const active = item.href === activeHref;
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton

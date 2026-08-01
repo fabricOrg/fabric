@@ -2,9 +2,11 @@
 
 import type {
   CommercialOfferChannelDto,
+  CommercialRouteVocabulary,
   Currency,
   PriceBookDto,
 } from "@app/contracts";
+import { supportedEligibilityDimensions } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Dialog,
@@ -31,6 +33,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
+import { CreditExpirySelect } from "@/components/forms/credit-expiry-select";
+import { EligibilityChips } from "@/components/forms/eligibility-chips";
 import { createPackage, OfferError } from "@/lib/client/commercial-offers-api";
 import { useOfferTermsForm } from "@/lib/client/offer-terms-form";
 
@@ -51,11 +55,13 @@ export function NewOfferDialog({
   onOpenChange,
   catalogs,
   channels,
+  routeVocabulary,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   catalogs: readonly PriceBookDto[];
   channels: readonly CommercialOfferChannelDto[];
+  routeVocabulary: CommercialRouteVocabulary;
 }) {
   const router = useRouter();
   const fieldId = useId();
@@ -166,98 +172,112 @@ export function NewOfferDialog({
 
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium">Included channel credits</p>
-          {form.items.map((item, index) => (
-            <div
-              key={item.key}
-              className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto]"
-            >
-              <Field>
-                <FieldLabel>Channel and unit</FieldLabel>
-                <Select
-                  value={item.channelKey}
-                  onValueChange={(channelKey) =>
-                    form.updateItem(item.key, { channelKey })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {channels.map((channel) => {
-                      const value = `${channel.code}:${channel.unit_code}`;
-                      return (
-                        <SelectItem
-                          key={value}
-                          value={value}
-                          disabled={form.items.some(
-                            (candidate) =>
-                              candidate.key !== item.key &&
-                              candidate.channelKey === value,
-                          )}
-                        >
-                          {channel.display_name} — per {channel.unit_label}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel>Credits per pack</FieldLabel>
-                <Input
-                  inputMode="numeric"
-                  value={item.units}
-                  placeholder="20"
-                  onChange={(event) =>
-                    form.updateItem(item.key, { units: event.target.value })
-                  }
-                />
-              </Field>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="self-end"
-                aria-label={`Remove package item ${index + 1}`}
-                disabled={form.items.length === 1}
-                onClick={() => form.removeItem(item.key)}
+          {form.items.map((item, index) => {
+            // Only the restrictions this channel's send path can match; see CHANNEL_SUPPORTED_ELIGIBILITY.
+            const routable = supportedEligibilityDimensions(
+              item.channelKey.split(":")[0] ?? "",
+            ).includes("destination_countries");
+            return (
+              <div
+                key={item.key}
+                className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto]"
               >
-                <Trash2 className="size-4" />
-              </Button>
-              <Field>
-                <FieldLabel>Providers</FieldLabel>
-                <Input
-                  value={item.vendors}
-                  placeholder="arkesel or aws-ses"
-                  onChange={(event) =>
-                    form.updateItem(item.key, { vendors: event.target.value })
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Traffic class</FieldLabel>
-                <Input
-                  value={item.trafficClasses}
-                  placeholder="transactional"
-                  onChange={(event) =>
-                    form.updateItem(item.key, {
-                      trafficClasses: event.target.value,
-                    })
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Destinations (ISO)</FieldLabel>
-                <Input
-                  value={item.countries}
-                  placeholder="GH, NG; blank if global"
-                  onChange={(event) =>
-                    form.updateItem(item.key, { countries: event.target.value })
-                  }
-                />
-              </Field>
-            </div>
-          ))}
+                <Field>
+                  <FieldLabel>Channel and unit</FieldLabel>
+                  <Select
+                    value={item.channelKey}
+                    onValueChange={(channelKey) =>
+                      form.updateItem(item.key, { channelKey })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {channels.map((channel) => {
+                        const value = `${channel.code}:${channel.unit_code}`;
+                        return (
+                          <SelectItem
+                            key={value}
+                            value={value}
+                            disabled={form.items.some(
+                              (candidate) =>
+                                candidate.key !== item.key &&
+                                candidate.channelKey === value,
+                            )}
+                          >
+                            {channel.display_name} — per {channel.unit_label}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel>Credits per pack</FieldLabel>
+                  <Input
+                    inputMode="numeric"
+                    value={item.units}
+                    placeholder="20"
+                    onChange={(event) =>
+                      form.updateItem(item.key, { units: event.target.value })
+                    }
+                  />
+                </Field>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="self-end"
+                  aria-label={`Remove package item ${index + 1}`}
+                  disabled={form.items.length === 1}
+                  onClick={() => form.removeItem(item.key)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+                <Field>
+                  <FieldLabel>Providers (required)</FieldLabel>
+                  <EligibilityChips
+                    value={item.vendors}
+                    options={routeVocabulary.provider_vendors}
+                    onChange={(vendors) =>
+                      form.updateItem(item.key, { vendors })
+                    }
+                    anyLabel="None selected — publication will be refused."
+                    emptyHint="No provider cost rates exist yet, so no package can be margin-checked."
+                  />
+                </Field>
+                {routable && (
+                  <>
+                    <Field>
+                      <FieldLabel>Traffic classes</FieldLabel>
+                      <EligibilityChips
+                        value={item.trafficClasses}
+                        options={routeVocabulary.traffic_classes}
+                        onChange={(trafficClasses) =>
+                          form.updateItem(item.key, { trafficClasses })
+                        }
+                        anyLabel="Any priced traffic class"
+                        emptyHint="No traffic-class-specific rates."
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Destinations</FieldLabel>
+                      <EligibilityChips
+                        value={item.countries}
+                        options={routeVocabulary.destination_countries}
+                        onChange={(countries) =>
+                          form.updateItem(item.key, { countries })
+                        }
+                        anyLabel="Any priced destination"
+                        emptyHint="No destination-specific rates."
+                      />
+                    </Field>
+                  </>
+                )}
+              </div>
+            );
+          })}
           <Button
             type="button"
             variant="outline"
@@ -304,17 +324,13 @@ export function NewOfferDialog({
           </Field>
           <Field>
             <FieldLabel>Credit expiry</FieldLabel>
-            <Input
-              inputMode="numeric"
+            <CreditExpirySelect
               value={form.creditValidityDays}
-              placeholder="Never expires"
-              onChange={(event) =>
-                form.setCreditValidityDays(event.target.value)
-              }
+              onChange={form.setCreditValidityDays}
             />
             <FieldDescription>
-              Leave blank for credits that never expire; otherwise enter days
-              after purchase.
+              Customers see this before they buy, and unspent credits are
+              recognised as breakage once they lapse.
             </FieldDescription>
           </Field>
         </div>
