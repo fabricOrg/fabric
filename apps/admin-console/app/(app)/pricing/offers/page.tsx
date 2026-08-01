@@ -20,11 +20,7 @@ export default async function CommercialOffersPage() {
 
   let offers: CommercialOfferWithVersions[] = [];
   let channels: CommercialOfferChannelDto[] = [];
-  let routeVocabulary: CommercialRouteVocabulary = {
-    provider_vendors: [],
-    destination_countries: [],
-    traffic_classes: [],
-  };
+  let routeVocabulary: CommercialRouteVocabulary = {};
   let catalogs: PriceBookDto[] = [];
   let loadError = false;
   try {
