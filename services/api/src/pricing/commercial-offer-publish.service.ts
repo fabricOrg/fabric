@@ -5,8 +5,10 @@ import type {
   RetireCommercialOfferVersionRequest,
 } from "@app/contracts";
 import {
+  type MinorUnits,
   type ProvisioningDb,
   pricingOffers,
+  pricingOfferVersionItems,
   pricingOfferVersions,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
@@ -27,6 +29,7 @@ import {
   offerTermsUnchanged,
   readStaffEmailMap,
   readVersionForUpdate,
+  readVersionItemsForUpdate,
   requireVersionContext,
 } from "./commercial-offer-writes.js";
 import type { StaffActor } from "./commercial-offers.service.js";
@@ -53,7 +56,7 @@ export class CommercialOfferPublishService {
     actor: StaffActor,
   ): Promise<CommercialOfferVersionDto> {
     await assertStaffExists(this.provisioning.db, actor.staffId);
-    const { version, offer } = await requireVersionContext(
+    const { version, offer, items } = await requireVersionContext(
       this.provisioning.db,
       versionId,
     );
@@ -71,25 +74,30 @@ export class CommercialOfferPublishService {
         "You authored this version — another staff admin must publish it.",
       );
     }
-    const channel = await readChannel(
-      this.provisioning.db,
-      offer.channelCode,
-      offer.unitCode,
-    );
-    if (!channel?.isActive) {
-      throw invalidRequest(
-        "commercial_channel_inactive",
-        `The ${offer.channelCode} channel is not active, so this offer cannot be sold yet.`,
+    for (const item of items) {
+      const channel = await readChannel(
+        this.provisioning.db,
+        item.channelCode,
+        item.unitCode,
       );
+      if (!channel?.isActive) {
+        throw invalidRequest(
+          "commercial_channel_inactive",
+          `The ${item.channelCode} channel is not active, so this package cannot be sold yet.`,
+        );
+      }
     }
 
     const preview = await this.margin.evaluate({
-      channelCode: offer.channelCode,
       priceBookId: offer.priceBookId,
       currency: version.currency as Currency,
-      totalUnits: version.totalUnits,
       totalPriceMinor: version.totalPriceMinor,
-      eligibility: eligibilityOf(version),
+      items: items.map((item) => ({
+        channelCode: item.channelCode,
+        unitCode: item.unitCode,
+        totalUnits: item.totalUnits,
+        eligibility: eligibilityOf(item),
+      })),
     });
     if (!preview.publishable) {
       throw invalidRequest(
@@ -113,10 +121,29 @@ export class CommercialOfferPublishService {
       // verdict was computed from the row as READ, and this UPDATE rewrites only lifecycle columns —
       // so a draft edited in the meantime would go live with a snapshot describing different terms.
       const current = await readVersionForUpdate(tx, versionId);
-      if (!current || current.status !== "draft") return "not_draft" as const;
-      if (!offerTermsUnchanged(version, current)) return "changed" as const;
+      if (current?.status !== "draft") return "not_draft" as const;
+      const currentItems = await readVersionItemsForUpdate(tx, versionId);
+      if (!offerTermsUnchanged(version, current, items, currentItems)) {
+        return "changed" as const;
+      }
 
       await assertNoOverlappingPublishedVersion(tx, current);
+      for (const allocation of preview.items) {
+        // item_index is an ORDINAL into the same ordered list the preview was computed from, not a
+        // `position` value. Matching it against the column would silently mismatch the moment a
+        // position sequence has a gap, and report it as "edited while you were reviewing".
+        const item = currentItems[allocation.item_index];
+        if (!item) return "changed" as const;
+        await tx
+          .update(pricingOfferVersionItems)
+          .set({
+            allocatedPriceMinor: BigInt(
+              allocation.allocated_price_minor,
+            ) as MinorUnits,
+            updatedAt: approvedAt,
+          })
+          .where(eq(pricingOfferVersionItems.id, item.id));
+      }
       const [row] = await tx
         .update(pricingOfferVersions)
         .set({
@@ -159,7 +186,7 @@ export class CommercialOfferPublishService {
         offer_id: offer.id,
         author_staff_id: version.createdBy,
         currency: published.currency,
-        total_units: published.totalUnits.toString(),
+        item_count: items.length,
         total_price_minor: published.totalPriceMinor.toString(),
         worst_case_margin_bps:
           preview.cost_snapshot?.worst_case_margin_bps ?? null,
@@ -169,9 +196,14 @@ export class CommercialOfferPublishService {
         route_count: preview.cost_snapshot?.route_count ?? null,
       },
     });
+    const publishedItems = await readVersionItemsForUpdate(
+      this.provisioning.db,
+      versionId,
+    );
     return toVersionDto(
       published,
       await readStaffEmailMap(this.provisioning.db),
+      publishedItems,
     );
   }
 
@@ -224,6 +256,14 @@ export class CommercialOfferPublishService {
       reason: request.reason,
       metadata: { offer_id: offer.id, version: retired.version },
     });
-    return toVersionDto(retired, await readStaffEmailMap(this.provisioning.db));
+    const items = await readVersionItemsForUpdate(
+      this.provisioning.db,
+      versionId,
+    );
+    return toVersionDto(
+      retired,
+      await readStaffEmailMap(this.provisioning.db),
+      items,
+    );
   }
 }

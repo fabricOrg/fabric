@@ -54,9 +54,10 @@ consumable credit because every SMS carries a real carrier cost.
    **especially email**, whose ~zero marginal cost makes abundant/cheap included email a near-free
    stickiness lever. v1 lock-in = a cheaper subscription baseline plus **spend-based automatic
    price-book upgrade** (loyalty). Committed-use plans and bonus-credit-on-top-up are deferred.
-7. **No token expiry by default.** Elastic supply gives expiry no cost basis; count-based counters
-   make adding an optional expiry date trivial later if it is ever wanted purely as a pricing lever
-   (mirroring Arkesel's cheaper-if-expiring SMS tier).
+7. **No token expiry by default; optional package validity is explicit.** A null validity means the
+   credits never expire. A published package may instead define a number of days after purchase.
+   Expiry removes the unused entitlement and recognizes its remaining deferred consideration as
+   `token_breakage`; it never credits or debits the customer wallet.
 8. **Send-path resolution order.** Resolve unit cost from the account's price book → consume
    **tokens first** for the channel (hold on send, commit on delivery, return on failure — mirroring
    the money `reserve`/`commit`/`refund` lifecycle and reusing the reservation sweeper) → else debit
@@ -104,7 +105,7 @@ consumable credit because every SMS carries a real carrier cost.
   rate-card / price-book / token-tier config surface; spend-based auto price-book upgrade; the SES
   adapter; dashboard buy-tokens + pricing + token-balance surfaces.
 - **Deferred:** voice channel and its pricing; committed-use and bonus-credit lock-in levers; email
-  attachments / per-MB data surcharge (the 256 KiB cap and flat per-send stay); token expiry.
+  attachments / per-MB data surcharge (the 256 KiB cap and flat per-send stay).
 - Email flattening changes an existing wire/price behaviour — the size-tier removal must land as a
   deliberate rating change, not a silent one.
 - Deferred-revenue accounting for unsent tokens is a new obligation the wallet review must cover,

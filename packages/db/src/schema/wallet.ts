@@ -62,6 +62,8 @@ export const ledgerTxnType = pgEnum("ledger_txn_type", [
   // from the purchase because reporting groups on it — labelling a consumption "token_purchase"
   // would misstate both sides.
   "token_consume",
+  // Unused expiring credits discharge the same liability into a separately reported revenue reason.
+  "token_breakage",
 ]);
 
 // A transaction's lifecycle. A reserve opens `pending`; commit/refund closes it.

@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import {
-  bigint,
   check,
   index,
   integer,
@@ -19,12 +18,19 @@ export interface TokenOfferSnapshot {
   readonly offerCode: string;
   readonly offerName: string;
   readonly offerVersion: number;
+  readonly totalPriceMinor: string;
+  readonly creditValidityDays: number | null;
+  readonly items: readonly TokenOfferItemSnapshot[];
+}
+
+export interface TokenOfferItemSnapshot {
+  readonly itemId: string;
   readonly channelCode: string;
   readonly unitCode: string;
   readonly paidUnits: string;
   readonly bonusUnits: string;
   readonly totalUnits: string;
-  readonly totalPriceMinor: string;
+  readonly allocatedPriceMinor: string;
   readonly eligibility: CommercialOfferEligibility;
 }
 
@@ -45,19 +51,13 @@ export const tokenPurchases = pgTable(
     providerMode: text("provider_mode"),
     pluginInstanceId: uuid("plugin_instance_id"),
     credentialVersion: integer("credential_version"),
-    /** Historical rows are unit-priced; commercial offers carry an exact fixed bundle total. */
-    pricingModel: text("pricing_model").notNull().default("unit"),
     offerVersionId: uuid("offer_version_id").references(
       () => pricingOfferVersions.id,
       { onDelete: "restrict" },
     ),
     packCount: integer("pack_count"),
-    unitsPerPackLocked: bigint("units_per_pack_locked", { mode: "bigint" }),
     pricePerPackMinorLocked: moneyMinor("price_per_pack_minor_locked"),
     offerSnapshot: jsonb("offer_snapshot").$type<TokenOfferSnapshot>(),
-    channel: text("channel").notNull(),
-    quantity: bigint("quantity", { mode: "bigint" }).notNull(),
-    unitPriceMinorLocked: moneyMinor("unit_price_minor_locked"),
     currency: text("currency").notNull(),
     amountMinor: moneyMinor("amount_minor").notNull(),
     email: text("email").notNull(),
@@ -73,31 +73,14 @@ export const tokenPurchases = pgTable(
       "token_purchases_provider_mode_chk",
       sql`${t.providerMode} is null or ${t.providerMode} in ('sandbox', 'live')`,
     ),
-    check("token_purchases_quantity_chk", sql`${t.quantity} > 0`),
-    check(
-      "token_purchases_pricing_model_chk",
-      sql`${t.pricingModel} in ('unit', 'fixed_bundle')`,
-    ),
-    // A bundle has no unit price because its total need not divide evenly by its natural units.
+    // Every purchase is a package: exact pack multiplication, no unit price to divide by.
     check(
       "token_purchases_amount_chk",
-      sql`(${t.pricingModel} = 'unit'
-          and ${t.unitPriceMinorLocked} > 0
-          and ${t.offerVersionId} is null
-          and ${t.packCount} is null
-          and ${t.unitsPerPackLocked} is null
-          and ${t.pricePerPackMinorLocked} is null
-          and ${t.offerSnapshot} is null
-          and ${t.amountMinor} = ${t.quantity} * ${t.unitPriceMinorLocked})
-        or (${t.pricingModel} = 'fixed_bundle'
-          and ${t.unitPriceMinorLocked} is null
-          and ${t.offerVersionId} is not null
-          and ${t.packCount} > 0
-          and ${t.unitsPerPackLocked} > 0
-          and ${t.pricePerPackMinorLocked} > 0
-          and ${t.offerSnapshot} is not null
-          and ${t.quantity} = ${t.unitsPerPackLocked} * ${t.packCount}
-          and ${t.amountMinor} = ${t.pricePerPackMinorLocked} * ${t.packCount})`,
+      sql`${t.offerVersionId} is not null
+        and ${t.packCount} > 0
+        and ${t.pricePerPackMinorLocked} > 0
+        and ${t.offerSnapshot} is not null
+        and ${t.amountMinor} = ${t.pricePerPackMinorLocked} * ${t.packCount}`,
     ),
     index("idx_token_purchases_tenant").on(t.tenantId, t.createdAt),
   ],

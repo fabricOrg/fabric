@@ -82,7 +82,7 @@ export const commercialOfferChannels = pgTable(
   ],
 );
 
-/** Stable offer identity inside a price-book catalog. Purchases always target a VERSION, not this row. */
+/** Stable package identity inside a price-book catalog. Purchases always target a VERSION, not this row. */
 export const pricingOffers = pgTable(
   "pricing_offers",
   {
@@ -93,8 +93,9 @@ export const pricingOffers = pgTable(
     code: text("code").notNull(),
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
-    channelCode: text("channel_code").notNull(),
-    unitCode: text("unit_code").notNull(),
+    /** Deprecated compatibility columns; package contents live on version items. */
+    channelCode: text("channel_code"),
+    unitCode: text("unit_code"),
     ...timestamps,
   },
   (t) => [
@@ -111,11 +112,7 @@ export const pricingOffers = pgTable(
       ],
       name: "pricing_offers_channel_unit_fk",
     }).onDelete("restrict"),
-    index("idx_pricing_offers_catalog").on(
-      t.priceBookId,
-      t.channelCode,
-      t.unitCode,
-    ),
+    index("idx_pricing_offers_catalog").on(t.priceBookId),
   ],
 );
 
@@ -134,14 +131,18 @@ export const pricingOfferVersions = pgTable(
     version: integer("version").notNull(),
     status: text("status").notNull().default("draft"),
     currency: char("currency", { length: 3 }).notNull(),
+    /** Deprecated aggregate compatibility fields; never use them to describe mixed natural units. */
     paidUnits: bigint("paid_units", { mode: "bigint" }).notNull(),
     bonusUnits: bigint("bonus_units", { mode: "bigint" })
       .notNull()
       .default(sql`0`),
     totalUnits: bigint("total_units", { mode: "bigint" }).notNull(),
     totalPriceMinor: moneyMinor("total_price_minor").notNull(),
+    /** NULL means the granted credits never expire; otherwise expiry is relative to settlement. */
+    creditValidityDays: integer("credit_validity_days"),
     minimumPackCount: integer("minimum_pack_count").notNull().default(1),
     maximumPackCount: integer("maximum_pack_count"),
+    /** Deprecated; item-specific eligibility is authoritative. */
     eligibility: jsonb("eligibility")
       .$type<CommercialOfferEligibility>()
       .notNull()
@@ -167,6 +168,10 @@ export const pricingOfferVersions = pgTable(
       "pricing_offer_versions_status_chk",
       sql`${t.status} in ('draft', 'published', 'retired')`,
     ),
+    check(
+      "pricing_offer_versions_total_price_chk",
+      sql`${t.totalPriceMinor} > 0`,
+    ),
     check("pricing_offer_versions_paid_units_chk", sql`${t.paidUnits} > 0`),
     check("pricing_offer_versions_bonus_units_chk", sql`${t.bonusUnits} >= 0`),
     check(
@@ -174,8 +179,8 @@ export const pricingOfferVersions = pgTable(
       sql`${t.totalUnits} = ${t.paidUnits} + ${t.bonusUnits}`,
     ),
     check(
-      "pricing_offer_versions_total_price_chk",
-      sql`${t.totalPriceMinor} > 0`,
+      "pricing_offer_versions_validity_chk",
+      sql`${t.creditValidityDays} is null or ${t.creditValidityDays} > 0`,
     ),
     check(
       "pricing_offer_versions_pack_range_chk",

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { SendEmailRequest } from "@app/contracts";
 import type { AppDb } from "@app/db";
 import type { EmailSenderPlugin } from "@app/integrations";
@@ -11,10 +12,9 @@ import {
 import type { EffectivePricingService } from "../pricing/effective-pricing.service.js";
 import type { PiiVaultService } from "../privacy/pii-vault.service.js";
 import type { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.service.js";
+import { holdTokens } from "../tokens/token-holds.js";
 import { resolveEmailEnvironment } from "./email-environment.js";
 import type { EmailRuntimeService } from "./email-runtime.service.js";
-
-type Row = Record<string, unknown>;
 
 export async function prepareEmail(input: {
   db: AppDb;
@@ -60,18 +60,9 @@ export async function prepareEmail(input: {
     JSON.stringify(input.content),
   );
   return input.db.withTenant(input.context.tenantId, async (tx) => {
-    const rows = (await tx`
-      INSERT INTO email_messages (
-        tenant_id, application_id, environment_id, subject_id, content_pii_id,
-        status, status_rank, backing, provider_slug, cost_minor, currency, pricing_snapshot
-      ) VALUES (
-        current_setting('app.tenant_id')::uuid, ${input.context.applicationId},
-        ${input.context.environmentId}, ${subjectId}, ${contentPiiId}, 'queued',
-        ${STATUS_RANK.queued}, ${mode === "sandbox" ? "sandbox_allowance" : "wallet"},
-        ${resolved.provider.slug}, ${quote?.totalPriceMinor.toString() ?? "0"}::bigint,
-        ${quote?.currency ?? "GHS"}, ${quote ? JSON.stringify(quote.snapshot) : null}::jsonb
-      ) RETURNING id`) as Row[];
-    const messageId = String(rows[0]?.id);
+    const messageId = randomUUID();
+    let backing: "wallet" | "tokens" | "sandbox_allowance" =
+      mode === "sandbox" ? "sandbox_allowance" : "wallet";
     if (mode === "sandbox") {
       await input.sandboxAllowance.consume(tx, {
         channel: "email",
@@ -81,13 +72,42 @@ export async function prepareEmail(input: {
         environmentId: input.context.environmentId,
       });
     } else if (quote) {
-      await reserve(tx, {
+      const held = await holdTokens(tx, {
+        channel: "email",
         currency: quote.currency,
-        amountMinor: quote.totalPriceMinor,
-        idempotencyKey: `reserve:${messageId}`,
+        quantity: 1n,
         referenceId: messageId,
+        compatibility: {
+          providerVendor: resolved.provider.slug,
+          trafficClass: "transactional",
+        },
       });
+      if (held.held) {
+        backing = "tokens";
+      } else {
+        await reserve(tx, {
+          currency: quote.currency,
+          amountMinor: quote.totalPriceMinor,
+          idempotencyKey: `reserve:${messageId}`,
+          referenceId: messageId,
+        });
+      }
     }
+    // cost_minor is the RATED price of this send, written whatever the backing is — the same as the
+    // SMS path. On a token-backed send no wallet money moves and revenue is recognized from the
+    // lot's allocation instead, so this column is rating evidence, NOT revenue: summing it across
+    // sends would double-count against the recognition entries.
+    await tx`
+      INSERT INTO email_messages (
+        id, tenant_id, application_id, environment_id, subject_id, content_pii_id,
+        status, status_rank, backing, provider_slug, cost_minor, currency, pricing_snapshot
+      ) VALUES (
+        ${messageId}, current_setting('app.tenant_id')::uuid, ${input.context.applicationId},
+        ${input.context.environmentId}, ${subjectId}, ${contentPiiId}, 'queued',
+        ${STATUS_RANK.queued}, ${backing},
+        ${resolved.provider.slug}, ${quote?.totalPriceMinor.toString() ?? "0"}::bigint,
+        ${quote?.currency ?? "GHS"}, ${quote ? JSON.stringify(quote.snapshot) : null}::jsonb
+      )`;
     await tx`
       INSERT INTO email_dispatches (message_id, tenant_id)
       VALUES (${messageId}, current_setting('app.tenant_id')::uuid)`;

@@ -1,7 +1,103 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-07-31. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-08-01. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
+
+## START HERE (2026-08-01): multi-channel packages + expiry, and the unit-priced model is GONE
+
+Branch `feature/ops-channel-packages` off `dev` @ `46e5ec4`. Phases 1–4 of the money roadmap are
+merged (#224/#225/#226) and were promoted to testing by #227 (deploy green 15:35 UTC).
+
+**The previous START HERE was stale in a way worth noting:** it described Phase 2 as "not pushed, no
+PR" long after #224–#227 had merged and deployed. #225 and #226 shipped without touching HANDOFF.
+Update it at the milestone, not after.
+
+### What this branch does
+
+COM-013/014/015. A single-channel offer becomes a **package**: one published version bundles several
+channels (20 SMS segments + 20 email messages) for one fixed consideration. Channel, unit and
+quantity move onto `pricing_offer_version_items`; each item freezes its own share of the price by
+largest-remainder allocation weighted by worst-case provider cost, so each channel's lot recognizes
+revenue independently without inventing a floating unit rate. Adds optional credit validity with
+lazy + scheduled expiry and double-entry breakage, and lets SMS and email spend package lots before
+wallet funds.
+
+Codex authored the implementation and ran out of quota before verifying it. Its own roadmap marker
+said "IMPLEMENTED; real-Postgres verification pending" — that verification is most of what follows.
+
+### Defects that verification found (none were reachable by `verify:push`)
+
+- **Migration 0123 could not apply to ANY database.** It set `updated_at` on
+  `commercial_offer_channels`, which has no such column, and left a `jsonb_build_object` unclosed.
+  Both are plan/parse errors. `verify:push` passes clean because **it never touches a database** —
+  that is exactly why the gates looked green.
+- **`grantTokensForPurchase` bound a JS `Date`** into a tagged template the driver cannot serialize:
+  every package purchase carrying an expiry would have thrown.
+- **`recognizeTokenBreakage` passed `postLegs` its arguments in the wrong order**, putting
+  `'token_lot'` into the `ledger_reason` enum column. Every breakage recognition would have thrown.
+  The order is `(referenceId, reason, amount, legs, referenceType)`.
+- **The item-immutability trigger also fired on DELETE.** With the items FK `ON DELETE RESTRICT` and
+  `published -> draft` refused, a published version became unremovable by any application role —
+  unlike its 0110 sibling, which fires on INSERT OR UPDATE only.
+- **Email packages were sellable but unspendable.** Both email send paths supply only a provider and
+  a hardcoded `"transactional"`, so an email item restricted by destination or traffic class matched
+  no lot, ever: the customer was charged, every send silently fell through to the wallet, and the
+  stranded allocation was later recognized as breakage we keep. Eligibility is now checked against a
+  per-channel map of what each send path can actually match (`CHANNEL_SUPPORTED_ELIGIBILITY`), at
+  create, publish AND purchase, and the authoring form no longer offers those fields for email.
+
+### The unit-priced model has been removed
+
+`pricing_model`, `unit_price_minor_locked`, `token_purchases.quantity`, `units_per_pack_locked` and
+`token_purchases.channel` are gone (migration `0125`), along with the dual-path recognition in
+grant/expiry/holds. Every lot now descends from a published offer item; there is no ad-hoc lot.
+
+**This was safe only because testing was empty, and that was checked, not assumed** — via `neonctl`,
+read-only: `token_purchases`, `token_lots`, `token_holds` and `pricing_offer_versions` all zero, on
+migration 123. `0125` still opens with a `DO` block that RAISEs if a legacy row is ever present:
+deleting a token lot would orphan its ledger entries and break the subledger's reconciliation to its
+control account, so the migration refuses rather than destroys.
+
+The cost lands on fixtures: a spec that just wants "some tokens" must now seed offer → version →
+item → publish. `services/api/src/tokens/package-fixtures.ts` does that once for all of them.
+
+### Worth not re-litigating
+
+- **The scheduler keeps the house locking pattern.** An independent review wanted a session-scoped
+  `pg_advisory_lock` with a `finally` unlock; on a pooled connection the lock and unlock can land on
+  different connections and leak the lock permanently, and it would diverge from
+  `maintenance.service.ts`, `maintenance-retention.ts`, `maintenance-invariants.ts` and the email
+  worker, which all hold an xact lock across per-tenant `withTenant` work. The real defect was the
+  unindexed discovery scan — fixed by the partial indexes in `0124` — plus a `LIMIT 250` with no
+  continuation, which is removed.
+- **Eligibility authoring is now selected, not typed.** The admin form offers only the vendors,
+  destinations and traffic classes that actually hold `provider_cost_rates`, so an unpriceable
+  restriction cannot be authored instead of merely being refused at publish.
+- **`email_messages.cost_minor` is rating evidence, not revenue.** It is written whatever the backing
+  is (SMS does the same); on a token-backed send no wallet money moves and revenue comes from the
+  lot's allocation, so summing it would double-count.
+
+### Verified, not reported
+
+`verify:push` 0 and `integration:gate` 0 **from an empty database** — migrations 0000→0125 applied by
+drizzle-kit itself, all DB assertions (FORCE RLS + policy on every tenant table, ledger append-only,
+GL and subledger invariants), drift clean, api 72/72 files, db 11/11, wallet 1/1, sms-engine 2/2.
+
+Note the local trap: the rate-limit integration spec needs Redis. Only `redis-queue`/`redis-cache`
+being down makes it fail; `docker compose up -d redis-queue redis-cache` fixes it, and its code is
+untouched by this branch.
+
+### Still open
+
+- `docs/MONEY-ACCOUNTING-AND-COMMERCIAL-PRICING-ROADMAP.md` still lists COM-010 (reconcile bundle
+  deferred revenue, consumption and remaining entitlement) and Phases 5–8.
+- 0123 retains data backfills that are provable no-ops (testing had zero rows). Harmless where they
+  sit — they run before 0125 drops the columns — but they describe a migration nobody needs.
+- A Convex-style **sync engine** was discussed: Neon has `enable_logical_replication: false`, and a
+  client-side sync path would bypass the BFF and the RLS tenancy boundary. The fit here is per-tenant
+  SSE off the API fed by the existing outbox, invalidating TanStack Query keys — push invalidation,
+  not push data. Not an ADR yet.
+
 
 ## START HERE (2026-07-31): money roadmap Phase 2 COMPLETE — commercial offers are publishable
 

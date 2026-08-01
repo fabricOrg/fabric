@@ -62,7 +62,7 @@ export const emailMessages = pgTable(
   (t) => [
     check(
       "email_messages_backing_chk",
-      sql`${t.backing} in ('wallet', 'sandbox_allowance')`,
+      sql`${t.backing} in ('wallet', 'tokens', 'sandbox_allowance')`,
     ),
     index("idx_email_messages_environment_created").on(
       t.tenantId,

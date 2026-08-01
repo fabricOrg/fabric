@@ -20,17 +20,24 @@ import { tokenBalancesResponseSchema } from "./price-books.js";
 
 const VERSION = {
   currency: "GHS",
-  paid_units: "200",
-  bonus_units: "0",
+  items: [
+    {
+      channel_code: "sms",
+      unit_code: "segment",
+      paid_units: "200",
+      bonus_units: "0",
+      eligibility: {
+        destination_countries: ["GH"],
+        traffic_classes: ["transactional"],
+        provider_vendors: ["arkesel"],
+        service_classes: [],
+      },
+    },
+  ],
   total_price_minor: "300",
+  credit_validity_days: null,
   minimum_pack_count: 1,
   maximum_pack_count: 10,
-  eligibility: {
-    destination_countries: ["GH"],
-    traffic_classes: ["transactional"],
-    provider_vendors: ["arkesel"],
-    service_classes: [],
-  },
   effective_from: "2026-08-01T00:00:00.000Z",
   effective_to: null,
 } as const;
@@ -55,27 +62,66 @@ describe("commercial offer contracts", () => {
   it("accepts an indivisible fixed-total offer without inventing a unit price", () => {
     const result = createCommercialOfferVersionRequestSchema.parse(VERSION);
 
-    expect(result.paid_units).toBe("200");
+    expect(result.items[0]?.paid_units).toBe("200");
     expect(result.total_price_minor).toBe("300");
     expect("unit_price_minor" in result).toBe(false);
   });
 
-  it("uses the same offer identity for a non-SMS channel and its natural unit", () => {
+  it("accepts a package containing multiple channel units", () => {
+    const result = createCommercialOfferVersionRequestSchema.parse({
+      ...VERSION,
+      items: [
+        VERSION.items[0],
+        {
+          channel_code: "email",
+          unit_code: "message",
+          paid_units: "20",
+          bonus_units: "0",
+          eligibility: {
+            destination_countries: [],
+            // No traffic class: the email send path cannot match one, so restricting by it would
+            // sell credits that can never be drawn (see the unspendable-eligibility rule).
+            traffic_classes: [],
+            provider_vendors: ["aws-ses"],
+            service_classes: [],
+          },
+        },
+      ],
+    });
+    expect(result.items.map((item) => item.channel_code)).toEqual([
+      "sms",
+      "email",
+    ]);
+  });
+
+  it("rejects duplicate channels inside one package", () => {
+    const result = createCommercialOfferVersionRequestSchema.safeParse({
+      ...VERSION,
+      items: [VERSION.items[0], VERSION.items[0]],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("keeps channel composition out of the stable offer identity", () => {
     const result = createCommercialOfferRequestSchema.parse({
       price_book_id: "00000000-0000-4000-8000-000000000001",
       code: "transactional-email-10k",
       name: "Transactional email 10k",
-      channel_code: "email",
-      unit_code: "recipient",
     });
 
-    expect(result.channel_code).toBe("email");
-    expect(result.unit_code).toBe("recipient");
+    expect("channel_code" in result).toBe(false);
   });
 
   it("keeps token balances registry-backed for future channels", () => {
     const balances = tokenBalancesResponseSchema.parse({
-      balances: [{ channel: "voice", currency: "GHS", available: "120" }],
+      balances: [
+        {
+          channel: "voice",
+          currency: "GHS",
+          available: "120",
+          expires_next_at: null,
+        },
+      ],
     });
     expect(balances.balances[0]?.channel).toBe("voice");
   });
@@ -83,7 +129,7 @@ describe("commercial offer contracts", () => {
   it("rejects bonus units until their accounting policy is enabled", () => {
     const result = createCommercialOfferVersionRequestSchema.safeParse({
       ...VERSION,
-      bonus_units: "20",
+      items: [{ ...VERSION.items[0], bonus_units: "20" }],
     });
 
     expect(result.success).toBe(false);
@@ -163,8 +209,7 @@ describe("commercial offer contracts", () => {
     });
 
     expect(result.offer_id).toBe("00000000-0000-4000-8000-000000000003");
-    // The channel is never client-supplied: it comes from the offer the preview targets.
-    expect("channel_code" in result).toBe(false);
+    expect(result.items[0]?.channel_code).toBe("sms");
   });
 
   it("clears a workspace catalog assignment with an explicit null", () => {
@@ -204,18 +249,23 @@ describe("commercial offer contracts", () => {
           offer_code: "sms-200",
           name: "200 segments",
           description: "Ghana transactional SMS",
-          channel_code: "sms",
-          channel_name: "SMS",
-          unit_code: "segment",
-          unit_label: "segments",
-          paid_units: "200",
-          bonus_units: "0",
-          total_units: "200",
+          items: [
+            {
+              channel_code: "sms",
+              channel_name: "SMS",
+              unit_code: "segment",
+              unit_label: "segments",
+              paid_units: "200",
+              bonus_units: "0",
+              total_units: "200",
+              eligibility: VERSION.items[0].eligibility,
+            },
+          ],
           total_price_minor: "300",
           currency: "GHS",
+          credit_validity_days: null,
           minimum_pack_count: 1,
           maximum_pack_count: 10,
-          eligibility: VERSION.eligibility,
           effective_to: null,
           cost_snapshot: { worst_case_cost_minor: "240" },
         },
@@ -230,15 +280,13 @@ describe("commercial offer contracts", () => {
       status: "pending",
       offer_version_id: "00000000-0000-4000-8000-000000000002",
       offer_name: "200 segments",
-      channel_code: "sms",
-      unit_code: "segment",
+      items: [{ channel_code: "sms", unit_code: "segment", quantity: "400" }],
       pack_count: 2,
-      quantity: "400",
       amount_minor: "600",
       currency: "GHS",
       created_at: "2026-08-01T00:00:00.000Z",
       updated_at: "2026-08-01T00:00:00.000Z",
     });
-    expect(receipt.quantity).toBe("400");
+    expect(receipt.items[0]?.quantity).toBe("400");
   });
 });

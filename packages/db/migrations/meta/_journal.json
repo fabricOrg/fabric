@@ -862,6 +862,27 @@
       "when": 1785595646626,
       "tag": "0122_pink_zeigeist",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1785600409370,
+      "tag": "0123_channel_packages",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1785606752100,
+      "tag": "0124_token_expiry_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1785619870333,
+      "tag": "0125_drop_unit_pricing_model",
+      "breakpoints": true
     }
   ]
 }

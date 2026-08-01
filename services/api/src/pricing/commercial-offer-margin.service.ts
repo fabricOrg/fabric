@@ -5,7 +5,6 @@ import type {
 } from "@app/contracts";
 import type { CommercialOfferCostSnapshot, ProvisioningDb } from "@app/db";
 import {
-  type CommercialOfferMarginEvaluation,
   CommercialOfferMarginInputError,
   evaluateCommercialOfferMargin,
 } from "@app/domain";
@@ -14,21 +13,21 @@ import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { resolveOfferCostBasis } from "./commercial-offer-cost.js";
 import { readCostRates, readMarginFloor } from "./commercial-offer-reads.js";
 
-/** The commercial terms a margin verdict is computed from — a saved version or an unsaved draft. */
-export interface OfferTermsUnderReview {
+export interface OfferItemTermsUnderReview {
   readonly channelCode: string;
-  readonly priceBookId: string;
-  readonly currency: Currency;
+  readonly unitCode: string;
   readonly totalUnits: bigint;
-  readonly totalPriceMinor: bigint;
   readonly eligibility: CommercialOfferEligibility;
 }
 
-/**
- * The publish-time margin gate (ADR-0012 §9), served two ways from ONE code path: as a preview the
- * authoring form renders, and as the verdict `publish` refuses on. Sharing the path is the point —
- * a preview that could disagree with the gate would be worse than no preview.
- */
+/** A package is priced once but may promise several channel-specific natural units. */
+export interface OfferTermsUnderReview {
+  readonly priceBookId: string;
+  readonly currency: Currency;
+  readonly totalPriceMinor: bigint;
+  readonly items: readonly OfferItemTermsUnderReview[];
+}
+
 @Injectable()
 export class CommercialOfferMarginService {
   constructor(
@@ -38,101 +37,204 @@ export class CommercialOfferMarginService {
   async evaluate(
     terms: OfferTermsUnderReview,
   ): Promise<CommercialOfferMarginPreview> {
-    const base = {
-      currency: terms.currency,
-      total_units: terms.totalUnits.toString(),
-      total_price_minor: terms.totalPriceMinor.toString(),
-      effective_unit_price_minor_display: effectiveUnitPrice(
-        terms.totalPriceMinor,
-        terms.totalUnits,
-      ),
-    };
-
-    const [rates, floor] = await Promise.all([
-      readCostRates(this.provisioning.db, terms.channelCode, terms.currency),
-      readMarginFloor(this.provisioning.db, terms.priceBookId),
-    ]);
-
-    const basis = resolveOfferCostBasis(
-      terms.channelCode,
-      terms.eligibility,
-      rates,
+    const floor = await readMarginFloor(
+      this.provisioning.db,
+      terms.priceBookId,
     );
-    if (!basis.ok) {
-      return {
-        ...base,
-        cost_snapshot: null,
-        routes: [],
-        publishable: false,
-        blocked_reason: basis.failure.code,
-        blocked_detail: basis.failure.detail,
-      };
+    const evaluatedItems: Array<{
+      index: number;
+      terms: OfferItemTermsUnderReview;
+      evaluation: ReturnType<typeof evaluateCommercialOfferMargin>;
+    }> = [];
+
+    for (const [index, item] of terms.items.entries()) {
+      const rates = await readCostRates(
+        this.provisioning.db,
+        item.channelCode,
+        terms.currency,
+      );
+      const basis = resolveOfferCostBasis(
+        item.channelCode,
+        item.eligibility,
+        rates,
+      );
+      if (!basis.ok) {
+        return blocked(terms, basis.failure.code, basis.failure.detail);
+      }
+      try {
+        evaluatedItems.push({
+          index,
+          terms: item,
+          // The per-item call supplies exact route cost evidence. Package profitability is evaluated
+          // below against the sum of every item's worst route, never against these interim margins.
+          evaluation: evaluateCommercialOfferMargin({
+            totalUnits: item.totalUnits,
+            totalPriceMinor: terms.totalPriceMinor,
+            minimumMarginBps: 0,
+            routes: basis.routes,
+          }),
+        });
+      } catch (error) {
+        if (error instanceof CommercialOfferMarginInputError) {
+          return blocked(terms, "offer_margin_not_calculable", error.message);
+        }
+        throw error;
+      }
     }
 
-    let evaluation: CommercialOfferMarginEvaluation;
+    const bestCost = evaluatedItems.reduce(
+      (sum, item) => sum + item.evaluation.bestCase.totalCostMinor,
+      0n,
+    );
+    const worstCost = evaluatedItems.reduce(
+      (sum, item) => sum + item.evaluation.worstCase.totalCostMinor,
+      0n,
+    );
+    const weights = evaluatedItems.map(
+      (item) => item.evaluation.worstCase.totalCostMinor,
+    );
+    // Same posture as the per-item evaluation above: an unallocatable package is a BLOCKED verdict
+    // staff can act on, not a 500. Reachable honestly — a package priced below one minor unit per
+    // item, or one whose every route costs nothing.
+    let allocations: bigint[];
     try {
-      evaluation = evaluateCommercialOfferMargin({
-        totalUnits: terms.totalUnits,
-        totalPriceMinor: terms.totalPriceMinor,
-        minimumMarginBps: floor.bps,
-        routes: basis.routes,
-      });
+      allocations = allocateConsideration(terms.totalPriceMinor, weights);
     } catch (error) {
-      // The domain refuses inputs that cannot support a verdict at all. Surfacing that as "not
-      // publishable" keeps the gate closed instead of letting an exception read as an unrelated 500.
       if (error instanceof CommercialOfferMarginInputError) {
-        return {
-          ...base,
-          cost_snapshot: null,
-          routes: [],
-          publishable: false,
-          blocked_reason: "offer_margin_not_calculable",
-          blocked_detail: error.message,
-        };
+        return blocked(terms, "offer_margin_not_calculable", error.message);
       }
       throw error;
     }
-
-    const routes = evaluation.routes.map((entry) => ({
-      provider_vendor: entry.route.providerVendor,
-      destination_country: entry.route.destinationCountry,
-      traffic_class: entry.route.trafficClass,
-      provider_cost_rate_id: entry.route.rateId,
-      source_reference: entry.route.sourceReference,
-      total_cost_minor: entry.totalCostMinor.toString(),
-      margin_minor: entry.marginMinor.toString(),
-      margin_bps: entry.marginBps,
-      meets_floor: entry.meetsFloor,
-    }));
+    const worstMargin = terms.totalPriceMinor - worstCost;
+    const bestMargin = terms.totalPriceMinor - bestCost;
+    const worstMarginBps = Number(
+      floorDiv(worstMargin * 10_000n, terms.totalPriceMinor),
+    );
+    const publishable = worstMarginBps >= floor.bps;
+    const routes = evaluatedItems.flatMap((item) =>
+      item.evaluation.routes.map((entry) => {
+        const allocated = allocations[item.index] ?? 0n;
+        const margin = allocated - entry.totalCostMinor;
+        return {
+          item_index: item.index,
+          channel_code: item.terms.channelCode,
+          unit_code: item.terms.unitCode,
+          provider_vendor: entry.route.providerVendor,
+          destination_country: entry.route.destinationCountry,
+          traffic_class: entry.route.trafficClass,
+          provider_cost_rate_id: entry.route.rateId,
+          source_reference: entry.route.sourceReference,
+          total_cost_minor: entry.totalCostMinor.toString(),
+          margin_minor: margin.toString(),
+          margin_bps: Number(floorDiv(margin * 10_000n, allocated)),
+          meets_floor: margin * 10_000n >= allocated * BigInt(floor.bps),
+        };
+      }),
+    );
 
     return {
-      ...base,
+      currency: terms.currency,
+      total_price_minor: terms.totalPriceMinor.toString(),
+      items: evaluatedItems.map((item) => ({
+        item_index: item.index,
+        channel_code: item.terms.channelCode,
+        unit_code: item.terms.unitCode,
+        total_units: item.terms.totalUnits.toString(),
+        best_case_cost_minor:
+          item.evaluation.bestCase.totalCostMinor.toString(),
+        worst_case_cost_minor:
+          item.evaluation.worstCase.totalCostMinor.toString(),
+        allocated_price_minor: (allocations[item.index] ?? 0n).toString(),
+      })),
       cost_snapshot: {
-        best_case_cost_minor: evaluation.bestCase.totalCostMinor.toString(),
-        worst_case_cost_minor: evaluation.worstCase.totalCostMinor.toString(),
-        best_case_margin_minor: evaluation.bestCase.marginMinor.toString(),
-        worst_case_margin_minor: evaluation.worstCase.marginMinor.toString(),
-        worst_case_margin_bps: evaluation.worstCase.marginBps,
+        best_case_cost_minor: bestCost.toString(),
+        worst_case_cost_minor: worstCost.toString(),
+        best_case_margin_minor: bestMargin.toString(),
+        worst_case_margin_minor: worstMargin.toString(),
+        worst_case_margin_bps: worstMarginBps,
         minimum_margin_bps: floor.bps,
         minimum_margin_source: floor.source,
         route_count: routes.length,
         calculated_at: new Date().toISOString(),
-        source_references: distinctReferences(evaluation),
+        source_references: [
+          ...new Set(routes.map((route) => route.source_reference)),
+        ],
       },
       routes,
-      publishable: evaluation.meetsFloor,
-      blocked_reason: evaluation.meetsFloor ? null : "offer_margin_below_floor",
-      blocked_detail: evaluation.meetsFloor
+      publishable,
+      blocked_reason: publishable ? null : "offer_margin_below_floor",
+      blocked_detail: publishable
         ? null
-        : `The worst permitted route (${describe(evaluation)}) leaves ${evaluation.worstCase.marginBps} bps against a ${floor.bps} bps floor.`,
+        : `The package's combined worst-case cost leaves ${worstMarginBps} bps against a ${floor.bps} bps floor.`,
     };
   }
 }
 
-/**
- * The stored form of a preview's evidence. Only ever called with a preview the gate has PASSED, so a
- * missing snapshot here is a programming error rather than a business state.
- */
+function blocked(
+  terms: OfferTermsUnderReview,
+  code: string,
+  detail: string,
+): CommercialOfferMarginPreview {
+  return {
+    currency: terms.currency,
+    total_price_minor: terms.totalPriceMinor.toString(),
+    items: [],
+    cost_snapshot: null,
+    routes: [],
+    publishable: false,
+    blocked_reason: code,
+    blocked_detail: detail,
+  };
+}
+
+/** Largest-remainder allocation: exact, deterministic, positive, and sums to package consideration. */
+export function allocateConsideration(
+  total: bigint,
+  weights: readonly bigint[],
+): bigint[] {
+  const weightTotal = weights.reduce((sum, weight) => sum + weight, 0n);
+  if (total <= 0n || weights.length === 0 || weightTotal <= 0n) {
+    throw new CommercialOfferMarginInputError(
+      "Package consideration cannot be allocated without positive item costs.",
+    );
+  }
+  if (total < BigInt(weights.length)) {
+    throw new CommercialOfferMarginInputError(
+      "Package price is too small to allocate a positive amount to every item.",
+    );
+  }
+  // Reserve one minor unit per item first. The remaining consideration is cost-weighted with the
+  // largest-remainder method, preserving both positivity and an exact package-total reconciliation.
+  const distributable = total - BigInt(weights.length);
+  const bases = weights.map(
+    (weight) => 1n + (distributable * weight) / weightTotal,
+  );
+  let remainder = total - bases.reduce((sum, value) => sum + value, 0n);
+  const order = weights
+    .map((weight, index) => ({
+      index,
+      remainder: (distributable * weight) % weightTotal,
+    }))
+    .sort((left, right) => {
+      if (left.remainder === right.remainder) return left.index - right.index;
+      return left.remainder > right.remainder ? -1 : 1;
+    });
+  for (const entry of order) {
+    if (remainder === 0n) break;
+    bases[entry.index] = (bases[entry.index] ?? 0n) + 1n;
+    remainder -= 1n;
+  }
+  return bases;
+}
+
+function floorDiv(numerator: bigint, denominator: bigint): bigint {
+  const quotient = numerator / denominator;
+  const exact = quotient * denominator === numerator;
+  return exact || numerator >= 0n === denominator > 0n
+    ? quotient
+    : quotient - 1n;
+}
+
 export function toStoredCostSnapshot(
   preview: CommercialOfferMarginPreview,
 ): CommercialOfferCostSnapshot {
@@ -152,38 +254,4 @@ export function toStoredCostSnapshot(
     calculatedAt: snapshot.calculated_at,
     sourceReferences: snapshot.source_references,
   };
-}
-
-function distinctReferences(
-  evaluation: CommercialOfferMarginEvaluation,
-): string[] {
-  const references = evaluation.routes
-    .map((entry) => entry.route.sourceReference)
-    .filter((reference) => reference.length > 0);
-  return [...new Set(references)];
-}
-
-function describe(evaluation: CommercialOfferMarginEvaluation): string {
-  const { route } = evaluation.worstCase;
-  return [
-    route.providerVendor,
-    route.destinationCountry ?? "any destination",
-    route.trafficClass ?? "any traffic class",
-  ].join(" / ");
-}
-
-/**
- * Informational only, and never the financial truth: a fixed total need not divide evenly by its
- * units. Four decimal places of minor units, computed with integer math so the display cannot drift
- * from the exact total the customer is charged.
- */
-function effectiveUnitPrice(
-  totalPriceMinor: bigint,
-  totalUnits: bigint,
-): string {
-  if (totalUnits <= 0n) return "0.0000";
-  const scaled = (totalPriceMinor * 10_000n) / totalUnits;
-  const whole = scaled / 10_000n;
-  const fraction = (scaled % 10_000n).toString().padStart(4, "0");
-  return `${whole}.${fraction}`;
 }

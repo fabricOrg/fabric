@@ -11,12 +11,13 @@ import {
   type ProvisioningDb,
   priceBooks,
   pricingOffers,
+  pricingOfferVersionItems,
   pricingOfferVersions,
   type TenantId,
   tokenPurchases,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { notFound } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 
@@ -46,30 +47,17 @@ export class TokenCatalogService {
       .select({
         offer: pricingOffers,
         version: pricingOfferVersions,
-        channelName: commercialOfferChannels.displayName,
-        unitLabel: commercialOfferChannels.unitLabel,
       })
       .from(pricingOfferVersions)
       .innerJoin(
         pricingOffers,
         eq(pricingOffers.id, pricingOfferVersions.offerId),
       )
-      .innerJoin(
-        commercialOfferChannels,
-        and(
-          eq(commercialOfferChannels.code, pricingOffers.channelCode),
-          eq(commercialOfferChannels.unitCode, pricingOffers.unitCode),
-        ),
-      )
       .where(
         and(
           eq(pricingOffers.priceBookId, catalogId),
           eq(pricingOfferVersions.status, "published"),
           eq(pricingOfferVersions.currency, account.billingCurrency),
-          eq(commercialOfferChannels.isActive, true),
-          // A catalog entry is displayed only when today's send path can consume its natural unit.
-          // The data model remains registry-backed; enabling another channel removes this gate.
-          eq(pricingOffers.channelCode, "sms"),
           lte(pricingOfferVersions.effectiveFrom, sql`now()`),
           or(
             isNull(pricingOfferVersions.effectiveTo),
@@ -78,39 +66,89 @@ export class TokenCatalogService {
         ),
       )
       .orderBy(pricingOffers.name, pricingOfferVersions.version);
+    const versionIds = rows.map(({ version }) => version.id);
+    const itemRows =
+      versionIds.length === 0
+        ? []
+        : await this.provisioning.db
+            .select({
+              item: pricingOfferVersionItems,
+              channelName: commercialOfferChannels.displayName,
+              unitLabel: commercialOfferChannels.unitLabel,
+              channelActive: commercialOfferChannels.isActive,
+            })
+            .from(pricingOfferVersionItems)
+            .innerJoin(
+              commercialOfferChannels,
+              and(
+                eq(
+                  commercialOfferChannels.code,
+                  pricingOfferVersionItems.channelCode,
+                ),
+                eq(
+                  commercialOfferChannels.unitCode,
+                  pricingOfferVersionItems.unitCode,
+                ),
+              ),
+            )
+            .where(inArray(pricingOfferVersionItems.offerVersionId, versionIds))
+            .orderBy(
+              pricingOfferVersionItems.offerVersionId,
+              pricingOfferVersionItems.position,
+            );
+    const itemsByVersion = new Map<string, typeof itemRows>();
+    for (const item of itemRows) {
+      const existing = itemsByVersion.get(item.item.offerVersionId) ?? [];
+      existing.push(item);
+      itemsByVersion.set(item.item.offerVersionId, existing);
+    }
+    const consumableChannels = new Set(["sms", "email"]);
 
     return customerCommercialOfferCatalogSchema.parse({
       catalog_name: catalog?.name ?? "Prepaid offers",
       offers: rows
         // The current send context has no service-class dimension. Do not sell a promise that the
         // reservation path cannot prove eligible; future channel adapters can supply that context.
-        .filter(
-          ({ version }) =>
-            (version.eligibility.serviceClasses ?? []).length === 0,
-        )
-        .map(({ offer, version, channelName, unitLabel }) => ({
+        .filter(({ version }) => {
+          const items = itemsByVersion.get(version.id) ?? [];
+          return (
+            items.length > 0 &&
+            items.every(
+              ({ item, channelActive }) =>
+                channelActive &&
+                consumableChannels.has(item.channelCode) &&
+                (item.eligibility.serviceClasses ?? []).length === 0,
+            )
+          );
+        })
+        .map(({ offer, version }) => ({
           offer_version_id: version.id,
           offer_code: offer.code,
           name: offer.name,
           description: offer.description,
-          channel_code: offer.channelCode,
-          channel_name: channelName,
-          unit_code: offer.unitCode,
-          unit_label: unitLabel,
-          paid_units: version.paidUnits.toString(),
-          bonus_units: version.bonusUnits.toString(),
-          total_units: version.totalUnits.toString(),
+          items: (itemsByVersion.get(version.id) ?? []).map(
+            ({ item, channelName, unitLabel }) => ({
+              channel_code: item.channelCode,
+              channel_name: channelName,
+              unit_code: item.unitCode,
+              unit_label: unitLabel,
+              paid_units: item.paidUnits.toString(),
+              bonus_units: item.bonusUnits.toString(),
+              total_units: item.totalUnits.toString(),
+              eligibility: {
+                destination_countries:
+                  item.eligibility.destinationCountries ?? [],
+                traffic_classes: item.eligibility.trafficClasses ?? [],
+                provider_vendors: item.eligibility.providerVendors ?? [],
+                service_classes: item.eligibility.serviceClasses ?? [],
+              },
+            }),
+          ),
           total_price_minor: version.totalPriceMinor.toString(),
           currency: version.currency,
           minimum_pack_count: version.minimumPackCount,
           maximum_pack_count: version.maximumPackCount,
-          eligibility: {
-            destination_countries:
-              version.eligibility.destinationCountries ?? [],
-            traffic_classes: version.eligibility.trafficClasses ?? [],
-            provider_vendors: version.eligibility.providerVendors ?? [],
-            service_classes: version.eligibility.serviceClasses ?? [],
-          },
+          credit_validity_days: version.creditValidityDays,
           effective_to: version.effectiveTo?.toISOString() ?? null,
         })),
     });
@@ -127,7 +165,6 @@ export class TokenCatalogService {
         and(
           eq(tokenPurchases.tenantId, tenantId as TenantId),
           eq(tokenPurchases.reference, reference),
-          eq(tokenPurchases.pricingModel, "fixed_bundle"),
         ),
       )
       .limit(1);
@@ -138,15 +175,18 @@ export class TokenCatalogService {
     ) {
       throw notFound("token_purchase_not_found", "Unknown token purchase.");
     }
+    const packCount = purchase.packCount;
     return commercialOfferPurchaseReceiptSchema.parse({
       reference: purchase.reference,
       status: purchase.status,
       offer_version_id: purchase.offerVersionId,
       offer_name: purchase.offerSnapshot.offerName,
-      channel_code: purchase.channel,
-      unit_code: purchase.offerSnapshot.unitCode,
-      pack_count: purchase.packCount,
-      quantity: purchase.quantity.toString(),
+      items: purchase.offerSnapshot.items.map((item) => ({
+        channel_code: item.channelCode,
+        unit_code: item.unitCode,
+        quantity: (BigInt(item.totalUnits) * BigInt(packCount)).toString(),
+      })),
+      pack_count: packCount,
       amount_minor: purchase.amountMinor.toString(),
       currency: purchase.currency,
       created_at: purchase.createdAt.toISOString(),

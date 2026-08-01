@@ -107,7 +107,11 @@ export class TokenPurchaseService {
       reference,
       offer_version_id: intent.offerVersionId,
       pack_count: intent.packCount,
-      quantity: intent.quantity.toString(),
+      items: intent.items.map((item) => ({
+        channel_code: item.channelCode,
+        unit_code: item.unitCode,
+        quantity: item.quantity.toString(),
+      })),
       amount_minor: intent.amountMinor.toString(),
       currency: intent.currency,
     });

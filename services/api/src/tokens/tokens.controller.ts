@@ -44,10 +44,16 @@ export class TokensController {
   @Get()
   async balances(@Req() req: AuthedRequest) {
     const tenant = requireScope(req.tenant, "wallet:read");
+    const balances = await this.db.withTenant(tenant.id, (tx) =>
+      listTokenBalances(tx),
+    );
     return {
-      balances: await this.db.withTenant(tenant.id, (tx) =>
-        listTokenBalances(tx),
-      ),
+      balances: balances.map((balance) => ({
+        channel: balance.channel,
+        currency: balance.currency,
+        available: balance.available,
+        expires_next_at: balance.expiresNextAt,
+      })),
     };
   }
 

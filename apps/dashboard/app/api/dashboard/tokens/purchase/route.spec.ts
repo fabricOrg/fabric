@@ -37,7 +37,10 @@ describe("commercial-offer purchase BFF", () => {
       reference: "token-ref",
       offer_version_id: offerVersionId,
       pack_count: 2,
-      quantity: "400",
+      items: [
+        { channel_code: "sms", unit_code: "segment", quantity: "400" },
+        { channel_code: "email", unit_code: "message", quantity: "40" },
+      ],
       amount_minor: "600",
       currency: "GHS",
     });

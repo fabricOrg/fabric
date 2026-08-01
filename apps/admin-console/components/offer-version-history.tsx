@@ -1,8 +1,10 @@
 "use client";
 
 import type {
+  CommercialOfferChannelDto,
   CommercialOfferVersionDto,
   CommercialOfferWithVersions,
+  CommercialRouteVocabulary,
   Currency,
 } from "@app/contracts";
 import { Badge } from "@app/ui/components/ui/badge";
@@ -33,10 +35,14 @@ export function OfferVersionHistory({
   offer,
   canManage,
   actorStaffId,
+  channels,
+  routeVocabulary,
 }: {
   offer: CommercialOfferWithVersions;
   canManage: boolean;
   actorStaffId: string;
+  channels: readonly CommercialOfferChannelDto[];
+  routeVocabulary: CommercialRouteVocabulary;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<CommercialOfferVersionDto | null>(
@@ -84,7 +90,10 @@ export function OfferVersionHistory({
                 <span className="font-medium">v{version.version}</span>
                 <StatusBadge status={version.status} />
                 <span className="tabular-nums">
-                  {version.total_units} {offer.unit_code}s ·{" "}
+                  {version.items
+                    .map((item) => `${item.total_units} ${item.unit_code}s`)
+                    .join(" + ")}{" "}
+                  ·{" "}
                   {formatMoney({
                     currency: version.currency as Currency,
                     minor: version.total_price_minor,
@@ -174,6 +183,8 @@ export function OfferVersionHistory({
         <OfferTermsDialog
           offer={offer}
           version={editing}
+          channels={channels}
+          routeVocabulary={routeVocabulary}
           open={editorOpen}
           onOpenChange={(open) => {
             setEditorOpen(open);

@@ -6,7 +6,6 @@ import type {
 import type { AppDb } from "@app/db";
 import { STATUS_RANK } from "@app/integrations";
 import { FakeEmailProvider } from "@app/integrations/testing/email";
-import { commit, refund } from "@app/wallet";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, newRequestId } from "../http/api-error.js";
@@ -16,6 +15,10 @@ import { EffectivePricingService } from "../pricing/effective-pricing.service.js
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.service.js";
+import {
+  parseEmailBacking,
+  settleEmailBacking,
+} from "./email-backing-settlement.js";
 import { isTerminalEmailStatus } from "./email-content.js";
 import {
   emailDispatchBlockReason,
@@ -251,22 +254,12 @@ export class EmailService {
       if (!current) return "failed";
       const prior = String(current.status) as SendEmailApiResponse["status"];
       if (isTerminalEmailStatus(prior)) return prior;
-      if (String(current.backing) === "wallet") {
-        const reachedBillable =
-          Number(current.status_rank) >= STATUS_RANK.accepted ||
-          STATUS_RANK[status] >= STATUS_RANK.accepted;
-        if (reachedBillable) {
-          await commit(tx, {
-            referenceId: messageId,
-            idempotencyKey: `commit:${messageId}`,
-          });
-        } else if (isTerminalEmailStatus(status)) {
-          await refund(tx, {
-            referenceId: messageId,
-            idempotencyKey: `refund:${messageId}`,
-          });
-        }
-      }
+      await settleEmailBacking(tx, {
+        backing: parseEmailBacking(String(current.backing)),
+        priorRank: Number(current.status_rank),
+        nextStatus: status,
+        messageId,
+      });
       await tx`
         UPDATE email_messages SET status = ${status}, status_rank = ${STATUS_RANK[status]},
           provider_ref = COALESCE(${detail.providerRef ?? null}, provider_ref),

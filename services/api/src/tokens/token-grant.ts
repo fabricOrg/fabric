@@ -7,29 +7,17 @@ import {
 import { creditTokenPurchase } from "@app/wallet";
 import { eq } from "drizzle-orm";
 import { invalidRequest, notFound } from "../http/api-error.js";
-
-/**
- * TOKEN GRANT (ADR-0010 Phase 2, slice 2a) — turn a CLEARED token purchase into an entitlement:
- * one tenant transaction that posts the deferred-revenue money leg, appends the price-locked lot, and
- * raises the spendable counter.
- *
- * SECURITY — the grant reads the stored intent ITSELF rather than accepting quantity/price from its
- * caller. That is deliberate: the provider webhook is attacker-reachable, so if the numbers could be
- * passed in, a forged payload could inflate a grant. Reading them here makes that impossible by
- * construction, and the `token_purchases_amount_chk` CHECK already ties the charged amount to
- * quantity × locked price. The caller still owes the signature check and the amount/currency
- * reconciliation against the intent, exactly as `PaymentsService.handleWebhook` does for top-ups.
- *
- * Called in production by `TokenPurchaseService.completeFromWebhook`, once the Paystack webhook's
- * signature and its amount-vs-intent reconciliation have both passed.
- */
+import { expireTokenLots } from "./token-expiry.js";
 
 export interface TokenGrantResult {
-  /** false when the purchase was already granted — a replayed webhook moves nothing. */
+  /** False when every package item already existed, so a replay moved no entitlement. */
   readonly granted: boolean;
-  readonly lotId: string;
   readonly txnId: string;
-  readonly quantity: bigint;
+  readonly lots: readonly {
+    lotId: string;
+    channel: string;
+    quantity: bigint;
+  }[];
 }
 
 export interface TokenGrantDeps {
@@ -38,16 +26,14 @@ export interface TokenGrantDeps {
 }
 
 /**
- * Grant the tokens bought by `reference`. IDEMPOTENT end to end: the ledger movement dedupes on the
- * reference, the lot insert dedupes on `uniq_token_lot_purchase`, and the counter is raised ONLY when
- * the lot row was actually inserted this call — so a duplicate callback+webhook grants exactly once.
+ * Grant the stored purchase promise. The one tenant transaction posts cash to deferred revenue,
+ * creates one lot per package item, and raises each channel projection. The stable
+ * (purchase, channel) key makes a webhook replay idempotent per item.
  */
 export async function grantTokensForPurchase(
   deps: TokenGrantDeps,
   reference: string,
 ): Promise<TokenGrantResult> {
-  // The intent is platform-level (the webhook carries no tenant context), so it is read on the
-  // provisioning connection — mirroring PaymentsService's top-up lookup.
   const [purchase] = await deps.provisioning.db
     .select()
     .from(tokenPurchases)
@@ -57,125 +43,157 @@ export async function grantTokensForPurchase(
     throw notFound("token_purchase_not_found", "Unknown token purchase.");
   }
   if (purchase.status === "failed") {
-    // Fail closed: a purchase we already rejected must never later mint an entitlement.
     throw invalidRequest(
       "token_purchase_failed",
       "This token purchase was not completed.",
     );
   }
+  const { offerVersionId, offerSnapshot, packCount: purchasedPacks } = purchase;
   if (
-    purchase.pricingModel === "unit" &&
-    purchase.unitPriceMinorLocked === null
+    !offerVersionId ||
+    !offerSnapshot ||
+    purchasedPacks === null ||
+    offerSnapshot.items.length === 0
   ) {
     throw invalidRequest(
       "token_purchase_snapshot_invalid",
-      "The stored unit-priced purchase is incomplete.",
-    );
-  }
-  if (
-    purchase.pricingModel === "fixed_bundle" &&
-    (!purchase.offerVersionId || !purchase.offerSnapshot)
-  ) {
-    throw invalidRequest(
-      "token_purchase_snapshot_invalid",
-      "The stored commercial-offer purchase is incomplete.",
+      "The stored package purchase is incomplete.",
     );
   }
 
   return deps.appDb.withTenant(purchase.tenantId, async (tx) => {
-    // 1. Money: cash in against the token liability. Idempotent on the purchase reference.
     const movement = await creditTokenPurchase(tx, {
       currency: purchase.currency,
       amountMinor: purchase.amountMinor,
       idempotencyKey: purchase.reference,
       purchaseId: purchase.id,
     });
+    const packCount = BigInt(purchasedPacks);
+    const lots = offerSnapshot.items.map((item) => ({
+      channel: item.channelCode,
+      quantity: BigInt(item.totalUnits) * packCount,
+      itemId: item.itemId,
+      snapshot: JSON.stringify(item),
+      totalPriceMinor: BigInt(item.allocatedPriceMinor) * packCount,
+    }));
+    const allocatedTotal = lots.reduce(
+      (sum, lot) => sum + lot.totalPriceMinor,
+      0n,
+    );
+    if (allocatedTotal !== purchase.amountMinor) {
+      throw invalidRequest(
+        "token_purchase_snapshot_invalid",
+        "The package allocations do not reconcile to its charged amount.",
+      );
+    }
 
-    // 2. Entitlement: append the price-locked lot. ON CONFLICT DO NOTHING is the grant-once gate —
-    // an empty RETURNING means this purchase was already granted.
-    const inserted = (await tx`
-      INSERT INTO token_lots (
-        tenant_id, channel, currency, pricing_model, offer_version_id,
-        compatibility_snapshot, quantity_total, unit_price_minor_locked,
-        total_price_minor_locked, purchase_reference, purchase_txn_id
-      )
-      VALUES (
-        current_setting('app.tenant_id')::uuid, ${purchase.channel}, ${purchase.currency},
-        ${purchase.pricingModel}, ${purchase.offerVersionId},
-        ${purchase.offerSnapshot ? JSON.stringify(purchase.offerSnapshot) : null}::jsonb,
-        ${purchase.quantity.toString()}::bigint,
-        ${purchase.unitPriceMinorLocked?.toString() ?? null}::bigint,
-        ${purchase.pricingModel === "fixed_bundle" ? purchase.amountMinor.toString() : null}::bigint,
-        ${purchase.reference}, ${movement.txnId}
-      )
-      ON CONFLICT (tenant_id, purchase_reference) DO NOTHING
-      RETURNING id`) as unknown as { id: string }[];
-
-    const lotRow = inserted[0];
-    if (!lotRow) {
-      // Replay: the lot already exists. Return its id and leave the counter alone — raising it here
-      // is exactly the double-grant bug the ON CONFLICT gate exists to prevent.
+    const validityDays = offerSnapshot.creditValidityDays;
+    // Bound as an ISO string with an explicit cast: the driver cannot serialize a bare Date into an
+    // untyped parameter slot. Millisecond precision is enough here — unlike a keyset cursor, nothing
+    // compares this for equality.
+    const expiresAt = validityDays
+      ? new Date(Date.now() + validityDays * 24 * 60 * 60 * 1_000).toISOString()
+      : null;
+    const grantedLots: Array<{
+      lotId: string;
+      channel: string;
+      quantity: bigint;
+    }> = [];
+    let insertedAny = false;
+    for (const lot of lots) {
+      const inserted = (await tx`
+        INSERT INTO token_lots (
+          tenant_id, channel, currency, offer_version_id,
+          offer_version_item_id, compatibility_snapshot, quantity_total,
+          total_price_minor_locked, purchase_reference,
+          purchase_txn_id, expires_at
+        ) VALUES (
+          current_setting('app.tenant_id')::uuid, ${lot.channel}, ${purchase.currency},
+          ${offerVersionId}, ${lot.itemId},
+          ${lot.snapshot}::jsonb, ${lot.quantity.toString()}::bigint,
+          ${lot.totalPriceMinor.toString()}::bigint,
+          ${purchase.reference}, ${movement.txnId}, ${expiresAt}::timestamptz
+        )
+        ON CONFLICT (tenant_id, purchase_reference, channel) DO NOTHING
+        RETURNING id`) as unknown as { id: string }[];
+      const insertedLot = inserted[0];
+      if (insertedLot) {
+        insertedAny = true;
+        await tx`
+          INSERT INTO token_counters (tenant_id, channel, currency, available)
+          VALUES (
+            current_setting('app.tenant_id')::uuid, ${lot.channel}, ${purchase.currency},
+            ${lot.quantity.toString()}::bigint
+          )
+          ON CONFLICT (tenant_id, channel, currency) DO UPDATE
+            SET available = token_counters.available + EXCLUDED.available, updated_at = now()`;
+        grantedLots.push({
+          lotId: insertedLot.id,
+          channel: lot.channel,
+          quantity: lot.quantity,
+        });
+        continue;
+      }
       const existing = (await tx`
         SELECT id FROM token_lots
         WHERE tenant_id = current_setting('app.tenant_id')::uuid
-          AND purchase_reference = ${purchase.reference}`) as { id: string }[];
-      return {
-        granted: false,
+          AND purchase_reference = ${purchase.reference}
+          AND channel = ${lot.channel}`) as { id: string }[];
+      grantedLots.push({
         lotId: String(existing[0]?.id ?? ""),
-        txnId: movement.txnId,
-        quantity: purchase.quantity,
-      };
+        channel: lot.channel,
+        quantity: lot.quantity,
+      });
     }
-
-    // 3. Projection: raise the spendable counter for (channel, currency). Only reached when the lot
-    // was genuinely inserted, so the counter can never run ahead of the lots backing it.
-    await tx`
-      INSERT INTO token_counters (tenant_id, channel, currency, available)
-      VALUES (
-        current_setting('app.tenant_id')::uuid, ${purchase.channel}, ${purchase.currency},
-        ${purchase.quantity.toString()}::bigint
-      )
-      ON CONFLICT (tenant_id, channel, currency) DO UPDATE
-        SET available = token_counters.available + EXCLUDED.available, updated_at = now()`;
-
-    return {
-      granted: true,
-      lotId: lotRow.id,
-      txnId: movement.txnId,
-      quantity: purchase.quantity,
-    };
+    return { granted: insertedAny, txnId: movement.txnId, lots: grantedLots };
   });
 }
 
-/** Every spendable token count this tenant holds, for the balances endpoint. */
-export async function listTokenBalances(
-  tx: TenantTx,
-): Promise<{ channel: string; currency: string; available: string }[]> {
-  const rows = (await tx`
-    SELECT channel, currency, available::text AS available
-    FROM token_counters
-    WHERE tenant_id = current_setting('app.tenant_id')::uuid AND available > 0
-    ORDER BY channel, currency`) as {
+export async function listTokenBalances(tx: TenantTx): Promise<
+  {
     channel: string;
     currency: string;
     available: string;
+    expiresNextAt: string | null;
+  }[]
+> {
+  await expireTokenLots(tx);
+  // The soonest unspent expiry per counter, so the balance can name the date checkout promised.
+  // Exhausted and already-processed lots carry nothing further to lose.
+  const rows = (await tx`
+    SELECT c.channel, c.currency, c.available::text AS available,
+      (
+        SELECT MIN(l.expires_at) FROM token_lots l
+        WHERE l.tenant_id = c.tenant_id AND l.channel = c.channel
+          AND l.currency = c.currency AND l.expires_at IS NOT NULL
+          AND l.expiry_processed_at IS NULL
+          AND l.quantity_consumed < l.quantity_total
+      ) AS expires_next_at
+    FROM token_counters c
+    WHERE c.tenant_id = current_setting('app.tenant_id')::uuid AND c.available > 0
+    ORDER BY c.channel, c.currency`) as {
+    channel: string;
+    currency: string;
+    available: string;
+    expires_next_at: Date | string | null;
   }[];
   return rows.map((row) => ({
     channel: String(row.channel),
     currency: String(row.currency),
     available: String(row.available),
+    expiresNextAt:
+      row.expires_next_at === null
+        ? null
+        : new Date(row.expires_next_at).toISOString(),
   }));
 }
 
-/**
- * The tenant's spendable token count for a (channel, currency). Reads the projection row the send
- * path will lock in slice 2b; returns 0 when no counter exists yet.
- */
 export async function readTokenBalance(
   tx: TenantTx,
   channel: string,
   currency: string,
 ): Promise<bigint> {
+  await expireTokenLots(tx, { channel, currency });
   const rows = (await tx`
     SELECT available FROM token_counters
     WHERE tenant_id = current_setting('app.tenant_id')::uuid

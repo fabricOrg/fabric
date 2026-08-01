@@ -4,6 +4,7 @@ import type {
   CommercialOfferEligibility as CommercialOfferEligibilityDto,
   CommercialOfferStatus,
   CommercialOfferVersionDto,
+  CommercialOfferVersionItemDto,
   Currency,
 } from "@app/contracts";
 import type {
@@ -11,6 +12,7 @@ import type {
   CommercialOfferEligibility,
   PricingOffer,
   PricingOfferVersion,
+  PricingOfferVersionItem,
 } from "@app/db";
 
 /**
@@ -67,8 +69,6 @@ export function toOfferDto(row: PricingOffer): CommercialOfferDto {
     code: row.code,
     name: row.name,
     description: row.description,
-    channel_code: row.channelCode,
-    unit_code: row.unitCode,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -78,6 +78,7 @@ export function toOfferDto(row: PricingOffer): CommercialOfferDto {
 export function toVersionDto(
   row: PricingOfferVersion,
   staffEmails: ReadonlyMap<string, string>,
+  items: readonly PricingOfferVersionItem[],
 ): CommercialOfferVersionDto {
   return {
     id: row.id,
@@ -85,13 +86,13 @@ export function toVersionDto(
     version: row.version,
     status: row.status as CommercialOfferStatus,
     currency: row.currency as Currency,
-    paid_units: row.paidUnits.toString(),
-    bonus_units: row.bonusUnits.toString(),
-    total_units: row.totalUnits.toString(),
+    items: [...items]
+      .sort((left, right) => left.position - right.position)
+      .map(toVersionItemDto),
     total_price_minor: row.totalPriceMinor.toString(),
+    credit_validity_days: row.creditValidityDays,
     minimum_pack_count: row.minimumPackCount,
     maximum_pack_count: row.maximumPackCount,
-    eligibility: toEligibilityDto(row.eligibility),
     cost_snapshot: toCostSnapshotDto(row.costSnapshot),
     effective_from: row.effectiveFrom.toISOString(),
     effective_to: row.effectiveTo?.toISOString() ?? null,
@@ -104,5 +105,21 @@ export function toVersionDto(
       : null,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
+  };
+}
+
+export function toVersionItemDto(
+  row: PricingOfferVersionItem,
+): CommercialOfferVersionItemDto {
+  return {
+    id: row.id,
+    position: row.position,
+    channel_code: row.channelCode,
+    unit_code: row.unitCode,
+    paid_units: row.paidUnits.toString(),
+    bonus_units: row.bonusUnits.toString(),
+    total_units: row.totalUnits.toString(),
+    eligibility: toEligibilityDto(row.eligibility),
+    allocated_price_minor: row.allocatedPriceMinor?.toString() ?? null,
   };
 }

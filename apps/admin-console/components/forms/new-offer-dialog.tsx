@@ -1,6 +1,10 @@
 "use client";
 
-import type { CommercialOfferChannelDto, PriceBookDto } from "@app/contracts";
+import type {
+  CommercialOfferChannelDto,
+  Currency,
+  PriceBookDto,
+} from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Dialog,
@@ -23,18 +27,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
+import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
-import { createOffer, OfferError } from "@/lib/client/commercial-offers-api";
+import { createPackage, OfferError } from "@/lib/client/commercial-offers-api";
+import { useOfferTermsForm } from "@/lib/client/offer-terms-form";
 
 const CODE_PATTERN = /^[a-z][a-z0-9_-]{1,63}$/;
+const CURRENCIES: readonly Currency[] = ["GHS", "NGN", "USD"];
 
-/**
- * An offer's stable identity — catalog, code, name, and the channel whose natural unit it sells.
- * Terms are deliberately a separate step: the identity outlives every price it has ever carried, and
- * conflating the two is what makes a "price change" look like a new product.
- */
+function codeFromName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
+/** One workflow for the package identity and its first draft terms. */
 export function NewOfferDialog({
   open,
   onOpenChange,
@@ -49,44 +60,41 @@ export function NewOfferDialog({
   const router = useRouter();
   const fieldId = useId();
   const [catalogId, setCatalogId] = useState(catalogs[0]?.id ?? "");
-  const [channelKey, setChannelKey] = useState(
-    channels[0] ? `${channels[0].code}:${channels[0].unit_code}` : "",
-  );
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
-
+  const defaultChannel = channels[0]
+    ? `${channels[0].code}:${channels[0].unit_code}`
+    : "";
+  const form = useOfferTermsForm(null, defaultChannel);
   const valid =
     catalogId.length > 0 &&
-    channelKey.length > 0 &&
     CODE_PATTERN.test(code) &&
-    name.trim().length > 0;
+    name.trim() &&
+    form.valid;
 
   async function submit() {
-    const [channelCode, unitCode] = channelKey.split(":");
-    if (!valid || !channelCode || !unitCode) return;
+    if (!valid) return;
     setBusy(true);
     try {
-      await createOffer({
-        price_book_id: catalogId,
-        code,
-        name: name.trim(),
-        description: description.trim(),
-        channel_code: channelCode,
-        unit_code: unitCode,
+      await createPackage({
+        offer: {
+          price_book_id: catalogId,
+          code,
+          name: name.trim(),
+          description: description.trim(),
+        },
+        version: form.terms(),
       });
-      toast.success(`Offer "${name.trim()}" created. Add its terms next.`);
+      toast.success(`Package “${name.trim()}” created as a draft.`);
       onOpenChange(false);
-      setCode("");
-      setName("");
-      setDescription("");
       router.refresh();
     } catch (error) {
       toast.error(
         error instanceof OfferError
           ? error.message
-          : "The offer could not be created.",
+          : "The package could not be created.",
       );
     } finally {
       setBusy(false);
@@ -95,19 +103,20 @@ export function NewOfferDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>New prepaid offer</DialogTitle>
+          <DialogTitle>New prepaid package</DialogTitle>
           <DialogDescription>
-            Nothing is sellable until a version of its terms is published.
+            Combine any supported channel credits under one price. The package
+            remains a draft until a different admin publishes it.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
-          <Field>
-            <FieldLabel htmlFor={`${fieldId}-catalog`}>Catalog</FieldLabel>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field className="sm:col-span-2">
+            <FieldLabel>Catalog</FieldLabel>
             <Select value={catalogId} onValueChange={setCatalogId}>
-              <SelectTrigger id={`${fieldId}-catalog`}>
+              <SelectTrigger>
                 <SelectValue placeholder="Select a catalog" />
               </SelectTrigger>
               <SelectContent>
@@ -119,71 +128,194 @@ export function NewOfferDialog({
                 ))}
               </SelectContent>
             </Select>
-            <FieldDescription>
-              Workspaces buy from the catalog they are assigned, or the default.
-            </FieldDescription>
           </Field>
-
           <Field>
-            <FieldLabel htmlFor={`${fieldId}-channel`}>
-              Channel and unit
-            </FieldLabel>
-            <Select value={channelKey} onValueChange={setChannelKey}>
-              <SelectTrigger id={`${fieldId}-channel`}>
-                <SelectValue placeholder="Select a channel" />
-              </SelectTrigger>
-              <SelectContent>
-                {channels.map((channel) => (
-                  <SelectItem
-                    key={`${channel.code}:${channel.unit_code}`}
-                    value={`${channel.code}:${channel.unit_code}`}
-                  >
-                    {channel.display_name} — per {channel.unit_label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldDescription>
-              Only active channels appear. SMS sells SEGMENTS, so a long message
-              consumes more than one — say so in customer copy.
-            </FieldDescription>
+            <FieldLabel htmlFor={`${fieldId}-name`}>Package name</FieldLabel>
+            <Input
+              id={`${fieldId}-name`}
+              value={name}
+              placeholder="Starter communications"
+              onChange={(event) => {
+                const nextName = event.target.value;
+                setName(nextName);
+                if (!code || code === codeFromName(name))
+                  setCode(codeFromName(nextName));
+              }}
+            />
           </Field>
-
           <Field>
             <FieldLabel htmlFor={`${fieldId}-code`}>Code</FieldLabel>
             <Input
               id={`${fieldId}-code`}
               value={code}
               onChange={(event) => setCode(event.target.value.toLowerCase())}
-              placeholder="starter-sms-200"
             />
             <FieldDescription>
-              Starts with a letter, then 1–63 more: lowercase letters, digits,
-              hyphens or underscores. Unique within the catalog, and permanent
-              once purchases reference it.
+              Permanent identifier used in receipts and audit history.
             </FieldDescription>
           </Field>
-
-          <Field>
-            <FieldLabel htmlFor={`${fieldId}-name`}>Display name</FieldLabel>
+          <Field className="sm:col-span-2">
+            <FieldLabel>Description</FieldLabel>
             <Input
-              id={`${fieldId}-name`}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Starter SMS"
+              value={description}
+              placeholder="20 SMS segments and 20 email messages"
+              onChange={(event) => setDescription(event.target.value)}
             />
           </Field>
+        </div>
 
+        <div className="flex flex-col gap-3">
+          <p className="text-sm font-medium">Included channel credits</p>
+          {form.items.map((item, index) => (
+            <div
+              key={item.key}
+              className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto]"
+            >
+              <Field>
+                <FieldLabel>Channel and unit</FieldLabel>
+                <Select
+                  value={item.channelKey}
+                  onValueChange={(channelKey) =>
+                    form.updateItem(item.key, { channelKey })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {channels.map((channel) => {
+                      const value = `${channel.code}:${channel.unit_code}`;
+                      return (
+                        <SelectItem
+                          key={value}
+                          value={value}
+                          disabled={form.items.some(
+                            (candidate) =>
+                              candidate.key !== item.key &&
+                              candidate.channelKey === value,
+                          )}
+                        >
+                          {channel.display_name} — per {channel.unit_label}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel>Credits per pack</FieldLabel>
+                <Input
+                  inputMode="numeric"
+                  value={item.units}
+                  placeholder="20"
+                  onChange={(event) =>
+                    form.updateItem(item.key, { units: event.target.value })
+                  }
+                />
+              </Field>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="self-end"
+                aria-label={`Remove package item ${index + 1}`}
+                disabled={form.items.length === 1}
+                onClick={() => form.removeItem(item.key)}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+              <Field>
+                <FieldLabel>Providers</FieldLabel>
+                <Input
+                  value={item.vendors}
+                  placeholder="arkesel or aws-ses"
+                  onChange={(event) =>
+                    form.updateItem(item.key, { vendors: event.target.value })
+                  }
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Traffic class</FieldLabel>
+                <Input
+                  value={item.trafficClasses}
+                  placeholder="transactional"
+                  onChange={(event) =>
+                    form.updateItem(item.key, {
+                      trafficClasses: event.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Destinations (ISO)</FieldLabel>
+                <Input
+                  value={item.countries}
+                  placeholder="GH, NG; blank if global"
+                  onChange={(event) =>
+                    form.updateItem(item.key, { countries: event.target.value })
+                  }
+                />
+              </Field>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            className="self-start"
+            disabled={form.items.length >= channels.length}
+            onClick={() => {
+              const used = new Set(form.items.map((item) => item.channelKey));
+              const next = channels.find(
+                (channel) => !used.has(`${channel.code}:${channel.unit_code}`),
+              );
+              if (next) form.addItem(`${next.code}:${next.unit_code}`);
+            }}
+          >
+            <Plus className="size-4" /> Add channel
+          </Button>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field>
-            <FieldLabel htmlFor={`${fieldId}-description`}>
-              Description
-            </FieldLabel>
+            <FieldLabel>Package price</FieldLabel>
+            <div className="flex gap-2">
+              <Select
+                value={form.currency}
+                onValueChange={(value) => form.setCurrency(value as Currency)}
+              >
+                <SelectTrigger className="w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCIES.map((currency) => (
+                    <SelectItem key={currency} value={currency}>
+                      {currency}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                inputMode="decimal"
+                value={form.amount}
+                placeholder="50.00"
+                onChange={(event) => form.setAmount(event.target.value)}
+              />
+            </div>
+          </Field>
+          <Field>
+            <FieldLabel>Credit expiry</FieldLabel>
             <Input
-              id={`${fieldId}-description`}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="200 SMS segments for Ghana transactional traffic"
+              inputMode="numeric"
+              value={form.creditValidityDays}
+              placeholder="Never expires"
+              onChange={(event) =>
+                form.setCreditValidityDays(event.target.value)
+              }
             />
+            <FieldDescription>
+              Leave blank for credits that never expire; otherwise enter days
+              after purchase.
+            </FieldDescription>
           </Field>
         </div>
 
@@ -196,7 +328,7 @@ export function NewOfferDialog({
             Cancel
           </Button>
           <Button type="button" onClick={submit} disabled={!valid || busy}>
-            Create offer
+            Create package draft
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -7,9 +7,12 @@ import {
   type CommercialOfferVersionDto,
   type CreateCommercialOfferRequest,
   type CreateCommercialOfferVersionRequest,
+  type CreateCommercialPackageRequest,
+  type CreateCommercialPackageResponse,
   commercialOfferDtoSchema,
   commercialOfferMarginPreviewSchema,
   commercialOfferVersionDtoSchema,
+  createCommercialPackageResponseSchema,
   type ListCommercialOffersResponse,
   listCommercialOffersResponseSchema,
   type PreviewCommercialOfferMarginRequest,
@@ -87,6 +90,15 @@ export function createCommercialOffer(
 ): Promise<CommercialOfferDto> {
   return request("", { method: "POST", actor, body }, (payload) =>
     commercialOfferDtoSchema.parse(payload),
+  );
+}
+
+export function createCommercialPackage(
+  body: CreateCommercialPackageRequest,
+  actor: Actor,
+): Promise<CreateCommercialPackageResponse> {
+  return request("/packages", { method: "POST", actor, body }, (payload) =>
+    createCommercialPackageResponseSchema.parse(payload),
   );
 }
 

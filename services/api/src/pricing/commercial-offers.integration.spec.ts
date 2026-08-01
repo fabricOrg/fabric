@@ -53,8 +53,6 @@ describeDb("commercial offer publication", () => {
           code: `sub-${randomUUID().slice(0, 8)}`,
           name: "Wrong catalog",
           description: "",
-          channel_code: "sms",
-          unit_code: "segment",
         },
         author,
       ),
@@ -63,15 +61,35 @@ describeDb("commercial offer publication", () => {
     });
 
     const tokenBook = await fixtures.book("token");
+    const offer = await offers.createOffer(
+      {
+        price_book_id: tokenBook,
+        code: `voice-${randomUUID().slice(0, 8)}`,
+        name: "Unregistered channel",
+        description: "",
+      },
+      author,
+    );
+    fixtures.trackOffer(offer.id);
     await expect(
-      offers.createOffer(
+      offers.createVersion(
+        offer.id,
         {
-          price_book_id: tokenBook,
-          code: `voice-${randomUUID().slice(0, 8)}`,
-          name: "Unregistered channel",
-          description: "",
-          channel_code: "voice",
-          unit_code: "second",
+          ...versionRequest(),
+          items: [
+            {
+              channel_code: "voice",
+              unit_code: "second",
+              paid_units: "200",
+              bonus_units: "0",
+              eligibility: {
+                destination_countries: [],
+                traffic_classes: [],
+                provider_vendors: [],
+                service_classes: [],
+              },
+            },
+          ],
         },
         author,
       ),
@@ -128,8 +146,7 @@ describeDb("commercial offer publication", () => {
     expect(preview.publishable).toBe(false);
     expect(preview.blocked_reason).toBe("offer_margin_below_floor");
     expect(preview.routes[0]?.total_cost_minor).toBe("400");
-    // The informational unit price is exact and never used as financial truth: 300/200 = 1.5 pesewas.
-    expect(preview.effective_unit_price_minor_display).toBe("1.5000");
+    expect(preview.items[0]?.allocated_price_minor).toBe("300");
 
     await expect(
       publishing.publish(draft.id, { reason: "below cost" }, approver),
