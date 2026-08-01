@@ -6,7 +6,10 @@ import type {
   Currency,
   PriceBookDto,
 } from "@app/contracts";
-import { supportedEligibilityDimensions } from "@app/contracts";
+import {
+  supportedEligibilityDimensions,
+  vocabularyForChannel,
+} from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Dialog,
@@ -173,9 +176,14 @@ export function NewOfferDialog({
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium">Included channel credits</p>
           {form.items.map((item, index) => {
+            const channelCode = item.channelKey.split(":")[0] ?? "";
+            const channelVocabulary = vocabularyForChannel(
+              routeVocabulary,
+              channelCode,
+            );
             // Only the restrictions this channel's send path can match; see CHANNEL_SUPPORTED_ELIGIBILITY.
             const routable = supportedEligibilityDimensions(
-              item.channelKey.split(":")[0] ?? "",
+              channelCode,
             ).includes("destination_countries");
             return (
               <div
@@ -239,7 +247,7 @@ export function NewOfferDialog({
                   <FieldLabel>Providers (required)</FieldLabel>
                   <EligibilityChips
                     value={item.vendors}
-                    options={routeVocabulary.provider_vendors}
+                    options={channelVocabulary.provider_vendors}
                     onChange={(vendors) =>
                       form.updateItem(item.key, { vendors })
                     }
@@ -253,7 +261,7 @@ export function NewOfferDialog({
                       <FieldLabel>Traffic classes</FieldLabel>
                       <EligibilityChips
                         value={item.trafficClasses}
-                        options={routeVocabulary.traffic_classes}
+                        options={channelVocabulary.traffic_classes}
                         onChange={(trafficClasses) =>
                           form.updateItem(item.key, { trafficClasses })
                         }
@@ -265,7 +273,7 @@ export function NewOfferDialog({
                       <FieldLabel>Destinations</FieldLabel>
                       <EligibilityChips
                         value={item.countries}
-                        options={routeVocabulary.destination_countries}
+                        options={channelVocabulary.destination_countries}
                         onChange={(countries) =>
                           form.updateItem(item.key, { countries })
                         }
