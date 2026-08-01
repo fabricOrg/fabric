@@ -16,7 +16,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { moneyMinor, timestamps } from "./_shared.js";
-import { staffUsers } from "./identity.js";
+import { accounts, staffUsers } from "./identity.js";
 import { priceBooks } from "./price-books.js";
 
 /**
@@ -30,11 +30,21 @@ export interface CommercialOfferEligibility {
   readonly serviceClasses?: readonly string[];
 }
 
+/**
+ * Publish-time cost evidence. Both ends of the permitted-route range are stored because the margin
+ * gate is the WORST route — a bundle is spendable on every route its eligibility allows. There is
+ * deliberately no single "expected" figure: which route a customer uses is unknowable at publish
+ * time, and an average would read as measured when it is not.
+ */
 export interface CommercialOfferCostSnapshot {
-  readonly estimatedCostMinor: string;
+  readonly bestCaseCostMinor: string;
   readonly worstCaseCostMinor: string;
-  readonly expectedMarginMinor: string;
+  readonly bestCaseMarginMinor: string;
+  readonly worstCaseMarginMinor: string;
+  readonly worstCaseMarginBps: number;
   readonly minimumMarginBps: number;
+  readonly minimumMarginSource: "catalog_version" | "platform_default";
+  readonly routeCount: number;
   readonly calculatedAt: string;
   readonly sourceReferences: readonly string[];
 }
@@ -199,8 +209,43 @@ export const pricingOfferVersions = pgTable(
   ],
 );
 
+/**
+ * Which prepaid catalog a workspace buys from (COM-011). Deliberately its OWN control-plane table
+ * rather than a column on `accounts`: the tenant-facing role holds table-level `UPDATE` on
+ * `accounts`, and Postgres will not let a column-level `REVOKE` override a table-level grant — so a
+ * negotiated-catalog column there would sit inside the tenant's own writable row. Here the runtime
+ * role holds nothing at all, exactly like the offers it selects.
+ *
+ * Absent row = the default token catalog. Changing an assignment affects FUTURE purchases only; a
+ * purchase snapshots the offer version it bought, so history never moves.
+ */
+export const offerCatalogAssignments = pgTable(
+  "offer_catalog_assignments",
+  {
+    // One catalog per workspace: the primary key IS the workspace, so ambiguity is unrepresentable.
+    tenantId: uuid("tenant_id")
+      .primaryKey()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    priceBookId: uuid("price_book_id")
+      .notNull()
+      .references(() => priceBooks.id, { onDelete: "restrict" }),
+    assignedBy: uuid("assigned_by")
+      .notNull()
+      .references(() => staffUsers.id, { onDelete: "restrict" }),
+    // Why this workspace was moved off the default catalog — negotiated pricing needs a paper trail
+    // at the row, not only in the audit log.
+    reason: text("reason").notNull().default(""),
+    ...timestamps,
+  },
+  (t) => [index("idx_offer_catalog_assignments_book").on(t.priceBookId)],
+);
+
 export type CommercialOfferChannel =
   typeof commercialOfferChannels.$inferSelect;
+export type OfferCatalogAssignment =
+  typeof offerCatalogAssignments.$inferSelect;
+export type NewOfferCatalogAssignment =
+  typeof offerCatalogAssignments.$inferInsert;
 export type PricingOffer = typeof pricingOffers.$inferSelect;
 export type NewPricingOffer = typeof pricingOffers.$inferInsert;
 export type PricingOfferVersion = typeof pricingOfferVersions.$inferSelect;

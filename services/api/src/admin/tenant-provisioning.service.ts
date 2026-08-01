@@ -9,20 +9,16 @@ import type {
 import {
   accounts,
   applications,
-  clampLimit,
-  decodeCursor,
-  encodeCursor,
   environments,
-  keysetWhere,
   memberships,
+  offerCatalogAssignments,
   type ProvisioningDb,
   type TenantId,
-  takePage,
   users,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
@@ -30,6 +26,7 @@ import {
   WORKOS_CLIENT,
   type WorkosClientProvider,
 } from "../identity/workos-client.provider.js";
+import { listTenantsPage } from "./tenant-list.js";
 import {
   type AllowanceActor,
   getTenantSandboxAllowancePolicy,
@@ -132,6 +129,13 @@ export class TenantProvisioningService {
         created_at: accounts.createdAt,
       });
     if (!updated) throw new Error("tenant status update returned no row");
+    // Read separately because `returning()` cannot join. One extra query on a rare staff action is
+    // cheaper than letting this response claim the workspace has no prepaid catalog when it does.
+    const [catalog] = await this.provisioning.db
+      .select({ id: offerCatalogAssignments.priceBookId })
+      .from(offerCatalogAssignments)
+      .where(eq(offerCatalogAssignments.tenantId, tenantId as TenantId))
+      .limit(1);
 
     await this.audit.record({
       actorStaffId: actor.staffId ?? null,
@@ -144,51 +148,18 @@ export class TenantProvisioningService {
       metadata: { before: current.status, after: request.status },
     });
 
-    return { ...updated, created_at: updated.created_at.toISOString() };
+    return {
+      ...updated,
+      offer_catalog_id: catalog?.id ?? null,
+      created_at: updated.created_at.toISOString(),
+    };
   }
 
-  /** Staff control-plane list of every account. Runs on the provisioning connection (cross-tenant).
-   *  Standard keyset pagination on (created_at DESC, id DESC). */
+  /** Staff control-plane list of every account — see `tenant-list.ts` for the query itself. */
   async list(
     opts: { limit?: number; cursor?: string } = {},
   ): Promise<ListTenantsResponse> {
-    const pageSize = clampLimit(opts.limit);
-    const decoded = opts.cursor ? decodeCursor(opts.cursor) : null;
-    const keyset = keysetWhere(
-      accounts.createdAt,
-      accounts.id,
-      "desc",
-      decoded
-        ? { primaryValue: new Date(decoded.primary), id: decoded.id }
-        : null,
-    );
-    const rows = await this.provisioning.db
-      .select({
-        tenant_id: accounts.id,
-        name: accounts.name,
-        slug: accounts.slug,
-        plan: accounts.plan,
-        status: accounts.status,
-        data_region: accounts.dataRegion,
-        workos_organization_id: accounts.workosOrganizationId,
-        price_book_id: accounts.priceBookId,
-        billing_currency: accounts.billingCurrency,
-        created_at: accounts.createdAt,
-      })
-      .from(accounts)
-      .where(keyset)
-      .orderBy(desc(accounts.createdAt), desc(accounts.id))
-      .limit(pageSize + 1);
-    const { page, nextCursor } = takePage(rows, pageSize, (r) =>
-      encodeCursor(r.created_at.toISOString(), r.tenant_id),
-    );
-    return {
-      tenants: page.map((r) => ({
-        ...r,
-        created_at: r.created_at.toISOString(),
-      })),
-      next_cursor: nextCursor,
-    };
+    return listTenantsPage(this.provisioning, opts);
   }
 
   async provision(
