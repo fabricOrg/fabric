@@ -63,7 +63,7 @@ export function CommercialOffersManager({
         <div className="flex justify-end">
           <Button size="sm" onClick={() => setCreating(true)}>
             <Plus className="size-4" />
-            New offer
+            New package
           </Button>
         </div>
       ) : null}
@@ -104,7 +104,7 @@ export function CommercialOffersManager({
                     variant="outline"
                     onClick={() => setDraftingFor(offer)}
                   >
-                    Add draft terms
+                    New version
                   </Button>
                 </div>
               ) : null}

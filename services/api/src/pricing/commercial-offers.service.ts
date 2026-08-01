@@ -32,11 +32,11 @@ import {
   toVersionDto,
 } from "./commercial-offer-mapping.js";
 import { CommercialOfferMarginService } from "./commercial-offer-margin.service.js";
+import { listOffersWithVersions } from "./commercial-offer-reads.js";
 import {
   listChannelRegistry,
-  listOffersWithVersions,
   listRouteVocabulary,
-} from "./commercial-offer-reads.js";
+} from "./commercial-offer-registry.js";
 import {
   assertStaffExists,
   insertVersion,

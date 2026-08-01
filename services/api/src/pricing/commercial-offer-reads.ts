@@ -1,9 +1,4 @@
-import type {
-  CommercialOfferChannelDto,
-  CommercialOfferWithVersions,
-  CommercialRouteVocabulary,
-  Currency,
-} from "@app/contracts";
+import type { CommercialOfferWithVersions, Currency } from "@app/contracts";
 import {
   commercialOfferChannels,
   offerCatalogAssignments,
@@ -40,52 +35,6 @@ export const PLATFORM_DEFAULT_MARGIN_BPS = 2_000;
 export interface MarginFloor {
   readonly bps: number;
   readonly source: "catalog_version" | "platform_default";
-}
-
-/**
- * The distinct route dimensions provider costs exist for. Authoring picks from these, so a staff
- * member cannot invent a vendor or destination the margin gate would then refuse. NULL columns are
- * wildcard rates ("any destination"), which contribute no value to pick from.
- */
-export async function listRouteVocabulary(
-  db: Db,
-): Promise<CommercialRouteVocabulary> {
-  const rows = await db
-    .selectDistinct({
-      providerVendor: providerCostRates.providerVendor,
-      destinationCountry: providerCostRates.destinationCountry,
-      trafficClass: providerCostRates.trafficClass,
-    })
-    .from(providerCostRates);
-  const unique = (values: (string | null)[]): string[] => [
-    ...new Set(values.filter((value): value is string => value !== null)),
-  ];
-  return {
-    provider_vendors: unique(rows.map((row) => row.providerVendor)).sort(),
-    destination_countries: unique(
-      rows.map((row) => row.destinationCountry),
-    ).sort(),
-    traffic_classes: unique(rows.map((row) => row.trafficClass)).sort(),
-  };
-}
-
-export async function listChannelRegistry(
-  db: Db,
-): Promise<CommercialOfferChannelDto[]> {
-  const rows = await db
-    .select()
-    .from(commercialOfferChannels)
-    .orderBy(
-      asc(commercialOfferChannels.code),
-      asc(commercialOfferChannels.unitCode),
-    );
-  return rows.map((row) => ({
-    code: row.code,
-    unit_code: row.unitCode,
-    display_name: row.displayName,
-    unit_label: row.unitLabel,
-    is_active: row.isActive,
-  }));
 }
 
 /**
