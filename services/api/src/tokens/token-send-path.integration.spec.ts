@@ -3,9 +3,7 @@ import {
   accounts,
   createAppDb,
   createProvisioningDb,
-  type MinorUnits,
   type TenantId,
-  tokenPurchases,
 } from "@app/db";
 import { FakeProvider } from "@app/integrations/testing";
 import {
@@ -18,6 +16,11 @@ import {
 import { credit } from "@app/wallet";
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
+import {
+  cleanupPackages,
+  type PackageTrack,
+  seedPackagePurchase,
+} from "./package-fixtures.js";
 import { grantTokensForPurchase, readTokenBalance } from "./token-grant.js";
 import { holdTokens, resolveTokenHolds } from "./token-holds.js";
 
@@ -37,6 +40,7 @@ describeDb("send path: tokens first, then wallet", () => {
   const appDb = createAppDb(appUrl ?? "", { max: 4 });
   const owner = postgres(superUrl ?? "", { max: 1 });
   const tenants: string[] = [];
+  const packages: PackageTrack = { bookIds: [], offerIds: [], staffIds: [] };
 
   const deps = {
     db: appDb,
@@ -67,16 +71,10 @@ describeDb("send path: tokens first, then wallet", () => {
     tenantId: string,
     quantity: bigint,
   ): Promise<void> {
-    const reference = `token-${randomUUID()}`;
-    await provisioning.db.insert(tokenPurchases).values({
-      tenantId: tenantId as TenantId,
-      reference,
-      channel: "sms",
+    const { reference } = await seedPackagePurchase(provisioning, packages, {
+      tenantId,
       quantity,
-      unitPriceMinorLocked: 4n as MinorUnits,
-      currency: "GHS",
-      amountMinor: (quantity * 4n) as MinorUnits,
-      email: "buyer@example.com",
+      totalPriceMinor: quantity * 4n,
     });
     await grantTokensForPurchase({ provisioning, appDb }, reference);
   }
@@ -136,6 +134,7 @@ describeDb("send path: tokens first, then wallet", () => {
       await owner`DELETE FROM token_purchases WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM accounts WHERE id = ${id}::uuid`;
     }
+    await cleanupPackages(owner, packages);
     await owner.end();
     await provisioning.end();
     await appDb.sql.end();

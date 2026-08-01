@@ -616,7 +616,13 @@ function TokenPurchaseNotice({
     "Returning from checkout does not grant tokens. We are waiting for Paystack's signed webhook.";
   if (confirmed) {
     title = "Token purchase confirmed";
-    description = `${BigInt(receipt.quantity).toLocaleString("en")} ${receipt.unit_code} were credited from ${receipt.offer_name}.`;
+    const credits = receipt.items
+      .map(
+        (item) =>
+          `${BigInt(item.quantity).toLocaleString("en")} ${item.unit_code}`,
+      )
+      .join(" and ");
+    description = `${credits} were credited from ${receipt.offer_name}.`;
   }
   if (failed) {
     title = "Token purchase failed";

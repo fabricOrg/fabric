@@ -1,6 +1,7 @@
 import type {
   CommercialOfferChannelDto,
   CommercialOfferWithVersions,
+  CommercialRouteVocabulary,
   PriceBookDto,
 } from "@app/contracts";
 import { CommercialOffersManager } from "@/components/commercial-offers-manager";
@@ -19,6 +20,11 @@ export default async function CommercialOffersPage() {
 
   let offers: CommercialOfferWithVersions[] = [];
   let channels: CommercialOfferChannelDto[] = [];
+  let routeVocabulary: CommercialRouteVocabulary = {
+    provider_vendors: [],
+    destination_countries: [],
+    traffic_classes: [],
+  };
   let catalogs: PriceBookDto[] = [];
   let loadError = false;
   try {
@@ -28,6 +34,7 @@ export default async function CommercialOffersPage() {
     ]);
     offers = listed.offers;
     channels = listed.channels;
+    routeVocabulary = listed.route_vocabulary;
     // Offers live in TOKEN-mode books; a subscription book is a rate plan, not a catalog.
     catalogs = books.filter((book) => book.mode === "token");
   } catch {
@@ -58,6 +65,7 @@ export default async function CommercialOffersPage() {
         <CommercialOffersManager
           offers={offers}
           channels={channels}
+          routeVocabulary={routeVocabulary}
           catalogs={catalogs}
           canManage={canManage}
           actorStaffId={session.userId}

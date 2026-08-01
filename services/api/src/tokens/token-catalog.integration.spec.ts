@@ -6,11 +6,13 @@ import {
   offerCatalogAssignments,
   priceBooks,
   pricingOffers,
+  pricingOfferVersionItems,
   pricingOfferVersions,
   staffUsers,
   type TenantId,
   tokenPurchases,
 } from "@app/db";
+import { eq } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TokenCatalogService } from "./token-catalog.service.js";
@@ -80,7 +82,7 @@ describeDb("customer commercial-offer catalog", () => {
       id: versionId,
       offerId,
       version: 1,
-      status: "published",
+      status: "draft",
       currency: "GHS",
       paidUnits: 200n,
       bonusUnits: 0n,
@@ -102,10 +104,24 @@ describeDb("customer commercial-offer catalog", () => {
         sourceReferences: ["fixture"],
       },
       createdBy: staffId,
-      approvedBy: approverId,
-      approvedAt: now,
       effectiveFrom: now,
     });
+    await provisioning.db.insert(pricingOfferVersionItems).values({
+      offerVersionId: versionId,
+      position: 0,
+      channelCode: "sms",
+      unitCode: "segment",
+      paidUnits: 200n,
+      totalUnits: 200n,
+      eligibility: { providerVendors: ["arkesel"] },
+      allocatedPriceMinor: 300n as MinorUnits,
+    });
+    // Items attach while the version is a draft; publishing is what freezes them. Approval moves
+    // with the status because pricing_offer_versions_approval_chk forbids an approved draft.
+    await provisioning.db
+      .update(pricingOfferVersions)
+      .set({ status: "published", approvedBy: approverId, approvedAt: now })
+      .where(eq(pricingOfferVersions.id, versionId));
     await provisioning.db.insert(offerCatalogAssignments).values({
       tenantId: tenantId as TenantId,
       priceBookId: bookId,
@@ -116,25 +132,28 @@ describeDb("customer commercial-offer catalog", () => {
       tenantId: tenantId as TenantId,
       reference,
       providerMode: "sandbox",
-      pricingModel: "fixed_bundle",
       offerVersionId: versionId,
       packCount: 2,
-      unitsPerPackLocked: 200n,
       pricePerPackMinorLocked: 300n as MinorUnits,
       offerSnapshot: {
         offerCode: "sms-200",
         offerName: "200 SMS segments",
         offerVersion: 1,
-        channelCode: "sms",
-        unitCode: "segment",
-        paidUnits: "200",
-        bonusUnits: "0",
-        totalUnits: "200",
         totalPriceMinor: "300",
-        eligibility: { providerVendors: ["arkesel"] },
+        creditValidityDays: null,
+        items: [
+          {
+            itemId: versionId,
+            channelCode: "sms",
+            unitCode: "segment",
+            paidUnits: "200",
+            bonusUnits: "0",
+            totalUnits: "200",
+            allocatedPriceMinor: "300",
+            eligibility: { providerVendors: ["arkesel"] },
+          },
+        ],
       },
-      channel: "sms",
-      quantity: 400n,
       currency: "GHS",
       amountMinor: 600n as MinorUnits,
       email: "buyer@example.com",
@@ -144,6 +163,7 @@ describeDb("customer commercial-offer catalog", () => {
   afterAll(async () => {
     await owner`DELETE FROM token_purchases WHERE reference = ${reference}`;
     await owner`DELETE FROM offer_catalog_assignments WHERE tenant_id = ${tenantId}::uuid`;
+    await owner`DELETE FROM pricing_offer_version_items WHERE offer_version_id = ${versionId}::uuid`;
     await owner`DELETE FROM pricing_offer_versions WHERE id = ${versionId}::uuid`;
     await owner`DELETE FROM pricing_offers WHERE id = ${offerId}::uuid`;
     await owner`DELETE FROM price_books WHERE id = ${bookId}::uuid`;
@@ -159,13 +179,19 @@ describeDb("customer commercial-offer catalog", () => {
       offers: [
         expect.objectContaining({
           offer_version_id: versionId,
-          channel_code: "sms",
-          unit_code: "segment",
-          total_units: "200",
           total_price_minor: "300",
-          eligibility: expect.objectContaining({
-            provider_vendors: ["arkesel"],
-          }),
+          credit_validity_days: null,
+          // Channel, unit and quantity now live per ITEM: one package can sell several channels.
+          items: [
+            expect.objectContaining({
+              channel_code: "sms",
+              unit_code: "segment",
+              total_units: "200",
+              eligibility: expect.objectContaining({
+                provider_vendors: ["arkesel"],
+              }),
+            }),
+          ],
         }),
       ],
     });
@@ -176,7 +202,9 @@ describeDb("customer commercial-offer catalog", () => {
       reference,
       status: "pending",
       offer_version_id: versionId,
-      quantity: "400",
+      // 2 packs of the 200-segment item — the receipt itemises what was bought, per channel.
+      pack_count: 2,
+      items: [{ channel_code: "sms", unit_code: "segment", quantity: "400" }],
       amount_minor: "600",
     });
     await expect(

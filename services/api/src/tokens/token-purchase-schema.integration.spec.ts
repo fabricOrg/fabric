@@ -95,44 +95,46 @@ describeDb("token purchase database invariants", () => {
       offerCode: "invariant-bundle",
       offerName: "Invariant bundle",
       offerVersion: 1,
-      channelCode: "sms",
-      unitCode: "segment",
-      paidUnits: "200",
-      bonusUnits: "0",
-      totalUnits: "200",
       totalPriceMinor: "300",
-      eligibility: {},
+      creditValidityDays: null,
+      items: [
+        {
+          itemId: versionId,
+          channelCode: "sms",
+          unitCode: "segment",
+          paidUnits: "200",
+          bonusUnits: "0",
+          totalUnits: "200",
+          allocatedPriceMinor: "300",
+          eligibility: {},
+        },
+      ],
     };
     await expect(
       db.db.insert(tokenPurchases).values({
         tenantId: tenantId as TenantId,
         reference: `token-${randomUUID()}`,
         providerMode: "sandbox",
-        pricingModel: "fixed_bundle",
         offerVersionId: versionId,
         packCount: 1,
-        unitsPerPackLocked: 200n,
         pricePerPackMinorLocked: 300n as MinorUnits,
         offerSnapshot: snapshot,
-        channel: "sms",
-        quantity: 200n,
         currency: "GHS",
         amountMinor: 301n as MinorUnits,
         email: "buyer@example.com",
       }),
     ).rejects.toThrow();
 
+    // A purchase with no offer provenance is refused outright: since packages replaced the
+    // unit-priced model there is no lawful shape without a version, pack count and snapshot.
     await expect(
       db.db.insert(tokenPurchases).values({
         tenantId: tenantId as TenantId,
         reference: `token-${randomUUID()}`,
-        channel: "sms",
-        quantity: 3n,
-        unitPriceMinorLocked: 5n as MinorUnits,
         currency: "GHS",
         amountMinor: 15n as MinorUnits,
-        email: "legacy@example.com",
+        email: "unpriced@example.com",
       }),
-    ).resolves.toBeDefined();
+    ).rejects.toThrow();
   });
 });

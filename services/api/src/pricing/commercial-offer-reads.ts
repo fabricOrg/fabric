@@ -1,6 +1,7 @@
 import type {
   CommercialOfferChannelDto,
   CommercialOfferWithVersions,
+  CommercialRouteVocabulary,
   Currency,
 } from "@app/contracts";
 import {
@@ -10,12 +11,24 @@ import {
   priceBooks,
   priceBookVersions,
   pricingOffers,
+  pricingOfferVersionItems,
   pricingOfferVersions,
   providerCostRates,
   staffUsers,
   type TenantId,
 } from "@app/db";
-import { and, asc, desc, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { CostRateRow } from "./commercial-offer-cost.js";
 import { toOfferDto, toVersionDto } from "./commercial-offer-mapping.js";
 
@@ -27,6 +40,33 @@ export const PLATFORM_DEFAULT_MARGIN_BPS = 2_000;
 export interface MarginFloor {
   readonly bps: number;
   readonly source: "catalog_version" | "platform_default";
+}
+
+/**
+ * The distinct route dimensions provider costs exist for. Authoring picks from these, so a staff
+ * member cannot invent a vendor or destination the margin gate would then refuse. NULL columns are
+ * wildcard rates ("any destination"), which contribute no value to pick from.
+ */
+export async function listRouteVocabulary(
+  db: Db,
+): Promise<CommercialRouteVocabulary> {
+  const rows = await db
+    .selectDistinct({
+      providerVendor: providerCostRates.providerVendor,
+      destinationCountry: providerCostRates.destinationCountry,
+      trafficClass: providerCostRates.trafficClass,
+    })
+    .from(providerCostRates);
+  const unique = (values: (string | null)[]): string[] => [
+    ...new Set(values.filter((value): value is string => value !== null)),
+  ];
+  return {
+    provider_vendors: unique(rows.map((row) => row.providerVendor)).sort(),
+    destination_countries: unique(
+      rows.map((row) => row.destinationCountry),
+    ).sort(),
+    traffic_classes: unique(rows.map((row) => row.trafficClass)).sort(),
+  };
 }
 
 export async function listChannelRegistry(
@@ -66,15 +106,39 @@ export async function listOffersWithVersions(
   const versions = await db
     .select()
     .from(pricingOfferVersions)
+    .where(
+      inArray(
+        pricingOfferVersions.offerId,
+        offers.map(({ offer }) => offer.id),
+      ),
+    )
     .orderBy(desc(pricingOfferVersions.version));
+  const versionIds = versions.map((version) => version.id);
+  const items = await db
+    .select()
+    .from(pricingOfferVersionItems)
+    .where(inArray(pricingOfferVersionItems.offerVersionId, versionIds))
+    .orderBy(asc(pricingOfferVersionItems.position));
   const staffEmails = await readStaffEmails(db);
+  const versionsByOffer = new Map<string, typeof versions>();
+  for (const version of versions) {
+    const grouped = versionsByOffer.get(version.offerId) ?? [];
+    grouped.push(version);
+    versionsByOffer.set(version.offerId, grouped);
+  }
+  const itemsByVersion = new Map<string, typeof items>();
+  for (const item of items) {
+    const grouped = itemsByVersion.get(item.offerVersionId) ?? [];
+    grouped.push(item);
+    itemsByVersion.set(item.offerVersionId, grouped);
+  }
 
   return offers.map(({ offer, catalogName }) => ({
     ...toOfferDto(offer),
     catalog_name: catalogName,
-    versions: versions
-      .filter((version) => version.offerId === offer.id)
-      .map((version) => toVersionDto(version, staffEmails)),
+    versions: (versionsByOffer.get(offer.id) ?? []).map((version) =>
+      toVersionDto(version, staffEmails, itemsByVersion.get(version.id) ?? []),
+    ),
   }));
 }
 
@@ -87,6 +151,7 @@ async function readStaffEmails(db: Db): Promise<Map<string, string>> {
 
 export interface OfferVersionContext {
   readonly version: typeof pricingOfferVersions.$inferSelect;
+  readonly items: readonly (typeof pricingOfferVersionItems.$inferSelect)[];
   readonly offer: typeof pricingOffers.$inferSelect;
   readonly catalogName: string;
 }
@@ -109,7 +174,13 @@ export async function readVersionContext(
     .innerJoin(priceBooks, eq(priceBooks.id, pricingOffers.priceBookId))
     .where(eq(pricingOfferVersions.id, versionId))
     .limit(1);
-  return row ?? null;
+  if (!row) return null;
+  const items = await db
+    .select()
+    .from(pricingOfferVersionItems)
+    .where(eq(pricingOfferVersionItems.offerVersionId, versionId))
+    .orderBy(asc(pricingOfferVersionItems.position));
+  return { ...row, items };
 }
 
 /**

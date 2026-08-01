@@ -11,7 +11,7 @@ export type StoredEmailDispatch =
   | {
       kind: "ready";
       content: SendEmailRequest;
-      backing: "wallet" | "sandbox_allowance";
+      backing: "wallet" | "tokens" | "sandbox_allowance";
       providerSlug: string;
     };
 
@@ -39,12 +39,16 @@ export async function loadStoredEmail(
     : null;
   if (!raw) return { kind: "unreadable" };
   const content = parseEmailContent(raw);
-  return content
-    ? {
-        kind: "ready",
-        content,
-        backing: row.backing === "wallet" ? "wallet" : "sandbox_allowance",
-        providerSlug: String(row.provider_slug),
-      }
-    : { kind: "unreadable" };
+  if (!content) return { kind: "unreadable" };
+  const storedBacking = String(row.backing);
+  const backing =
+    storedBacking === "wallet" || storedBacking === "tokens"
+      ? storedBacking
+      : "sandbox_allowance";
+  return {
+    kind: "ready",
+    content,
+    backing,
+    providerSlug: String(row.provider_slug),
+  };
 }

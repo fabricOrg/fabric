@@ -61,8 +61,9 @@ export function MarginVerdict({
           rate is exactly what ADR-0012 refuses to treat as financial truth.
         */}
         <span className="text-xs text-muted-foreground">
-          Informational: ≈ {verdict.effective_unit_price_minor_display} minor
-          units per {unitLabel} (the total is what is charged)
+          {verdict.items.length} channel allocation
+          {verdict.items.length === 1 ? "" : "s"}; the {unitLabel} total is what
+          is charged.
         </span>
       </div>
 

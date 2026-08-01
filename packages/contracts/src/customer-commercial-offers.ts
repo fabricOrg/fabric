@@ -1,8 +1,8 @@
 import { z } from "zod";
+import { commercialOfferEligibilitySchema } from "./commercial-offer-eligibility.js";
 import {
   commercialChannelCodeSchema,
   commercialOfferCodeSchema,
-  commercialOfferEligibilitySchema,
   commercialUnitCodeSchema,
   nonNegativeIntegerString,
   positiveIntegerString,
@@ -23,18 +23,23 @@ export const customerCommercialOfferSchema = z.object({
   offer_code: commercialOfferCodeSchema,
   name: z.string(),
   description: z.string(),
-  channel_code: commercialChannelCodeSchema,
-  channel_name: z.string(),
-  unit_code: commercialUnitCodeSchema,
-  unit_label: z.string(),
-  paid_units: positiveIntegerString,
-  bonus_units: nonNegativeIntegerString,
-  total_units: positiveIntegerString,
+  items: z.array(
+    z.object({
+      channel_code: commercialChannelCodeSchema,
+      channel_name: z.string(),
+      unit_code: commercialUnitCodeSchema,
+      unit_label: z.string(),
+      paid_units: positiveIntegerString,
+      bonus_units: nonNegativeIntegerString,
+      total_units: positiveIntegerString,
+      eligibility: commercialOfferEligibilitySchema,
+    }),
+  ),
   total_price_minor: positiveIntegerString,
   currency,
+  credit_validity_days: z.number().int().positive().nullable(),
   minimum_pack_count: z.number().int().positive(),
   maximum_pack_count: z.number().int().positive().nullable(),
-  eligibility: commercialOfferEligibilitySchema,
   effective_to: z.string().datetime().nullable(),
 });
 export type CustomerCommercialOffer = z.infer<
@@ -54,10 +59,14 @@ export const commercialOfferPurchaseReceiptSchema = z.object({
   status: z.enum(["pending", "success", "failed"]),
   offer_version_id: z.string().uuid(),
   offer_name: z.string(),
-  channel_code: commercialChannelCodeSchema,
-  unit_code: commercialUnitCodeSchema,
+  items: z.array(
+    z.object({
+      channel_code: commercialChannelCodeSchema,
+      unit_code: commercialUnitCodeSchema,
+      quantity: positiveIntegerString,
+    }),
+  ),
   pack_count: z.number().int().positive(),
-  quantity: positiveIntegerString,
   amount_minor: positiveIntegerString,
   currency,
   created_at: z.string().datetime(),

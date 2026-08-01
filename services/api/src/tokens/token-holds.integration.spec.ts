@@ -3,12 +3,15 @@ import {
   accounts,
   createAppDb,
   createProvisioningDb,
-  type MinorUnits,
   type TenantId,
-  tokenPurchases,
 } from "@app/db";
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
+import {
+  cleanupPackages,
+  type PackageTrack,
+  seedPackagePurchase,
+} from "./package-fixtures.js";
 import { grantTokensForPurchase, readTokenBalance } from "./token-grant.js";
 import { holdTokens, resolveTokenHolds } from "./token-holds.js";
 
@@ -37,23 +40,21 @@ describeDb("token holds", () => {
     return id;
   }
 
-  /** Grant `quantity` tokens at `unitPrice`, so lots can be stacked at different locked prices. */
+  const packages: PackageTrack = { bookIds: [], offerIds: [], staffIds: [] };
+
+  /** Grant `quantity` tokens for a total of `quantity * unitPrice`, so lots stack at distinct
+   * per-unit economics even though the package price is what is actually locked. */
   async function grant(
     tenantId: string,
     quantity: bigint,
     unitPrice = 4n,
     channel = "sms",
   ): Promise<void> {
-    const reference = `token-${randomUUID()}`;
-    await provisioning.db.insert(tokenPurchases).values({
-      tenantId: tenantId as TenantId,
-      reference,
+    const { reference } = await seedPackagePurchase(provisioning, packages, {
+      tenantId,
       channel,
       quantity,
-      unitPriceMinorLocked: unitPrice as MinorUnits,
-      currency: "GHS",
-      amountMinor: (quantity * unitPrice) as MinorUnits,
-      email: "buyer@example.com",
+      totalPriceMinor: quantity * unitPrice,
     });
     await grantTokensForPurchase(deps, reference);
   }
@@ -73,6 +74,7 @@ describeDb("token holds", () => {
       await owner`DELETE FROM token_purchases WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM accounts WHERE id = ${id}::uuid`;
     }
+    await cleanupPackages(owner, packages);
     await owner.end();
     await provisioning.end();
     await appDb.sql.end();
@@ -126,11 +128,10 @@ describeDb("token holds", () => {
         referenceId: randomUUID(),
       }),
     );
-    // Spans both lots: 2 from the old one, then 1 from the new — one row per lot, each carrying its
-    // own locked price so 2c can recognize revenue unambiguously.
-    expect(
-      result.allocations.map((a) => `${a.quantity}@${a.unitPriceMinorLocked}`),
-    ).toEqual(["2@4", "1@9"]);
+    // Spans both lots: 2 from the old one, then 1 from the new — one hold row per lot, which is what
+    // lets 2c recognize each lot's own allocation unambiguously.
+    expect(result.allocations.map((a) => a.quantity)).toEqual([2n, 1n]);
+    expect(new Set(result.allocations.map((a) => a.lotId)).size).toBe(2);
     expect(await balance(tenant)).toBe(4n);
   });
 

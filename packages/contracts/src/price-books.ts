@@ -167,6 +167,12 @@ export const tokenBalanceDtoSchema = z.object({
   channel: commercialChannelCodeSchema,
   currency: z.string(),
   available: z.string(),
+  /**
+   * When the soonest-expiring credits in this balance lapse, or null when none expire. Checkout
+   * promises an expiry, so the balance has to be able to show it — otherwise credits can be
+   * recognized as breakage without the customer ever having been told a date.
+   */
+  expires_next_at: z.string().datetime().nullable(),
 });
 export const tokenBalancesResponseSchema = z.object({
   balances: z.array(tokenBalanceDtoSchema),

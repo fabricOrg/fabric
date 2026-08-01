@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  commercialOfferEligibilitySchema,
+  commercialRouteVocabularySchema,
+  unsupportedEligibilityDimensions,
+} from "./commercial-offer-eligibility.js";
 import { currency } from "./money.js";
 
 const code = z.string().regex(/^[a-z][a-z0-9_]{1,31}$/);
@@ -37,68 +42,70 @@ export const commercialOfferStatusSchema = z.enum([
 ]);
 export type CommercialOfferStatus = z.infer<typeof commercialOfferStatusSchema>;
 
-const eligibilityCode = z
-  .string()
-  .trim()
-  .min(1)
-  .max(120)
-  .regex(/^[a-zA-Z0-9._:-]+$/);
-
-export const commercialOfferEligibilitySchema = z
-  .object({
-    destination_countries: z
-      .array(z.string().regex(/^[A-Z]{2}$/))
-      .max(250)
-      .default([]),
-    traffic_classes: z.array(eligibilityCode).max(50).default([]),
-    provider_vendors: z.array(eligibilityCode).max(50).default([]),
-    service_classes: z.array(eligibilityCode).max(50).default([]),
-  })
-  .strict();
-export type CommercialOfferEligibility = z.infer<
-  typeof commercialOfferEligibilitySchema
->;
-
 export const createCommercialOfferRequestSchema = z.object({
   price_book_id: z.string().uuid(),
   code: commercialOfferCodeSchema,
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500).default(""),
-  channel_code: commercialChannelCodeSchema,
-  unit_code: commercialUnitCodeSchema,
 });
 export type CreateCommercialOfferRequest = z.infer<
   typeof createCommercialOfferRequestSchema
 >;
 
 /** The commercial terms of one version — shared by create, update, and the margin preview. */
-export const commercialOfferVersionFieldsSchema = z.object({
-  currency,
+export const commercialOfferVersionItemFieldsSchema = z.object({
+  channel_code: commercialChannelCodeSchema,
+  unit_code: commercialUnitCodeSchema,
   paid_units: positiveIntegerString,
-  // The first release has no promotional units. Keeping the field explicit prevents a later
-  // promotion feature from silently changing what "total units" meant on historical versions.
-  // The explicit `boolean` return matters: without it TypeScript infers a type predicate and the
-  // field's type collapses to the literal `"0"`, which would make every DTO carrying a stored value
-  // uncompilable the day bonus units ship.
   bonus_units: nonNegativeIntegerString.refine(
     (value): boolean => value === "0",
     "Bonus units are not enabled.",
   ),
-  total_price_minor: positiveIntegerString,
-  minimum_pack_count: z.number().int().positive().max(1_000_000).default(1),
-  maximum_pack_count: z.number().int().positive().max(1_000_000).nullable(),
   eligibility: commercialOfferEligibilitySchema.default({
     destination_countries: [],
     traffic_classes: [],
     provider_vendors: [],
     service_classes: [],
   }),
+});
+export type CommercialOfferVersionItemFields = z.infer<
+  typeof commercialOfferVersionItemFieldsSchema
+>;
+
+export const commercialOfferVersionFieldsSchema = z.object({
+  currency,
+  items: z.array(commercialOfferVersionItemFieldsSchema).min(1).max(20),
+  total_price_minor: positiveIntegerString,
+  credit_validity_days: z.number().int().positive().max(3_650).nullable(),
+  minimum_pack_count: z.number().int().positive().max(1_000_000).default(1),
+  maximum_pack_count: z.number().int().positive().max(1_000_000).nullable(),
   effective_from: z.string().datetime(),
   effective_to: z.string().datetime().nullable(),
 });
 
 export const createCommercialOfferVersionRequestSchema =
   commercialOfferVersionFieldsSchema.superRefine((version, ctx) => {
+    const channels = new Set<string>();
+    version.items.forEach((item, index) => {
+      if (channels.has(item.channel_code)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "A package can include each channel only once.",
+          path: ["items", index, "channel_code"],
+        });
+      }
+      channels.add(item.channel_code);
+      for (const dimension of unsupportedEligibilityDimensions(
+        item.channel_code,
+        item.eligibility,
+      )) {
+        ctx.addIssue({
+          code: "custom",
+          message: `${item.channel_code} sends cannot be restricted by ${dimension.replace(/_/g, " ")}, so credits carrying that restriction could never be spent.`,
+          path: ["items", index, "eligibility", dimension],
+        });
+      }
+    });
     if (
       version.maximum_pack_count !== null &&
       version.maximum_pack_count < version.minimum_pack_count
@@ -122,6 +129,14 @@ export const createCommercialOfferVersionRequestSchema =
   });
 export type CreateCommercialOfferVersionRequest = z.infer<
   typeof createCommercialOfferVersionRequestSchema
+>;
+
+export const createCommercialPackageRequestSchema = z.object({
+  offer: createCommercialOfferRequestSchema,
+  version: createCommercialOfferVersionRequestSchema,
+});
+export type CreateCommercialPackageRequest = z.infer<
+  typeof createCommercialPackageRequestSchema
 >;
 
 export const commercialOfferDtoSchema = createCommercialOfferRequestSchema
@@ -171,13 +186,24 @@ export type CommercialOfferCostSnapshot = z.infer<
   typeof commercialOfferCostSnapshotSchema
 >;
 
+export const commercialOfferVersionItemDtoSchema =
+  commercialOfferVersionItemFieldsSchema.extend({
+    id: z.string().uuid(),
+    position: z.number().int().nonnegative(),
+    total_units: positiveIntegerString,
+    allocated_price_minor: positiveIntegerString.nullable(),
+  });
+export type CommercialOfferVersionItemDto = z.infer<
+  typeof commercialOfferVersionItemDtoSchema
+>;
+
 export const commercialOfferVersionDtoSchema =
   commercialOfferVersionFieldsSchema.extend({
     id: z.string().uuid(),
     offer_id: z.string().uuid(),
     version: z.number().int().positive(),
     status: commercialOfferStatusSchema,
-    total_units: positiveIntegerString,
+    items: z.array(commercialOfferVersionItemDtoSchema),
     cost_snapshot: commercialOfferCostSnapshotSchema.nullable(),
     created_by: z.string().uuid(),
     approved_by: z.string().uuid().nullable(),
@@ -191,6 +217,14 @@ export const commercialOfferVersionDtoSchema =
   });
 export type CommercialOfferVersionDto = z.infer<
   typeof commercialOfferVersionDtoSchema
+>;
+
+export const createCommercialPackageResponseSchema = z.object({
+  offer: commercialOfferDtoSchema,
+  version: commercialOfferVersionDtoSchema,
+});
+export type CreateCommercialPackageResponse = z.infer<
+  typeof createCommercialPackageResponseSchema
 >;
 
 /** A registered channel + natural unit. Only `is_active` entries may be published or purchased. */
@@ -217,6 +251,7 @@ export type CommercialOfferWithVersions = z.infer<
 export const listCommercialOffersResponseSchema = z.object({
   offers: z.array(commercialOfferWithVersionsSchema),
   channels: z.array(commercialOfferChannelDtoSchema),
+  route_vocabulary: commercialRouteVocabularySchema,
 });
 export type ListCommercialOffersResponse = z.infer<
   typeof listCommercialOffersResponseSchema
@@ -236,7 +271,13 @@ export const purchaseCommercialOfferResponseSchema = z.object({
   reference: z.string(),
   offer_version_id: z.string().uuid(),
   pack_count: z.number().int().positive(),
-  quantity: positiveIntegerString,
+  items: z.array(
+    z.object({
+      channel_code: commercialChannelCodeSchema,
+      unit_code: commercialUnitCodeSchema,
+      quantity: positiveIntegerString,
+    }),
+  ),
   amount_minor: positiveIntegerString,
   currency,
 });

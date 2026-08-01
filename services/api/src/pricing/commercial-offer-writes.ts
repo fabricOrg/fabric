@@ -7,9 +7,11 @@ import {
   type MinorUnits,
   type PricingOffer,
   type PricingOfferVersion,
+  type PricingOfferVersionItem,
   type ProvisioningDb,
   priceBooks,
   pricingOffers,
+  pricingOfferVersionItems,
   pricingOfferVersions,
   staffUsers,
 } from "@app/db";
@@ -106,7 +108,18 @@ export async function insertVersion(
   version: number,
   request: CreateCommercialOfferVersionRequest,
   createdBy: string,
-): Promise<PricingOfferVersion> {
+): Promise<{
+  version: PricingOfferVersion;
+  items: PricingOfferVersionItem[];
+}> {
+  const paidUnits = request.items.reduce(
+    (sum, item) => sum + BigInt(item.paid_units),
+    0n,
+  );
+  const bonusUnits = request.items.reduce(
+    (sum, item) => sum + BigInt(item.bonus_units),
+    0n,
+  );
   const [row] = await db
     .insert(pricingOfferVersions)
     .values({
@@ -114,20 +127,39 @@ export async function insertVersion(
       version,
       status: "draft",
       currency: request.currency,
-      paidUnits: BigInt(request.paid_units),
-      bonusUnits: BigInt(request.bonus_units),
-      totalUnits: BigInt(request.paid_units) + BigInt(request.bonus_units),
+      paidUnits,
+      bonusUnits,
+      totalUnits: paidUnits + bonusUnits,
       totalPriceMinor: BigInt(request.total_price_minor) as MinorUnits,
+      creditValidityDays: request.credit_validity_days,
       minimumPackCount: request.minimum_pack_count,
       maximumPackCount: request.maximum_pack_count,
-      eligibility: toStoredEligibility(request.eligibility),
+      eligibility: {},
       effectiveFrom: new Date(request.effective_from),
       effectiveTo: request.effective_to ? new Date(request.effective_to) : null,
       createdBy,
     })
     .returning();
   if (!row) throw new Error("Offer version insert returned no row.");
-  return row;
+  const items = await db
+    .insert(pricingOfferVersionItems)
+    .values(
+      request.items.map((item, position) => ({
+        offerVersionId: row.id,
+        position,
+        channelCode: item.channel_code,
+        unitCode: item.unit_code,
+        paidUnits: BigInt(item.paid_units),
+        bonusUnits: BigInt(item.bonus_units),
+        totalUnits: BigInt(item.paid_units) + BigInt(item.bonus_units),
+        eligibility: toStoredEligibility(item.eligibility),
+      })),
+    )
+    .returning();
+  if (items.length !== request.items.length) {
+    throw new Error("Offer version item insert was incomplete.");
+  }
+  return { version: row, items };
 }
 
 /**
@@ -142,23 +174,33 @@ export async function insertVersion(
 export function offerTermsUnchanged(
   evaluated: PricingOfferVersion,
   current: PricingOfferVersion,
+  evaluatedItems: readonly PricingOfferVersionItem[],
+  currentItems: readonly PricingOfferVersionItem[],
 ): boolean {
   return (
     current.currency === evaluated.currency &&
-    current.totalUnits === evaluated.totalUnits &&
-    current.paidUnits === evaluated.paidUnits &&
-    current.bonusUnits === evaluated.bonusUnits &&
     current.totalPriceMinor === evaluated.totalPriceMinor &&
+    current.creditValidityDays === evaluated.creditValidityDays &&
     current.minimumPackCount === evaluated.minimumPackCount &&
     current.maximumPackCount === evaluated.maximumPackCount &&
     current.effectiveFrom.getTime() === evaluated.effectiveFrom.getTime() &&
     (current.effectiveTo?.getTime() ?? null) ===
       (evaluated.effectiveTo?.getTime() ?? null) &&
-    // Eligibility decides which routes were priced, so a change to it invalidates the verdict as surely
-    // as a price change. Compared through the normalized DTO so key order cannot fake a difference.
-    JSON.stringify(eligibilityOf(current)) ===
-      JSON.stringify(eligibilityOf(evaluated))
+    JSON.stringify(itemTerms(currentItems)) ===
+      JSON.stringify(itemTerms(evaluatedItems))
   );
+}
+
+function itemTerms(items: readonly PricingOfferVersionItem[]) {
+  return [...items]
+    .sort((left, right) => left.position - right.position)
+    .map((item) => ({
+      channelCode: item.channelCode,
+      unitCode: item.unitCode,
+      paidUnits: item.paidUnits.toString(),
+      bonusUnits: item.bonusUnits.toString(),
+      eligibility: toEligibilityDto(item.eligibility),
+    }));
 }
 
 /** The version row as it stands now — read inside the publish transaction, under the offer's lock. */
@@ -174,11 +216,27 @@ export async function readVersionForUpdate(
   return row ?? null;
 }
 
+export async function readVersionItemsForUpdate(
+  tx: Executor,
+  versionId: string,
+): Promise<PricingOfferVersionItem[]> {
+  return (
+    tx
+      .select()
+      .from(pricingOfferVersionItems)
+      .where(eq(pricingOfferVersionItems.offerVersionId, versionId))
+      .orderBy(pricingOfferVersionItems.position)
+      // Actually take the row locks the name promises: the offer-row lock serializes concurrent
+      // PUBLISHES, but not a draft edit racing between this re-read and the allocation write.
+      .for("update")
+  );
+}
+
 /** The eligibility of a stored version, in the wire shape the margin gate and preview both take. */
 export function eligibilityOf(
-  version: PricingOfferVersion,
+  item: PricingOfferVersionItem,
 ): CommercialOfferEligibilityDto {
-  return toEligibilityDto(version.eligibility);
+  return toEligibilityDto(item.eligibility);
 }
 
 /**

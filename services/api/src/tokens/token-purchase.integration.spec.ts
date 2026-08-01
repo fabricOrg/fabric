@@ -3,12 +3,6 @@ import {
   accounts,
   createAppDb,
   createProvisioningDb,
-  type MinorUnits,
-  offerCatalogAssignments,
-  priceBooks,
-  pricingOffers,
-  pricingOfferVersions,
-  staffUsers,
   type TenantId,
   tokenPurchases,
 } from "@app/db";
@@ -20,6 +14,7 @@ import type { KillSwitchService } from "../kill-switches/kill-switches.service.j
 import type { PluginResolverService } from "../plugins/plugin-resolver.service.js";
 import { TokenCatalogService } from "./token-catalog.service.js";
 import { readTokenBalance } from "./token-grant.js";
+import { seedPublishedOffer } from "./token-purchase.fixtures.js";
 import { TokenPurchaseService } from "./token-purchase.service.js";
 
 const superUrl = process.env.DATABASE_URL_SUPER;
@@ -83,87 +78,16 @@ describeDb("commercial-offer token purchase", () => {
     return id;
   }
 
-  async function makePublishedOffer(
+  const makePublishedOffer = (
     tenantId: string,
-    terms: {
-      minimum?: number;
-      maximum?: number | null;
-      serviceClasses?: string[];
-    } = {},
-  ) {
-    const [author, approver] = await provisioning.db
-      .insert(staffUsers)
-      .values([
-        { email: `${randomUUID()}@author.test`, role: "admin" },
-        { email: `${randomUUID()}@approver.test`, role: "admin" },
-      ])
-      .returning({ id: staffUsers.id });
-    if (!author || !approver) throw new Error("staff fixtures failed");
-    staffIds.push(author.id, approver.id);
-
-    const [book] = await provisioning.db
-      .insert(priceBooks)
-      .values({ name: `Bundle ${randomUUID()}`, mode: "token" })
-      .returning({ id: priceBooks.id });
-    if (!book) throw new Error("book fixture failed");
-    bookIds.push(book.id);
-    const [offer] = await provisioning.db
-      .insert(pricingOffers)
-      .values({
-        priceBookId: book.id,
-        code: `bundle-${randomUUID().slice(0, 8)}`,
-        name: "200 SMS segments",
-        channelCode: "sms",
-        unitCode: "segment",
-      })
-      .returning({ id: pricingOffers.id });
-    if (!offer) throw new Error("offer fixture failed");
-    offerIds.push(offer.id);
-    const now = new Date();
-    const [version] = await provisioning.db
-      .insert(pricingOfferVersions)
-      .values({
-        offerId: offer.id,
-        version: 1,
-        status: "published",
-        currency: "GHS",
-        paidUnits: 200n,
-        bonusUnits: 0n,
-        totalUnits: 200n,
-        totalPriceMinor: 300n as MinorUnits,
-        minimumPackCount: terms.minimum ?? 1,
-        maximumPackCount: terms.maximum ?? 10,
-        eligibility: {
-          providerVendors: ["arkesel"],
-          serviceClasses: terms.serviceClasses ?? [],
-        },
-        costSnapshot: {
-          bestCaseCostMinor: "100",
-          worstCaseCostMinor: "120",
-          bestCaseMarginMinor: "200",
-          worstCaseMarginMinor: "180",
-          worstCaseMarginBps: 6_000,
-          minimumMarginBps: 2_000,
-          minimumMarginSource: "platform_default",
-          routeCount: 1,
-          calculatedAt: now.toISOString(),
-          sourceReferences: ["fixture"],
-        },
-        createdBy: author.id,
-        approvedBy: approver.id,
-        approvedAt: now,
-        effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
-      })
-      .returning({ id: pricingOfferVersions.id });
-    if (!version) throw new Error("version fixture failed");
-    await provisioning.db.insert(offerCatalogAssignments).values({
-      tenantId: tenantId as TenantId,
-      priceBookId: book.id,
-      assignedBy: approver.id,
-      reason: "purchase test",
-    });
-    return version.id;
-  }
+    terms: Parameters<typeof seedPublishedOffer>[3] = {},
+  ) =>
+    seedPublishedOffer(
+      provisioning,
+      { bookIds, offerIds, staffIds },
+      tenantId,
+      terms,
+    );
 
   afterAll(async () => {
     for (const tenantId of tenantIds) {
@@ -179,6 +103,12 @@ describeDb("commercial-offer token purchase", () => {
       await owner`DELETE FROM accounts WHERE id = ${tenantId}::uuid`;
     }
     for (const offerId of offerIds) {
+      // Items first: the FK to the version is ON DELETE RESTRICT.
+      await owner`
+        DELETE FROM pricing_offer_version_items
+        WHERE offer_version_id IN (
+          SELECT id FROM pricing_offer_versions WHERE offer_id = ${offerId}::uuid
+        )`;
       await owner`DELETE FROM pricing_offer_versions WHERE offer_id = ${offerId}::uuid`;
       await owner`DELETE FROM pricing_offers WHERE id = ${offerId}::uuid`;
     }
@@ -205,7 +135,8 @@ describeDb("commercial-offer token purchase", () => {
     expect(checkout).toMatchObject({
       offer_version_id: versionId,
       pack_count: 2,
-      quantity: "400",
+      // 2 packs × the 200-segment item; quantity is per item now, not one number on the package.
+      items: [{ channel_code: "sms", unit_code: "segment", quantity: "400" }],
       amount_minor: "600",
       currency: "GHS",
     });
@@ -230,12 +161,9 @@ describeDb("commercial-offer token purchase", () => {
       .from(tokenPurchases)
       .where(eq(tokenPurchases.reference, checkout.reference));
     expect(purchase).toMatchObject({
-      pricingModel: "fixed_bundle",
       offerVersionId: versionId,
       packCount: 2,
-      quantity: 400n,
       amountMinor: 600n,
-      unitPriceMinorLocked: null,
       status: "success",
     });
   });

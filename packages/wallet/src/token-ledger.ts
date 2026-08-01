@@ -109,3 +109,47 @@ export async function recognizeTokenConsumption(
   });
   return { txnId, amountMinor: p.amountMinor, replayed: false };
 }
+
+/**
+ * EXPIRY: recognize the unearned consideration attached to credits that have contractually expired.
+ * This is distinct from delivered-message revenue in reporting, but it discharges the same deferred
+ * liability. Idempotency is per lot because a lot can cross the expiry boundary only once.
+ */
+export async function recognizeTokenBreakage(
+  tx: TenantTx,
+  p: {
+    currency: string;
+    amountMinor: bigint;
+    lotId: string;
+  },
+): Promise<MovementResult> {
+  const idempotencyKey = `token_breakage:${p.lotId}`;
+  const { txnId, replayed } = await openIdempotentTxn(tx, {
+    type: "token_breakage",
+    status: "committed",
+    idempotencyKey,
+    referenceId: p.lotId,
+    referenceType: "token_lot",
+    fingerprint: {
+      op: "token_breakage",
+      currency: p.currency,
+      amount: p.amountMinor.toString(),
+      ref: p.lotId,
+    },
+  });
+  if (replayed) return { txnId, amountMinor: p.amountMinor, replayed: true };
+  const deferred = await accountId(tx, p.currency, "token_deferred_revenue");
+  const revenue = await accountId(tx, p.currency, "revenue");
+  // Arg order is (referenceId, REASON, amount, legs, REFERENCE_TYPE): the reason is the enum column,
+  // the reference type names what the id points at.
+  await postLegs(
+    tx,
+    txnId,
+    p.lotId,
+    "token_breakage",
+    p.amountMinor,
+    { debit: deferred, credit: revenue },
+    "token_lot",
+  );
+  return { txnId, amountMinor: p.amountMinor, replayed: false };
+}

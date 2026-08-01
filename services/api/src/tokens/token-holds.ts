@@ -1,4 +1,5 @@
 import type { TenantTx } from "@app/db";
+import { expireTokenLots } from "./token-expiry.js";
 
 /**
  * TOKEN HOLDS (ADR-0010 Phase 2, slice 2b) — the count-space mirror of the wallet's
@@ -25,8 +26,6 @@ export interface TokenHoldAllocation {
   readonly holdId: string;
   readonly lotId: string;
   readonly quantity: bigint;
-  /** The lot's locked unit price — what slice 2c recognizes as revenue when this hold commits. */
-  readonly unitPriceMinorLocked: bigint | null;
   /** The lot's currency, so recognition posts against the right per-currency ledger accounts. */
   readonly currency: string;
 }
@@ -64,11 +63,12 @@ export async function holdTokens(
   },
 ): Promise<TokenHoldResult> {
   if (p.quantity <= 0n) return NONE;
+  await expireTokenLots(tx, { channel: p.channel, currency: p.currency });
 
   // Replay guard first — a retried accept must not claim a second set of tokens. Mirrors
   // prepareSend's replay check preceding the wallet reserve.
   const existing = (await tx`
-    SELECT h.id AS hold_id, h.lot_id, h.quantity, h.currency, l.unit_price_minor_locked
+    SELECT h.id AS hold_id, h.lot_id, h.quantity, h.currency
     FROM token_holds h
     JOIN token_lots l ON l.id = h.lot_id
     WHERE h.tenant_id = current_setting('app.tenant_id')::uuid
@@ -95,7 +95,7 @@ export async function holdTokens(
   // The first replay probe can race another transaction. Re-check after acquiring the counter lock;
   // otherwise the losing caller's hold INSERT conflicts but it still decrements the counter.
   const concurrentExisting = (await tx`
-    SELECT h.id AS hold_id, h.lot_id, h.quantity, h.currency, l.unit_price_minor_locked
+    SELECT h.id AS hold_id, h.lot_id, h.quantity, h.currency
     FROM token_holds h
     JOIN token_lots l ON l.id = h.lot_id
     WHERE h.tenant_id = current_setting('app.tenant_id')::uuid
@@ -111,25 +111,29 @@ export async function holdTokens(
   // Draw lots expiry-soonest then oldest (FIFO). `remaining` subtracts live claims, so a lot cannot
   // be over-drawn even though the counter is the aggregate.
   const lots = (await tx`
-    SELECT l.id, l.unit_price_minor_locked,
+    SELECT l.id,
            l.quantity_total - COALESCE(SUM(h.quantity)
              FILTER (WHERE h.status IN ('pending', 'committed')), 0) AS remaining
     FROM token_lots l
     LEFT JOIN token_holds h ON h.lot_id = l.id
     WHERE l.tenant_id = current_setting('app.tenant_id')::uuid
       AND l.channel = ${p.channel} AND l.currency = ${p.currency}
+      AND (l.expires_at IS NULL OR l.expires_at > now())
       AND (
-        l.pricing_model = 'unit'
-        OR (
-          l.pricing_model = 'fixed_bundle'
-          AND ${p.compatibility?.providerVendor ?? null}::text IS NOT NULL
-          AND (
+        (
+          -- Same shape as every other dimension: a restriction the caller cannot answer excludes the
+          -- lot, but a lot that restricts NOTHING is spendable on any route. Demanding a vendor
+          -- unconditionally would make an unrestricted package permanently unspendable.
+          (
             COALESCE(jsonb_array_length(
               l.compatibility_snapshot->'eligibility'->'providerVendors'
             ), 0) = 0
-            OR COALESCE(
-              l.compatibility_snapshot->'eligibility'->'providerVendors', '[]'::jsonb
-            ) ? ${p.compatibility?.providerVendor ?? ""}
+            OR (
+              ${p.compatibility?.providerVendor ?? null}::text IS NOT NULL
+              AND COALESCE(
+                l.compatibility_snapshot->'eligibility'->'providerVendors', '[]'::jsonb
+              ) ? ${p.compatibility?.providerVendor ?? ""}
+            )
           )
           AND (
             COALESCE(jsonb_array_length(
@@ -157,7 +161,7 @@ export async function holdTokens(
           )
         )
       )
-    GROUP BY l.id, l.unit_price_minor_locked, l.expires_at, l.created_at
+    GROUP BY l.id, l.expires_at, l.created_at
     HAVING l.quantity_total - COALESCE(SUM(h.quantity)
              FILTER (WHERE h.status IN ('pending', 'committed')), 0) > 0
     ORDER BY l.expires_at ASC NULLS LAST, l.created_at ASC`) as Row[];
@@ -172,10 +176,6 @@ export async function holdTokens(
       holdId: "",
       lotId: String(lot.id),
       quantity: take,
-      unitPriceMinorLocked:
-        lot.unit_price_minor_locked === null
-          ? null
-          : BigInt(String(lot.unit_price_minor_locked)),
       currency: p.currency,
     });
     outstanding -= take;
@@ -234,8 +234,7 @@ export async function resolveTokenHolds(
       AND h.tenant_id = current_setting('app.tenant_id')::uuid
       AND h.reference_id = ${referenceId}
       AND h.status = 'pending'
-    RETURNING h.id AS hold_id, h.lot_id, h.quantity, h.channel, h.currency,
-      l.unit_price_minor_locked`) as Row[];
+    RETURNING h.id AS hold_id, h.lot_id, h.quantity, h.channel, h.currency`) as Row[];
   if (rows.length === 0) return [];
 
   if (outcome === "returned") {
@@ -260,10 +259,6 @@ function toAllocation(row: Row): TokenHoldAllocation {
     holdId: String(row.hold_id),
     lotId: String(row.lot_id),
     quantity: BigInt(String(row.quantity)),
-    unitPriceMinorLocked:
-      row.unit_price_minor_locked === null
-        ? null
-        : BigInt(String(row.unit_price_minor_locked)),
     currency: String(row.currency),
   };
 }
