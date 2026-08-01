@@ -562,6 +562,16 @@ full lot consumption recognizes exactly the purchase total.
 
 ### Phase 4 — usage eligibility and customer experience
 
+**Complete.** Live workspaces now read their assigned/default customer-safe catalog, inspect token
+balances, and start exact pack checkout through an owner/admin-only BFF. Paystack return pages show
+the immutable purchase receipt and remain pending until the signed webhook grants the lot. Sandbox
+workspaces cannot enter this paid path: wallet navigation and the direct page are closed, and the API
+independently refuses a sandbox purchase. Fixed-bundle lots are selected only when provider,
+destination, traffic, and available service-class context satisfy the stored eligibility snapshot;
+legacy unit-priced lots remain unrestricted. Token accounting channel fields are registry-backed so
+adding a future channel does not require another token-table migration, while a capability gate keeps
+offers hidden until that channel's send path can consume its natural unit.
+
 - enforce offer compatibility in token selection;
 - retain tokens-first, wallet-second, fail-closed behavior;
 - add customer catalog, checkout, receipt, and balance views;
@@ -657,8 +667,8 @@ defect.
 - `COM-005` Initiate purchase from a published offer snapshot. **DONE.**
 - `COM-006` Reconcile payment and grant an offer-backed lot exactly once. **DONE.**
 - `COM-007` Implement cumulative integer revenue allocation. **DONE.**
-- `COM-008` Enforce destination/traffic/service compatibility during token holds.
-- `COM-009` Build eligible customer catalog, checkout, receipt, and balance surfaces.
+- `COM-008` Enforce destination/traffic/service compatibility during token holds. **DONE.**
+- `COM-009` Build eligible customer catalog, checkout, receipt, and balance surfaces. **DONE.**
 - `COM-010` Reconcile bundle deferred revenue, consumption, and remaining entitlement.
 - `COM-011` Add workspace-specific catalog assignment. **DONE** (`offer_catalog_assignments`).
 - `COM-012` Add volume tiers or promotional units only after a separate approved scope.
