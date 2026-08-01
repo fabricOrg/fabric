@@ -10,7 +10,7 @@ import { listCommercialOffers } from "@/lib/server/commercial-offers-client";
 import { listPriceBooks } from "@/lib/server/price-book-client";
 
 /**
- * Prepaid offers (ADR-0012) — kept on its own page rather than mixed into Pricing, because a
+ * Prepaid packages (ADR-0012) — kept on its own page rather than mixed into Pricing, because a
  * pay-as-you-go rate and a fixed-total bundle are different things: one prices a unit, the other is a
  * product with an immutable promise and an approval trail.
  */
@@ -39,7 +39,7 @@ export default async function CommercialOffersPage() {
     catalogs = books.filter((book) => book.mode === "token");
   } catch {
     // Any throw here means the catalog could not be loaded. Testing for specific error classes would
-    // leave a non-Error throw rendering the success-shaped "No prepaid offers yet." empty state.
+    // leave a non-Error throw rendering the success-shaped "No prepaid packages yet." empty state.
     loadError = true;
   }
 
@@ -47,7 +47,7 @@ export default async function CommercialOffersPage() {
     <div className="flex w-full flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Prepaid offers
+          Prepaid packages
         </h1>
         <p className="text-sm text-muted-foreground">
           Fixed quantities for a fixed total price. A published version can
@@ -59,7 +59,7 @@ export default async function CommercialOffersPage() {
 
       {loadError ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          Couldn&apos;t load prepaid offers right now. Try again shortly.
+          Couldn&apos;t load prepaid packages right now. Try again shortly.
         </p>
       ) : (
         <CommercialOffersManager
