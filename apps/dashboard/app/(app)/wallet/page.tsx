@@ -182,7 +182,7 @@ export default async function WalletPage({
     ) : (
       <Alert variant="destructive">
         <TriangleAlert />
-        <AlertTitle>Couldn&apos;t load prepaid offers</AlertTitle>
+        <AlertTitle>Couldn&apos;t load prepaid packages</AlertTitle>
         <AlertDescription>
           Your wallet remains available. Refresh before attempting a token
           purchase.

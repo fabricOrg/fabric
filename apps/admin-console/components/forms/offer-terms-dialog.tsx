@@ -34,6 +34,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
+import { CreditExpirySelect } from "@/components/forms/credit-expiry-select";
 import { EligibilityChips } from "@/components/forms/eligibility-chips";
 import { MarginVerdict } from "@/components/offer-margin-verdict";
 import {
@@ -316,14 +317,10 @@ export function OfferTermsDialog({
               </div>
             </Field>
             <Field>
-              <FieldLabel>Credit validity (days)</FieldLabel>
-              <Input
-                inputMode="numeric"
+              <FieldLabel>Credit expiry</FieldLabel>
+              <CreditExpirySelect
                 value={form.creditValidityDays}
-                placeholder="Blank means never expires"
-                onChange={(event) =>
-                  form.setCreditValidityDays(event.target.value)
-                }
+                onChange={form.setCreditValidityDays}
               />
             </Field>
             <Field>
