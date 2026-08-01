@@ -33,7 +33,7 @@ export const tokenLots = pgTable(
     tenantId: tenantIdCol().references(() => accounts.id, {
       onDelete: "restrict",
     }),
-    channel: text("channel").notNull(), // sms | email
+    channel: text("channel").notNull(),
     currency: text("currency").notNull(),
     pricingModel: text("pricing_model").notNull().default("unit"),
     offerVersionId: uuid("offer_version_id").references(
@@ -69,7 +69,6 @@ export const tokenLots = pgTable(
     // Grant-once at the DB: a replayed webhook cannot mint a second lot for the same purchase.
     unique("uniq_token_lot_purchase").on(t.tenantId, t.purchaseReference),
     unique("uniq_token_lot_tenant_id").on(t.tenantId, t.id),
-    check("token_lots_channel_chk", sql`${t.channel} in ('sms', 'email')`),
     check("token_lots_quantity_chk", sql`${t.quantityTotal} > 0`),
     check(
       "token_lots_pricing_model_chk",
@@ -124,7 +123,7 @@ export const tokenCounters = pgTable(
     tenantId: tenantIdCol().references(() => accounts.id, {
       onDelete: "restrict",
     }),
-    channel: text("channel").notNull(), // sms | email
+    channel: text("channel").notNull(),
     currency: text("currency").notNull(),
     /** Sends still owned and spendable. A COUNT, not money. */
     available: bigint("available", { mode: "bigint" })
@@ -134,7 +133,6 @@ export const tokenCounters = pgTable(
   },
   (t) => [
     unique("uniq_token_counter").on(t.tenantId, t.channel, t.currency),
-    check("token_counters_channel_chk", sql`${t.channel} in ('sms', 'email')`),
     // The no-negative-entitlement floor. Mirrors the wallet's overdraw rejection, enforced at the DB.
     check("token_counters_available_chk", sql`${t.available} >= 0`),
   ],
@@ -161,7 +159,7 @@ export const tokenHolds = pgTable(
     }),
     // RESTRICT: a lot is history for anything held against it; it must never vanish underneath.
     lotId: uuid("lot_id").notNull(),
-    channel: text("channel").notNull(), // sms | email
+    channel: text("channel").notNull(),
     currency: text("currency").notNull(),
     /** Tokens claimed from THIS lot. A COUNT, not money. */
     quantity: bigint("quantity", { mode: "bigint" }).notNull(),
@@ -185,7 +183,6 @@ export const tokenHolds = pgTable(
       "token_holds_status_chk",
       sql`${t.status} in ('pending', 'committed', 'returned')`,
     ),
-    check("token_holds_channel_chk", sql`${t.channel} in ('sms', 'email')`),
     check("token_holds_quantity_chk", sql`${t.quantity} > 0`),
     // Find every hold for a send (commit/return) and sweep stuck pendings.
     index("idx_token_holds_reference").on(t.tenantId, t.referenceId),

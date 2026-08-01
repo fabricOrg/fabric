@@ -36,17 +36,24 @@ export interface NavItem {
   /** Membership roles allowed to see this item (for role-gated pages like Team, which isn't a
    *  permission scope). Absent → any role. */
   readonly roles?: readonly string[];
+  /** Sandbox funding is a daily allowance, never a wallet or paid token purchase. */
+  readonly hideInSandbox?: boolean;
 }
 
 /** True when a session (its permissions + membership role) may see a nav item. */
 export function canSeeNavItem(
   item: NavItem,
-  ctx: { readonly permissions: readonly string[]; readonly role: string },
+  ctx: {
+    readonly permissions: readonly string[];
+    readonly role: string;
+    readonly plan?: string;
+  },
 ): boolean {
   if (item.permission && !ctx.permissions.includes(item.permission)) {
     return false;
   }
   if (item.roles && !item.roles.includes(ctx.role)) return false;
+  if (item.hideInSandbox && ctx.plan === "sandbox") return false;
   return true;
 }
 
@@ -151,10 +158,11 @@ export const navGroups: readonly NavGroup[] = [
     label: "Account",
     items: [
       {
-        title: "Billing & Wallet",
+        title: "Billing & Tokens",
         href: "/wallet",
         icon: Wallet,
         permission: "wallet:read",
+        hideInSandbox: true,
       },
       // Team management is role-gated (owner/admin), not a permission scope.
       { title: "Team", href: "/team", icon: Users, roles: ["owner", "admin"] },
@@ -171,6 +179,7 @@ export interface NavCommand {
   icon: LucideIcon;
   permission?: string;
   roles?: readonly string[];
+  hideInSandbox?: boolean;
 }
 
 export const navCommands: readonly NavCommand[] = navGroups.flatMap((g) =>
@@ -181,15 +190,21 @@ export const navCommands: readonly NavCommand[] = navGroups.flatMap((g) =>
     icon: item.icon,
     ...(item.permission ? { permission: item.permission } : {}),
     ...(item.roles ? { roles: item.roles } : {}),
+    ...(item.hideInSandbox ? { hideInSandbox: true } : {}),
   })),
 );
 
 /** Palette-side visibility check — mirrors canSeeNavItem for a flattened command. */
 export function canSeeNavCommand(
   cmd: NavCommand,
-  ctx: { readonly permissions: readonly string[]; readonly role: string },
+  ctx: {
+    readonly permissions: readonly string[];
+    readonly role: string;
+    readonly plan?: string;
+  },
 ): boolean {
   if (cmd.permission && !ctx.permissions.includes(cmd.permission)) return false;
   if (cmd.roles && !cmd.roles.includes(ctx.role)) return false;
+  if (cmd.hideInSandbox && ctx.plan === "sandbox") return false;
   return true;
 }

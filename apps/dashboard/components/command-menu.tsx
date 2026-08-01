@@ -21,9 +21,11 @@ const OPEN_EVENT = "fabric:command-menu";
 export function CommandMenu({
   permissions,
   role,
+  plan,
 }: {
   permissions: readonly string[];
   role: string;
+  plan?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -33,8 +35,11 @@ export function CommandMenu({
 
   // Only destinations the member can actually reach — mirrors the sidebar gating.
   const commands = useMemo(
-    () => navCommands.filter((c) => canSeeNavCommand(c, { permissions, role })),
-    [permissions, role],
+    () =>
+      navCommands.filter((c) =>
+        canSeeNavCommand(c, { permissions, role, plan }),
+      ),
+    [permissions, role, plan],
   );
 
   const results = useMemo(() => {

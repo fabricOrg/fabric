@@ -3,6 +3,7 @@ import type {
   PurchaseCommercialOfferRequest,
   PurchaseCommercialOfferResponse,
 } from "@app/contracts";
+import { purchaseCommercialOfferResponseSchema } from "@app/contracts";
 import { type AppDb, type ProvisioningDb, tokenPurchases } from "@app/db";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -83,7 +84,9 @@ export class TokenPurchaseService {
         email: request.email,
         reference,
         ...(base
-          ? { callbackUrl: `${base.replace(/\/$/, "")}/wallet?tokens=1` }
+          ? {
+              callbackUrl: `${base.replace(/\/$/, "")}/wallet?tokens=1&reference=${encodeURIComponent(reference)}`,
+            }
           : {}),
         metadata: {
           tenant_id: tenantId,
@@ -99,15 +102,15 @@ export class TokenPurchaseService {
       .set({ providerRef: init.providerRef, updatedAt: new Date() })
       .where(eq(tokenPurchases.reference, reference));
 
-    return {
+    return purchaseCommercialOfferResponseSchema.parse({
       authorization_url: init.authorizationUrl,
       reference,
       offer_version_id: intent.offerVersionId,
       pack_count: intent.packCount,
       quantity: intent.quantity.toString(),
       amount_minor: intent.amountMinor.toString(),
-      currency: intent.currency as PurchaseCommercialOfferResponse["currency"],
-    };
+      currency: intent.currency,
+    });
   }
 
   /** Reconcile a verified Paystack success event and grant its stored promise exactly once. */

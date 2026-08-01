@@ -18,6 +18,7 @@ import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
 import type { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import type { PluginResolverService } from "../plugins/plugin-resolver.service.js";
+import { TokenCatalogService } from "./token-catalog.service.js";
 import { readTokenBalance } from "./token-grant.js";
 import { TokenPurchaseService } from "./token-purchase.service.js";
 
@@ -64,6 +65,7 @@ describeDb("commercial-offer token purchase", () => {
       }),
     } as unknown as PluginResolverService,
   );
+  const catalogService = new TokenCatalogService(provisioning);
 
   async function makeTenant(
     currency: "GHS" | "NGN" = "GHS",
@@ -83,7 +85,11 @@ describeDb("commercial-offer token purchase", () => {
 
   async function makePublishedOffer(
     tenantId: string,
-    terms: { minimum?: number; maximum?: number | null } = {},
+    terms: {
+      minimum?: number;
+      maximum?: number | null;
+      serviceClasses?: string[];
+    } = {},
   ) {
     const [author, approver] = await provisioning.db
       .insert(staffUsers)
@@ -127,7 +133,10 @@ describeDb("commercial-offer token purchase", () => {
         totalPriceMinor: 300n as MinorUnits,
         minimumPackCount: terms.minimum ?? 1,
         maximumPackCount: terms.maximum ?? 10,
-        eligibility: { providerVendors: ["arkesel"] },
+        eligibility: {
+          providerVendors: ["arkesel"],
+          serviceClasses: terms.serviceClasses ?? [],
+        },
         costSnapshot: {
           bestCaseCostMinor: "100",
           worstCaseCostMinor: "120",
@@ -143,7 +152,7 @@ describeDb("commercial-offer token purchase", () => {
         createdBy: author.id,
         approvedBy: approver.id,
         approvedAt: now,
-        effectiveFrom: now,
+        effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
       })
       .returning({ id: pricingOfferVersions.id });
     if (!version) throw new Error("version fixture failed");
@@ -303,42 +312,36 @@ describeDb("commercial-offer token purchase", () => {
     });
   });
 
-  it("cannot settle a sandbox purchase with live webhook credentials", async () => {
+  it("never creates a paid token purchase for a sandbox workspace", async () => {
     const tenantId = await makeTenant("GHS", "sandbox");
     const versionId = await makePublishedOffer(tenantId);
-    const checkout = await service.initiate(tenantId, {
-      offer_version_id: versionId,
-      pack_count: 1,
-      email: "buyer@example.com",
-    });
     await expect(
-      service.completeFromWebhook(checkout.reference, {
-        amountMinor: 300n,
-        currency: "GHS",
-        verifiedMode: "live",
+      service.initiate(tenantId, {
+        offer_version_id: versionId,
+        pack_count: 1,
+        email: "buyer@example.com",
       }),
     ).rejects.toMatchObject({
-      response: { error: { code: "credential_mode_mismatch" } },
+      response: { error: { code: "sandbox_token_purchase_denied" } },
     });
-    expect(
-      await appDb.withTenant(tenantId, (tx) =>
-        readTokenBalance(tx, "sms", "GHS"),
-      ),
-    ).toBe(0n);
+  });
 
-    await service.completeFromWebhook(checkout.reference, {
-      amountMinor: 300n,
-      currency: "GHS",
-      verifiedMode: "sandbox",
+  it("does not sell an offer whose service-class restriction cannot be consumed yet", async () => {
+    const tenantId = await makeTenant();
+    const versionId = await makePublishedOffer(tenantId, {
+      serviceClasses: ["priority"],
     });
+    expect((await catalogService.catalog(tenantId)).offers).toEqual([]);
     await expect(
-      service.completeFromWebhook(checkout.reference, {
-        amountMinor: 300n,
-        currency: "GHS",
-        verifiedMode: "live",
+      service.initiate(tenantId, {
+        offer_version_id: versionId,
+        pack_count: 1,
+        email: "buyer@example.com",
       }),
     ).rejects.toMatchObject({
-      response: { error: { code: "credential_mode_mismatch" } },
+      response: {
+        error: { code: "commercial_offer_consumption_unavailable" },
+      },
     });
   });
 });

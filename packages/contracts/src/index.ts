@@ -17,6 +17,7 @@ export * from "./applications.js";
 export * from "./audit.js";
 export * from "./commercial-offers.js";
 export * from "./commercial-offers-admin.js";
+export * from "./customer-commercial-offers.js";
 export * from "./definition-catalog.js";
 // Dev-portal DTOs (F8.6/F2.3) — API keys, webhook endpoints, request logs.
 export * from "./dev-portal.js";

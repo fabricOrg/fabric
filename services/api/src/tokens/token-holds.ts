@@ -55,6 +55,12 @@ export async function holdTokens(
     currency: string;
     quantity: bigint;
     referenceId: string;
+    compatibility?: {
+      providerVendor: string;
+      destinationCountry?: string;
+      trafficClass?: string;
+      serviceClass?: string;
+    };
   },
 ): Promise<TokenHoldResult> {
   if (p.quantity <= 0n) return NONE;
@@ -112,6 +118,45 @@ export async function holdTokens(
     LEFT JOIN token_holds h ON h.lot_id = l.id
     WHERE l.tenant_id = current_setting('app.tenant_id')::uuid
       AND l.channel = ${p.channel} AND l.currency = ${p.currency}
+      AND (
+        l.pricing_model = 'unit'
+        OR (
+          l.pricing_model = 'fixed_bundle'
+          AND ${p.compatibility?.providerVendor ?? null}::text IS NOT NULL
+          AND (
+            COALESCE(jsonb_array_length(
+              l.compatibility_snapshot->'eligibility'->'providerVendors'
+            ), 0) = 0
+            OR COALESCE(
+              l.compatibility_snapshot->'eligibility'->'providerVendors', '[]'::jsonb
+            ) ? ${p.compatibility?.providerVendor ?? ""}
+          )
+          AND (
+            COALESCE(jsonb_array_length(
+              l.compatibility_snapshot->'eligibility'->'destinationCountries'
+            ), 0) = 0
+            OR COALESCE(
+              l.compatibility_snapshot->'eligibility'->'destinationCountries', '[]'::jsonb
+            ) ? ${p.compatibility?.destinationCountry ?? ""}
+          )
+          AND (
+            COALESCE(jsonb_array_length(
+              l.compatibility_snapshot->'eligibility'->'trafficClasses'
+            ), 0) = 0
+            OR COALESCE(
+              l.compatibility_snapshot->'eligibility'->'trafficClasses', '[]'::jsonb
+            ) ? ${p.compatibility?.trafficClass ?? ""}
+          )
+          AND (
+            COALESCE(jsonb_array_length(
+              l.compatibility_snapshot->'eligibility'->'serviceClasses'
+            ), 0) = 0
+            OR COALESCE(
+              l.compatibility_snapshot->'eligibility'->'serviceClasses', '[]'::jsonb
+            ) ? ${p.compatibility?.serviceClass ?? ""}
+          )
+        )
+      )
     GROUP BY l.id, l.unit_price_minor_locked, l.expires_at, l.created_at
     HAVING l.quantity_total - COALESCE(SUM(h.quantity)
              FILTER (WHERE h.status IN ('pending', 'committed')), 0) > 0

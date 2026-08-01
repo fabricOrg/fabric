@@ -2,7 +2,9 @@ import { z } from "zod";
 import { currency } from "./money.js";
 
 const code = z.string().regex(/^[a-z][a-z0-9_]{1,31}$/);
-const offerCode = z.string().regex(/^[a-z][a-z0-9_-]{1,63}$/);
+export const commercialOfferCodeSchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9_-]{1,63}$/);
 // Quantities and money travel as exact decimal-integer strings (bigint doesn't survive JSON).
 // Exported for `commercial-offers-admin.ts` so staff authoring and customer purchase can never
 // disagree about what counts as a valid quantity or amount.
@@ -59,7 +61,7 @@ export type CommercialOfferEligibility = z.infer<
 
 export const createCommercialOfferRequestSchema = z.object({
   price_book_id: z.string().uuid(),
-  code: offerCode,
+  code: commercialOfferCodeSchema,
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500).default(""),
   channel_code: commercialChannelCodeSchema,

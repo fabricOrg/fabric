@@ -5,6 +5,7 @@ import {
   Controller,
   Get,
   Inject,
+  Param,
   Post,
   Req,
   UseGuards,
@@ -16,6 +17,7 @@ import {
 } from "../api-keys/api-key.guard.js";
 import { APP_DB } from "../db/db.module.js";
 import { forbidden, invalidRequest } from "../http/api-error.js";
+import { TokenCatalogService } from "./token-catalog.service.js";
 import { listTokenBalances } from "./token-grant.js";
 import { TokenPurchaseService } from "./token-purchase.service.js";
 
@@ -35,6 +37,8 @@ export class TokensController {
     @Inject(TokenPurchaseService)
     private readonly purchases: TokenPurchaseService,
     @Inject(APP_DB) private readonly db: AppDb,
+    @Inject(TokenCatalogService)
+    private readonly catalog: TokenCatalogService,
   ) {}
 
   @Get()
@@ -47,9 +51,21 @@ export class TokensController {
     };
   }
 
+  @Get("catalog")
+  offers(@Req() req: AuthedRequest) {
+    const tenant = requireTokenSession(req.tenant);
+    return this.catalog.catalog(tenant.id);
+  }
+
+  @Get("purchases/:reference")
+  receipt(@Req() req: AuthedRequest, @Param("reference") reference: string) {
+    const tenant = requireTokenSession(req.tenant);
+    return this.catalog.receipt(tenant.id, reference);
+  }
+
   @Post("purchase")
   async purchase(@Req() req: AuthedRequest, @Body() body: unknown) {
-    const tenant = requirePurchaseSession(req.tenant);
+    const tenant = requireTokenSession(req.tenant);
     const parsed = purchaseCommercialOfferRequestSchema.safeParse(body);
     if (!parsed.success) {
       throw invalidRequest(
@@ -61,9 +77,7 @@ export class TokensController {
   }
 }
 
-function requirePurchaseSession(
-  tenant: RequestTenant | undefined,
-): RequestTenant {
+function requireTokenSession(tenant: RequestTenant | undefined): RequestTenant {
   const resolved = requireScope(tenant, "wallet:read");
   if (!resolved.isSessionToken) {
     throw forbidden(
