@@ -174,6 +174,8 @@ export const tokenBalanceDtoSchema = z.object({
    */
   expires_next_at: z.string().datetime().nullable(),
 });
+export type TokenBalanceDto = z.infer<typeof tokenBalanceDtoSchema>;
+
 export const tokenBalancesResponseSchema = z.object({
   balances: z.array(tokenBalanceDtoSchema),
 });

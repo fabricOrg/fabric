@@ -56,6 +56,7 @@ import { redirect } from "next/navigation";
 import { AutoTopupDialog } from "@/components/forms/auto-topup-dialog";
 import { TopUpDialog } from "@/components/forms/top-up-dialog";
 import { CommercialOfferCatalog } from "@/components/tokens/commercial-offer-catalog";
+import { CreditBalances } from "@/components/tokens/credit-balances";
 import { BalanceTrend } from "@/components/wallet/balance-trend";
 import { formatMoney, formatSigned } from "@/lib/money";
 import { requireDashboardSession } from "@/lib/server/auth";
@@ -176,7 +177,6 @@ export default async function WalletPage({
     tokenBalancesResult.status === "fulfilled" ? (
       <CommercialOfferCatalog
         catalog={catalogResult.value}
-        balances={tokenBalancesResult.value.balances}
         canPurchase={canPurchase}
       />
     ) : (
@@ -304,6 +304,10 @@ export default async function WalletPage({
       </div>
 
       {tokenReceipt ? <TokenPurchaseNotice receipt={tokenReceipt} /> : null}
+
+      {tokenBalancesResult.status === "fulfilled" ? (
+        <CreditBalances balances={tokenBalancesResult.value.balances} />
+      ) : null}
 
       {commercialSection}
 

@@ -5,7 +5,6 @@ import {
   type CustomerCommercialOfferCatalog,
   parseApiError,
   purchaseCommercialOfferResponseSchema,
-  type TokenBalancesResponse,
 } from "@app/contracts";
 import { Alert, AlertDescription } from "@app/ui/components/ui/alert";
 import { Badge } from "@app/ui/components/ui/badge";
@@ -19,19 +18,17 @@ import {
   CardTitle,
 } from "@app/ui/components/ui/card";
 import { Input } from "@app/ui/components/ui/input";
-import { Coins, LockKeyhole, TriangleAlert } from "lucide-react";
+import { LockKeyhole, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { formatMoney } from "@/lib/money";
 
 interface CommercialOfferCatalogProps {
   readonly catalog: CustomerCommercialOfferCatalog;
-  readonly balances: TokenBalancesResponse["balances"];
   readonly canPurchase: boolean;
 }
 
 export function CommercialOfferCatalog({
   catalog,
-  balances,
   canPurchase,
 }: CommercialOfferCatalogProps) {
   return (
@@ -49,44 +46,6 @@ export function CommercialOfferCatalog({
             and checked when a send reserves tokens.
           </p>
         </div>
-        {balances.length > 0 ? (
-          <div
-            className="flex flex-wrap gap-2"
-            role="group"
-            aria-label="Token balances"
-          >
-            {balances.map((balance) => {
-              // Name the date rather than only the count: these credits can lapse, and an expiry the
-              // customer was never shown is one they cannot act on.
-              const expiry = balance.expires_next_at;
-              return (
-                <Badge
-                  key={`${balance.channel}:${balance.currency}`}
-                  variant="secondary"
-                  className="font-mono tabular-nums"
-                  title={
-                    expiry === null
-                      ? undefined
-                      : `Soonest expiry ${new Date(expiry).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`
-                  }
-                >
-                  <Coins aria-hidden="true" />
-                  {BigInt(balance.available).toLocaleString("en")}{" "}
-                  {balance.channel}
-                  {expiry !== null && (
-                    <span className="ml-1 font-normal opacity-80">
-                      · expires{" "}
-                      {new Date(expiry).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                      })}
-                    </span>
-                  )}
-                </Badge>
-              );
-            })}
-          </div>
-        ) : null}
       </div>
 
       {!canPurchase ? (
@@ -190,7 +149,8 @@ function OfferCard({
               const bonus = BigInt(item.bonus_units) * BigInt(packCount);
               return (
                 <li key={item.channel_code}>
-                  {quantity.toLocaleString("en")} {item.unit_label}
+                  {quantity.toLocaleString("en")}{" "}
+                  {quantity === 1n ? item.unit_label : `${item.unit_label}s`}
                   {bonus > 0n ? ` (${bonus.toLocaleString("en")} bonus)` : ""}
                 </li>
               );
