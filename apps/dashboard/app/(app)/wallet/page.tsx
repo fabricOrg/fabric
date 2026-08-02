@@ -58,6 +58,7 @@ import { TopUpDialog } from "@/components/forms/top-up-dialog";
 import { CommercialOfferCatalog } from "@/components/tokens/commercial-offer-catalog";
 import { CreditBalances } from "@/components/tokens/credit-balances";
 import { BalanceTrend } from "@/components/wallet/balance-trend";
+import { WalletTabs } from "@/components/wallet/wallet-tabs";
 import { formatMoney, formatSigned } from "@/lib/money";
 import { requireDashboardSession } from "@/lib/server/auth";
 import {
@@ -305,12 +306,6 @@ export default async function WalletPage({
 
       {tokenReceipt ? <TokenPurchaseNotice receipt={tokenReceipt} /> : null}
 
-      {tokenBalancesResult.status === "fulfilled" ? (
-        <CreditBalances balances={tokenBalancesResult.value.balances} />
-      ) : null}
-
-      {commercialSection}
-
       {paymentParams.payment_return === "1" ? (
         <Alert>
           {paymentCredited ? <CheckCircle2 /> : <Clock />}
@@ -378,230 +373,250 @@ export default async function WalletPage({
         </Alert>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {balances.map((b) => {
-          const runway = messageRunway(b);
-          const isPrimary = b.balance.currency === primaryCurrency;
-          return (
-            <Card key={b.balance.currency} className="flex flex-col">
-              <CardHeader>
-                <CardDescription>{b.balance.currency} balance</CardDescription>
-                <CardTitle className="font-display text-3xl tabular-nums">
-                  {formatMoney(b.balance)}
-                </CardTitle>
-                {isLow(b) && (
-                  <CardAction>
-                    <Badge
-                      variant="outline"
-                      className="gap-1 border-transparent bg-warning/15 text-warning"
-                    >
-                      <TriangleAlert />
-                      Low
-                    </Badge>
-                  </CardAction>
-                )}
-              </CardHeader>
-              <CardContent className="mt-auto flex flex-col gap-3 text-sm">
-                {runway && (
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-mono text-lg font-semibold tabular-nums">
-                      ≈ {runway.count.toLocaleString("en")} SMS
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      left at {formatMoney(runway.rate)} / segment
-                    </span>
+      <WalletTabs
+        defaultTab={tokenReceipt ? "credits" : "wallet"}
+        credits={
+          <>
+            {tokenBalancesResult.status === "fulfilled" ? (
+              <CreditBalances balances={tokenBalancesResult.value.balances} />
+            ) : null}
+
+            {commercialSection}
+          </>
+        }
+        wallet={
+          <>
+            <div className="grid gap-4 md:grid-cols-3">
+              {balances.map((b) => {
+                const runway = messageRunway(b);
+                const isPrimary = b.balance.currency === primaryCurrency;
+                return (
+                  <Card key={b.balance.currency} className="flex flex-col">
+                    <CardHeader>
+                      <CardDescription>
+                        {b.balance.currency} balance
+                      </CardDescription>
+                      <CardTitle className="font-display text-3xl tabular-nums">
+                        {formatMoney(b.balance)}
+                      </CardTitle>
+                      {isLow(b) && (
+                        <CardAction>
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-transparent bg-warning/15 text-warning"
+                          >
+                            <TriangleAlert />
+                            Low
+                          </Badge>
+                        </CardAction>
+                      )}
+                    </CardHeader>
+                    <CardContent className="mt-auto flex flex-col gap-3 text-sm">
+                      {runway && (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-mono text-lg font-semibold tabular-nums">
+                            ≈ {runway.count.toLocaleString("en")} SMS
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            left at {formatMoney(runway.rate)} / segment
+                          </span>
+                        </div>
+                      )}
+                      {isPrimary && (
+                        <>
+                          <Separator />
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">
+                              Spent this month
+                            </span>
+                            <span className="font-mono tabular-nums">
+                              {formatMoney(monthSpend)}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+              <BalanceTrend points={balancePoints} currency={primaryCurrency} />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Auto top-up</CardTitle>
+                  <CardDescription>Never run out mid-campaign.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col gap-1.5">
+                    {autoTopup.config?.enabled ? (
+                      <>
+                        <Badge
+                          variant="outline"
+                          className="w-fit gap-1 border-transparent bg-success/12 text-success"
+                        >
+                          <Repeat />
+                          On
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          At{" "}
+                          {formatMoney({
+                            currency: autoTopup.config.currency,
+                            minor: autoTopup.config.threshold_minor,
+                          })}
+                          , add{" "}
+                          {formatMoney({
+                            currency: autoTopup.config.currency,
+                            minor: autoTopup.config.top_up_minor,
+                          })}
+                          .
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Badge
+                          variant="outline"
+                          className="w-fit gap-1 border-transparent bg-muted text-muted-foreground"
+                        >
+                          <Repeat />
+                          Off
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {autoTopup.has_card
+                            ? "Charge your saved card automatically."
+                            : "Pay once by card to enable."}
+                        </span>
+                      </>
+                    )}
                   </div>
-                )}
-                {isPrimary && (
-                  <>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">
-                        Spent this month
+                  <AutoTopupDialog
+                    config={autoTopup.config}
+                    hasCard={autoTopup.has_card}
+                    defaultCurrency={primaryCurrency}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Payment method</CardTitle>
+                  <CardDescription>How top-ups are charged.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex items-start gap-2">
+                  <CreditCard className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  {savedMethod ? (
+                    <div className="flex flex-col gap-0.5 text-sm">
+                      <span className="font-medium capitalize">
+                        {savedMethod.brand ?? "Card"} ••••{" "}
+                        {savedMethod.last4 ?? "····"}
                       </span>
-                      <span className="font-mono tabular-nums">
-                        {formatMoney(monthSpend)}
+                      <span className="text-xs text-muted-foreground">
+                        {savedMethod.exp ? `Expires ${savedMethod.exp} · ` : ""}
+                        Saved via Paystack · reused for auto top-up
                       </span>
                     </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-        <BalanceTrend points={balancePoints} currency={primaryCurrency} />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Auto top-up</CardTitle>
-            <CardDescription>Never run out mid-campaign.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-center justify-between gap-2">
-            <div className="flex flex-col gap-1.5">
-              {autoTopup.config?.enabled ? (
-                <>
-                  <Badge
-                    variant="outline"
-                    className="w-fit gap-1 border-transparent bg-success/12 text-success"
-                  >
-                    <Repeat />
-                    On
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    At{" "}
-                    {formatMoney({
-                      currency: autoTopup.config.currency,
-                      minor: autoTopup.config.threshold_minor,
-                    })}
-                    , add{" "}
-                    {formatMoney({
-                      currency: autoTopup.config.currency,
-                      minor: autoTopup.config.top_up_minor,
-                    })}
-                    .
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Badge
-                    variant="outline"
-                    className="w-fit gap-1 border-transparent bg-muted text-muted-foreground"
-                  >
-                    <Repeat />
-                    Off
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {autoTopup.has_card
-                      ? "Charge your saved card automatically."
-                      : "Pay once by card to enable."}
-                  </span>
-                </>
-              )}
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Secured by Paystack — you&apos;re redirected to a hosted
+                      checkout (card or mobile money) for each top-up. No card
+                      is stored on Fabric. Pay once by card to enable auto
+                      top-up.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-            <AutoTopupDialog
-              config={autoTopup.config}
-              hasCard={autoTopup.has_card}
-              defaultCurrency={primaryCurrency}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Payment method</CardTitle>
-            <CardDescription>How top-ups are charged.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-start gap-2">
-            <CreditCard className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            {savedMethod ? (
-              <div className="flex flex-col gap-0.5 text-sm">
-                <span className="font-medium capitalize">
-                  {savedMethod.brand ?? "Card"} ••••{" "}
-                  {savedMethod.last4 ?? "····"}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {savedMethod.exp ? `Expires ${savedMethod.exp} · ` : ""}
-                  Saved via Paystack · reused for auto top-up
-                </span>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Secured by Paystack — you&apos;re redirected to a hosted
-                checkout (card or mobile money) for each top-up. No card is
-                stored on Fabric. Pay once by card to enable auto top-up.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Transactions</CardTitle>
-          <CardDescription>
-            Top-ups, SMS charges, refunds, and adjustments — with running
-            balance.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* Semantic <section> so the scroll region is keyboard-focusable (tabIndex) — running-balance
+          </>
+        }
+        history={
+          <Card>
+            <CardHeader>
+              <CardTitle>Transactions</CardTitle>
+              <CardDescription>
+                Top-ups, SMS charges, refunds, and adjustments — with running
+                balance.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Semantic <section> so the scroll region is keyboard-focusable (tabIndex) — running-balance
               columns reachable without a mouse (WCAG 2.1.1 / axe scrollable-region-focusable, QA-DS-4). */}
-          <section
-            className="overflow-x-auto"
-            tabIndex={0}
-            aria-label="Transaction history"
-          >
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Transaction</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right">Balance</TableHead>
-                  <TableHead className="text-right">Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ledger.length === 0 ? (
-                  <TableEmptyRow
-                    columns={5}
-                    icon={<Wallet />}
-                    title="No billing transactions yet"
-                    description="Top-ups, message charges, refunds, and adjustments will appear here."
-                  />
-                ) : (
-                  ledger.map((e) => (
-                    <TableRow key={e.id}>
-                      <TableCell>
-                        <span className="font-medium">
-                          {KIND[e.type].label}
-                        </span>
-                        {e.reference &&
-                          (e.type === "sms_charge" ? (
-                            <Link
-                              href={`/messages?messageId=${encodeURIComponent(e.reference)}`}
-                              className="block font-mono text-xs text-primary hover:underline"
-                            >
-                              View message {e.reference}
-                            </Link>
-                          ) : (
-                            <span className="block font-mono text-xs text-muted-foreground">
-                              {e.reference}
-                            </span>
-                          ))}
-                      </TableCell>
-                      <TableCell>
-                        <LedgerKindBadge type={e.type} />
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          "text-right font-mono tabular-nums",
-                          e.direction === "credit"
-                            ? "text-success"
-                            : "text-foreground",
-                        )}
-                      >
-                        {formatSigned(e.amount, e.direction)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
-                        {formatMoney(e.runningBalance)}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {new Date(e.createdAt).toLocaleDateString("en", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </TableCell>
+              <section
+                className="overflow-x-auto"
+                tabIndex={0}
+                aria-label="Transaction history"
+              >
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Transaction</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead className="text-right">Balance</TableHead>
+                      <TableHead className="text-right">Date</TableHead>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </section>
-        </CardContent>
-      </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {ledger.length === 0 ? (
+                      <TableEmptyRow
+                        columns={5}
+                        icon={<Wallet />}
+                        title="No billing transactions yet"
+                        description="Top-ups, message charges, refunds, and adjustments will appear here."
+                      />
+                    ) : (
+                      ledger.map((e) => (
+                        <TableRow key={e.id}>
+                          <TableCell>
+                            <span className="font-medium">
+                              {KIND[e.type].label}
+                            </span>
+                            {e.reference &&
+                              (e.type === "sms_charge" ? (
+                                <Link
+                                  href={`/messages?messageId=${encodeURIComponent(e.reference)}`}
+                                  className="block font-mono text-xs text-primary hover:underline"
+                                >
+                                  View message {e.reference}
+                                </Link>
+                              ) : (
+                                <span className="block font-mono text-xs text-muted-foreground">
+                                  {e.reference}
+                                </span>
+                              ))}
+                          </TableCell>
+                          <TableCell>
+                            <LedgerKindBadge type={e.type} />
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "text-right font-mono tabular-nums",
+                              e.direction === "credit"
+                                ? "text-success"
+                                : "text-foreground",
+                            )}
+                          >
+                            {formatSigned(e.amount, e.direction)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
+                            {formatMoney(e.runningBalance)}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {new Date(e.createdAt).toLocaleDateString("en", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </section>
+            </CardContent>
+          </Card>
+        }
+      />
     </Shell>
   );
 }
