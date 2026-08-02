@@ -173,6 +173,17 @@ export const tokenBalanceDtoSchema = z.object({
    * recognized as breakage without the customer ever having been told a date.
    */
   expires_next_at: z.string().datetime().nullable(),
+  /**
+   * The same balance split by whether it lapses. A workspace routinely holds both — one package
+   * with a validity window, one without — and `expires_next_at` alone reports the SOONEST date over
+   * the whole counter, which reads as "all of it expires then". That is wrong for the permanent
+   * part, so the split is carried explicitly rather than inferred.
+   *
+   * Defaulted so an older API paired with a newer dashboard degrades to "no breakdown shown"
+   * instead of failing the page.
+   */
+  never_expires_available: z.string().default("0"),
+  expiring_available: z.string().default("0"),
 });
 export type TokenBalanceDto = z.infer<typeof tokenBalanceDtoSchema>;
 

@@ -1,6 +1,8 @@
 import {
+  type CommercialOfferPurchaseList,
   type CommercialOfferPurchaseReceipt,
   type CustomerCommercialOfferCatalog,
+  commercialOfferPurchaseListSchema,
   commercialOfferPurchaseReceiptSchema,
   customerCommercialOfferCatalogSchema,
 } from "@app/contracts";
@@ -17,7 +19,7 @@ import {
   tokenPurchases,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { notFound } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 
@@ -222,6 +224,50 @@ export class TokenCatalogService {
       currency: purchase.currency,
       created_at: purchase.createdAt.toISOString(),
       updated_at: purchase.updatedAt.toISOString(),
+    });
+  }
+
+  /**
+   * Every package purchase this workspace has made, newest first — including pending and failed
+   * ones, because "I paid and nothing happened" is exactly the case a history has to cover.
+   */
+  async purchases(tenantId: string): Promise<CommercialOfferPurchaseList> {
+    const rows = await this.provisioning.db
+      .select()
+      .from(tokenPurchases)
+      .where(eq(tokenPurchases.tenantId, tenantId as TenantId))
+      .orderBy(desc(tokenPurchases.createdAt))
+      .limit(50);
+    return commercialOfferPurchaseListSchema.parse({
+      purchases: rows.flatMap((purchase) => {
+        const packCount = purchase.packCount;
+        const snapshot = purchase.offerSnapshot;
+        // A row without its snapshot predates packages; it has nothing to itemise, so it is omitted
+        // rather than rendered as a purchase of nothing.
+        if (!purchase.offerVersionId || !snapshot || packCount === null) {
+          return [];
+        }
+        return [
+          {
+            reference: purchase.reference,
+            status: purchase.status,
+            offer_version_id: purchase.offerVersionId,
+            offer_name: snapshot.offerName,
+            items: snapshot.items.map((item) => ({
+              channel_code: item.channelCode,
+              unit_code: item.unitCode,
+              quantity: (
+                BigInt(item.totalUnits) * BigInt(packCount)
+              ).toString(),
+            })),
+            pack_count: packCount,
+            amount_minor: purchase.amountMinor.toString(),
+            currency: purchase.currency,
+            created_at: purchase.createdAt.toISOString(),
+            updated_at: purchase.updatedAt.toISOString(),
+          },
+        ];
+      }),
     });
   }
 

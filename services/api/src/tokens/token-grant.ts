@@ -155,11 +155,20 @@ export async function listTokenBalances(tx: TenantTx): Promise<
     currency: string;
     available: string;
     expiresNextAt: string | null;
+    neverExpiresAvailable: string;
+    expiringAvailable: string;
   }[]
 > {
   await expireTokenLots(tx);
   // The soonest unspent expiry per counter, so the balance can name the date checkout promised.
   // Exhausted and already-processed lots carry nothing further to lose.
+  //
+  // The counter is ONE number per (channel, currency), so a workspace holding both a dated package
+  // and a permanent one gets a single `expires_next_at` covering credits that will never lapse.
+  // The two bucket sums below fix that by going back to the lots. A lot's spendable remainder is
+  // `total - consumed - pending holds`, because a hold leaves the counter at reserve time but does
+  // not touch `quantity_consumed` until the send commits — summing without it would over-report
+  // mid-flight.
   const rows = (await tx`
     SELECT c.channel, c.currency, c.available::text AS available,
       (
@@ -168,7 +177,30 @@ export async function listTokenBalances(tx: TenantTx): Promise<
           AND l.currency = c.currency AND l.expires_at IS NOT NULL
           AND l.expiry_processed_at IS NULL
           AND l.quantity_consumed < l.quantity_total
-      ) AS expires_next_at
+      ) AS expires_next_at,
+      COALESCE((
+        SELECT SUM(l.quantity_total - l.quantity_consumed - COALESCE(h.held, 0))
+        FROM token_lots l
+        LEFT JOIN LATERAL (
+          SELECT SUM(th.quantity) AS held FROM token_holds th
+          WHERE th.lot_id = l.id AND th.status = 'pending'
+        ) h ON TRUE
+        WHERE l.tenant_id = c.tenant_id AND l.channel = c.channel
+          AND l.currency = c.currency AND l.expires_at IS NULL
+          AND l.quantity_consumed < l.quantity_total
+      ), 0)::text AS never_expires_available,
+      COALESCE((
+        SELECT SUM(l.quantity_total - l.quantity_consumed - COALESCE(h.held, 0))
+        FROM token_lots l
+        LEFT JOIN LATERAL (
+          SELECT SUM(th.quantity) AS held FROM token_holds th
+          WHERE th.lot_id = l.id AND th.status = 'pending'
+        ) h ON TRUE
+        WHERE l.tenant_id = c.tenant_id AND l.channel = c.channel
+          AND l.currency = c.currency AND l.expires_at IS NOT NULL
+          AND l.expiry_processed_at IS NULL
+          AND l.quantity_consumed < l.quantity_total
+      ), 0)::text AS expiring_available
     FROM token_counters c
     WHERE c.tenant_id = current_setting('app.tenant_id')::uuid AND c.available > 0
     ORDER BY c.channel, c.currency`) as {
@@ -176,6 +208,8 @@ export async function listTokenBalances(tx: TenantTx): Promise<
     currency: string;
     available: string;
     expires_next_at: Date | string | null;
+    never_expires_available: string;
+    expiring_available: string;
   }[];
   return rows.map((row) => ({
     channel: String(row.channel),
@@ -185,6 +219,8 @@ export async function listTokenBalances(tx: TenantTx): Promise<
       row.expires_next_at === null
         ? null
         : new Date(row.expires_next_at).toISOString(),
+    neverExpiresAvailable: String(row.never_expires_available),
+    expiringAvailable: String(row.expiring_available),
   }));
 }
 

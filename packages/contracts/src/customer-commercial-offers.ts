@@ -81,3 +81,18 @@ export const commercialOfferPurchaseReceiptSchema = z.object({
 export type CommercialOfferPurchaseReceipt = z.infer<
   typeof commercialOfferPurchaseReceiptSchema
 >;
+
+/**
+ * A workspace's package purchases, newest first.
+ *
+ * These are deliberately NOT wallet ledger lines: a package purchase posts to gateway clearing and
+ * deferred revenue, never to the customer wallet account, so it has no running balance and would be
+ * a lie inside the wallet statement. It still has to be visible somewhere — paying and finding no
+ * record of it is worse than the accounting being tidy.
+ */
+export const commercialOfferPurchaseListSchema = z.object({
+  purchases: z.array(commercialOfferPurchaseReceiptSchema),
+});
+export type CommercialOfferPurchaseList = z.infer<
+  typeof commercialOfferPurchaseListSchema
+>;

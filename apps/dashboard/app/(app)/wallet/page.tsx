@@ -1,8 +1,4 @@
-import type {
-  LedgerEntry,
-  LedgerEntryType,
-  WalletBalance,
-} from "@app/contracts";
+import type { LedgerEntry, WalletBalance } from "@app/contracts";
 import { parseApiError, toMoney } from "@app/contracts";
 import { DEFAULT_RATES, rateSegments } from "@app/domain";
 import {
@@ -21,32 +17,19 @@ import {
   CardTitle,
 } from "@app/ui/components/ui/card";
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@app/ui/components/ui/empty";
+  PageHeader,
+  PageHeaderActions,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+} from "@app/ui/components/ui/page-header";
 import { Separator } from "@app/ui/components/ui/separator";
-import { TableEmptyRow } from "@app/ui/components/ui/states";
+import { EmptyState, ErrorState } from "@app/ui/components/ui/states";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@app/ui/components/ui/table";
-import { cn } from "@app/ui/lib/utils";
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  BadgeCheck,
   Bell,
   CheckCircle2,
   Clock,
   CreditCard,
-  type LucideIcon,
   Repeat,
   TriangleAlert,
   Wallet,
@@ -57,69 +40,38 @@ import { AutoTopupDialog } from "@/components/forms/auto-topup-dialog";
 import { TopUpDialog } from "@/components/forms/top-up-dialog";
 import { CommercialOfferCatalog } from "@/components/tokens/commercial-offer-catalog";
 import { CreditBalances } from "@/components/tokens/credit-balances";
+import { CreditsPanel } from "@/components/tokens/credits-panel";
 import { BalanceTrend } from "@/components/wallet/balance-trend";
 import { BillingOverview } from "@/components/wallet/billing-overview";
+import {
+  PackagePurchasesCard,
+  WalletLedgerCard,
+} from "@/components/wallet/transactions-panel";
 import { WalletTabs } from "@/components/wallet/wallet-tabs";
-import { formatMoney, formatSigned } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
 import { requireDashboardSession } from "@/lib/server/auth";
 import {
   getAutoTopup,
   getCommercialOfferCatalog,
   getCommercialOfferPurchaseReceipt,
+  getCommercialOfferPurchases,
   getSavedPaymentMethod,
   getTokenBalances,
   getWalletSnapshot,
 } from "@/lib/server/dashboard-data";
 
-/** Ledger-kind chip — color paired with icon + label (never color-only, WCAG). */
-const KIND: Record<
-  LedgerEntryType,
-  { label: string; icon: LucideIcon; cls: string }
-> = {
-  topup: {
-    label: "Top-up",
-    icon: ArrowDownLeft,
-    cls: "bg-success/12 text-success",
-  },
-  refund: {
-    label: "Refund",
-    icon: ArrowDownLeft,
-    cls: "bg-success/12 text-success",
-  },
-  adjustment: {
-    label: "Adjustment",
-    icon: BadgeCheck,
-    cls: "bg-gold-subtle text-gold-ink",
-  },
-  sms_charge: {
-    label: "SMS charge",
-    icon: ArrowUpRight,
-    cls: "bg-muted text-muted-foreground",
-  },
-};
-
-function LedgerKindBadge({ type }: { type: LedgerEntryType }) {
-  const { label, icon: Icon, cls } = KIND[type];
+/** The heading block, identical in every state the page can render (loaded, empty, failed). */
+function WalletHeading({ actions }: { actions?: React.ReactNode }) {
   return (
-    <Badge variant="outline" className={cn("gap-1 border-transparent", cls)}>
-      <Icon />
-      {label}
-    </Badge>
-  );
-}
-
-function PageHeader() {
-  return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Wallet &amp; Billing
-        </h1>
-        <p className="text-sm text-muted-foreground">
+    <PageHeader>
+      <PageHeaderHeading>
+        <PageHeaderTitle>Wallet &amp; Billing</PageHeaderTitle>
+        <PageHeaderDescription>
           Balances, top-ups, and your double-entry transaction history.
-        </p>
-      </div>
-    </div>
+        </PageHeaderDescription>
+      </PageHeaderHeading>
+      {actions ? <PageHeaderActions>{actions}</PageHeaderActions> : null}
+    </PageHeader>
   );
 }
 
@@ -163,10 +115,16 @@ export default async function WalletPage({
   const session = await requireDashboardSession();
   if (session.plan === "sandbox") redirect("/");
   const paymentParams = await searchParams;
-  const [catalogResult, tokenBalancesResult] = await Promise.allSettled([
-    getCommercialOfferCatalog(),
-    getTokenBalances(),
-  ]);
+  const [catalogResult, tokenBalancesResult, purchaseResult] =
+    await Promise.allSettled([
+      getCommercialOfferCatalog(),
+      getTokenBalances(),
+      getCommercialOfferPurchases(),
+    ]);
+  // Best-effort: an unreadable purchase history renders as empty rather than taking the wallet down
+  // with it. The credits themselves are read from the balances above.
+  const purchases =
+    purchaseResult.status === "fulfilled" ? purchaseResult.value.purchases : [];
   const canPurchase = session.role === "owner" || session.role === "admin";
   const commercialSection =
     catalogResult.status === "fulfilled" &&
@@ -176,14 +134,10 @@ export default async function WalletPage({
         canPurchase={canPurchase}
       />
     ) : (
-      <Alert variant="destructive">
-        <TriangleAlert />
-        <AlertTitle>Couldn&apos;t load prepaid packages</AlertTitle>
-        <AlertDescription>
-          Your wallet remains available. Refresh before attempting a token
-          purchase.
-        </AlertDescription>
-      </Alert>
+      <ErrorState
+        title="Couldn't load prepaid packages"
+        message="Your wallet remains available. Refresh before attempting a package purchase."
+      />
     );
   const tokenReceipt =
     paymentParams.tokens === "1" && paymentParams.reference
@@ -210,21 +164,13 @@ export default async function WalletPage({
     const err = parseApiError(payload);
     return (
       <Shell>
-        <PageHeader />
+        <WalletHeading />
         {commercialSection}
-        <Alert variant="destructive">
-          <TriangleAlert />
-          <AlertTitle>Couldn&apos;t load your wallet</AlertTitle>
-          <AlertDescription>
-            <p>{err.message}</p>
-            {err.requestId && (
-              <p>
-                Contact support with{" "}
-                <code className="font-mono">{err.requestId}</code>.
-              </p>
-            )}
-          </AlertDescription>
-        </Alert>
+        <ErrorState
+          title="Couldn't load your wallet"
+          message={err.message}
+          {...(err.requestId ? { requestId: err.requestId } : {})}
+        />
       </Shell>
     );
   }
@@ -232,22 +178,15 @@ export default async function WalletPage({
   if (balances.length === 0) {
     return (
       <Shell>
-        <PageHeader />
+        <WalletHeading />
         {tokenReceipt ? <TokenPurchaseNotice receipt={tokenReceipt} /> : null}
         {commercialSection}
-        <Empty className="mx-auto max-w-2xl">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Wallet />
-            </EmptyMedia>
-            <EmptyTitle>No funds yet</EmptyTitle>
-            <EmptyDescription>
-              Top up your wallet to start sending. You&apos;re charged per
-              delivered segment — no monthly fees.
-            </EmptyDescription>
-          </EmptyHeader>
-          <TopUpDialog />
-        </Empty>
+        <EmptyState
+          icon={<Wallet />}
+          title="No funds yet"
+          description="Top up your wallet to start sending. You're charged per delivered segment — no monthly fees."
+          action={<TopUpDialog />}
+        />
       </Shell>
     );
   }
@@ -304,16 +243,17 @@ export default async function WalletPage({
 
   return (
     <Shell>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader />
-        <div className="flex gap-2">
-          <TopUpDialog defaultCurrency={primaryCurrency} />
-          <Button variant="outline" size="sm">
-            <Bell data-icon="inline-start" />
-            Alerts
-          </Button>
-        </div>
-      </div>
+      <WalletHeading
+        actions={
+          <>
+            <TopUpDialog defaultCurrency={primaryCurrency} />
+            <Button variant="outline" size="sm">
+              <Bell data-icon="inline-start" />
+              Alerts
+            </Button>
+          </>
+        }
+      />
 
       {tokenReceipt ? <TokenPurchaseNotice receipt={tokenReceipt} /> : null}
 
@@ -402,7 +342,11 @@ export default async function WalletPage({
               <CreditBalances balances={tokenBalancesResult.value.balances} />
             ) : null}
 
-            {commercialSection}
+            <CreditsPanel
+              purchaseCount={purchases.length}
+              catalog={commercialSection}
+              history={<PackagePurchasesCard purchases={purchases} />}
+            />
           </>
         }
         wallet={
@@ -548,103 +492,9 @@ export default async function WalletPage({
                 </CardContent>
               </Card>
             </div>
+
+            <WalletLedgerCard ledger={ledger} />
           </>
-        }
-        history={
-          <Card>
-            <CardHeader>
-              <CardTitle>Transactions</CardTitle>
-              <CardDescription>
-                Top-ups, SMS charges, refunds, and adjustments — with running
-                balance.
-              </CardDescription>
-              {/* B1: the auditable statement — every line a ledger leg, opening/closing balanced.
-                  It belongs with the ledger it exports, not in the page header. */}
-              <CardAction>
-                <Button asChild variant="outline" size="sm">
-                  <a href="/api/dashboard/wallet/statement" download>
-                    Export statement (CSV)
-                  </a>
-                </Button>
-              </CardAction>
-            </CardHeader>
-            <CardContent>
-              {/* Semantic <section> so the scroll region is keyboard-focusable (tabIndex) — running-balance
-              columns reachable without a mouse (WCAG 2.1.1 / axe scrollable-region-focusable, QA-DS-4). */}
-              <section
-                className="overflow-x-auto"
-                tabIndex={0}
-                aria-label="Transaction history"
-              >
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Transaction</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                      <TableHead className="text-right">Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ledger.length === 0 ? (
-                      <TableEmptyRow
-                        columns={5}
-                        icon={<Wallet />}
-                        title="No billing transactions yet"
-                        description="Top-ups, message charges, refunds, and adjustments will appear here."
-                      />
-                    ) : (
-                      ledger.map((e) => (
-                        <TableRow key={e.id}>
-                          <TableCell>
-                            <span className="font-medium">
-                              {KIND[e.type].label}
-                            </span>
-                            {e.reference &&
-                              (e.type === "sms_charge" ? (
-                                <Link
-                                  href={`/messages?messageId=${encodeURIComponent(e.reference)}`}
-                                  className="block font-mono text-xs text-primary hover:underline"
-                                >
-                                  View message {e.reference}
-                                </Link>
-                              ) : (
-                                <span className="block font-mono text-xs text-muted-foreground">
-                                  {e.reference}
-                                </span>
-                              ))}
-                          </TableCell>
-                          <TableCell>
-                            <LedgerKindBadge type={e.type} />
-                          </TableCell>
-                          <TableCell
-                            className={cn(
-                              "text-right font-mono tabular-nums",
-                              e.direction === "credit"
-                                ? "text-success"
-                                : "text-foreground",
-                            )}
-                          >
-                            {formatSigned(e.amount, e.direction)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
-                            {formatMoney(e.runningBalance)}
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {new Date(e.createdAt).toLocaleDateString("en", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </section>
-            </CardContent>
-          </Card>
         }
       />
     </Shell>

@@ -8,7 +8,7 @@ import {
 } from "@app/ui/components/ui/tabs";
 import { createContext, type ReactNode, useContext, useState } from "react";
 
-export type WalletTab = "overview" | "credits" | "wallet" | "history";
+export type WalletTab = "overview" | "credits" | "wallet";
 
 /**
  * Lets content INSIDE a tab move to another one — the overview cards are signposts, so they have to
@@ -23,8 +23,12 @@ export function useSelectWalletTab(): (tab: WalletTab) => void {
 }
 
 /**
- * Wallet, credits and history are separate questions — "what can I spend", "how much money is in
- * the account", "what happened" — and stacking all of them made the page one long scroll.
+ * Credits and wallet are separate questions — "what can I send for free" versus "how much money is
+ * in the account" — and stacking both made the page one long scroll.
+ *
+ * Each tab carries its OWN history: the ledger sits under the wallet, package purchases sit under
+ * the packages. A shared "Transactions" tab would have forced every history hunt through a second
+ * hop, and would have implied purchases move the wallet balance, which they do not.
  *
  * Alerts stay OUTSIDE the tabs on purpose: a pending purchase or a low balance has to be visible
  * whichever tab is open, or the tab that hides it becomes the one where the warning is missed.
@@ -34,14 +38,12 @@ export function WalletTabs({
   overview,
   credits,
   wallet,
-  history,
 }: {
   /** Returning from checkout opens Credits, so the thing just bought is what loads. */
   defaultTab: WalletTab;
   overview: ReactNode;
   credits: ReactNode;
   wallet: ReactNode;
-  history: ReactNode;
 }) {
   const [tab, setTab] = useState<WalletTab>(defaultTab);
 
@@ -56,7 +58,6 @@ export function WalletTabs({
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="credits">Credits</TabsTrigger>
           <TabsTrigger value="wallet">Wallet</TabsTrigger>
-          <TabsTrigger value="history">Transactions</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">{overview}</TabsContent>
         <TabsContent value="credits" className="flex flex-col gap-6">
@@ -65,7 +66,6 @@ export function WalletTabs({
         <TabsContent value="wallet" className="flex flex-col gap-4">
           {wallet}
         </TabsContent>
-        <TabsContent value="history">{history}</TabsContent>
       </Tabs>
     </SelectTabContext.Provider>
   );
