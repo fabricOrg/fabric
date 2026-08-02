@@ -61,7 +61,13 @@ async function request<T>(
       method: init.method,
       cache: "no-store",
       headers: {
-        "content-type": "application/json",
+        // Only claim a JSON body when there is one. Fastify refuses an empty body under
+        // `content-type: application/json` with FST_ERR_CTP_EMPTY_JSON_BODY — a 400 that made
+        // bodyless actions like clone fail, and whose payload has no `error.message` for the UI to
+        // show, so it surfaced as a bare "request failed with status 400".
+        ...(init.body === undefined
+          ? {}
+          : { "content-type": "application/json" }),
         "x-bff-token": bffToken,
         ...(init.actor
           ? {

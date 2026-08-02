@@ -170,9 +170,13 @@ export function OfferVersionHistory({
             ) : null}
 
             {ownAuthor && version.status === "draft" && canManage ? (
-              <p className="w-full text-xs text-muted-foreground">
-                You authored this version, so another staff admin must publish
-                it.
+              <p className="w-full rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  Publish is waiting on a second admin.
+                </span>{" "}
+                Separation of duties: whoever authored a version cannot approve
+                it, so ask another staff admin to review and publish v
+                {version.version}.
               </p>
             ) : null}
           </div>

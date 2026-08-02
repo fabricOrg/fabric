@@ -48,18 +48,27 @@ async function send<T>(
 ): Promise<T> {
   const response = await fetch(`/api/admin/commercial-offers${path}`, {
     method,
-    headers: { "content-type": "application/json" },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    // Same reason as the server client: declaring a JSON body without sending one is a 400.
+    ...(body === undefined
+      ? {}
+      : {
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
   });
   const payload = (await response.json().catch(() => null)) as {
     error?: { code?: string; message?: string };
+    message?: string;
   } | null;
   if (!response.ok) {
     throw new OfferError({
       code: payload?.error?.code ?? "request_failed",
-      // A 5xx from Nest carries no cause; naming the status beats an empty toast.
+      // Prefer OUR structured error, then any top-level message (a framework-level refusal such as
+      // Fastify's empty-body 400 carries one there). Naming the status is the last resort — it tells
+      // staff nothing they can act on, and hid a real bug behind "status 400" until now.
       message:
         payload?.error?.message ??
+        payload?.message ??
         `The request failed with status ${response.status}.`,
     });
   }
