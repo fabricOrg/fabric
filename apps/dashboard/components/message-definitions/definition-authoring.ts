@@ -14,20 +14,43 @@ export interface AuthoringVariable {
   readonly type: AuthoringVariableType;
   readonly required: boolean;
   readonly sourceNode?: VariableSchemaNode;
+  /**
+   * True when this row exists only because a `{{token}}` in the content produced it.
+   *
+   * Provenance has to be recorded, because after the author types a name a hand-added row and a
+   * detected row are indistinguishable — and they must behave differently when the content changes:
+   * a detected row disappears with its token, a hand-added one does not (you may add a variable
+   * before writing the token that uses it, and an existing definition's schema is a published
+   * contract that must not silently shed fields because someone reworded the prose).
+   */
+  readonly fromBody?: boolean;
 }
 
+/**
+ * Reconcile the variable list against the tokens currently in the content.
+ *
+ * Adds a row for a new token and REMOVES one whose token is gone — previously it only ever added, so
+ * deleting `{{time}}` from the body left `time` in the schema as a required field forever, and the
+ * definition demanded data the message no longer renders. Only auto-detected rows are pruned; see
+ * `AuthoringVariable.fromBody`.
+ */
 export function variablesFromBody(
   body: string,
   current: readonly AuthoringVariable[] = [],
 ): AuthoringVariable[] {
-  const byName = new Map(current.map((field) => [field.name, field]));
-  for (const name of extractTokens(body)) {
+  const tokens = new Set(extractTokens(body));
+  const kept = current.filter(
+    (field) => !field.fromBody || tokens.has(field.name),
+  );
+  const byName = new Map(kept.map((field) => [field.name, field]));
+  for (const name of tokens) {
     if (!byName.has(name)) {
       byName.set(name, {
         id: crypto.randomUUID(),
         name,
         type: "string",
         required: true,
+        fromBody: true,
       });
     }
   }

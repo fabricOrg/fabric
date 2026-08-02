@@ -10,6 +10,7 @@ import { Badge } from "@app/ui/components/ui/badge";
 import { Button } from "@app/ui/components/ui/button";
 import { Field, FieldLabel } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
+import { LocaleSelect } from "@app/ui/components/ui/locale-select";
 import { Textarea } from "@app/ui/components/ui/textarea";
 import { useMemo, useState } from "react";
 import {
@@ -23,11 +24,19 @@ export function DefinitionPreviewPanel({
   schema,
   fields,
   definitionKey,
+  locales = [],
 }: {
   body: string;
   schema: VariableSchema | null;
   fields: readonly AuthoringVariable[];
   definitionKey?: string;
+  /**
+   * The locales this definition actually has, default first. A SELECT rather than a text input
+   * because the value has to match a RELEASED locale — free text asks the reader to recall BCP-47
+   * codes from memory and then fails the request server-side when they misremember, which is the
+   * worst of both. An empty list means "default only", so the control still renders honestly.
+   */
+  locales?: readonly string[];
 }) {
   const [samples, setSamples] = useState<Record<string, string>>({});
   const [sampleJson, setSampleJson] = useState("{}");
@@ -190,7 +199,7 @@ export function DefinitionPreviewPanel({
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
             <Field className="flex-1">
               <FieldLabel htmlFor={`recipient-${definitionKey}`}>
-                Recipient for eligibility (optional)
+                Recipient (optional)
               </FieldLabel>
               <Input
                 id={`recipient-${definitionKey}`}
@@ -203,10 +212,12 @@ export function DefinitionPreviewPanel({
               <FieldLabel htmlFor={`released-locale-${definitionKey}`}>
                 Locale
               </FieldLabel>
-              <Input
+              <LocaleSelect
                 id={`released-locale-${definitionKey}`}
                 value={releasedLocale}
-                onChange={(event) => setReleasedLocale(event.target.value)}
+                onChange={setReleasedLocale}
+                locales={locales}
+                allowDefault
                 placeholder="Default"
               />
             </Field>

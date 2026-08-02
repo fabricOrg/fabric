@@ -2,9 +2,10 @@
 
 import { Button } from "@app/ui/components/ui/button";
 import { Field, FieldLabel } from "@app/ui/components/ui/field";
-import { Input } from "@app/ui/components/ui/input";
+import { LocaleSelect } from "@app/ui/components/ui/locale-select";
 import { Textarea } from "@app/ui/components/ui/textarea";
 import { Plus, Trash2 } from "lucide-react";
+import { AUTHORING_LOCALES } from "@/lib/locales";
 
 export interface LocalizedVariantDraft {
   id: string;
@@ -15,9 +16,12 @@ export interface LocalizedVariantDraft {
 export function LocalizedVariantsEditor({
   variants,
   onChange,
+  defaultLocale,
 }: {
   variants: readonly LocalizedVariantDraft[];
   onChange: (variants: LocalizedVariantDraft[]) => void;
+  /** Excluded from the options — a variant for the default locale is what "Message body" already is. */
+  defaultLocale?: string;
 }) {
   function update(id: string, patch: Partial<LocalizedVariantDraft>) {
     onChange(
@@ -56,13 +60,21 @@ export function LocalizedVariantsEditor({
           <div className="flex items-end gap-2">
             <Field className="flex-1">
               <FieldLabel htmlFor={`locale-${variant.id}`}>Locale</FieldLabel>
-              <Input
+              <LocaleSelect
                 id={`locale-${variant.id}`}
                 value={variant.locale}
-                onChange={(event) =>
-                  update(variant.id, { locale: event.target.value })
-                }
-                placeholder="fr or en-GH"
+                onChange={(locale) => update(variant.id, { locale })}
+                // Offer only locales not already used by the default or another variant, so the same
+                // language cannot be authored twice in one version.
+                locales={AUTHORING_LOCALES.filter(
+                  (option) =>
+                    option !== defaultLocale &&
+                    !variants.some(
+                      (other) =>
+                        other.id !== variant.id && other.locale === option,
+                    ),
+                )}
+                placeholder="Select a locale"
               />
             </Field>
             <Button

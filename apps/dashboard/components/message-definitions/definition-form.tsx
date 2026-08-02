@@ -1,21 +1,14 @@
 "use client";
 
 import {
+  type ApplicationDto,
   type MessageChannel,
   type MessageDefinitionState,
   type SmsTemplate,
   stableKey,
 } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@app/ui/components/ui/dialog";
+import { Card, CardContent } from "@app/ui/components/ui/card";
 import {
   Field,
   FieldDescription,
@@ -31,7 +24,7 @@ import {
   SelectValue,
 } from "@app/ui/components/ui/select";
 import { Textarea } from "@app/ui/components/ui/textarea";
-import { Pencil, Plus } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -59,22 +52,23 @@ interface BffErrorPayload {
   error?: { message?: string };
 }
 
-export function CreateDefinitionDialog({
-  triggerLabel = "New definition",
-  triggerVariant = "default",
+export function DefinitionForm({
   initialTemplate,
   initialDefinition,
   initialApplicationId = "",
+  applications,
+  returnHref,
 }: {
-  triggerLabel?: string;
-  triggerVariant?: "default" | "outline" | "ghost";
   initialTemplate?: SmsTemplate;
   initialDefinition?: MessageDefinitionState;
   initialApplicationId?: string;
+  /** Loaded by the server page that renders this form — see DefinitionApplicationField. */
+  applications: readonly ApplicationDto[];
+  /** Where Cancel and a successful save return to. */
+  returnHref: string;
 }) {
   const router = useRouter();
   const initial = initialDefinitionDraft(initialTemplate, initialDefinition);
-  const [open, setOpen] = useState(false);
   const [channel, setChannel] = useState<MessageChannel>(initial.channel);
   const [key, setKey] = useState(initial.key);
   const [variables, setVariables] = useState(initial.variables);
@@ -107,32 +101,35 @@ export function CreateDefinitionDialog({
     variables,
   );
   const editing = Boolean(initialDefinition);
+  // Locales the RELEASED version serves. Dropping one is a breaking change the API refuses
+  // (`locale_removed`) — and switching the Default locale silently drops the old one, which reads as a
+  // preference rather than an edit to the locale SET. The form has known this the whole time and said
+  // nothing until submit, after the body had been rewritten; worse, the server's advice ("publish under
+  // a new stable key") is the drastic option, when the intended move is almost always to KEEP the old
+  // locale and add the new one alongside it.
+  const releasedLocales = (() => {
+    if (!initialDefinition) return [] as string[];
+    const released = initialDefinition.releases[0];
+    const version = initialDefinition.latest_version;
+    if (!released || !version || released.version_id !== version.id) return [];
+    const content = version.content as { locales?: Record<string, unknown> };
+    return [
+      version.default_locale,
+      ...Object.keys(content.locales ?? {}),
+    ].filter((entry, index, all) => entry && all.indexOf(entry) === index);
+  })();
+  const draftLocales = new Set(
+    [
+      locale.trim(),
+      ...localizedVariants.map((variant) => variant.locale.trim()),
+    ].filter(Boolean),
+  );
+  const droppedLocales = releasedLocales.filter(
+    (released) => !draftLocales.has(released),
+  );
   // Channel is chosen once and is immutable across versions (the API enforces it), so the selector
   // only appears when authoring a brand-new definition. A template is always SMS.
   const channelLocked = editing || Boolean(initialTemplate);
-
-  function reset(template?: SmsTemplate, definition?: MessageDefinitionState) {
-    const draft = initialDefinitionDraft(template, definition);
-    setChannel(draft.channel);
-    setKey(draft.key);
-    setVariables(draft.variables);
-    setLocale(draft.locale);
-    setSchemaText(draft.schemaText);
-    setAdvancedSchema(draft.advancedSchema);
-    setBody(draft.body);
-    setMessageClass(draft.messageClass);
-    setSenderId(draft.senderId);
-    setLocalizedVariants(draft.localizedVariants);
-    setFrom(draft.from);
-    setSubject(draft.subject);
-    setText(draft.text);
-    setHtml(draft.html);
-    setEmailLocalizedVariants(draft.emailLocalizedVariants);
-    setApplicationId(
-      definition?.definition.application_id ?? initialApplicationId,
-    );
-    setError(null);
-  }
 
   // Tokens are re-derived from whichever channel's content is active, so switching channel repopulates
   // the variable set from the new content.
@@ -256,8 +253,7 @@ export function CreateDefinitionDialog({
           : `Created ${key.trim()}`,
         { description: "Publish the latest version to update sandbox." },
       );
-      setOpen(false);
-      reset();
+      router.push(returnHref);
       router.refresh();
     } catch (cause) {
       setError(
@@ -271,188 +267,198 @@ export function CreateDefinitionDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        setError(null);
-        if (nextOpen) reset(initialTemplate, initialDefinition);
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button variant={triggerVariant}>
-          {editing ? (
-            <Pencil className="size-4" />
-          ) : (
-            <Plus className="size-4" />
-          )}
-          {triggerLabel}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>
-            {editing ? "Create a new version" : "New message definition"}
-          </DialogTitle>
-          <DialogDescription>
-            Review the stable key, message, variables, and live output before
-            creating the draft.
-            {initialTemplate
-              ? " The original SMS template will remain unchanged."
-              : " Tokens such as {{name}} are detected automatically."}
-          </DialogDescription>
-        </DialogHeader>
-        {!editing ? (
-          <DefinitionApplicationField
-            enabled={open}
-            applicationId={applicationId}
-            onChange={setApplicationId}
-          />
-        ) : null}
-        {!channelLocked ? (
-          <Field>
-            <FieldLabel htmlFor="def-channel">Channel</FieldLabel>
-            <Select
-              value={channel}
-              onValueChange={(next) => switchChannel(next as MessageChannel)}
-            >
-              <SelectTrigger id="def-channel">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sms">SMS</SelectItem>
-                <SelectItem value="email">Email</SelectItem>
-              </SelectContent>
-            </Select>
-            <FieldDescription>
-              A definition's channel is fixed once created.
-            </FieldDescription>
-          </Field>
-        ) : null}
-        <Field>
-          <FieldLabel htmlFor="def-key">Stable key</FieldLabel>
-          <Input
-            id="def-key"
-            value={key}
-            onChange={(event) => setKey(event.target.value)}
-            disabled={editing}
-            placeholder="order.shipped"
-          />
-          <FieldDescription>
-            Lowercase, dotted, and immutable once created.
-          </FieldDescription>
-        </Field>
-
-        {channel === "email" ? (
-          <>
-            <EmailContentFields
-              from={from}
-              subject={subject}
-              text={text}
-              html={html}
-              onFromChange={setFrom}
-              onSubjectChange={(value) =>
-                updateEmailContent({ subject: value })
-              }
-              onTextChange={(value) => updateEmailContent({ text: value })}
-              onHtmlChange={(value) => updateEmailContent({ html: value })}
+    // Two columns: the fields you fill on the left, and what they PRODUCE on the right — the live
+    // preview plus the submit. Stacked in one column the preview sat below the fold while you typed
+    // and the submit button was another scroll past it, so the two things you check before saving were
+    // never on screen with the thing you were editing. The rail is sticky for the same reason.
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+      {/* Fields live ON a surface, not loose on the page background. A bare column of inputs has no
+          edge, so it reads as page furniture rather than one object you are filling in — and it lines
+          up with nothing else in the product, where every other group of content sits on a Card. */}
+      <Card className="min-w-0">
+        <CardContent className="flex min-w-0 flex-col gap-4">
+          {/* No lede here: each page's own header already states what this form does, and in the edit
+          flow this copy contradicted it by promising "the draft". The one fact worth repeating next
+          to the fields is the token behaviour, which the Variables section states where it applies. */}
+          {initialTemplate ? (
+            <p className="text-muted-foreground text-sm">
+              The original SMS template will remain unchanged.
+            </p>
+          ) : null}
+          {!editing ? (
+            <DefinitionApplicationField
+              enabled={true}
+              applications={applications}
+              applicationId={applicationId}
+              onChange={setApplicationId}
             />
+          ) : null}
+          {!channelLocked ? (
             <Field>
-              <FieldLabel htmlFor="def-email-locale">Default locale</FieldLabel>
-              <Input
-                id="def-email-locale"
-                value={locale}
-                onChange={(event) => setLocale(event.target.value)}
-                placeholder="en"
-              />
+              <FieldLabel htmlFor="def-channel">Channel</FieldLabel>
+              <Select
+                value={channel}
+                onValueChange={(next) => switchChannel(next as MessageChannel)}
+              >
+                <SelectTrigger id="def-channel">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sms">SMS</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                </SelectContent>
+              </Select>
               <FieldDescription>
-                Used when no locale is requested.
+                A definition's channel is fixed once created.
               </FieldDescription>
             </Field>
-            <EmailLocalizedVariantsEditor
-              variants={emailLocalizedVariants}
-              onChange={setEmailLocalizedVariants}
+          ) : null}
+          <Field>
+            <FieldLabel htmlFor="def-key">Stable key</FieldLabel>
+            <Input
+              id="def-key"
+              value={key}
+              onChange={(event) => setKey(event.target.value)}
+              disabled={editing}
+              placeholder="order.shipped"
             />
-          </>
-        ) : (
-          <>
-            <LocalizedVariantsEditor
-              variants={localizedVariants}
-              onChange={setLocalizedVariants}
-            />
-            <DefinitionDeliveryFields
-              locale={locale}
-              messageClass={messageClass}
-              senderId={senderId}
-              onLocaleChange={setLocale}
-              onMessageClassChange={setMessageClass}
-              onSenderIdChange={setSenderId}
-            />
-            <Field>
-              <FieldLabel htmlFor="def-body">Message body</FieldLabel>
-              <Textarea
-                id="def-body"
-                value={body}
-                onChange={(event) => {
-                  const nextBody = event.target.value;
-                  setBody(nextBody);
-                  setVariables((current) =>
-                    variablesFromBody(nextBody, current),
-                  );
-                }}
-                placeholder="Hi {{name}}, your order shipped."
+            <FieldDescription>
+              Lowercase, dotted, and immutable once created.
+            </FieldDescription>
+          </Field>
+
+          {channel === "email" ? (
+            <>
+              <EmailContentFields
+                from={from}
+                subject={subject}
+                text={text}
+                html={html}
+                onFromChange={setFrom}
+                onSubjectChange={(value) =>
+                  updateEmailContent({ subject: value })
+                }
+                onTextChange={(value) => updateEmailContent({ text: value })}
+                onHtmlChange={(value) => updateEmailContent({ html: value })}
               />
-            </Field>
-          </>
-        )}
+              <Field>
+                <FieldLabel htmlFor="def-email-locale">
+                  Default locale
+                </FieldLabel>
+                <Input
+                  id="def-email-locale"
+                  value={locale}
+                  onChange={(event) => setLocale(event.target.value)}
+                  placeholder="en"
+                />
+                <FieldDescription>
+                  Used when no locale is requested.
+                </FieldDescription>
+              </Field>
+              <EmailLocalizedVariantsEditor
+                variants={emailLocalizedVariants}
+                onChange={setEmailLocalizedVariants}
+              />
+            </>
+          ) : (
+            <>
+              <LocalizedVariantsEditor
+                variants={localizedVariants}
+                onChange={setLocalizedVariants}
+                defaultLocale={locale}
+              />
+              <DefinitionDeliveryFields
+                locale={locale}
+                messageClass={messageClass}
+                senderId={senderId}
+                onLocaleChange={setLocale}
+                onMessageClassChange={setMessageClass}
+                onSenderIdChange={setSenderId}
+              />
+              {droppedLocales.length > 0 ? (
+                <p
+                  role="alert"
+                  className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning-strong"
+                >
+                  This version would drop{" "}
+                  <strong>{droppedLocales.join(", ")}</strong>, which the
+                  released version serves — the API refuses that as a breaking
+                  change. Use <em>Add locale</em> to keep{" "}
+                  {droppedLocales.join(", ")} and add the new one alongside it.
+                </p>
+              ) : null}
+              <Field>
+                <FieldLabel htmlFor="def-body">Message body</FieldLabel>
+                <Textarea
+                  id="def-body"
+                  value={body}
+                  onChange={(event) => {
+                    const nextBody = event.target.value;
+                    setBody(nextBody);
+                    setVariables((current) =>
+                      variablesFromBody(nextBody, current),
+                    );
+                  }}
+                  placeholder="Hi {{name}}, your order shipped."
+                />
+              </Field>
+            </>
+          )}
 
-        <DefinitionSchemaEditor
-          advanced={advancedSchema}
-          schemaText={schemaText}
-          fields={variables}
-          onAdvancedChange={(advanced) => {
-            if (advanced && builtSchema.schema) {
-              setSchemaText(JSON.stringify(builtSchema.schema, null, 2));
-            }
-            if (!advanced) {
-              const parsed = resolveAuthoringSchema(
-                true,
-                schemaText,
-                variables,
-              );
-              if (!parsed.schema || !supportsVisualSchema(parsed.schema)) {
-                setError(
-                  parsed.error ??
-                    "Schemas containing arrays must stay in advanced mode.",
-                );
-                return;
+          <DefinitionSchemaEditor
+            advanced={advancedSchema}
+            schemaText={schemaText}
+            fields={variables}
+            onAdvancedChange={(advanced) => {
+              if (advanced && builtSchema.schema) {
+                setSchemaText(JSON.stringify(builtSchema.schema, null, 2));
               }
-              setVariables(variablesFromSchema(parsed.schema));
-            }
-            setError(null);
-            setAdvancedSchema(advanced);
-          }}
-          onSchemaTextChange={setSchemaText}
-          onFieldsChange={setVariables}
-        />
+              if (!advanced) {
+                const parsed = resolveAuthoringSchema(
+                  true,
+                  schemaText,
+                  variables,
+                );
+                if (!parsed.schema || !supportsVisualSchema(parsed.schema)) {
+                  setError(
+                    parsed.error ??
+                      "Schemas containing arrays must stay in advanced mode.",
+                  );
+                  return;
+                }
+                setVariables(variablesFromSchema(parsed.schema));
+              }
+              setError(null);
+              setAdvancedSchema(advanced);
+            }}
+            onSchemaTextChange={setSchemaText}
+            onFieldsChange={setVariables}
+          />
+        </CardContent>
+      </Card>
 
-        {channel === "email" ? (
-          <EmailPreviewPanel
-            subject={subject}
-            text={text}
-            html={html}
-            schema={builtSchema.schema}
-            fields={variables}
-          />
-        ) : (
-          <DefinitionPreviewPanel
-            body={body}
-            schema={builtSchema.schema}
-            fields={variables}
-          />
-        )}
+      <div className="flex flex-col gap-4 lg:sticky lg:top-6">
+        <Card>
+          <CardContent>
+            {channel === "email" ? (
+              <EmailPreviewPanel
+                subject={subject}
+                text={text}
+                html={html}
+                schema={builtSchema.schema}
+                fields={variables}
+              />
+            ) : (
+              <DefinitionPreviewPanel
+                body={body}
+                schema={builtSchema.schema}
+                fields={variables}
+              />
+            )}
+          </CardContent>
+        </Card>
         {error ? <FieldError>{error}</FieldError> : null}
-        <DialogFooter>
+        <div className="flex items-center gap-2">
           <Button onClick={submit} disabled={submitting}>
             {submitting
               ? "Creating…"
@@ -460,8 +466,11 @@ export function CreateDefinitionDialog({
                 ? "Create version"
                 : "Create draft"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <Button variant="ghost" asChild>
+            <Link href={returnHref}>Cancel</Link>
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
