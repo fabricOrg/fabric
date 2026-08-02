@@ -1,9 +1,91 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-01. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-08-02. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## START HERE (2026-08-01): multi-channel packages + expiry, and the unit-priced model is GONE
+## START HERE (2026-08-02): credits are live end to end — verified on a real handset
+
+PR #238 squash-merged to `dev` @ `c94af45`, promoted to `testing` @ `86fabe6`. Deploy green 13:52
+UTC — every job, including `Migrate · testing db`. Working tree clean, nothing unpushed.
+
+**The prepaid loop is closed and proven, not assumed.** One live SMS was sent from the dashboard to
+a real handset and traced through the database: `backing: tokens`, `provider_slug: arkesel-sms`, a
+real vendor `provider_ref` (not `fake-…`), **no customer wallet leg**, balanced `token_consume`
+legs (deferred revenue debit 33 → revenue credit 33), hold `committed`, and the credit drawn from
+the *expiring* lot while three never-expire lots stayed untouched. That last detail is
+`ORDER BY expires_at ASC NULLS LAST` in `token-holds.ts` doing its job.
+
+### What shipped
+
+- **`expiry_groups`** replaces a single `expires_next_at`. A counter is one number per (channel,
+  currency), so the old field reported the soonest date across everything it held — telling a
+  workspace its 40 never-expiring credits expired in 59 days. Groups are channel-agnostic and
+  N-way: three packages with three dates produce three groups. Empty means UNKNOWN, so a consumer
+  renders no expiry claim rather than inventing "never expires" from missing data.
+- **`granted_total` / `consumed_total`** for the usage line. `consumed_total` is deliberately NOT
+  `granted - available`: a pending hold moves the counter but not `quantity_consumed`, and expiry
+  removes credits nobody spent. Either shortcut reports usage that did not happen. Pinned by a test
+  that reserves without committing and asserts zero used.
+- **Credit-backed sends.** The composer gated every live send on the wallet, so 160 credits + an
+  empty wallet said "top up" for a send costing nothing. It could not have known better — no BFF
+  route exposed token balances to the client. Added `api/dashboard/tokens` (GET) and wired the gate
+  to the engine's all-or-nothing rule.
+- **`backing` on the message summary**, so the Messages list stops printing a cash cost for a
+  credit-backed send (it showed `GHS 0.03` while the ledger recognised 33 at the lot's locked price).
+- **Sender-ID matching** used `startsWith("+234") ? "NG" : "GH"`, so an EMPTY recipient box resolved
+  to Ghana and told anyone holding only a Nigerian sender they had none — while /senders showed it
+  Active. Now uses the `countryOf` helper that already existed.
+- **Route error boundaries.** An audit found 26 route segments sharing ONE `error.tsx` between them;
+  any throw blanked the whole shell. Added `(app)/error.tsx` + `global-error.tsx` per app, plus
+  shared `RouteError`/`RouteLoading`.
+- **Blueprint card treatment** from the imported "Industrial pricing cards" design, on Fabric's own
+  tokens and type scale. Registration marks live on the shared `Card` so both apps inherit them.
+
+### Live-by-default — understand this before testing anything
+
+There is **no "move the account to live" step**. `virtual-phone.service.ts:60` makes any workspace
+whose plan is not `sandbox` live by default; virtual is opt-IN. `Fabric Local` is `plan = growth`
+with `settings = {}`, so it has always been live. Go-live gates the transition OUT of the `sandbox`
+plan, and a seeded `growth` workspace starts on the far side of it.
+
+Combined with an **armed Arkesel live plugin instance** (`enabled + is_default + credentials`, set
+manually 2026-08-02 12:08), sends reach a real carrier and spend real money. Two consequences:
+
+- **The integration suite dispatches live.** `send-dlr-e2e.integration.spec.ts` reads the shared
+  global `plugin_instances` table instead of pinning its own, so `pnpm test:integration` resolved
+  `arkesel-sms` and attempted real dispatch. Its 2 failures are this, not a code defect —
+  reproduced on an unmodified checkout before attributing. **Real fix: the spec must seed and pin
+  its own instance so a test can never reach a live vendor.**
+- Consider seeding local/testing workspaces as `plan = 'sandbox'` (forced virtual, `locked: true`)
+  and flipping deliberately. Seed change only, no product code.
+
+### Known gaps, deliberately not addressed
+
+- **Arkesel DLR callback is not configured**, so live sends go `accepted` → `expired` (~16 min
+  sweep) even when they arrive. Money and credits are unaffected; only status. Route is
+  `/webhooks/dlr/arkesel-sms`, guarded by `WEBHOOK_INGRESS_TOKEN` (header `x-webhook-token` or
+  `?token=`, since Arkesel GETs with `?sms_id=..&status=..`).
+- The local seeded GHS 1,000 wallet float was cleared with a balanced `adjustment` (debit customer,
+  credit writeoff, key `local-seed-writeoff-2026-08-02`) so a token test fails honestly instead of
+  silently falling back to cash. Ledger invariants re-verified: 0 unbalanced, 0 projection drift.
+- **Standards audit — safety net only.** Still open: ~25 missing `loading.tsx`; 5 empty-vs-error
+  conflations where a fetch failure renders as "you have nothing" (`dashboard/senders:121`,
+  `dashboard/templates:236`, `admin-console/senders:40`, `admin-console/maker-checker:53`,
+  `tenants/[slug]:182`); 9 separate `StatusBadge` implementations; ~30 ad-hoc date formats.
+  `Card` now draws corner marks app-wide — anything inside `overflow-hidden` or a grid tighter than
+  `gap-6` needs `corners={false}`; only the wallet page was checked visually.
+
+### Traps this session re-confirmed
+
+- **`tsc` cannot see a client/server boundary error.** Exporting a parser from a `"use client"`
+  module made every export a client reference; the server component calling it threw at request
+  time with perfectly valid types. Only running the page found it.
+- **Unlayered CSS beats every Tailwind utility** regardless of specificity. Blueprint rules had to
+  move into `@layer components` before per-call-site colour overrides worked at all.
+- The Windows bash/node `/tmp` split bit repeatedly: bash writes `/tmp/x`, node reads `D:\tmp\x`.
+  Use the scratchpad absolute path. Heredocs also mangle backticks inside doc comments — use Edit.
+
+## Previous (2026-08-01): multi-channel packages + expiry, and the unit-priced model is GONE
 
 Branch `feature/ops-channel-packages` off `dev` @ `46e5ec4`. Phases 1–4 of the money roadmap are
 merged (#224/#225/#226) and were promoted to testing by #227 (deploy green 15:35 UTC).
