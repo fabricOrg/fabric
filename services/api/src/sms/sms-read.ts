@@ -72,6 +72,7 @@ function toMessageSummary(row: {
   currency: string;
   providerSlug: string | null;
   deliveryMode: string;
+  backing: string | null;
   subjectId: string | null;
   createdAt: Date;
 }): MessageSummary {
@@ -86,6 +87,12 @@ function toMessageSummary(row: {
       minor: row.costMinor.toString(),
     },
     provider: row.providerSlug ?? "pending",
+    // Anything unrecognised falls back to `wallet`: that is the historical default for rows written
+    // before the column existed, and it is the reading that shows a cost rather than hiding one.
+    backing:
+      row.backing === "tokens" || row.backing === "sandbox_allowance"
+        ? row.backing
+        : "wallet",
     delivery_mode: row.deliveryMode === "virtual" ? "virtual" : "live",
     created_at: row.createdAt.toISOString(),
   };

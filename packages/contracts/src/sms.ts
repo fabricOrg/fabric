@@ -30,6 +30,20 @@ export const messageSummary = z.object({
   encoding,
   segments: z.number().int().positive(),
   cost: money,
+  /**
+   * What actually paid for this send.
+   *
+   * `cost` is the rate-card price and is charged to the wallet ONLY when backing is `wallet`. A
+   * token-backed send takes nothing from the wallet — it consumes one credit per unit and discharges
+   * deferred revenue at the lot's locked price, which is a different number from `cost`. Showing
+   * `cost` without this would tell a customer they were charged money they were not.
+   *
+   * Defaulted so an older API degrades to the historical wallet assumption rather than failing.
+   */
+  backing: z
+    .enum(["wallet", "tokens", "sandbox_allowance"])
+    .optional()
+    .default("wallet"),
   provider: z.string(),
   delivery_mode: deliveryMode.optional().default("live"),
   created_at: z.string(),
