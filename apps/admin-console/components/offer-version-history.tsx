@@ -37,12 +37,15 @@ export function OfferVersionHistory({
   actorStaffId,
   channels,
   routeVocabulary,
+  selfApprovalAllowed,
 }: {
   offer: CommercialOfferWithVersions;
   canManage: boolean;
   actorStaffId: string;
   channels: readonly CommercialOfferChannelDto[];
   routeVocabulary: CommercialRouteVocabulary;
+  /** Solo deployments have no second approver; the publish button must not promise a refusal. */
+  selfApprovalAllowed: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<CommercialOfferVersionDto | null>(
@@ -80,6 +83,7 @@ export function OfferVersionHistory({
     <div className="flex flex-col gap-2">
       {offer.versions.map((version) => {
         const ownAuthor = version.created_by === actorStaffId;
+        const blockedByDuties = ownAuthor && !selfApprovalAllowed;
         return (
           <div
             key={version.id}
@@ -127,9 +131,9 @@ export function OfferVersionHistory({
                     </Button>
                     <Button
                       size="sm"
-                      disabled={ownAuthor || busy}
+                      disabled={blockedByDuties || busy}
                       title={
-                        ownAuthor
+                        blockedByDuties
                           ? "You authored this version — another staff admin must publish it."
                           : undefined
                       }
@@ -171,12 +175,24 @@ export function OfferVersionHistory({
 
             {ownAuthor && version.status === "draft" && canManage ? (
               <p className="w-full rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  Publish is waiting on a second admin.
-                </span>{" "}
-                Separation of duties: whoever authored a version cannot approve
-                it, so ask another staff admin to review and publish v
-                {version.version}.
+                {blockedByDuties ? (
+                  <>
+                    <span className="font-medium text-foreground">
+                      Publish is waiting on a second admin.
+                    </span>{" "}
+                    Separation of duties: whoever authored a version cannot
+                    approve it, so ask another staff admin to review and publish
+                    v{version.version}.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-foreground">
+                      You are approving your own version.
+                    </span>{" "}
+                    This deployment allows solo approval, so your reason is
+                    recorded against v{version.version} as the approval itself.
+                  </>
+                )}
               </p>
             ) : null}
           </div>

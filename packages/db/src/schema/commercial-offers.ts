@@ -159,6 +159,13 @@ export const pricingOfferVersions = pgTable(
       onDelete: "restrict",
     }),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
+    /**
+     * Why a single operator approved their own version. Separation of duties is the default, but a
+     * solo-operated deployment has no second admin, and a rule that only costs a logout is ceremony
+     * rather than control. Self-approval stays possible ONLY with a recorded justification — the
+     * CHECK below means it can never happen silently, whatever the service layer does.
+     */
+    selfApprovalReason: text("self_approval_reason"),
     ...timestamps,
   },
   (t) => [
@@ -199,7 +206,9 @@ export const pricingOfferVersions = pgTable(
       "pricing_offer_versions_approval_chk",
       sql`(${t.status} = 'draft' and ${t.approvedBy} is null and ${t.approvedAt} is null)
         or (${t.status} in ('published', 'retired') and ${t.approvedBy} is not null
-          and ${t.approvedAt} is not null and ${t.approvedBy} <> ${t.createdBy})`,
+          and ${t.approvedAt} is not null
+          and (${t.approvedBy} <> ${t.createdBy}
+            or ${t.selfApprovalReason} is not null))`,
     ),
     check(
       "pricing_offer_versions_cost_snapshot_chk",

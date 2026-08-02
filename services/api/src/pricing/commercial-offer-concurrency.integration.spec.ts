@@ -5,6 +5,7 @@ import {
   pricingOfferVersions,
   staffUsers,
 } from "@app/db";
+import type { ConfigService } from "@nestjs/config";
 import { eq, like } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { AuditService } from "../audit/audit.service.js";
@@ -29,11 +30,14 @@ const describeDb = superUrl ? describe : describe.skip;
 describeDb("commercial offer publication — concurrency and attribution", () => {
   const db = createProvisioningDb(superUrl ?? "", { max: 1 });
   const margin = new CommercialOfferMarginService(db);
-  const offers = new CommercialOffersService(db, new AuditService(db), margin);
+  const offers = new CommercialOffersService(db, new AuditService(db), margin, {
+    get: () => undefined,
+  } as unknown as ConfigService);
   const publishing = new CommercialOfferPublishService(
     db,
     new AuditService(db),
     margin,
+    { get: () => undefined } as unknown as ConfigService,
   );
   const fixtures: OfferFixtures = makeOfferFixtures(db);
 
@@ -84,6 +88,7 @@ describeDb("commercial offer publication — concurrency and attribution", () =>
       db,
       new AuditService(db),
       racingMargin,
+      { get: () => undefined } as unknown as ConfigService,
     );
 
     await expect(

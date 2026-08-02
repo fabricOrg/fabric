@@ -252,6 +252,12 @@ export const listCommercialOffersResponseSchema = z.object({
   offers: z.array(commercialOfferWithVersionsSchema),
   channels: z.array(commercialOfferChannelDtoSchema),
   route_vocabulary: commercialRouteVocabularySchema,
+  /**
+   * Whether one admin may approve their own version in THIS deployment. Separation of duties is the
+   * default; a solo-operated install has no second approver, and a rule that costs only a logout is
+   * ceremony rather than control. The UI needs the answer to avoid offering a button that refuses.
+   */
+  self_approval_allowed: z.boolean(),
 });
 export type ListCommercialOffersResponse = z.infer<
   typeof listCommercialOffersResponseSchema
