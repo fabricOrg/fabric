@@ -58,6 +58,7 @@ import { TopUpDialog } from "@/components/forms/top-up-dialog";
 import { CommercialOfferCatalog } from "@/components/tokens/commercial-offer-catalog";
 import { CreditBalances } from "@/components/tokens/credit-balances";
 import { BalanceTrend } from "@/components/wallet/balance-trend";
+import { BillingOverview } from "@/components/wallet/billing-overview";
 import { WalletTabs } from "@/components/wallet/wallet-tabs";
 import { formatMoney, formatSigned } from "@/lib/money";
 import { requireDashboardSession } from "@/lib/server/auth";
@@ -118,12 +119,6 @@ function PageHeader() {
           Balances, top-ups, and your double-entry transaction history.
         </p>
       </div>
-      {/* B1: the auditable statement — every line a ledger leg, opening/closing balanced. */}
-      <Button asChild variant="outline" size="sm">
-        <a href="/api/dashboard/wallet/statement" download>
-          Export statement (CSV)
-        </a>
-      </Button>
     </div>
   );
 }
@@ -267,6 +262,22 @@ export default async function WalletPage({
       )
     : false;
   const primaryCurrency = balances[0]?.balance.currency ?? "GHS";
+  const primaryBalance = balances[0]?.balance;
+  const tokenBalances =
+    tokenBalancesResult.status === "fulfilled"
+      ? tokenBalancesResult.value.balances.filter(
+          (balance) => BigInt(balance.available) > 0n,
+        )
+      : [];
+  const creditSummary =
+    tokenBalances.length === 0
+      ? null
+      : tokenBalances
+          .map(
+            (balance) =>
+              `${BigInt(balance.available).toLocaleString("en")} ${balance.channel}`,
+          )
+          .join(" · ");
   // "This month" spend = Σ|sms_charge| (exact bigint minor units, never float).
   const monthSpendMinor = ledger
     .filter((e) => e.type === "sms_charge")
@@ -374,7 +385,17 @@ export default async function WalletPage({
       )}
 
       <WalletTabs
-        defaultTab={tokenReceipt ? "credits" : "wallet"}
+        defaultTab={tokenReceipt ? "credits" : "overview"}
+        overview={
+          <BillingOverview
+            walletBalance={
+              primaryBalance
+                ? formatMoney(primaryBalance)
+                : `${primaryCurrency} 0.00`
+            }
+            creditSummary={creditSummary}
+          />
+        }
         credits={
           <>
             {tokenBalancesResult.status === "fulfilled" ? (
@@ -537,6 +558,15 @@ export default async function WalletPage({
                 Top-ups, SMS charges, refunds, and adjustments — with running
                 balance.
               </CardDescription>
+              {/* B1: the auditable statement — every line a ledger leg, opening/closing balanced.
+                  It belongs with the ledger it exports, not in the page header. */}
+              <CardAction>
+                <Button asChild variant="outline" size="sm">
+                  <a href="/api/dashboard/wallet/statement" download>
+                    Export statement (CSV)
+                  </a>
+                </Button>
+              </CardAction>
             </CardHeader>
             <CardContent>
               {/* Semantic <section> so the scroll region is keyboard-focusable (tabIndex) — running-balance

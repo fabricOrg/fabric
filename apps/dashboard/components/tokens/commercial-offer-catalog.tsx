@@ -134,6 +134,12 @@ function OfferCard({
         </div>
         <CardTitle>{offer.name}</CardTitle>
         <CardDescription>{offer.description}</CardDescription>
+        {offer.purchased_packs > 0 ? (
+          <p className="text-muted-foreground text-xs">
+            You have bought {offer.purchased_packs.toLocaleString("en")}{" "}
+            {offer.purchased_packs === 1 ? "pack" : "packs"} of this before.
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">
         <div>

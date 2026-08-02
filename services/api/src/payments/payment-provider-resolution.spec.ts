@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   modeForSecretKey,
   webhookModeMismatch,
-} from "./payment-provider-resolution";
+} from "./payment-provider-resolution.js";
 
 describe("payment credential mode", () => {
   it("reads the mode off the key, not the tenant", () => {

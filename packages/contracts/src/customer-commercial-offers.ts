@@ -41,6 +41,12 @@ export const customerCommercialOfferSchema = z.object({
   minimum_pack_count: z.number().int().positive(),
   maximum_pack_count: z.number().int().positive().nullable(),
   effective_to: z.string().datetime().nullable(),
+  /**
+   * Packs of this PACKAGE the workspace has already paid for, across every version of it — a buyer
+   * who bought v1 should still see that history on v2. Defaulted so an older api reads as "never
+   * bought" rather than breaking the catalogue.
+   */
+  purchased_packs: z.number().int().nonnegative().default(0),
 });
 export type CustomerCommercialOffer = z.infer<
   typeof customerCommercialOfferSchema

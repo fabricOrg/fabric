@@ -102,6 +102,36 @@ export class TokenCatalogService {
       existing.push(item);
       itemsByVersion.set(item.item.offerVersionId, existing);
     }
+    // What this workspace has already bought, per PACKAGE rather than per version: buying v1 is
+    // still part of your history when v2 is the one on sale.
+    const purchasedRows =
+      rows.length === 0
+        ? []
+        : await this.provisioning.db
+            .select({
+              offerId: pricingOfferVersions.offerId,
+              packs: sql<string>`coalesce(sum(${tokenPurchases.packCount}), 0)`,
+            })
+            .from(tokenPurchases)
+            .innerJoin(
+              pricingOfferVersions,
+              eq(pricingOfferVersions.id, tokenPurchases.offerVersionId),
+            )
+            .where(
+              and(
+                eq(tokenPurchases.tenantId, tenantId as TenantId),
+                eq(tokenPurchases.status, "success"),
+                inArray(
+                  pricingOfferVersions.offerId,
+                  rows.map((row) => row.offer.id),
+                ),
+              ),
+            )
+            .groupBy(pricingOfferVersions.offerId);
+    const packsByOffer = new Map(
+      purchasedRows.map((row) => [row.offerId, Number(row.packs)]),
+    );
+
     const consumableChannels = new Set(["sms", "email"]);
 
     return customerCommercialOfferCatalogSchema.parse({
@@ -150,6 +180,7 @@ export class TokenCatalogService {
           maximum_pack_count: version.maximumPackCount,
           credit_validity_days: version.creditValidityDays,
           effective_to: version.effectiveTo?.toISOString() ?? null,
+          purchased_packs: packsByOffer.get(offer.id) ?? 0,
         })),
     });
   }
