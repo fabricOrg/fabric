@@ -25,7 +25,8 @@ function toList(value: string): string[] {
     .filter(Boolean);
 }
 
-function toLocalInput(iso: string): string {
+/** Local wall-clock in the `YYYY-MM-DDTHH:mm` shape the form state carries. */
+export function toLocalInput(iso: string): string {
   const date = new Date(iso);
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);

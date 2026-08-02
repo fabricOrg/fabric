@@ -3,12 +3,7 @@
 import type {
   CommercialOfferChannelDto,
   CommercialRouteVocabulary,
-  Currency,
   PriceBookDto,
-} from "@app/contracts";
-import {
-  supportedEligibilityDimensions,
-  vocabularyForChannel,
 } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
@@ -32,17 +27,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
-import { CreditExpirySelect } from "@/components/forms/credit-expiry-select";
-import { EligibilityChips } from "@/components/forms/eligibility-chips";
+import { PackageTermsFields } from "@/components/forms/package-terms-fields";
 import { createPackage, OfferError } from "@/lib/client/commercial-offers-api";
 import { useOfferTermsForm } from "@/lib/client/offer-terms-form";
 
 const CODE_PATTERN = /^[a-z][a-z0-9_-]{1,63}$/;
-const CURRENCIES: readonly Currency[] = ["GHS", "NGN", "USD"];
 
 function codeFromName(name: string): string {
   return name
@@ -173,175 +165,11 @@ export function NewOfferDialog({
           </Field>
         </div>
 
-        <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium">Included channel credits</p>
-          {form.items.map((item, index) => {
-            const channelCode = item.channelKey.split(":")[0] ?? "";
-            const channelVocabulary = vocabularyForChannel(
-              routeVocabulary,
-              channelCode,
-            );
-            // Only the restrictions this channel's send path can match; see CHANNEL_SUPPORTED_ELIGIBILITY.
-            const routable = supportedEligibilityDimensions(
-              channelCode,
-            ).includes("destination_countries");
-            return (
-              <div
-                key={item.key}
-                className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto]"
-              >
-                <Field>
-                  <FieldLabel>Channel and unit</FieldLabel>
-                  <Select
-                    value={item.channelKey}
-                    onValueChange={(channelKey) =>
-                      form.updateItem(item.key, { channelKey })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {channels.map((channel) => {
-                        const value = `${channel.code}:${channel.unit_code}`;
-                        return (
-                          <SelectItem
-                            key={value}
-                            value={value}
-                            disabled={form.items.some(
-                              (candidate) =>
-                                candidate.key !== item.key &&
-                                candidate.channelKey === value,
-                            )}
-                          >
-                            {channel.display_name} — per {channel.unit_label}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel>Credits per pack</FieldLabel>
-                  <Input
-                    inputMode="numeric"
-                    value={item.units}
-                    placeholder="20"
-                    onChange={(event) =>
-                      form.updateItem(item.key, { units: event.target.value })
-                    }
-                  />
-                </Field>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="self-end"
-                  aria-label={`Remove package item ${index + 1}`}
-                  disabled={form.items.length === 1}
-                  onClick={() => form.removeItem(item.key)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-                <Field>
-                  <FieldLabel>Providers (required)</FieldLabel>
-                  <EligibilityChips
-                    value={item.vendors}
-                    options={channelVocabulary.provider_vendors}
-                    onChange={(vendors) =>
-                      form.updateItem(item.key, { vendors })
-                    }
-                    anyLabel="None selected — publication will be refused."
-                    emptyHint="No provider cost rates exist yet, so no package can be margin-checked."
-                  />
-                </Field>
-                {routable && (
-                  <>
-                    <Field>
-                      <FieldLabel>Traffic classes</FieldLabel>
-                      <EligibilityChips
-                        value={item.trafficClasses}
-                        options={channelVocabulary.traffic_classes}
-                        onChange={(trafficClasses) =>
-                          form.updateItem(item.key, { trafficClasses })
-                        }
-                        anyLabel="Any priced traffic class"
-                        emptyHint="No traffic-class-specific rates."
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>Destinations</FieldLabel>
-                      <EligibilityChips
-                        value={item.countries}
-                        options={channelVocabulary.destination_countries}
-                        onChange={(countries) =>
-                          form.updateItem(item.key, { countries })
-                        }
-                        anyLabel="Any priced destination"
-                        emptyHint="No destination-specific rates."
-                      />
-                    </Field>
-                  </>
-                )}
-              </div>
-            );
-          })}
-          <Button
-            type="button"
-            variant="outline"
-            className="self-start"
-            disabled={form.items.length >= channels.length}
-            onClick={() => {
-              const used = new Set(form.items.map((item) => item.channelKey));
-              const next = channels.find(
-                (channel) => !used.has(`${channel.code}:${channel.unit_code}`),
-              );
-              if (next) form.addItem(`${next.code}:${next.unit_code}`);
-            }}
-          >
-            <Plus className="size-4" /> Add channel
-          </Button>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field>
-            <FieldLabel>Package price</FieldLabel>
-            <div className="flex gap-2">
-              <Select
-                value={form.currency}
-                onValueChange={(value) => form.setCurrency(value as Currency)}
-              >
-                <SelectTrigger className="w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CURRENCIES.map((currency) => (
-                    <SelectItem key={currency} value={currency}>
-                      {currency}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                inputMode="decimal"
-                value={form.amount}
-                placeholder="50.00"
-                onChange={(event) => form.setAmount(event.target.value)}
-              />
-            </div>
-          </Field>
-          <Field>
-            <FieldLabel>Credit expiry</FieldLabel>
-            <CreditExpirySelect
-              value={form.creditValidityDays}
-              onChange={form.setCreditValidityDays}
-            />
-            <FieldDescription>
-              Customers see this before they buy, and unspent credits are
-              recognised as breakage once they lapse.
-            </FieldDescription>
-          </Field>
-        </div>
+        <PackageTermsFields
+          form={form}
+          channels={channels}
+          routeVocabulary={routeVocabulary}
+        />
 
         <DialogFooter className="gap-2">
           <Button
