@@ -75,12 +75,40 @@ describeDb("auto top-up concurrency", () => {
     await provisioning.db
       .delete(payments)
       .where(eq(payments.tenantId, tenantId));
+    // Reset the WALLET, not just the payments: a preceding test's successful charge credits it, and
+    // `maybeAutoTopUp` then correctly returns before touching the provider because the balance is above
+    // the threshold (auto-topup.service.ts: `if (balance > cfg.thresholdMinor) return`). That made each
+    // test's result depend on the one before it — the second half of this spec's reported flakiness.
+    //
+    // The legs go too: `balance_minor` is a projection the write-time trigger maintains, so resetting it
+    // while entries remain would leave drift for the standing ledger invariant to report against
+    // whichever spec looks next.
+    await owner`DELETE FROM ledger_entries WHERE tenant_id = ${tenantId}`;
+    await owner`DELETE FROM ledger_transactions WHERE tenant_id = ${tenantId}`;
+    await provisioning.db
+      .update(ledgerAccounts)
+      .set({ balanceMinor: 0n as MinorUnits })
+      .where(
+        and(
+          eq(ledgerAccounts.tenantId, tenantId),
+          eq(ledgerAccounts.kind, "customer"),
+        ),
+      );
     await service.updateAutoTopup(tenantId, {
       enabled: true,
       threshold_minor: "1000",
       top_up_minor: "5000",
       currency: "GHS",
     });
+    // Make "due" unambiguous on the DATABASE's clock. `updateAutoTopup` stamps `next_check_at` from the
+    // client (`new Date()`), while `scheduledCheck` claims rows with `next_check_at <= now()` evaluated
+    // in Postgres. Any skew between the two — routine with a containerised database — leaves the row a
+    // few milliseconds in the future and the claim finds nothing due, which surfaces as "fetch called 0
+    // times". That is the machine-dependent half of this spec's reported flakiness, and it is why it
+    // reproduced on CI but not in isolation here.
+    await owner`
+      UPDATE auto_topup SET next_check_at = now() - interval '1 minute'
+      WHERE tenant_id = ${tenantId}`;
   });
 
   afterEach(() => {
@@ -88,6 +116,8 @@ describeDb("auto top-up concurrency", () => {
   });
 
   afterAll(async () => {
+    await owner`DELETE FROM ledger_entries WHERE tenant_id = ${tenantId}`;
+    await owner`DELETE FROM ledger_transactions WHERE tenant_id = ${tenantId}`;
     await owner`DELETE FROM payments WHERE tenant_id = ${tenantId}`;
     await owner`DELETE FROM auto_topup WHERE tenant_id = ${tenantId}`;
     await owner`DELETE FROM payment_authorizations WHERE tenant_id = ${tenantId}`;
@@ -137,7 +167,12 @@ describeDb("auto top-up concurrency", () => {
       reference,
       kind: "auto_topup",
       provider: "paystack",
-      providerMode: "live",
+      // SANDBOX, matching what this environment can actually bind. A `live` orphan is only recoverable
+      // while a credentialed LIVE Paystack instance happens to exist in the shared platform-wide
+      // catalog; without one the reconcile path stops with "requires an unavailable credential binding"
+      // and never reaches the provider — which is the correct refusal, and reads as "fetch called 0
+      // times". This spec was reported as flaky; it was depending on control-plane state it never set up.
+      providerMode: "sandbox",
       amountMinor: 5000n as MinorUnits,
       currency: "GHS",
       email: "billing@example.com",
