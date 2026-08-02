@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from "@app/ui/components/ui/avatar";
 import { Badge } from "@app/ui/components/ui/badge";
 import { DataTable } from "@app/ui/components/ui/data-table";
 import { LoadMore } from "@app/ui/components/ui/load-more";
+import { StatusBadge as SharedStatusBadge } from "@app/ui/components/ui/status-badge";
 import { useCursorPage } from "@app/ui/hooks/use-cursor-page";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMemo } from "react";
@@ -39,20 +40,12 @@ function initials(value: string): string {
 }
 
 function StatusBadge({ status }: { status: StaffDto["status"] }) {
-  return status === "suspended" ? (
-    <Badge
-      variant="outline"
-      className="border-transparent bg-warning/15 text-warning"
-    >
-      Suspended
-    </Badge>
-  ) : (
-    <Badge
-      variant="outline"
-      className="border-transparent bg-success/12 text-success"
-    >
-      Active
-    </Badge>
+  const suspended = status === "suspended";
+  return (
+    <SharedStatusBadge
+      tone={suspended ? "warning" : "success"}
+      label={suspended ? "Suspended" : "Active"}
+    />
   );
 }
 

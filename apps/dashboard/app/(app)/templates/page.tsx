@@ -34,7 +34,6 @@ import { FileText, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CreateDefinitionDialog } from "@/components/message-definitions/create-definition-dialog";
 import { useDefinitionPermissions } from "@/components/message-definitions/definition-permissions";
 import {
   createSmsTemplate,
@@ -63,7 +62,6 @@ export default function SmsTemplatesPage() {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
   useEffect(() => {
     let current = true;
     listSmsTemplates()
@@ -257,11 +255,11 @@ export default function SmsTemplatesPage() {
               </CardContent>
               <CardFooter className="gap-2">
                 {canWriteDefinitions ? (
-                  <CreateDefinitionDialog
-                    initialTemplate={template}
-                    triggerLabel="Create definition"
-                    triggerVariant="outline"
-                  />
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href="/message-definitions/new">
+                      Create definition
+                    </Link>
+                  </Button>
                 ) : null}
                 <Button
                   size="sm"

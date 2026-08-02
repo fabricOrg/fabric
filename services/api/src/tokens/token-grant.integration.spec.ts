@@ -100,8 +100,12 @@ describeDb("token grant", () => {
   afterAll(async () => {
     for (const id of tenants) {
       // RESTRICT FKs everywhere on money history — delete children before the account.
+      // Allocations RESTRICT-reference lots, holds AND ledger transactions, so they go first: leaving
+      // them out makes the `token_holds` delete throw, and an afterAll that throws part-way leaves
+      // lots with their ledger entries already gone — residue the COM-010 reconciliation then reports
+      // as unbacked deferred revenue forever, on every future run.
+      await owner`DELETE FROM token_recognition_allocations WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM ledger_entries WHERE tenant_id = ${id}::uuid`;
-      // Holds reference their lot with a RESTRICT FK, so they go before the lots they point at.
       await owner`DELETE FROM token_holds WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM token_lots WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM ledger_transactions WHERE tenant_id = ${id}::uuid`;

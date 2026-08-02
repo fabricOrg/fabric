@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@app/ui/components/ui/dialog";
+import { formatDateTimeFull } from "@app/ui/lib/datetime";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { CopyButton } from "@/components/copy-button";
@@ -61,12 +62,12 @@ export function MessageDialog({
               </Detail>
               <Detail label="Received">
                 <time dateTime={message.created_at}>
-                  {new Date(message.created_at).toLocaleString()}
+                  {formatDateTimeFull(message.created_at)}
                 </time>
               </Detail>
               <Detail label="Read">
                 {message.read_at
-                  ? new Date(message.read_at).toLocaleString()
+                  ? formatDateTimeFull(message.read_at)
                   : "Unread"}
               </Detail>
               <Detail label="Segments">{message.segments}</Detail>

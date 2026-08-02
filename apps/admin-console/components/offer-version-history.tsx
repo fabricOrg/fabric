@@ -7,8 +7,8 @@ import type {
   CommercialRouteVocabulary,
   Currency,
 } from "@app/contracts";
-import { Badge } from "@app/ui/components/ui/badge";
 import { Button } from "@app/ui/components/ui/button";
+import { StatusBadge as SharedStatusBadge } from "@app/ui/components/ui/status-badge";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -246,18 +246,11 @@ export function OfferVersionHistory({
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "published") {
-    return (
-      <Badge className="border-transparent bg-success/12 text-success">
-        Published
-      </Badge>
-    );
+    return <SharedStatusBadge tone="success" label="Published" />;
   }
+  // Retired is not a failure — it is the only way out of `published` (0110), so it rests neutral.
   if (status === "retired") {
-    return <Badge variant="outline">Retired</Badge>;
+    return <SharedStatusBadge tone="neutral" label="Retired" />;
   }
-  return (
-    <Badge className="border-transparent bg-primary/12 text-primary">
-      Draft
-    </Badge>
-  );
+  return <SharedStatusBadge tone="info" label="Draft" />;
 }

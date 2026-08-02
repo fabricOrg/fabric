@@ -1,9 +1,334 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-01. Point-in-time; verify against code/git before asserting as fact. Companion to
+_Snapshot: 2026-08-02. Point-in-time; verify against code/git before asserting as fact. Companion to
 [CLAUDE.md](./CLAUDE.md) (the how-we-build guide) and `docs/`._
 
-## START HERE (2026-08-01): multi-channel packages + expiry, and the unit-priced model is GONE
+## START HERE (2026-08-02, evening): the live SMS pipeline is PROVEN on a real handset
+
+Working tree on `fix/ops-datepicker-proportions`, uncommitted. **Rename or rebranch before a PR** — the
+name describes none of this. Gates green: typecheck 0 (api / dashboard / admin-console), biome clean,
+file-length guard clean.
+
+### Live sends: 3 of an authorised 10 used, all three received
+
+Proven by `provider_ref` (real vendor UUIDs, never `fake-…`), then confirmed on the physical handset:
+
+| # | body | encoding | segments | cost | provider_ref |
+| --- | --- | --- | --- | --- | --- |
+| 1 | short | gsm7 | 1 | GHS 3 | `c0b5a3fc-6cff-48fc-8783-3a7506d12981` |
+| 2 | >160 chars | gsm7 | **2** | GHS 6 | `ccdffc6f-2562-420b-83b8-344416766a07` |
+| 3 | accents + emoji | **ucs2** | 1 | GHS 3 | `7c76ff5b-bd23-4187-85d5-0eabae88a8a9` |
+
+Per-segment billing, encoding detection and the `AKWAAH` sender ID all held: the recipient's thread
+header read **AKWAAH**, so sender-ID registration → activation → carrier delivery works end to end.
+Ledger: 0 unbalanced transactions, 12 minor over 4 segments.
+
+Three guards verified at **zero** cost: replaying send 2's idempotency key returned the same message id
+and created no second row and no second charge (3 carrier messages, not 4); `NOTMINE` was refused
+`sender_not_registered` before any carrier call; and a managed send with the LIVE key was refused
+`definition_not_released`, so the sandbox-only release really is enforced.
+
+### I DESTROYED the armed live plugin instance by running the integration suite
+
+`plugin-credentials.integration.spec.ts` and `plugin-registry.integration.spec.ts` each ran
+`db.db.delete(pluginInstances)` — an **unqualified delete of the whole platform-wide catalog** — so a
+full `pnpm --filter @app/api test:integration` wiped the operator's configured Arkesel live instance and
+its encrypted credential, and the registry then re-seeded a blank catalog. Every row carried the same
+`created_at`, which is how it was diagnosed. The credential ciphertext was the only copy: unrecoverable,
+re-installed by hand.
+
+This is the RECIPROCAL of the trap fixed earlier the same day. That fix stopped a test *reaching* a live
+vendor; nobody asked whether a test could *destroy* its configuration. It could.
+
+`assertDisposablePluginCatalog()` (`services/api/src/testing/`) now runs before either delete and
+**refuses** when any row holds an installed credential, naming what it protected. An installed
+credential is the right signal: tests never create one, so its presence means a human did. Pinned by 3
+unit tests covering both directions; the 2 plugin integration specs still pass 10/10. The specs' old
+comment — *"the test owns the whole table on a local db"* — was the false premise; it is corrected in
+place.
+
+### Live API keys were impossible for any non-sandbox workspace (migration 0127)
+
+`accounts.plan` and `environments.status` both encode "is this live" and only one transition existed:
+the go-live proposal approval, whose plan update is guarded on `plan = 'sandbox'`. So a workspace
+provisioned straight onto a paid plan sent live from the dashboard forever while **never** being able to
+mint a live key — `api-keys.service.ts` refuses `sandbox_no_live_keys` unless the live env is `active`.
+Fixed in `applications.service.ts` (live env follows the workspace plan) plus **migration 0127**
+(idempotent repair of existing rows). The dashboard also stopped hiding it: `api-keys-panel.tsx` used to
+force `activeEnv = "sandbox"` and hide the Test/Live switch, so you got an `sk_test_` key with no
+explanation.
+
+### Message definitions: authoring was completely broken, now reworked
+
+`/api/applications` exported **POST only** while the authoring form did a GET → 405 → *"Applications
+could not be loaded"*, so **no definition could be created through the UI at all**. Server pages now
+pass the list as props (the GET was deleted again — zero callers). `/message-definitions` was also in no
+nav entry, reachable only by typing the URL.
+
+Reworked per review: the 467-line dialog became pages (`/new`, `/[key]`, `/[key]/new-version`); the list
+card is a light preview with a `…` quick-action menu and a stretched link; the detail page is two
+columns with an actions rail; forms sit on Cards; `RouteBreadcrumbs` now renders intermediate crumbs
+(keys stay raw — `order.shipped`, not `Order.Shipped`) which replaced the separate back links. The route
+is `/new-version`, not `/edit`, because the API only ever APPENDS a version — the old segment made the
+breadcrumb say "Edit" above a title saying "Create a new version".
+
+Real defects fixed alongside: variables were added on token detection but **never removed** (deleting
+`{{time}}` left `time` required forever — now reconciled both ways, with `fromBody` provenance so
+hand-added rows and a published schema survive); the release line claimed "v2 · Released to sandbox"
+while the release still pointed at v1 (now names the released version); Publish stayed enabled after
+publishing; sender options were duplicated per country so Radix ticked both `AKWAAH` rows at once (now
+deduped, `AKWAAH · GH, NG`); "No active sender IDs" showed before the fetch answered.
+
+### Versioning semantics — settled with product
+
+The model: **stable key = contract, version = immutable revision, release = one pointer per
+environment, locale = language within a version.** A send has no version parameter; the environment's
+release decides, and the delivery records which `version_id` served it. Compatibility is gated on the
+key (`locale_removed`, `property_removed`, `type_changed`, …) because callers may run stale catalogs.
+
+Ratified: **language via locales inside one version** (proven — one key, one version, `en` + `fr`, the
+French body rendered on the virtual handset). **Next: market variants (option 4)** — content that
+differs by country in the *same* language. Agreed shape: `content.markets[GH|NG]` composing with
+locales, market derived server-side from `smsDestinationCountry()` (already used for pricing, so **no
+new send parameter**), missing variant **falls back to the base body** and never crosses markets, plus a
+`market_removed` compatibility code. `content` is jsonb so **no migration**. Wants an ADR before code.
+Rejected for now: caller-pinned versions, and multiple concurrent releases (A/B) — the unique index is
+one release per environment.
+
+### Open, in priority order
+
+1. **No inbound (MO) path — replies and STOP are silently lost.** The only carrier-facing webhook is
+   `webhooks/dlr/:provider`; the only inbound route is `internal/.../virtual-phone/inbound`, which feeds
+   the simulated handset. Recipients' SMS apps DO offer a compose box on alphanumeric threads (verified
+   on a real device), so customers will reply — and a customer texting **STOP** has no effect, since
+   Consent & DND can only be driven from the API or dashboard. Compliance exposure on promotional
+   traffic.
+2. **Arkesel DLR callback still unconfigured** — statuses go `accepted` → `expired` (~16 min sweep).
+   Money unaffected. Route `/webhooks/dlr/arkesel-sms`, guarded by `WEBHOOK_INGRESS_TOKEN`.
+3. **SDK-006 (publish to live)** — `message-definition-publish.ts:29` refuses every environment but
+   sandbox and the env lookup hardcodes `type = 'sandbox'`. Promotion is structurally cheap (a release
+   row + a live sender binding; content is application-scoped, so nothing is lost) and migration 0127 is
+   its prerequisite. Also missing: **version history in the UI** — the payload carries only
+   `latest_version`, so listing versions needs an API addition.
+4. **Market variants (option 4)** per the ADR above.
+5. Post-activation the Plugins row shows *"No credentials"* though `credentials_ref` is set — the
+   optimistic re-render drops `credential_fingerprint`. Cosmetic, but it reads as "activation ate my
+   key".
+6. Playground is off-system (emerald on near-black, own type scale) and its operation `<select>` shows
+   bare method names — four options labelled `send`. Run it locally with
+   `FABRIC_BASE_URL=http://127.0.0.1:3000` (`:3400`; `FABRIC_ALLOW_LIVE_WRITES=true` for live).
+
+### Also landed
+
+The admin sandbox/live credential switch is gone. That flag has exactly one legal value per instance
+(`credentialModeViolation` rejects every other), so it is now **stated, not asked** — *"On — nothing
+here reaches a carrier."* with `sandbox=true` in mono beside it; SES's `sesMode` got the same treatment
+(it was free text, so typo-able). A mode mismatch is now unrepresentable rather than merely refused.
+`ThemeToggle` also had a real hydration mismatch (`aria-label` read `resolvedTheme`, undefined on the
+server) — that was the dashboard's standing dev-overlay error, now zero.
+
+## Previous START HERE (2026-08-02, midday): tests can no longer reach a live vendor, and credits reconcile
+
+Working tree on `fix/ops-datepicker-proportions` (content-identical to `dev` before this work — the
+branch was a stale leftover; **rename or rebranch before opening a PR**, the name describes nothing
+here). Not committed, not pushed.
+
+### 1. A test can no longer dispatch to a real carrier — the fix is one seam, not per-spec discipline
+
+The trap in the previous entry ("the integration suite dispatches live") is closed. The previous
+entry's proposed fix — *"the spec must seed and pin its own instance"* — turns out to be
+**impossible**: `SMS_ADAPTERS` in `packages/integrations/src/registry.ts` deliberately contains no
+fake vendor, so **no `plugin_instances` row can ever resolve to a test double**. That absence is a
+safety property, not an omission.
+
+Two layers instead, both in production code and both keyed on `VITEST` (not `NODE_ENV`, which is also
+how a developer runs the stack against a real vendor on purpose):
+
+- **`refusedUnderTest()` in `sms-runtime.service.ts`** ignores a resolved vendor whose slug is not
+  `fake-sms`/`virtual-phone` and falls through to the env provider — which `liveProviderReadiness`
+  already makes ready under `NODE_ENV=test` precisely so the suite runs on the FakeProvider. One
+  place, zero lines per spec, and it covers specs nobody has thought about yet.
+- **`sms-dispatch.ts` throws** on a non-test provider at the moment of the irreversible act, so a new
+  send path that bypasses the seam fails loudly instead of billing someone. Pinned by
+  `sms-dispatch.spec.ts`.
+
+**Verified by the null hypothesis, not by a green run.** With the guard removed, the e2e spec resolves
+`arkesel-sms` and fails exactly as it did this morning; with it, 8/8 pass. Note that
+`send-dlr-e2e.integration.spec.ts` already proved which provider carried the send and nobody noticed:
+its DLR posts `fake-<messageId>` to `/webhooks/dlr/fake-sms`, which **404s** under a real-vendor
+dispatch. A pre-existing assertion was the detector all along.
+
+An earlier attempt applied a `unconfiguredPluginResolverStub()` to 15 specs. It worked, but it pushed
+three specs past the file-length guard and left the property resting on per-spec memory. Deleted.
+
+### 2. COM-010 shipped: prepaid credits reconcile, and it has teeth
+
+`packages/db/src/token-reconciliation*.ts` — three comparisons, separate because they fail for
+different reasons and an operator needs to know which:
+
+| comparison | question |
+| --- | --- |
+| entitlement | does `token_counters.available` equal Σ lots(total − consumed − expired) − Σ pending holds? |
+| deferred revenue | does the ledger's `token_deferred_revenue` equal Σ lots(locked price − recognized − breakage)? |
+| allocation trail | does each lot's running position equal the sum of its append-only allocation rows? |
+
+Exposed as **`pnpm --filter @app/db db:assert:tokens`** (on the provisioning connection — every token
+table is FORCE RLS) and as a **fourth check in the hourly maintenance pass**. It carries the same
+blindness guard as the GL reconciliation, gated by a test that runs it under `SET ROLE app_migrator`.
+
+**Unlike the GL reconciliation this has no lag scope, deliberately.** There the drain posts
+asynchronously so the subledger side had to be narrowed to movements already posted. Here every pair
+compared is written in ONE tenant transaction (grant, recognition, expiry each do both halves), so
+equality is exact at any instant a reader can observe.
+
+Driven in both directions: a real lifecycle (purchase + delivered send + an in-flight hold) reconciles,
+and each comparison is shown to go red on the divergence it exists for — a counter nudged +5, **a
+balanced purchase movement whose grant never landed** (the customer paid for credits they do not have,
+and no double-entry invariant can see it), and a lot whose allocation rows were deleted. The spec
+filters findings to its OWN tenants: the query is global, so asserting `ok === true` outright makes a
+spec a report on other specs' residue — which is exactly why `gl-reconciliation.integration.spec.ts`
+is red on a long-lived local database.
+
+### 3. The new gate immediately found residue on the local DB — pre-existing, not product
+
+`db:assert:tokens` reports one workspace (`Token test`, `9155296d-…`, created 12:50 today, before this
+session): a 400-minor lot with **zero ledger entries** and its `ledger_accounts` rows still stored at
+±400. An aborted spec run got as far as deleting `ledger_entries` and stopped. The same residue is why
+`maintenance.integration.spec.ts` ("ledger invariant green") and the four accounting specs fail
+locally — **not a regression from this work**, and they fail identically on an unmodified checkout.
+
+Two things came out of it:
+
+- `token-balances` and `token-grant` teardowns never deleted **`token_recognition_allocations`**, which
+  RESTRICT-references lots, holds AND ledger transactions. Any run that produced one made the
+  `token_holds` delete throw, and a part-way `afterAll` leaves exactly this shape. Fixed in both.
+- **6 `gl_posting_requests` are parked `failed` with `tenant_id Invalid UUID`**, aged 2–7 hours. Older
+  residue, separate cause, still unexplained — a movement enqueued a payload whose tenant id was not a
+  uuid. Worth a look; nothing this session touched it.
+
+The residue is still there. Clearing it is a delete against the dev database, so it was left for a
+human: removing that one tenant's `ledger_accounts`, `token_counters`, `token_holds`, `token_lots`,
+`ledger_transactions` and `accounts` rows makes four gates go green.
+
+### 4. Standards audit — three chunks closed, one was already done
+
+- **`loading.tsx`: 25 added** via the shared `RouteLoading`, one per async server page, each carrying
+  the page's OWN heading (a fallback that invents a title misreports what is pending). Client pages are
+  deliberately excluded — they hold their own loading state, so a segment fallback never renders.
+- **`StatusBadge` consolidated** into `@app/ui/components/ui/status-badge` on five semantic TONES, with
+  each domain keeping its own vocabulary→tone map. Seven implementations, not nine. **This found a real
+  defect**: three of them paired `bg-warning/15` with `text-warning`, which measures 3.73:1 and FAILS
+  WCAG AA — the exact reason `--warning-strong` exists. Centralising the tone fixed all three.
+- **32 ad-hoc date formats → `@app/ui/lib/datetime`** with six named formats. Several call sites used
+  a bare `toLocaleString()` with no locale at all, so output followed the *rendering environment* —
+  which for a server component is the container, not the reader.
+  **Known gap left explicit in that file: no format pins a `timeZone`**, so a client-rendered timestamp
+  shows the reader's zone and a server-rendered one shows UTC. Consolidating does not fix that; it makes
+  it fixable in one place. Choosing a zone is a product call.
+- **Empty-vs-error conflations: already fixed.** All five sites named in the previous entry render a
+  distinct error state (`failed` / `loadError`). That list was stale.
+
+### 5. Card corner marks — audited by code, 3 sites fixed
+
+Marks sit 6px outside the border, so two adjacent cards need 12px of gap. `gap-3` (12px) collides
+exactly; `gap-4` leaves 4px and is already accepted on the wallet and overview grids; `gap-6` is what a
+list of full-width cards wants. An audit of all 75 `<Card>` usages found **no clipping ancestor
+anywhere** (no app shell or layout uses `overflow-hidden`) and exactly three `gap-3` card lists —
+kill-switch, price books, prepaid packages — now `gap-6`. The measured threshold is recorded in
+`card.tsx` so nobody has to re-derive it.
+
+### Gates run
+
+`@app/api` unit 46 files / 237 tests, tokens integration 11/11 files / 55 tests (including the 5 new
+reconciliation tests), send + sandbox-routing + e2e green, `@app/db` build, typecheck clean for db /
+api / dashboard / admin-console, biome clean on all 75 changed files, file-length guard clean.
+**Not run:** `verify:push` (no commit yet) and the full integration suite end-to-end since the residue
+above makes 4 accounting/maintenance specs fail regardless. **No independent review yet** — codex is
+out of quota until 2026-08-05 and gemini's free tier is gone.
+
+## Previous START HERE (2026-08-02): credits are live end to end — verified on a real handset
+
+PR #238 squash-merged to `dev` @ `c94af45`, promoted to `testing` @ `86fabe6`. Deploy green 13:52
+UTC — every job, including `Migrate · testing db`. Working tree clean, nothing unpushed.
+
+**The prepaid loop is closed and proven, not assumed.** One live SMS was sent from the dashboard to
+a real handset and traced through the database: `backing: tokens`, `provider_slug: arkesel-sms`, a
+real vendor `provider_ref` (not `fake-…`), **no customer wallet leg**, balanced `token_consume`
+legs (deferred revenue debit 33 → revenue credit 33), hold `committed`, and the credit drawn from
+the *expiring* lot while three never-expire lots stayed untouched. That last detail is
+`ORDER BY expires_at ASC NULLS LAST` in `token-holds.ts` doing its job.
+
+### What shipped
+
+- **`expiry_groups`** replaces a single `expires_next_at`. A counter is one number per (channel,
+  currency), so the old field reported the soonest date across everything it held — telling a
+  workspace its 40 never-expiring credits expired in 59 days. Groups are channel-agnostic and
+  N-way: three packages with three dates produce three groups. Empty means UNKNOWN, so a consumer
+  renders no expiry claim rather than inventing "never expires" from missing data.
+- **`granted_total` / `consumed_total`** for the usage line. `consumed_total` is deliberately NOT
+  `granted - available`: a pending hold moves the counter but not `quantity_consumed`, and expiry
+  removes credits nobody spent. Either shortcut reports usage that did not happen. Pinned by a test
+  that reserves without committing and asserts zero used.
+- **Credit-backed sends.** The composer gated every live send on the wallet, so 160 credits + an
+  empty wallet said "top up" for a send costing nothing. It could not have known better — no BFF
+  route exposed token balances to the client. Added `api/dashboard/tokens` (GET) and wired the gate
+  to the engine's all-or-nothing rule.
+- **`backing` on the message summary**, so the Messages list stops printing a cash cost for a
+  credit-backed send (it showed `GHS 0.03` while the ledger recognised 33 at the lot's locked price).
+- **Sender-ID matching** used `startsWith("+234") ? "NG" : "GH"`, so an EMPTY recipient box resolved
+  to Ghana and told anyone holding only a Nigerian sender they had none — while /senders showed it
+  Active. Now uses the `countryOf` helper that already existed.
+- **Route error boundaries.** An audit found 26 route segments sharing ONE `error.tsx` between them;
+  any throw blanked the whole shell. Added `(app)/error.tsx` + `global-error.tsx` per app, plus
+  shared `RouteError`/`RouteLoading`.
+- **Blueprint card treatment** from the imported "Industrial pricing cards" design, on Fabric's own
+  tokens and type scale. Registration marks live on the shared `Card` so both apps inherit them.
+
+### Live-by-default — understand this before testing anything
+
+There is **no "move the account to live" step**. `virtual-phone.service.ts:60` makes any workspace
+whose plan is not `sandbox` live by default; virtual is opt-IN. `Fabric Local` is `plan = growth`
+with `settings = {}`, so it has always been live. Go-live gates the transition OUT of the `sandbox`
+plan, and a seeded `growth` workspace starts on the far side of it.
+
+Combined with an **armed Arkesel live plugin instance** (`enabled + is_default + credentials`, set
+manually 2026-08-02 12:08), sends reach a real carrier and spend real money. Two consequences:
+
+- **The integration suite dispatches live.** `send-dlr-e2e.integration.spec.ts` reads the shared
+  global `plugin_instances` table instead of pinning its own, so `pnpm test:integration` resolved
+  `arkesel-sms` and attempted real dispatch. Its 2 failures are this, not a code defect —
+  reproduced on an unmodified checkout before attributing. **Real fix: the spec must seed and pin
+  its own instance so a test can never reach a live vendor.**
+- Consider seeding local/testing workspaces as `plan = 'sandbox'` (forced virtual, `locked: true`)
+  and flipping deliberately. Seed change only, no product code.
+
+### Known gaps, deliberately not addressed
+
+- **Arkesel DLR callback is not configured**, so live sends go `accepted` → `expired` (~16 min
+  sweep) even when they arrive. Money and credits are unaffected; only status. Route is
+  `/webhooks/dlr/arkesel-sms`, guarded by `WEBHOOK_INGRESS_TOKEN` (header `x-webhook-token` or
+  `?token=`, since Arkesel GETs with `?sms_id=..&status=..`).
+- The local seeded GHS 1,000 wallet float was cleared with a balanced `adjustment` (debit customer,
+  credit writeoff, key `local-seed-writeoff-2026-08-02`) so a token test fails honestly instead of
+  silently falling back to cash. Ledger invariants re-verified: 0 unbalanced, 0 projection drift.
+- **Standards audit — safety net only.** Still open: ~25 missing `loading.tsx`; 5 empty-vs-error
+  conflations where a fetch failure renders as "you have nothing" (`dashboard/senders:121`,
+  `dashboard/templates:236`, `admin-console/senders:40`, `admin-console/maker-checker:53`,
+  `tenants/[slug]:182`); 9 separate `StatusBadge` implementations; ~30 ad-hoc date formats.
+  `Card` now draws corner marks app-wide — anything inside `overflow-hidden` or a grid tighter than
+  `gap-6` needs `corners={false}`; only the wallet page was checked visually.
+
+### Traps this session re-confirmed
+
+- **`tsc` cannot see a client/server boundary error.** Exporting a parser from a `"use client"`
+  module made every export a client reference; the server component calling it threw at request
+  time with perfectly valid types. Only running the page found it.
+- **Unlayered CSS beats every Tailwind utility** regardless of specificity. Blueprint rules had to
+  move into `@layer components` before per-call-site colour overrides worked at all.
+- The Windows bash/node `/tmp` split bit repeatedly: bash writes `/tmp/x`, node reads `D:\tmp\x`.
+  Use the scratchpad absolute path. Heredocs also mangle backticks inside doc comments — use Edit.
+
+## Previous (2026-08-01): multi-channel packages + expiry, and the unit-priced model is GONE
 
 Branch `feature/ops-channel-packages` off `dev` @ `46e5ec4`. Phases 1–4 of the money roadmap are
 merged (#224/#225/#226) and were promoted to testing by #227 (deploy green 15:35 UTC).

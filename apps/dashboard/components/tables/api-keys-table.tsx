@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@app/ui/components/ui/dialog";
+import { formatDate } from "@app/ui/lib/datetime";
 import type { ColumnDef } from "@tanstack/react-table";
 import { KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -22,12 +23,7 @@ import { useState } from "react";
 import { toastApiError } from "@/lib/error-toast";
 
 function formatTimestamp(value: string | null): string {
-  if (!value) return "Never";
-  return new Date(value).toLocaleDateString("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatDate(value, { fallback: "Never" });
 }
 
 export function ApiKeysTable({ keys }: { keys: readonly ApiKey[] }) {

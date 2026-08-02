@@ -22,6 +22,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@app/ui/components/ui/sheet";
+import { formatDateTime } from "@app/ui/lib/datetime";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -79,12 +80,7 @@ function failureGuidance(reason: string): {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString("en", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTime(iso);
 }
 
 const columns: ColumnDef<MessageSummary>[] = [

@@ -1,5 +1,6 @@
 import type { TokenBalanceDto } from "@app/contracts";
 import { StatCard } from "@app/ui/components/ui/stat-card";
+import { formatDayMonth } from "@app/ui/lib/datetime";
 import { cn } from "@app/ui/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -208,10 +209,7 @@ function ExpiryLine({
         `Expires ${when}`
       )}
       <span className="ml-auto shrink-0 tabular-nums opacity-70">
-        {new Date(expiresAt).toLocaleDateString("en", {
-          day: "numeric",
-          month: "short",
-        })}
+        {formatDayMonth(expiresAt)}
       </span>
     </li>
   );

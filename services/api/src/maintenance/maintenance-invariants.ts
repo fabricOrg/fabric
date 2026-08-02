@@ -2,8 +2,10 @@ import {
   checkGlInvariants,
   checkGlReconciliation,
   checkLedgerInvariants,
+  checkTokenReconciliation,
   formatGlViolations,
   formatReconciliation,
+  formatTokenReconciliation,
   formatViolations,
   type LedgerInvariantResult,
   type ProvisioningDb,
@@ -59,8 +61,20 @@ export async function runLedgerInvariants(input: {
       );
     }
 
-    // The subledger result is what existing callers and tests consume; the GL and reconciliation
-    // results are reported through the log because nothing branches on them yet.
+    // COM-010: prepaid credits. A FOURTH check rather than part of the reconciliation above, because
+    // entitlement can drift while both ledgers stay perfectly balanced — a counter is a projection of
+    // counts, not of money, so no double-entry invariant covers it. Runs on the same provisioning
+    // connection: every token table is FORCE RLS with a policy naming `app_provisioner`.
+    const tokens = await checkTokenReconciliation(executor);
+    if (!tokens.ok) {
+      input.logger.error(
+        `PREPAID CREDIT RECONCILIATION FAILURE
+${formatTokenReconciliation(tokens)}`,
+      );
+    }
+
+    // The subledger result is what existing callers and tests consume; the GL, reconciliation and
+    // token results are reported through the log because nothing branches on them yet.
     return subledger;
   });
 }

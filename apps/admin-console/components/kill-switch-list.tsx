@@ -84,7 +84,9 @@ export function KillSwitchList({
 
   return (
     <>
-      <div className="flex flex-col gap-3">
+      {/* gap-6, not gap-3: a Card's registration marks sit 6px outside its border, so a 12px gap
+          makes the bottom marks of one row collide with the top marks of the next. */}
+      <div className="flex flex-col gap-6">
         {switches.map((k) => (
           <Card key={k.key}>
             <CardHeader>

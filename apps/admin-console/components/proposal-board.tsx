@@ -40,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
+import { formatUtcTimestamp } from "@app/ui/lib/datetime";
 import { ArrowRight, Plus, ShieldQuestion, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -146,7 +147,7 @@ export function ProposalBoard({
                   <CardDescription>
                     Proposed by{" "}
                     <span className="font-mono">{p.maker_email}</span> ·{" "}
-                    {p.created_at.slice(0, 16).replace("T", " ")}
+                    {formatUtcTimestamp(p.created_at)}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">

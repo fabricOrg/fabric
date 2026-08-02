@@ -70,7 +70,9 @@ export function CommercialOffersManager({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3">
+      {/* gap-6: the cards carry blueprint registration marks 6px outside their border, which
+          collide at the 12px gap this list used to use. */}
+      <div className="flex flex-col gap-6">
         {offers.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No prepaid packages yet.

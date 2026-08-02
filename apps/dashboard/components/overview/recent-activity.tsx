@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@app/ui/components/ui/card";
+import { formatDayMonth } from "@app/ui/lib/datetime";
 import { cn } from "@app/ui/lib/utils";
 import {
   ArrowUpRight,
@@ -59,10 +60,7 @@ function relativeTime(iso: string): string {
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.round(mins / 60);
   if (hours < 24) return `${hours}h ago`;
-  return new Date(iso).toLocaleDateString("en", {
-    month: "short",
-    day: "numeric",
-  });
+  return formatDayMonth(iso);
 }
 
 function Row({ item }: { item: OverviewActivity }) {

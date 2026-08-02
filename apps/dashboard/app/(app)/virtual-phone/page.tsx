@@ -258,6 +258,7 @@ export default function VirtualPhonePage() {
               onBack={() => setSelectedKey(undefined)}
               onSelectMessage={setSelectedMessageId}
               onReply={reply}
+              liveDelivery={settings?.delivery_mode === "live"}
             />
             <MessageInspector message={selectedMessage} />
           </div>

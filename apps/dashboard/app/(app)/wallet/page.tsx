@@ -25,6 +25,7 @@ import {
 } from "@app/ui/components/ui/page-header";
 import { Separator } from "@app/ui/components/ui/separator";
 import { EmptyState, ErrorState } from "@app/ui/components/ui/states";
+import { formatDayMonth } from "@app/ui/lib/datetime";
 import {
   Bell,
   CheckCircle2,
@@ -238,10 +239,7 @@ export default async function WalletPage({
         new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     )
     .map((e) => ({
-      label: new Date(e.createdAt).toLocaleDateString("en", {
-        month: "short",
-        day: "numeric",
-      }),
+      label: formatDayMonth(e.createdAt),
       balance: Number(e.runningBalance.minor) / 100,
     }));
 

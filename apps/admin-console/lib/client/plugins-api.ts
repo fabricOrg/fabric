@@ -41,11 +41,22 @@ export const VENDOR_CREDENTIAL_FIELDS: Record<
     /** Render masked. Set on anything that IS the secret, not just fields literally named apiKey. */
     secret?: boolean;
     /**
-     * Render as a switch rather than a text box. The stored value stays the STRING "true"/"false",
-     * because that is what the adapter's configSchema declares — the control changes, not the
-     * contract.
+     * This field is DETERMINED by the instance's mode, so it is stated rather than asked.
+     *
+     * `credentialModeViolation` accepts exactly one value per mode — a live Arkesel instance requires
+     * `sandbox="false"`, a sandbox one requires anything else, and SES requires `sesMode` to equal the
+     * mode outright. A control with one legal position cannot help anyone; it can only be set wrong and
+     * then refused. Deriving it makes the mismatch unrepresentable instead of merely rejected, which
+     * also removes the switch whose filled track and left-hand knob made its own state unreadable.
      */
-    boolean?: boolean;
+    derivedFromMode?: (mode: "sandbox" | "live") => string;
+    /**
+     * What the derived value MEANS, per mode. The stored literal is not self-explanatory — the flag is
+     * `sandbox`, so a live instance stores `false`, and showing that raw under a label like "carrier
+     * delivery" reads as the opposite of the truth. State the consequence; keep the literal visible
+     * beside it for anyone debugging what was actually installed.
+     */
+    derivedNote?: (mode: "sandbox" | "live") => string;
     hint?: string;
   }[]
 > = {
@@ -55,8 +66,11 @@ export const VENDOR_CREDENTIAL_FIELDS: Record<
       name: "sandbox",
       label: "Sandbox mode",
       required: false,
-      boolean: true,
-      hint: "Off sends to real carriers and spends real money. A live instance requires this off.",
+      derivedFromMode: (mode) => (mode === "live" ? "false" : "true"),
+      derivedNote: (mode) =>
+        mode === "live"
+          ? "Off — sends reach real carriers and spend real money."
+          : "On — nothing here reaches a carrier.",
     },
     {
       name: "callbackUrl",
@@ -110,9 +124,11 @@ export const VENDOR_CREDENTIAL_FIELDS: Record<
     },
     {
       name: "sesMode",
-      label: "SES mode (sandbox or live)",
+      label: "SES mode",
       required: true,
-      hint: "Must match this plugin instance's mode.",
+      derivedFromMode: (mode) => mode,
+      derivedNote: (mode) =>
+        `Matches this ${mode} instance — SES refuses a credential that disagrees with it.`,
     },
   ],
 };

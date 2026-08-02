@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
+import { formatDateTime } from "@app/ui/lib/datetime";
 import { cn } from "@app/ui/lib/utils";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -134,12 +135,7 @@ const columns: ColumnDef<Verification>[] = [
     ),
     cell: ({ row }) => (
       <div className="text-right text-muted-foreground">
-        {new Date(row.original.createdAt).toLocaleString("en", {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })}
+        {formatDateTime(row.original.createdAt)}
       </div>
     ),
   },
