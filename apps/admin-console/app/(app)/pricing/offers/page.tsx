@@ -21,6 +21,7 @@ export default async function CommercialOffersPage() {
   let offers: CommercialOfferWithVersions[] = [];
   let channels: CommercialOfferChannelDto[] = [];
   let routeVocabulary: CommercialRouteVocabulary = {};
+  let selfApprovalAllowed = false;
   let catalogs: PriceBookDto[] = [];
   let loadError = false;
   try {
@@ -31,6 +32,7 @@ export default async function CommercialOffersPage() {
     offers = listed.offers;
     channels = listed.channels;
     routeVocabulary = listed.route_vocabulary;
+    selfApprovalAllowed = listed.self_approval_allowed;
     // Offers live in TOKEN-mode books; a subscription book is a rate plan, not a catalog.
     catalogs = books.filter((book) => book.mode === "token");
   } catch {
@@ -62,6 +64,7 @@ export default async function CommercialOffersPage() {
           offers={offers}
           channels={channels}
           routeVocabulary={routeVocabulary}
+          selfApprovalAllowed={selfApprovalAllowed}
           catalogs={catalogs}
           canManage={canManage}
           actorStaffId={session.userId}

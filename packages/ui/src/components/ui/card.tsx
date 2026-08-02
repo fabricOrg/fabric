@@ -1,16 +1,36 @@
+import { BlueprintCorners } from "@app/ui/components/ui/blueprint";
 import { cn } from "@app/ui/lib/utils";
 import type * as React from "react";
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * The standard surface. Carries the blueprint registration marks — a "+" hairline at each corner,
+ * drawn just OUTSIDE the border — so every card in every app reads as a drafted object rather than
+ * a floating rounded panel. It only works because the app is a squared-corner system
+ * (`--radius: 0`); the marks are defined in theme.css and rendered by `BlueprintCorners`.
+ *
+ * Pass `corners={false}` where they cannot survive: inside a clipped parent (`overflow-hidden`),
+ * flush against a viewport edge, or in a dense grid whose gap is under ~1rem, since adjacent marks
+ * would collide. Grids of cards generally want `gap-6` or wider.
+ */
+function Card({
+  className,
+  corners = true,
+  children,
+  ...props
+}: React.ComponentProps<"div"> & { corners?: boolean }) {
   return (
     <div
       data-slot="card"
       className={cn(
-        "flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm",
+        "relative flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm",
+        corners && "blueprint",
         className,
       )}
       {...props}
-    />
+    >
+      {corners ? <BlueprintCorners /> : null}
+      {children}
+    </div>
   );
 }
 

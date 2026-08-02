@@ -1,6 +1,8 @@
 import {
+  type CommercialOfferPurchaseList,
   type CommercialOfferPurchaseReceipt,
   type CustomerCommercialOfferCatalog,
+  commercialOfferPurchaseListSchema,
   commercialOfferPurchaseReceiptSchema,
   customerCommercialOfferCatalogSchema,
 } from "@app/contracts";
@@ -17,7 +19,7 @@ import {
   tokenPurchases,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { notFound } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 
@@ -102,6 +104,36 @@ export class TokenCatalogService {
       existing.push(item);
       itemsByVersion.set(item.item.offerVersionId, existing);
     }
+    // What this workspace has already bought, per PACKAGE rather than per version: buying v1 is
+    // still part of your history when v2 is the one on sale.
+    const purchasedRows =
+      rows.length === 0
+        ? []
+        : await this.provisioning.db
+            .select({
+              offerId: pricingOfferVersions.offerId,
+              packs: sql<string>`coalesce(sum(${tokenPurchases.packCount}), 0)`,
+            })
+            .from(tokenPurchases)
+            .innerJoin(
+              pricingOfferVersions,
+              eq(pricingOfferVersions.id, tokenPurchases.offerVersionId),
+            )
+            .where(
+              and(
+                eq(tokenPurchases.tenantId, tenantId as TenantId),
+                eq(tokenPurchases.status, "success"),
+                inArray(
+                  pricingOfferVersions.offerId,
+                  rows.map((row) => row.offer.id),
+                ),
+              ),
+            )
+            .groupBy(pricingOfferVersions.offerId);
+    const packsByOffer = new Map(
+      purchasedRows.map((row) => [row.offerId, Number(row.packs)]),
+    );
+
     const consumableChannels = new Set(["sms", "email"]);
 
     return customerCommercialOfferCatalogSchema.parse({
@@ -150,6 +182,7 @@ export class TokenCatalogService {
           maximum_pack_count: version.maximumPackCount,
           credit_validity_days: version.creditValidityDays,
           effective_to: version.effectiveTo?.toISOString() ?? null,
+          purchased_packs: packsByOffer.get(offer.id) ?? 0,
         })),
     });
   }
@@ -191,6 +224,50 @@ export class TokenCatalogService {
       currency: purchase.currency,
       created_at: purchase.createdAt.toISOString(),
       updated_at: purchase.updatedAt.toISOString(),
+    });
+  }
+
+  /**
+   * Every package purchase this workspace has made, newest first — including pending and failed
+   * ones, because "I paid and nothing happened" is exactly the case a history has to cover.
+   */
+  async purchases(tenantId: string): Promise<CommercialOfferPurchaseList> {
+    const rows = await this.provisioning.db
+      .select()
+      .from(tokenPurchases)
+      .where(eq(tokenPurchases.tenantId, tenantId as TenantId))
+      .orderBy(desc(tokenPurchases.createdAt))
+      .limit(50);
+    return commercialOfferPurchaseListSchema.parse({
+      purchases: rows.flatMap((purchase) => {
+        const packCount = purchase.packCount;
+        const snapshot = purchase.offerSnapshot;
+        // A row without its snapshot predates packages; it has nothing to itemise, so it is omitted
+        // rather than rendered as a purchase of nothing.
+        if (!purchase.offerVersionId || !snapshot || packCount === null) {
+          return [];
+        }
+        return [
+          {
+            reference: purchase.reference,
+            status: purchase.status,
+            offer_version_id: purchase.offerVersionId,
+            offer_name: snapshot.offerName,
+            items: snapshot.items.map((item) => ({
+              channel_code: item.channelCode,
+              unit_code: item.unitCode,
+              quantity: (
+                BigInt(item.totalUnits) * BigInt(packCount)
+              ).toString(),
+            })),
+            pack_count: packCount,
+            amount_minor: purchase.amountMinor.toString(),
+            currency: purchase.currency,
+            created_at: purchase.createdAt.toISOString(),
+            updated_at: purchase.updatedAt.toISOString(),
+          },
+        ];
+      }),
     });
   }
 

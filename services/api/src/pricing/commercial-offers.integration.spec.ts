@@ -4,6 +4,7 @@ import {
   createProvisioningDb,
   pricingOfferVersions,
 } from "@app/db";
+import type { ConfigService } from "@nestjs/config";
 import { and, eq, like } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { AuditService } from "../audit/audit.service.js";
@@ -27,11 +28,15 @@ const describeDb = superUrl ? describe : describe.skip;
 describeDb("commercial offer publication", () => {
   const db = createProvisioningDb(superUrl ?? "", { max: 1 });
   const margin = new CommercialOfferMarginService(db);
-  const offers = new CommercialOffersService(db, new AuditService(db), margin);
+  const offers = new CommercialOffersService(db, new AuditService(db), margin, {
+    get: () => undefined,
+  } as unknown as ConfigService);
+  // Separation of duties ON: this suite asserts the author's own publish is refused.
   const publishing = new CommercialOfferPublishService(
     db,
     new AuditService(db),
     margin,
+    { get: () => undefined } as unknown as ConfigService,
   );
   const fixtures: OfferFixtures = makeOfferFixtures(db);
 
@@ -271,5 +276,47 @@ describeDb("commercial offer publication", () => {
       approver,
     );
     expect(live.status).toBe("published");
+  });
+
+  it("lets a solo deployment self-approve, but only with a recorded reason", async () => {
+    // A single-operator install has no second admin. The policy permits it; the DATABASE still
+    // refuses a silent self-approval, so the reason is the approval record.
+    const solo = new CommercialOfferPublishService(
+      db,
+      new AuditService(db),
+      margin,
+      {
+        get: (key: string) =>
+          key === "PRICING_SELF_APPROVAL_ENABLED" ? "true" : undefined,
+      } as unknown as ConfigService,
+    );
+    const author = await fixtures.staff();
+    const offer = await fixtures.offer(author);
+    const vendor = await fixtures.costRate({ numerator: 1n, denominator: 2n });
+    const draft = await offers.createVersion(
+      offer.id,
+      versionRequest({
+        provider_vendors: [vendor],
+        destination_countries: ["GH"],
+        traffic_classes: ["transactional"],
+      }),
+      author,
+    );
+
+    const published = await solo.publish(
+      draft.id,
+      { reason: "Sole operator; margin checked against the fixture rate." },
+      author,
+    );
+    expect(published.status).toBe("published");
+    expect(published.approved_by).toBe(author.staffId);
+
+    // The justification is persisted on the version, not just in the audit log.
+    const [row] = await db.db
+      .select({ reason: pricingOfferVersions.selfApprovalReason })
+      .from(pricingOfferVersions)
+      .where(eq(pricingOfferVersions.id, draft.id))
+      .limit(1);
+    expect(row?.reason).toContain("Sole operator");
   });
 });

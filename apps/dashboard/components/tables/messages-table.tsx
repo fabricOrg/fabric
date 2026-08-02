@@ -123,11 +123,10 @@ const columns: ColumnDef<MessageSummary>[] = [
   {
     id: "cost",
     header: () => <div className="text-right">Cost</div>,
-    cell: ({ row }) => (
-      <div className="text-right font-mono tabular-nums">
-        {formatMoney(row.original.cost)}
-      </div>
-    ),
+    // `cost` is the rate-card price and only leaves the wallet when the send was wallet-backed. A
+    // token-backed send spends credits and charges no cash, so printing money against it claims a
+    // charge that never happened.
+    cell: ({ row }) => <CostCell message={row.original} />,
   },
   {
     accessorKey: "created_at",
@@ -283,7 +282,12 @@ export function MessagesTable({
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={detail.status} />
                 <Badge variant="secondary">
-                  {detail.segments} seg · {formatMoney(detail.cost)}
+                  {detail.segments} seg ·{" "}
+                  {detail.backing === "tokens"
+                    ? `${detail.segments} credit${detail.segments === 1 ? "" : "s"}`
+                    : detail.backing === "sandbox_allowance"
+                      ? "sandbox allowance"
+                      : formatMoney(detail.cost)}
                 </Badge>
                 <Badge variant="outline">
                   {detail.encoding === "ucs2" ? "UCS-2" : "GSM-7"}
@@ -364,6 +368,30 @@ export function MessagesTable({
           )}
         </SheetContent>
       </Sheet>
+    </div>
+  );
+}
+
+/**
+ * What this send actually cost the customer. Credits and the sandbox allowance are COUNTS, not
+ * money — running either through formatMoney would print a cash figure for a send that took none.
+ */
+function CostCell({ message }: { message: MessageSummary }) {
+  if (message.backing === "tokens") {
+    return (
+      <div className="text-right text-muted-foreground text-xs">
+        {message.segments} credit{message.segments === 1 ? "" : "s"}
+      </div>
+    );
+  }
+  if (message.backing === "sandbox_allowance") {
+    return (
+      <div className="text-right text-muted-foreground text-xs">Sandbox</div>
+    );
+  }
+  return (
+    <div className="text-right font-mono tabular-nums">
+      {formatMoney(message.cost)}
     </div>
   );
 }

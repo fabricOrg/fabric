@@ -27,6 +27,9 @@ const staffEmails = (
   .map((email) => email.trim().toLowerCase())
   .filter((email) => email.length > 0);
 
+/** Wallet money to seed, in minor units. Zero by default — see the credit call below for why. */
+const seedWalletMinor = BigInt(process.env.SEED_WALLET_MINOR ?? "0");
+
 const localSmsTemplates = [
   {
     name: "Delivery update",
@@ -126,15 +129,25 @@ async function main(): Promise<void> {
           });
       }
     });
-    await appDb.withTenant(tenantId, (tx) =>
-      credit(tx, {
-        currency: "GHS",
-        amountMinor: 100_000n,
-        idempotencyKey: "topup:local-development-seed",
-        referenceId: tenantId,
-      }),
-    );
+    // Opt-in, and OFF by default. A pre-funded wallet reads as real money in the dashboard, and it
+    // hides which instrument a send actually drew on — tokens-first vs wallet-second is the whole
+    // point of the prepaid path, and a seeded balance makes both look the same.
+    if (seedWalletMinor > 0n) {
+      await appDb.withTenant(tenantId, (tx) =>
+        credit(tx, {
+          currency: "GHS",
+          amountMinor: seedWalletMinor,
+          idempotencyKey: "topup:local-development-seed",
+          referenceId: tenantId,
+        }),
+      );
+    }
     console.log(`Local tenant ready: ${tenantId}`);
+    console.log(
+      seedWalletMinor > 0n
+        ? `Wallet seeded: ${seedWalletMinor} minor`
+        : "Wallet left EMPTY (set SEED_WALLET_MINOR to fund it)",
+    );
     console.log(`SMS templates ready: ${localSmsTemplates.length}`);
     console.log(`Staff seeded: ${staffEmails.join(", ")}`);
   } finally {

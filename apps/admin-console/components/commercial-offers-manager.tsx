@@ -30,6 +30,7 @@ export function CommercialOffersManager({
   offers,
   channels,
   routeVocabulary,
+  selfApprovalAllowed,
   catalogs,
   canManage,
   actorStaffId,
@@ -37,6 +38,7 @@ export function CommercialOffersManager({
   offers: readonly CommercialOfferWithVersions[];
   channels: readonly CommercialOfferChannelDto[];
   routeVocabulary: CommercialRouteVocabulary;
+  selfApprovalAllowed: boolean;
   catalogs: readonly PriceBookDto[];
   canManage: boolean;
   actorStaffId: string;
@@ -96,6 +98,7 @@ export function CommercialOffersManager({
                 actorStaffId={actorStaffId}
                 channels={activeChannels}
                 routeVocabulary={routeVocabulary}
+                selfApprovalAllowed={selfApprovalAllowed}
               />
               {canManage ? (
                 <div>

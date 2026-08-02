@@ -10,19 +10,23 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 /**
- * Standard metric tile, shared across all Fabric apps (overview, insights, wallet, admin). A label +
- * a big mono/tabular value, an optional tinted icon chip top-right, and a `children` footer slot for
- * whatever the metric needs (a hint line, a progress bar, a trend, or an action button). One anatomy
- * so every stat reads the same.
+ * Standard metric tile, shared across all Fabric apps (overview, insights, wallet, admin).
  *
- *   <StatCard label="Delivery rate" value="94.7%" icon={CheckCheck}
- *     iconClassName="bg-success/15 text-success">
- *     <Progress value={94.7} /> <p className="text-sm text-muted-foreground">Delivered of resolved.</p>
+ * One anatomy so every stat reads the same: an uppercase label, a squared icon plate top-right, a
+ * large tabular value with an optional unit set small beside it, and a `children` footer slot for
+ * whatever the metric needs — a hint line, a progress bar, a trend, or an action.
+ *
+ * The plate is square and hairline-bordered rather than a rounded tinted chip: it matches the
+ * blueprint frame the surrounding Card draws, and reads as an instrument label.
+ *
+ *   <StatCard label="Delivery rate" value="94.7" unit="%" icon={CheckCheck}>
+ *     <Progress value={94.7} /> <p className="text-muted-foreground text-sm">Delivered of resolved.</p>
  *   </StatCard>
  */
 export function StatCard({
   label,
   value,
+  unit,
   icon: Icon,
   iconClassName,
   children,
@@ -30,8 +34,10 @@ export function StatCard({
 }: {
   label: ReactNode;
   value: ReactNode;
+  /** Small uppercase unit set on the value's baseline — "msg", "%", "GHS". */
+  unit?: ReactNode;
   icon?: LucideIcon;
-  /** Tint classes for the icon chip (e.g. "bg-primary/12 text-primary"). */
+  /** Tint for the icon plate (e.g. "bg-warning/10 text-warning"). Defaults to the accent. */
   iconClassName?: string;
   /** Footer content: hint text, a progress bar, a trend, or an action. */
   children?: ReactNode;
@@ -41,20 +47,25 @@ export function StatCard({
     <Card className={className}>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
-          <CardDescription>{label}</CardDescription>
+          <CardDescription className="truncate">{label}</CardDescription>
           {Icon && (
             <span
               className={cn(
-                "flex size-9 shrink-0 items-center justify-center rounded-lg [&_svg]:size-4",
-                iconClassName,
+                "flex size-7 shrink-0 items-center justify-center border [&_svg]:size-3.5",
+                iconClassName ?? "bg-primary/10 text-primary",
               )}
             >
               <Icon aria-hidden />
             </span>
           )}
         </div>
-        <CardTitle className="font-mono text-3xl tabular-nums">
+        <CardTitle className="flex items-baseline gap-1.5 font-display text-3xl tabular-nums tracking-tight">
           {value}
+          {unit ? (
+            <span className="font-sans text-muted-foreground text-xs">
+              {unit}
+            </span>
+          ) : null}
         </CardTitle>
       </CardHeader>
       {children && (

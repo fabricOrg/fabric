@@ -59,7 +59,13 @@ const fieldVariants = cva(
   {
     variants: {
       orientation: {
-        vertical: ["flex-col [&>*]:w-full [&>.sr-only]:w-auto"],
+        // `[&>*]:w-full` is right for a text input, which should fill the field — but it also hit
+        // controls with an intrinsic size, stretching a Switch into a full-width bar. Exempt them
+        // the same way `.sr-only` already is: a switch/checkbox/radio has ONE correct width.
+        vertical: [
+          "flex-col [&>*]:w-full [&>.sr-only]:w-auto",
+          "[&>[data-slot=switch]]:w-auto [&>[role=checkbox]]:w-auto [&>[role=radio]]:w-auto",
+        ],
         horizontal: [
           "flex-row items-center",
           "[&>[data-slot=field-label]]:flex-auto",
@@ -67,6 +73,7 @@ const fieldVariants = cva(
         ],
         responsive: [
           "flex-col @md/field-group:flex-row @md/field-group:items-center [&>*]:w-full @md/field-group:[&>*]:w-auto [&>.sr-only]:w-auto",
+          "[&>[data-slot=switch]]:w-auto [&>[role=checkbox]]:w-auto [&>[role=radio]]:w-auto",
           "@md/field-group:[&>[data-slot=field-label]]:flex-auto",
           "@md/field-group:has-[>[data-slot=field-content]]:items-start @md/field-group:has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px",
         ],

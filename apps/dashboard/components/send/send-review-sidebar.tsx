@@ -31,6 +31,13 @@ interface Props {
   readonly estimateMinor: bigint;
   readonly balanceAfterMinor: bigint;
   readonly insufficient: boolean;
+  /**
+   * Prepaid credits cover this send in full, so the wallet is untouched. The engine claims tokens
+   * before cash, and the claim is all-or-nothing — partial credit cover still charges the wallet.
+   */
+  readonly tokenBacked: boolean;
+  /** SMS credits left once this send claims its segments; null when credits are unknown. */
+  readonly creditsAfter: bigint | null;
   /** Segments left in today's sandbox allowance; null on live delivery, where it does not apply. */
   readonly allowanceRemaining: bigint | null;
   readonly allowanceExceeded: boolean;
@@ -116,15 +123,23 @@ export function SendReviewSidebar(props: Props) {
           ) : (
             <>
               <ConfirmRow
-                label="Estimated cost"
+                label={props.tokenBacked ? "Charged to" : "Estimated cost"}
                 value={
-                  <span className="font-mono font-semibold tabular-nums">
-                    {formatMoney(toMoney(props.estimateMinor, CURRENCY))}
-                  </span>
+                  props.tokenBacked ? (
+                    <span className="font-medium">Prepaid credits</span>
+                  ) : (
+                    <span className="font-mono font-semibold tabular-nums">
+                      {formatMoney(toMoney(props.estimateMinor, CURRENCY))}
+                    </span>
+                  )
                 }
               />
               <ConfirmRow
-                label="Estimated balance after"
+                label={
+                  props.tokenBacked
+                    ? "Credits after"
+                    : "Estimated balance after"
+                }
                 value={
                   <span
                     className={
@@ -132,7 +147,11 @@ export function SendReviewSidebar(props: Props) {
                       (props.insufficient ? "text-destructive" : "")
                     }
                   >
-                    {formatMoney(toMoney(props.balanceAfterMinor, CURRENCY))}
+                    {/* Credits are a COUNT, not money — rendering them through formatMoney would
+                        print "GHS 159" for 159 SMS segments. */}
+                    {props.tokenBacked && props.creditsAfter !== null
+                      ? `${props.creditsAfter.toLocaleString("en")} SMS`
+                      : formatMoney(toMoney(props.balanceAfterMinor, CURRENCY))}
                   </span>
                 }
               />
