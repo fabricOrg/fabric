@@ -257,7 +257,10 @@ export const listCommercialOffersResponseSchema = z.object({
    * default; a solo-operated install has no second approver, and a rule that costs only a logout is
    * ceremony rather than control. The UI needs the answer to avoid offering a button that refuses.
    */
-  self_approval_allowed: z.boolean(),
+  // Defaulted, not required: the console and the api deploy separately, so a version skew must not
+  // break the page. An api that does not send it yet reads as FALSE — separation of duties stays on,
+  // which is the safe direction to be wrong in.
+  self_approval_allowed: z.boolean().default(false),
 });
 export type ListCommercialOffersResponse = z.infer<
   typeof listCommercialOffersResponseSchema
