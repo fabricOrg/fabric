@@ -67,7 +67,7 @@ export function PackageTermsFields({
           return (
             <div
               key={item.key}
-              className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto]"
+              className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto] [&>*]:min-w-0"
             >
               <Field>
                 <FieldLabel>Channel and unit</FieldLabel>
@@ -180,7 +180,7 @@ export function PackageTermsFields({
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 [&>*]:min-w-0">
         <Field>
           <FieldLabel>Package price</FieldLabel>
           <div className="flex gap-2">
@@ -244,7 +244,7 @@ export function PackageTermsFields({
           </FieldDescription>
         </Field>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 [&>*]:min-w-0">
         <Field>
           <FieldLabel>Minimum packs</FieldLabel>
           <Input
