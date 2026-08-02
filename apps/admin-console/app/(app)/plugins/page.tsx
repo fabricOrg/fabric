@@ -218,7 +218,10 @@ function PluginRow({
     <div className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2">
-          <span className="font-medium">{row.vendor}</span>
+          {/* The LABEL, not the vendor slug. An instance is per (vendor, mode), so a vendor with
+              both shows two rows — printing the slug made them read as one thing duplicated, when
+              "Arkesel" and "Arkesel (live)" are distinct instances with separate credentials. */}
+          <span className="font-medium">{row.label}</span>
           {row.isDefault ? (
             <Badge
               variant="outline"

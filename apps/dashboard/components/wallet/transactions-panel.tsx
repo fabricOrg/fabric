@@ -188,6 +188,9 @@ export function WalletLedgerCard({
 /**
  * Package purchase history, sitting under the packages it bought — "did my payment land, and what
  * did it give me" is one question, so it should not need a second tab to answer.
+ *
+ * No header of its own: `CreditsPanel` already titles the section and owns the switch that reveals
+ * this, so a card title here printed the same sentence twice.
  */
 export function PackagePurchasesCard({
   purchases,
@@ -195,14 +198,7 @@ export function PackagePurchasesCard({
   purchases: readonly CommercialOfferPurchaseReceipt[];
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Package purchases</CardTitle>
-        <CardDescription>
-          What you bought and the credits each payment granted. Packages are
-          charged to your card, not to your wallet balance.
-        </CardDescription>
-      </CardHeader>
+    <Card className="py-4">
       <CardContent>
         <section
           className="overflow-x-auto"
