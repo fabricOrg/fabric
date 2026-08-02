@@ -23,6 +23,7 @@
     "db:assert:ledger": "tsx scripts/assert.ts ledger",
     "db:assert:gl": "tsx scripts/assert.ts gl",
     "db:assert:recon": "tsx scripts/assert.ts recon",
+    "db:assert:tokens": "tsx scripts/assert.ts tokens",
     "db:assert:drift": "node scripts/assert-drift.mjs"
   },
   "dependencies": {
