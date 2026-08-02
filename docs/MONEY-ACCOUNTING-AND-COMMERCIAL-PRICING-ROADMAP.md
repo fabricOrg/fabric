@@ -620,10 +620,10 @@ Exit gate: every cleared purchase is settled, outstanding, refunded, or an owned
 
 ### Phase 7 — operational reconciliation and reporting
 
-- continuous ledger-balance invariant;
-- wallet liability versus customer balance reconciliation;
-- token deferred revenue versus unrecognized lot value reconciliation;
-- entitlement counter versus lots/holds reconciliation;
+- continuous ledger-balance invariant; — **done** (`checkLedgerInvariants`, hourly + `db:assert:ledger`)
+- wallet liability versus customer balance reconciliation; — **done** (`checkGlReconciliation`, 1c)
+- token deferred revenue versus unrecognized lot value reconciliation; — **done** (COM-010)
+- entitlement counter versus lots/holds reconciliation; — **done** (COM-010)
 - provider usage/cost and PSP settlement dashboards;
 - revenue, deferred revenue, gross margin, breakage, fees, and tax reports by tenant/channel/currency.
 
@@ -687,7 +687,14 @@ defect.
 - `COM-007` Implement cumulative integer revenue allocation. **DONE.**
 - `COM-008` Enforce destination/traffic/service compatibility during token holds. **DONE.**
 - `COM-009` Build eligible customer catalog, checkout, receipt, and balance surfaces. **DONE.**
-- `COM-010` Reconcile bundle deferred revenue, consumption, and remaining entitlement.
+- `COM-010` Reconcile bundle deferred revenue, consumption, and remaining entitlement. — **DONE.**
+  `packages/db/src/token-reconciliation*.ts`: three comparisons (entitlement counter vs lots-minus-holds;
+  ledger `token_deferred_revenue` vs unearned lot consideration; each lot's running position vs its
+  append-only allocation rows), exposed as `db:assert:tokens` and as a fourth check in the hourly
+  invariant pass. No lag scope, unlike the GL reconciliation: every pair compared is written in one
+  tenant transaction. Driven in both directions, including a balanced purchase movement whose grant
+  never landed — money taken for entitlement that does not exist, which no double-entry invariant can
+  see. Carries the same blindness guard, gated by a test under `SET ROLE app_migrator`.
 - `COM-011` Add workspace-specific catalog assignment. **DONE** (`offer_catalog_assignments`).
 - `COM-012` Add volume tiers or promotional units only after a separate approved scope.
 - `COM-013` Generalize offers into multi-channel packages with atomic per-item grants. **IMPLEMENTED;

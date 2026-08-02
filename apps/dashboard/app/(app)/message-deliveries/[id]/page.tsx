@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@app/ui/components/ui/table";
+import { formatDateTimeFull } from "@app/ui/lib/datetime";
 import Link from "next/link";
 import { BffError } from "@/lib/server/api-client";
 import { listApplications } from "@/lib/server/applications-client";
@@ -85,7 +86,7 @@ function AttemptTimeline({ delivery }: { delivery: MessageDelivery }) {
               {attempt.error_code ?? "—"}
             </TableCell>
             <TableCell className="text-muted-foreground">
-              {new Date(attempt.updated_at).toLocaleString()}
+              {formatDateTimeFull(attempt.updated_at)}
             </TableCell>
           </TableRow>
         ))}
@@ -182,7 +183,7 @@ export default async function MessageDeliveryDetailPage({
           />
           <FactRow
             label="Created"
-            value={new Date(delivery.created_at).toLocaleString()}
+            value={formatDateTimeFull(delivery.created_at)}
           />
           {requestId ? <FactRow label="Request id" value={requestId} /> : null}
         </dl>
@@ -264,7 +265,7 @@ function WebhookStatusTable({
             </TableCell>
             <TableCell className="text-muted-foreground">
               {webhook.delivered_at
-                ? new Date(webhook.delivered_at).toLocaleString()
+                ? formatDateTimeFull(webhook.delivered_at)
                 : "—"}
             </TableCell>
           </TableRow>

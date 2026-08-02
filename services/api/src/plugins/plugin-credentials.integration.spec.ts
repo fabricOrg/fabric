@@ -2,6 +2,7 @@ import { createProvisioningDb, pluginInstances } from "@app/db";
 import type { ConfigService } from "@nestjs/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AuditService } from "../audit/audit.service.js";
+import { assertDisposablePluginCatalog } from "../testing/disposable-plugin-catalog.js";
 import { PluginCredentialsService } from "./plugin-credentials.service.js";
 import { PluginRegistryService } from "./plugin-registry.service.js";
 import { PluginResolverService } from "./plugin-resolver.service.js";
@@ -30,6 +31,7 @@ describeDb("plugin credentials → resolution (ADR-0011 slices 1+2+4)", () => {
   const resolver = new PluginResolverService(db, config);
 
   beforeAll(async () => {
+    await assertDisposablePluginCatalog(db);
     await db.db.delete(pluginInstances);
     await registry.list(); // seeds the catalog
   });

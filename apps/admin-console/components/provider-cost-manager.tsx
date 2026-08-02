@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
+import { formatDateTimeFull } from "@app/ui/lib/datetime";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -192,7 +193,7 @@ export function ProviderCostManager({
                   {rate.numerator_minor}/{rate.denominator} {rate.currency}
                 </td>
                 <td className="p-3">
-                  {new Date(rate.effective_from).toLocaleString()}
+                  {formatDateTimeFull(rate.effective_from)}
                   {rate.effective_to ? " · retired" : " · active"}
                 </td>
                 <td className="p-3">{rate.source_reference}</td>

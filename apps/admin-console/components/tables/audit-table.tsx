@@ -5,6 +5,7 @@ import { Badge } from "@app/ui/components/ui/badge";
 import { DataTable } from "@app/ui/components/ui/data-table";
 import { LoadMore } from "@app/ui/components/ui/load-more";
 import { useCursorPage } from "@app/ui/hooks/use-cursor-page";
+import { formatUtcTimestamp } from "@app/ui/lib/datetime";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toastApiError } from "@/lib/error-toast";
 
@@ -20,8 +21,9 @@ async function fetchAuditPage(cursor: string): Promise<ListAuditResponse> {
 }
 
 function formatTime(iso: string): string {
-  // Stable UTC render (avoids SSR/client locale drift): "2026-07-07 02:31".
-  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+  // Stable UTC render (avoids SSR/client locale drift): "2026-07-07 02:31". See formatUtcTimestamp
+  // for why the audit log deliberately does NOT use the reader's local clock.
+  return formatUtcTimestamp(iso);
 }
 
 function target(event: AuditEventDto): string {

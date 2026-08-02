@@ -1,5 +1,6 @@
 import { createProvisioningDb, pluginInstances } from "@app/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { assertDisposablePluginCatalog } from "../testing/disposable-plugin-catalog.js";
 import { PluginRegistryService } from "./plugin-registry.service.js";
 
 // Runs only when a real DB is configured (local docker / CI ephemeral); skipped otherwise.
@@ -10,8 +11,11 @@ describeDb("plugin registry", () => {
   const db = createProvisioningDb(superUrl ?? "", { max: 1 });
   const service = new PluginRegistryService(db);
 
-  // plugin_instances is GLOBAL config (no tenant) — the test owns the whole table on a local db.
+  // plugin_instances is GLOBAL config with no tenant column, so this spec deletes the whole table to
+  // get a clean catalog. That is safe on an ephemeral CI database and DESTRUCTIVE on a developer's,
+  // where the same table holds whatever an operator armed — so prove the catalog is disposable first.
   beforeAll(async () => {
+    await assertDisposablePluginCatalog(db);
     await db.db.delete(pluginInstances);
   });
   afterAll(async () => {

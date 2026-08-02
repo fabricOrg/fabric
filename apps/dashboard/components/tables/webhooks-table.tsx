@@ -15,20 +15,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@app/ui/components/ui/dialog";
+import { formatDate } from "@app/ui/lib/datetime";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Webhook } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { WebhookDeliveriesDialog } from "@/components/webhook-deliveries-dialog";
 import { toastApiError } from "@/lib/error-toast";
-
-function formatDate(value: string): string {
-  return new Date(value).toLocaleDateString("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 export function WebhooksTable({
   endpoints,

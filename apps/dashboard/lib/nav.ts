@@ -2,6 +2,7 @@ import {
   BadgeCheck,
   BellOff,
   Boxes,
+  FileCode2,
   LayoutDashboard,
   Library,
   List,
@@ -116,6 +117,17 @@ export const navGroups: readonly NavGroup[] = [
         href: "/messages",
         icon: List,
         permission: "sms:read",
+      },
+      // Definitions sit immediately before deliveries because they are the two halves of the same
+      // feature: author a versioned message here, watch what it sent there. The page shipped without
+      // ANY nav entry, so it was reachable only by typing the URL — a whole surface effectively
+      // undiscoverable. Gated on `messages:read` (its pair's gate, and one every role holds);
+      // `definitions:write` / `definitions:publish` gate the actions inside the page, not seeing it.
+      {
+        title: "Message definitions",
+        href: "/message-definitions",
+        icon: FileCode2,
+        permission: "messages:read",
       },
       {
         title: "Managed deliveries",

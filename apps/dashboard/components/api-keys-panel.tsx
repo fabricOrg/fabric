@@ -16,10 +16,15 @@ import { ApiKeysTable } from "@/components/tables/api-keys-table";
 
 /**
  * API keys tab body. Keys belong to Sandbox or Live and a developer manages both, so once the
- * workspace has gone live this exposes a Sandbox / Live switch. Before go-live only sandbox keys
- * exist, so the switch is hidden and the tab is sandbox-only. Independent of the topbar
- * delivery toggle (which drives webhooks/logs) — you may hold live keys while still delivering to the
- * virtual phone.
+ * application's live environment is unlocked this exposes a Sandbox / Live switch. Independent of the
+ * topbar delivery toggle (which drives webhooks/logs) — you may hold live keys while still delivering
+ * to the virtual phone.
+ *
+ * When live is LOCKED the switch stays visible but disabled, with the reason stated. It used to be
+ * hidden and `activeEnv` silently forced to `sandbox`, which produced the worst version of this: the
+ * workspace chrome said "Live", the page offered "Create key", and what arrived was an `sk_test_` key
+ * with nothing anywhere explaining why. A control that is absent teaches nothing; a control that is
+ * present and disabled says both that live keys exist and what has to happen first.
  */
 export function ApiKeysPanel({
   keys,
@@ -43,24 +48,45 @@ export function ApiKeysPanel({
     <>
       <CardHeader>
         <CardDescription>
-          {activeEnv === "live"
-            ? "Live keys spend real money and deliver to carriers."
-            : "Sandbox keys never charge or reach real recipients."}
+          {activeEnv === "live" ? (
+            "Live keys spend real money and deliver to carriers."
+          ) : liveActive ? (
+            "Sandbox keys never charge or reach real recipients."
+          ) : (
+            <>
+              Sandbox keys never charge or reach real recipients. This
+              application&apos;s live environment is still locked, so live keys
+              can&apos;t be created yet —{" "}
+              <Link href="/go-live" className="underline hover:text-foreground">
+                request go-live
+              </Link>{" "}
+              to unlock it.
+            </>
+          )}
         </CardDescription>
         <CardAction className="flex items-center gap-2">
-          {liveActive ? (
-            <div
-              className="inline-flex rounded-md border p-0.5"
-              role="group"
-              aria-label="Key environment"
-            >
-              {(["sandbox", "live"] as const).map((e) => (
+          <div
+            className="inline-flex rounded-md border p-0.5"
+            role="group"
+            aria-label="Key environment"
+          >
+            {(["sandbox", "live"] as const).map((e) => {
+              const locked = e === "live" && !liveActive;
+              return (
                 <Button
                   key={e}
                   type="button"
                   size="sm"
                   variant="ghost"
+                  disabled={locked}
                   aria-pressed={activeEnv === e}
+                  // `title` rather than a Tooltip: a disabled button never fires the pointer events
+                  // Radix's Tooltip trigger listens for, so a Tooltip here would silently never open.
+                  title={
+                    locked
+                      ? "This application's live environment is locked. Go live to create live keys."
+                      : undefined
+                  }
                   onClick={() => setKeyEnv(e)}
                   className={cn(
                     "h-7 px-3 text-xs",
@@ -69,9 +95,9 @@ export function ApiKeysPanel({
                 >
                   {e === "live" ? "Live" : "Sandbox"}
                 </Button>
-              ))}
-            </div>
-          ) : null}
+              );
+            })}
+          </div>
           {canManage ? (
             <Button size="sm" variant="outline" asChild>
               <Link

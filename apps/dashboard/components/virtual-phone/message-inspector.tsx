@@ -1,6 +1,7 @@
 import type { VirtualPhoneMessage } from "@app/contracts";
 import { Badge } from "@app/ui/components/ui/badge";
 import { Button } from "@app/ui/components/ui/button";
+import { formatDateTimeFull } from "@app/ui/lib/datetime";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { CopyButton } from "@/components/copy-button";
@@ -24,7 +25,7 @@ export function MessageInspector({
           </Detail>
           <Detail label="Received">
             <time dateTime={message.created_at}>
-              {new Date(message.created_at).toLocaleString()}
+              {formatDateTimeFull(message.created_at)}
             </time>
           </Detail>
           <Detail label="Segments">{message.segments}</Detail>

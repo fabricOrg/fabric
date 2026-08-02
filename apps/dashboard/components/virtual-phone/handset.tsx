@@ -2,7 +2,13 @@ import type { VirtualPhoneMessage } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import { Input } from "@app/ui/components/ui/input";
 import {
+  formatDateTimeFull,
+  formatTime,
+  formatWeekdayDate,
+} from "@app/ui/lib/datetime";
+import {
   ArrowLeft,
+  Info,
   Maximize2,
   MessageSquareText,
   MoreVertical,
@@ -17,11 +23,21 @@ export function Handset({
   onBack,
   onSelectMessage,
   onReply,
+  liveDelivery = false,
 }: {
   thread?: VirtualThread;
   onBack: () => void;
   onSelectMessage: (id: string) => void;
   onReply: (to: string, body: string) => Promise<boolean>;
+  /**
+   * The workspace delivers to a real carrier, so these threads are HISTORY and the composer must not
+   * be offered. A reply box under a message that arrived on a real handset reads as "answer this
+   * text" — and a real recipient cannot reply at all: sends go out from an alphanumeric sender ID
+   * (AKWAAH), which has no number to reply to, and Fabric has no inbound (MO) route either. The
+   * composer only ever simulated an inbound to the virtual number, which is useful in sandbox and
+   * meaningless here.
+   */
+  liveDelivery?: boolean;
 }) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -88,11 +104,7 @@ export function Handset({
                 <div key={message.id}>
                   {showDay(thread, index) ? (
                     <p className="my-3 text-center text-[11px] font-medium text-muted-foreground">
-                      {new Date(message.created_at).toLocaleDateString([], {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                      })}
+                      {formatWeekdayDate(message.created_at)}
                     </p>
                   ) : null}
                   <div
@@ -106,17 +118,14 @@ export function Handset({
                       >
                         <span className="sr-only">
                           From {message.from}, {message.status}, at{" "}
-                          {new Date(message.created_at).toLocaleString()}.
+                          {formatDateTimeFull(message.created_at)}.
                         </span>
                         <span className="block whitespace-pre-wrap text-sm leading-5">
                           {message.body}
                         </span>
                         <span className="mt-1 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
                           <time dateTime={message.created_at}>
-                            {new Date(message.created_at).toLocaleTimeString(
-                              [],
-                              { hour: "2-digit", minute: "2-digit" },
-                            )}
+                            {formatTime(message.created_at)}
                           </time>
                           <span>·</span>
                           <span>{message.status}</span>
@@ -136,29 +145,40 @@ export function Handset({
                 </div>
               ))}
             </div>
-            <div className="flex h-16 shrink-0 items-center gap-2 border-t bg-background px-3">
-              <Input
-                value={body}
-                onChange={(event) => setBody(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    void submit();
-                  }
-                }}
-                placeholder="Reply as this phone (try STOP)"
-                aria-label="Virtual phone reply"
-                disabled={sending}
-              />
-              <Button
-                size="icon"
-                onClick={() => void submit()}
-                disabled={sending || body.trim().length === 0}
-                aria-label="Send virtual reply"
-              >
-                <Send />
-              </Button>
-            </div>
+            {liveDelivery ? (
+              <div className="flex shrink-0 items-center gap-2 border-t bg-background px-3 py-3 text-muted-foreground text-xs">
+                <Info className="size-3.5 shrink-0" />
+                <span>
+                  No replies while live delivery is on — these are past virtual
+                  deliveries, and a real recipient can&apos;t reply to an
+                  alphanumeric sender ID.
+                </span>
+              </div>
+            ) : (
+              <div className="flex h-16 shrink-0 items-center gap-2 border-t bg-background px-3">
+                <Input
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      void submit();
+                    }
+                  }}
+                  placeholder="Reply as this phone (try STOP)"
+                  aria-label="Virtual phone reply"
+                  disabled={sending}
+                />
+                <Button
+                  size="icon"
+                  onClick={() => void submit()}
+                  disabled={sending || body.trim().length === 0}
+                  aria-label="Send virtual reply"
+                >
+                  <Send />
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">

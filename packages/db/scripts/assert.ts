@@ -13,7 +13,7 @@
 // pg_class / pg_policies / role_table_grants / pg_trigger. The `recon` gate is the exception — it needs
 // a cross-tenant read of the subledger, so it uses DATABASE_URL_PROVISIONER (see below).
 //
-// USAGE:  tsx scripts/assert.ts [security|ledger|gl|recon]    (no arg = run all)
+// USAGE:  tsx scripts/assert.ts [security|ledger|gl|recon|tokens]    (no arg = run all)
 // EXIT:   0 = all pass · 1 = a violation (or runtime error) · 2 = misconfigured (missing a DATABASE_URL)
 // ============================================================================================
 
@@ -27,6 +27,8 @@ import {
   checkLedgerInvariants,
   formatViolations,
 } from "../src/ledger-invariant.js";
+import { checkTokenReconciliation } from "../src/token-reconciliation.js";
+import { formatTokenReconciliation } from "../src/token-reconciliation-format.js";
 import {
   checkSecurityLayerApplied,
   formatSecurityViolations,
@@ -43,9 +45,9 @@ if (!OWNER_URL) {
 // Which gate(s) to run — lets `db:assert:security` / `db:assert:ledger` target one without a second
 // runner. Unknown arg fails loud rather than silently running nothing.
 const which = process.argv[2] ?? "all";
-if (!["all", "security", "ledger", "gl", "recon"].includes(which)) {
+if (!["all", "security", "ledger", "gl", "recon", "tokens"].includes(which)) {
   console.error(
-    `unknown gate '${which}' — expected: security | ledger | gl | recon | (none for all)`,
+    `unknown gate '${which}' — expected: security | ledger | gl | recon | tokens | (none for all)`,
   );
   process.exit(2);
 }
@@ -63,9 +65,11 @@ if (!["all", "security", "ledger", "gl", "recon"].includes(which)) {
  */
 const RECON_URL =
   process.env.DATABASE_URL_PROVISIONER ?? process.env.DATABASE_URL_SUPER;
-if ((which === "all" || which === "recon") && !RECON_URL) {
+const NEEDS_RECON_URL =
+  which === "all" || which === "recon" || which === "tokens";
+if (NEEDS_RECON_URL && !RECON_URL) {
   console.error(
-    "the recon gate requires DATABASE_URL_PROVISIONER (or _SUPER): reconciling needs cross-tenant read of the subledger, which the owner role does not have",
+    "the recon and tokens gates require DATABASE_URL_PROVISIONER (or _SUPER): reconciling needs cross-tenant read of the subledger and the token tables, which the owner role does not have",
   );
   process.exit(2);
 }
@@ -115,6 +119,16 @@ async function main(): Promise<void> {
   if (which === "all" || which === "recon") {
     const r = await checkGlReconciliation(reconDb);
     console.log(formatReconciliation(r));
+    if (!r.ok) failed = true;
+  }
+
+  // COM-010: prepaid credits. Its own gate rather than part of `recon` because the two answer
+  // different questions — `recon` compares the subledger to the corporate books, this compares
+  // entitlement counts and the deferred-revenue liability to the lots that back them. Runs on the
+  // provisioning connection for the same reason: every token table is FORCE RLS.
+  if (which === "all" || which === "tokens") {
+    const r = await checkTokenReconciliation(reconDb);
+    console.log(formatTokenReconciliation(r));
     if (!r.ok) failed = true;
   }
 

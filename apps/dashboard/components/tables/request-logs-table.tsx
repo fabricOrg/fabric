@@ -1,38 +1,33 @@
 "use client";
 
 import type { RequestLogSummary } from "@app/contracts";
-import { Badge } from "@app/ui/components/ui/badge";
 import { Button } from "@app/ui/components/ui/button";
 import { DataTable } from "@app/ui/components/ui/data-table";
+import {
+  StatusBadge as SharedStatusBadge,
+  type StatusTone,
+} from "@app/ui/components/ui/status-badge";
+import { formatDateTime } from "@app/ui/lib/datetime";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ScrollText } from "lucide-react";
 import { useState } from "react";
 import { toastApiError } from "@/lib/error-toast";
 
 function StatusBadge({ status }: { status: number }) {
-  const cls =
-    status >= 500
-      ? "bg-destructive/12 text-destructive"
-      : status >= 400
-        ? "bg-warning/15 text-warning-strong"
-        : "bg-success/12 text-success";
+  // The label IS the code, so no icon: three digits are already unambiguous without colour.
+  const tone: StatusTone =
+    status >= 500 ? "danger" : status >= 400 ? "warning" : "success";
   return (
-    <Badge
-      variant="outline"
-      className={`border-transparent ${cls} tabular-nums`}
-    >
-      {status}
-    </Badge>
+    <SharedStatusBadge
+      tone={tone}
+      label={String(status)}
+      className="tabular-nums"
+    />
   );
 }
 
 function formatTime(value: string): string {
-  return new Date(value).toLocaleString("en", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTime(value);
 }
 
 const columns: ColumnDef<RequestLogSummary>[] = [

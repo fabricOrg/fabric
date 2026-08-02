@@ -17,6 +17,7 @@ import {
 import { Input } from "@app/ui/components/ui/input";
 import { Label } from "@app/ui/components/ui/label";
 import { Textarea } from "@app/ui/components/ui/textarea";
+import { formatDate } from "@app/ui/lib/datetime";
 import { BadgeCheck, Clock, Rocket, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toastApiError } from "@/lib/error-toast";
@@ -149,13 +150,7 @@ export function GoLiveCard({
           sandbox access meanwhile.
           {status.requested_at ? (
             <span className="mt-1 block text-xs">
-              Submitted{" "}
-              {new Date(status.requested_at).toLocaleDateString("en", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-              .
+              Submitted {formatDate(status.requested_at)}.
             </span>
           ) : null}
         </AlertDescription>

@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@app/ui/components/ui/table";
+import { formatDateTime } from "@app/ui/lib/datetime";
 import { cn } from "@app/ui/lib/utils";
 import {
   CheckCheck,
@@ -329,12 +330,7 @@ export default function TransactionsPage() {
                           </span>
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground">
-                          {new Date(t.createdAt).toLocaleString("en", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {formatDateTime(t.createdAt)}
                         </TableCell>
                         <TableCell className="text-right">
                           <ChevronRight className="size-4 text-muted-foreground/50 transition-colors group-hover:text-foreground" />

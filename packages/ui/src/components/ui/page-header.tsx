@@ -38,7 +38,11 @@ function PageHeaderHeading({
   return (
     <div
       data-slot="page-header-heading"
-      className={cn("flex min-w-0 flex-col gap-1", className)}
+      // `flex-1` so the heading absorbs the free space and its description wraps INTERNALLY. Without
+      // it the block's min-content width is the longest unbroken run of the description, which under
+      // the parent's `flex-wrap` pushed the actions onto their own line below the title instead of
+      // keeping them on the right.
+      className={cn("flex min-w-0 flex-1 flex-col gap-1", className)}
       {...props}
     />
   );
@@ -77,7 +81,7 @@ function PageHeaderActions({
   return (
     <div
       data-slot="page-header-actions"
-      className={cn("flex flex-wrap items-center gap-2", className)}
+      className={cn("flex shrink-0 flex-wrap items-center gap-2", className)}
       {...props}
     />
   );

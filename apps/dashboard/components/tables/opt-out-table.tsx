@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
+import { formatDate } from "@app/ui/lib/datetime";
 import { cn } from "@app/ui/lib/utils";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ShieldOff, Trash2 } from "lucide-react";
@@ -58,14 +59,6 @@ function ScopeBadge({ scope }: { scope: OptOutScope }) {
       {meta.label}
     </Badge>
   );
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 export function OptOutTable({

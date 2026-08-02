@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@app/ui/components/ui/table";
+import { formatDateTimeFull } from "@app/ui/lib/datetime";
 import Link from "next/link";
 import { DefinitionApplicationSelector } from "@/components/message-definitions/definition-application-selector";
 import { BffError } from "@/lib/server/api-client";
@@ -83,7 +84,7 @@ function DeliveriesTable({
               {delivery.reference ?? "—"}
             </TableCell>
             <TableCell className="text-muted-foreground">
-              {new Date(delivery.created_at).toLocaleString()}
+              {formatDateTimeFull(delivery.created_at)}
             </TableCell>
           </TableRow>
         ))}

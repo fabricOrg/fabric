@@ -11,6 +11,10 @@ import {
 } from "@app/ui/components/ui/card";
 import { ErrorState, TableEmptyState } from "@app/ui/components/ui/states";
 import {
+  StatusBadge as SharedStatusBadge,
+  type StatusTone,
+} from "@app/ui/components/ui/status-badge";
+import {
   Table,
   TableBody,
   TableCell,
@@ -18,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@app/ui/components/ui/table";
+import { formatDate } from "@app/ui/lib/datetime";
 import { Check } from "lucide-react";
 import { InviteMemberDialog } from "@/components/forms/invite-member-dialog";
 import { MemberPermissionsDialog } from "@/components/member-permissions-dialog";
@@ -52,22 +57,18 @@ function RoleBadge({ role }: { role: Role }) {
   );
 }
 
+const MEMBER_STATUS: Record<
+  MemberDto["status"],
+  { tone: StatusTone; label: string }
+> = {
+  active: { tone: "success", label: "Active" },
+  invited: { tone: "warning", label: "Invited" },
+  disabled: { tone: "neutral", label: "Disabled" },
+};
+
 function StatusBadge({ status }: { status: MemberDto["status"] }) {
-  const styles: Record<MemberDto["status"], string> = {
-    active: "border-transparent bg-success/12 text-success",
-    invited: "border-transparent bg-warning/15 text-warning",
-    disabled: "border-transparent bg-muted text-muted-foreground",
-  };
-  const label: Record<MemberDto["status"], string> = {
-    active: "Active",
-    invited: "Invited",
-    disabled: "Disabled",
-  };
-  return (
-    <Badge variant="outline" className={styles[status]}>
-      {label[status]}
-    </Badge>
-  );
+  const { tone, label } = MEMBER_STATUS[status];
+  return <SharedStatusBadge tone={tone} label={label} />;
 }
 
 export default async function TeamPage() {
@@ -159,15 +160,7 @@ export default async function TeamPage() {
                               </span>
                               {m.status === "invited" ? (
                                 <span className="text-xs text-muted-foreground">
-                                  Invited{" "}
-                                  {new Date(m.updated_at).toLocaleDateString(
-                                    "en",
-                                    {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    },
-                                  )}
+                                  Invited {formatDate(m.updated_at)}
                                 </span>
                               ) : null}
                             </div>

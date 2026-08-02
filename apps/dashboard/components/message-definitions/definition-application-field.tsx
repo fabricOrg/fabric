@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  type ApplicationDto,
-  listApplicationsResponseSchema,
-} from "@app/contracts";
+import type { ApplicationDto } from "@app/contracts";
 import {
   Field,
   FieldDescription,
@@ -16,46 +13,42 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
+/**
+ * Application picker for the definition author.
+ *
+ * The list is PASSED IN, not fetched. It used to `fetch("/api/applications")`, but that route only
+ * exports POST — so the GET returned 405, the field showed "Applications could not be loaded", and
+ * authoring a definition was impossible through the UI. The page rendering this form is a server
+ * component that has already loaded the same list for its own selector, so handing it down removes a
+ * network round-trip, a parse, an error state, and the endpoint that never existed.
+ */
 export function DefinitionApplicationField({
   enabled,
+  applications,
   applicationId,
   onChange,
 }: {
   enabled: boolean;
+  applications: readonly ApplicationDto[];
   applicationId: string;
   onChange: (applicationId: string) => void;
 }) {
-  const [applications, setApplications] = useState<ApplicationDto[]>([]);
-  const [failed, setFailed] = useState(false);
-
+  const firstId = applications[0]?.id;
+  // Default to the first application once, when the form opens with nothing selected.
   useEffect(() => {
-    if (!enabled || applications.length > 0 || failed) return;
-    let current = true;
-    fetch("/api/applications")
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Applications could not be loaded.");
-        return listApplicationsResponseSchema.parse(await response.json());
-      })
-      .then(({ applications: loaded }) => {
-        if (!current) return;
-        setApplications(loaded);
-        if (!applicationId && loaded[0]) onChange(loaded[0].id);
-      })
-      .catch(() => {
-        if (current) setFailed(true);
-      });
-    return () => {
-      current = false;
-    };
-  }, [applicationId, applications.length, enabled, failed, onChange]);
+    if (enabled && !applicationId && firstId) onChange(firstId);
+  }, [applicationId, enabled, firstId, onChange]);
 
   return (
     <Field>
       <FieldLabel htmlFor="def-application">Application</FieldLabel>
       <Select value={applicationId} onValueChange={onChange}>
-        <SelectTrigger id="def-application" disabled={!enabled || failed}>
+        <SelectTrigger
+          id="def-application"
+          disabled={!enabled || applications.length === 0}
+        >
           <SelectValue placeholder="Select an application" />
         </SelectTrigger>
         <SelectContent>
@@ -67,8 +60,8 @@ export function DefinitionApplicationField({
         </SelectContent>
       </Select>
       <FieldDescription>
-        {failed
-          ? "Applications could not be loaded. Close and try again."
+        {applications.length === 0
+          ? "Create an application first — a definition's stable key belongs to one."
           : "The stable key belongs only to this application."}
       </FieldDescription>
     </Field>

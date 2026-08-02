@@ -1,7 +1,6 @@
 "use client";
 
 import type { ListTenantsResponse, TenantSummaryDto } from "@app/contracts";
-import { Badge } from "@app/ui/components/ui/badge";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Card,
@@ -13,7 +12,12 @@ import {
 import { DataTable } from "@app/ui/components/ui/data-table";
 import { Input } from "@app/ui/components/ui/input";
 import { LoadMore } from "@app/ui/components/ui/load-more";
+import {
+  StatusBadge as SharedStatusBadge,
+  type StatusTone,
+} from "@app/ui/components/ui/status-badge";
 import { useCursorPage } from "@app/ui/hooks/use-cursor-page";
+import { formatUtcDate } from "@app/ui/lib/datetime";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Building2, ChevronRight, SearchX } from "lucide-react";
 import Link from "next/link";
@@ -32,19 +36,16 @@ async function fetchTenantsPage(cursor: string): Promise<ListTenantsResponse> {
 
 type Status = TenantSummaryDto["status"];
 
-const STATUS: Record<Status, string> = {
-  active: "border-transparent bg-success/12 text-success",
-  suspended: "border-transparent bg-warning/15 text-warning",
-  closed: "border-transparent bg-muted text-muted-foreground",
+const STATUS: Record<Status, { tone: StatusTone; label: string }> = {
+  active: { tone: "success", label: "Active" },
+  suspended: { tone: "warning", label: "Suspended" },
+  // An account soft-closes, so `closed` is a resting state rather than a failure.
+  closed: { tone: "neutral", label: "Closed" },
 };
 
 function StatusBadge({ status }: { status: Status }) {
-  return (
-    <Badge variant="outline" className={STATUS[status]}>
-      {status[0]?.toUpperCase()}
-      {status.slice(1)}
-    </Badge>
-  );
+  const { tone, label } = STATUS[status];
+  return <SharedStatusBadge tone={tone} label={label} />;
 }
 
 const columns: ColumnDef<TenantSummaryDto>[] = [
@@ -86,7 +87,7 @@ const columns: ColumnDef<TenantSummaryDto>[] = [
     header: "Created",
     cell: ({ row }) => (
       <span className="text-muted-foreground tabular-nums">
-        {row.original.created_at.slice(0, 10)}
+        {formatUtcDate(row.original.created_at)}
       </span>
     ),
   },

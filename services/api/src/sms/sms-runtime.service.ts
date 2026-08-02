@@ -45,6 +45,33 @@ interface LiveProvider {
   readonly vendor: string | null;
 }
 
+/**
+ * Whether a control-plane vendor must be IGNORED because this process is a test run.
+ *
+ * `plugin_instances` is platform-wide, so an armed live Arkesel instance resolves inside
+ * `pnpm test:integration` exactly as it does in production — on 2026-08-02 that made the send specs
+ * dispatch to a real carrier and spend real money. A spec cannot pin its own fake instance instead:
+ * `SMS_ADAPTERS` deliberately contains no fake vendor, so no control-plane row can ever resolve to a
+ * test double.
+ *
+ * So the refusal lives here, once, rather than as a stub each spec has to remember to apply. Falling
+ * through to the env provider is not a fabricated success: `liveProviderReadiness` already returns
+ * ready under `NODE_ENV=test` precisely so the suite runs on the FakeProvider, and that provider
+ * reports honest per-scenario outcomes. `sms-dispatch.ts` then refuses any non-test provider outright,
+ * so a mistake here fails loudly instead of billing someone.
+ *
+ * Keyed on `VITEST` rather than `NODE_ENV`, since `NODE_ENV=test` is also how a developer runs the
+ * stack against a real vendor deliberately.
+ */
+function refusedUnderTest(slug: string): boolean {
+  if (!process.env.VITEST) return false;
+  if (slug === "fake-sms" || slug === "virtual-phone") return false;
+  new Logger(SmsRuntimeService.name).warn(
+    `ignoring control-plane SMS vendor '${slug}' under vitest — a test must never reach a real vendor; falling back to the test provider`,
+  );
+  return true;
+}
+
 @Injectable()
 export class SmsRuntimeService {
   readonly virtualProvider: VirtualPhoneProvider;
@@ -99,7 +126,7 @@ export class SmsRuntimeService {
    */
   private async liveProvider(): Promise<LiveProvider | null> {
     const resolved = await this.resolver?.resolveSms("live");
-    if (resolved) {
+    if (resolved && !refusedUnderTest(resolved.provider.slug)) {
       return {
         provider: resolved.provider,
         creds: resolved.creds,
