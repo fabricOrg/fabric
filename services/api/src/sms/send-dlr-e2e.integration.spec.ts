@@ -170,6 +170,7 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
     expect(await balance("revenue")).toBe(cost); // recognized once
   });
 
+  // Also PROVES the send above went to the fake provider: a real-vendor ref 404s on this route.
   it("7. POST /webhooks/dlr/fake-sms {delivered} is accepted and does NOT move money again", async () => {
     const customerBefore = await balance("customer");
     const revenueBefore = await balance("revenue");
