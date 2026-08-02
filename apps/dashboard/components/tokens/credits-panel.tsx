@@ -31,9 +31,6 @@ export function CreditsPanel({
     <section className="flex flex-col gap-6 border-t pt-6">
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div className="flex flex-col gap-1">
-          <span className="text-primary text-xs uppercase tracking-widest">
-            {buying ? "Prepaid — local" : "Prepaid — record"}
-          </span>
           <h2 className="font-display font-semibold text-2xl leading-tight tracking-tight">
             {buying ? "Buy packages" : "Purchase history"}
           </h2>

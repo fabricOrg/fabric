@@ -6,9 +6,13 @@ import {
   TabsList,
   TabsTrigger,
 } from "@app/ui/components/ui/tabs";
-import { createContext, type ReactNode, useContext, useState } from "react";
+import { useUrlTabState } from "@app/ui/hooks/use-url-tab-state";
+import { createContext, type ReactNode, useContext } from "react";
+import { WALLET_TABS, type WalletTab } from "@/lib/wallet-tab";
 
-export type WalletTab = "overview" | "credits" | "wallet";
+// Re-exported for the components that already import the type from here. The VALUES stay in
+// `@/lib/wallet-tab`, which has no "use client" — the server must be able to call the parser.
+export type { WalletTab };
 
 /**
  * Lets content INSIDE a tab move to another one — the overview cards are signposts, so they have to
@@ -39,20 +43,28 @@ export function WalletTabs({
   credits,
   wallet,
 }: {
-  /** Returning from checkout opens Credits, so the thing just bought is what loads. */
+  /**
+   * Resolved on the SERVER from `?tab=`, falling back to Credits when returning from checkout so
+   * the thing just bought is what loads. Passing it in (rather than reading the URL here) is what
+   * keeps the first paint identical on both sides of hydration.
+   */
   defaultTab: WalletTab;
   overview: ReactNode;
   credits: ReactNode;
   wallet: ReactNode;
 }) {
-  const [tab, setTab] = useState<WalletTab>(defaultTab);
+  const [tab, setTab] = useUrlTabState<WalletTab>(
+    "tab",
+    defaultTab,
+    WALLET_TABS,
+  );
 
   return (
     <SelectTabContext.Provider value={setTab}>
       <Tabs
         value={tab}
         onValueChange={(next) => setTab(next as WalletTab)}
-        className="gap-4"
+        className="gap-6"
       >
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>

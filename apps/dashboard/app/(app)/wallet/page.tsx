@@ -59,13 +59,16 @@ import {
   getTokenBalances,
   getWalletSnapshot,
 } from "@/lib/server/dashboard-data";
+import { parseWalletTab } from "@/lib/wallet-tab";
 
 /** The heading block, identical in every state the page can render (loaded, empty, failed). */
 function WalletHeading({ actions }: { actions?: React.ReactNode }) {
   return (
-    <PageHeader>
+    <PageHeader className="border-b pb-4">
       <PageHeaderHeading>
-        <PageHeaderTitle>Wallet &amp; Billing</PageHeaderTitle>
+        <PageHeaderTitle className="text-3xl">
+          Wallet &amp; Billing
+        </PageHeaderTitle>
         <PageHeaderDescription>
           Balances, top-ups, and your double-entry transaction history.
         </PageHeaderDescription>
@@ -110,6 +113,7 @@ export default async function WalletPage({
     reference?: string;
     tokens?: string;
     trxref?: string;
+    tab?: string;
   }>;
 }) {
   const session = await requireDashboardSession();
@@ -246,11 +250,11 @@ export default async function WalletPage({
       <WalletHeading
         actions={
           <>
-            <TopUpDialog defaultCurrency={primaryCurrency} />
             <Button variant="outline" size="sm">
               <Bell data-icon="inline-start" />
               Alerts
             </Button>
+            <TopUpDialog defaultCurrency={primaryCurrency} />
           </>
         }
       />
@@ -325,7 +329,12 @@ export default async function WalletPage({
       )}
 
       <WalletTabs
-        defaultTab={tokenReceipt ? "credits" : "overview"}
+        // An explicit ?tab= wins; otherwise a fresh token receipt opens Credits so the purchase
+        // you just made is the panel you land on.
+        defaultTab={
+          parseWalletTab(paymentParams.tab) ??
+          (tokenReceipt ? "credits" : "overview")
+        }
         overview={
           <BillingOverview
             walletBalance={
