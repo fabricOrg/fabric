@@ -16,7 +16,6 @@ import {
   FieldLabel,
 } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
-import { Switch } from "@app/ui/components/ui/switch";
 import { useForm } from "@tanstack/react-form";
 import { useId, useState } from "react";
 import { toast } from "sonner";
@@ -26,13 +25,9 @@ import {
   VENDOR_CREDENTIAL_FIELDS,
 } from "@/lib/client/plugins-api";
 
-/**
- * The only value a given mode will accept. `credentialModeViolation` on the api rejects a live
- * instance without sandbox='false' and a sandbox instance with it, so the switch opens already
- * correct instead of making staff discover the rule by being refused.
- */
-function booleanDefault(mode: string | null | undefined): string {
-  return mode === "live" ? "false" : "true";
+/** Narrow an instance's mode for the field specs' `derivedFromMode`. */
+function modeOf(mode: string | null | undefined): "sandbox" | "live" {
+  return mode === "live" ? "live" : "sandbox";
 }
 
 /**
@@ -91,15 +86,15 @@ export function ConfigurePluginDialog({
       if (!instance) return;
       setError(null);
       // Drop blanks so an untouched optional field is absent rather than stored as "" — but a
-      // switch is never "untouched": it always shows a definite position, so it must always submit
-      // the value the operator can see. Leaving it out is how a live instance ends up without
-      // sandbox='false' and gets rejected for a setting the form appeared to have made.
+      // mode-derived field is never "untouched": it always has a definite value the operator can read
+      // on screen, so it must always be submitted. Omitting it is how a live instance ends up without
+      // sandbox='false' and is rejected for a setting the form appeared to have made.
       const credential = Object.fromEntries(
         fields
           .map((spec) => [
             spec.name,
-            spec.boolean
-              ? (value[spec.name] ?? booleanDefault(instance.mode))
+            spec.derivedFromMode
+              ? spec.derivedFromMode(modeOf(instance.mode))
               : (value[spec.name]?.trim() ?? ""),
           ])
           .filter(([, v]) => v !== ""),
@@ -163,22 +158,23 @@ export function ConfigurePluginDialog({
                   <Field>
                     <FieldLabel htmlFor={`${ids}-${spec.name}`}>
                       {spec.label}
-                      {spec.required || spec.boolean ? "" : " (optional)"}
+                      {spec.required || spec.derivedFromMode
+                        ? ""
+                        : " (optional)"}
                     </FieldLabel>
-                    {spec.boolean ? (
-                      // A two-value enum is a switch, not a spelling test. Typing the literal
-                      // "false" invited a typo that would have been accepted as "sandboxed" and
-                      // silently never delivered anything.
-                      <Switch
-                        id={`${ids}-${spec.name}`}
-                        checked={
-                          (field.state.value ??
-                            booleanDefault(instance?.mode)) !== "false"
-                        }
-                        onCheckedChange={(on) =>
-                          field.handleChange(on ? "true" : "false")
-                        }
-                      />
+                    {spec.derivedFromMode ? (
+                      // Stated, not asked: the instance's mode already decides this, so a control
+                      // here could only be set to the one value that gets refused.
+                      <p className="flex flex-wrap items-baseline gap-x-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                        <span>
+                          {spec.derivedNote?.(modeOf(instance?.mode)) ??
+                            spec.derivedFromMode(modeOf(instance?.mode))}
+                        </span>
+                        <span className="font-mono text-muted-foreground text-xs">
+                          {spec.name}=
+                          {spec.derivedFromMode(modeOf(instance?.mode))}
+                        </span>
+                      </p>
                     ) : (
                       <Input
                         id={`${ids}-${spec.name}`}
