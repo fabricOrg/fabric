@@ -53,8 +53,12 @@ export class TokensController {
         currency: balance.currency,
         available: balance.available,
         expires_next_at: balance.expiresNextAt,
-        never_expires_available: balance.neverExpiresAvailable,
-        expiring_available: balance.expiringAvailable,
+        expiry_groups: balance.expiryGroups.map((group) => ({
+          expires_at: group.expiresAt,
+          available: group.available,
+        })),
+        granted_total: balance.grantedTotal,
+        consumed_total: balance.consumedTotal,
       })),
     };
   }

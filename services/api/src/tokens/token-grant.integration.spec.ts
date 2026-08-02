@@ -14,11 +14,7 @@ import {
   type PackageTrack,
   seedPackagePurchase,
 } from "./package-fixtures.js";
-import {
-  grantTokensForPurchase,
-  listTokenBalances,
-  readTokenBalance,
-} from "./token-grant.js";
+import { grantTokensForPurchase, readTokenBalance } from "./token-grant.js";
 
 const superUrl = process.env.DATABASE_URL_SUPER;
 const appUrl = process.env.DATABASE_URL_APP;
@@ -105,6 +101,8 @@ describeDb("token grant", () => {
     for (const id of tenants) {
       // RESTRICT FKs everywhere on money history — delete children before the account.
       await owner`DELETE FROM ledger_entries WHERE tenant_id = ${id}::uuid`;
+      // Holds reference their lot with a RESTRICT FK, so they go before the lots they point at.
+      await owner`DELETE FROM token_holds WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM token_lots WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM ledger_transactions WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM ledger_accounts WHERE tenant_id = ${id}::uuid`;
@@ -280,52 +278,5 @@ describeDb("token grant", () => {
       };
     });
     expect(seen).toEqual({ lots: 0, balance: 0n });
-  });
-
-  it("splits a mixed balance into expiring and permanent instead of dating all of it", async () => {
-    const tenant = await makeTenant();
-    // The shape a real workspace ends up in: one package with a validity window, one without.
-    const permanent = await makeIntent(tenant, {
-      quantity: 40n,
-      creditValidityDays: null,
-    });
-    const dated = await makeIntent(tenant, {
-      quantity: 200n,
-      creditValidityDays: 60,
-    });
-    await grantTokensForPurchase(deps, permanent);
-    await grantTokensForPurchase(deps, dated);
-
-    const [balance] = await appDb.withTenant(tenant, (tx) =>
-      listTokenBalances(tx),
-    );
-
-    // The counter is one number, so `expiresNextAt` alone would have labelled all 240 as lapsing in
-    // 60 days — false for the 40 that never do. The split is what makes the tile honest.
-    expect(balance?.available).toBe("240");
-    expect(balance?.neverExpiresAvailable).toBe("40");
-    expect(balance?.expiringAvailable).toBe("200");
-    expect(balance?.expiresNextAt).not.toBeNull();
-    // The buckets must reconcile to the counter, or the UI is showing a balance that is not there.
-    expect(
-      BigInt(balance?.neverExpiresAvailable ?? "0") +
-        BigInt(balance?.expiringAvailable ?? "0"),
-    ).toBe(BigInt(balance?.available ?? "0"));
-  });
-
-  it("reports a wholly permanent balance with no expiry date at all", async () => {
-    const tenant = await makeTenant();
-    await grantTokensForPurchase(
-      deps,
-      await makeIntent(tenant, { quantity: 25n, creditValidityDays: null }),
-    );
-
-    const [balance] = await appDb.withTenant(tenant, (tx) =>
-      listTokenBalances(tx),
-    );
-    expect(balance?.available).toBe("25");
-    expect(balance?.neverExpiresAvailable).toBe("25");
-    expect(balance?.expiringAvailable).toBe("0");
-    expect(balance?.expiresNextAt).toBeNull();
   });
 });
