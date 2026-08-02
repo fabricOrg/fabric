@@ -173,7 +173,38 @@ export const tokenBalanceDtoSchema = z.object({
    * recognized as breakage without the customer ever having been told a date.
    */
   expires_next_at: z.string().datetime().nullable(),
+  /**
+   * The same balance broken down BY EXPIRY, soonest first, credits that never lapse last.
+   *
+   * `expires_next_at` alone reports the soonest date across the whole counter, which reads as "all
+   * of it expires then" for a workspace holding a dated package and a permanent one at once. This
+   * carries the real composition instead, and generalises: three packages with three dates produce
+   * three groups. The groups sum to `available`.
+   *
+   * Empty means UNKNOWN, not "nothing expires" — an older API paired with a newer dashboard sends
+   * no groups, and a consumer must render no expiry claim at all rather than inferring a permanent
+   * balance from the absence of data.
+   */
+  expiry_groups: z
+    .array(
+      z.object({
+        expires_at: z.string().datetime().nullable(),
+        available: z.string(),
+      }),
+    )
+    .default([]),
+  /**
+   * Lifetime totals for this counter: everything ever granted, and everything actually SPENT.
+   *
+   * `consumed_total` is NOT `granted_total - available` — expiry also removes credits, and
+   * reporting forfeited breakage as "used" would tell a workspace it got value it never received.
+   * Defaulted so an older API degrades to hiding the usage line rather than showing a wrong one.
+   */
+  granted_total: z.string().default("0"),
+  consumed_total: z.string().default("0"),
 });
+export type TokenBalanceDto = z.infer<typeof tokenBalanceDtoSchema>;
+
 export const tokenBalancesResponseSchema = z.object({
   balances: z.array(tokenBalanceDtoSchema),
 });

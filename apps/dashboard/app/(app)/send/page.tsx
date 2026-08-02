@@ -25,6 +25,7 @@ import { getConsent, type OptOut } from "@/lib/client/consent-api";
 import {
   getMessagingSettings,
   getSandboxAllowances,
+  getTokenBalances,
   getWallet,
   sendSms,
 } from "@/lib/client/dashboard-api";
@@ -33,6 +34,8 @@ import { listSmsTemplates } from "@/lib/client/sms-templates-api";
 import {
   buildPreflight,
   buildRecipientReport,
+  COUNTRY_LABEL,
+  countryOf,
   extractTokens,
   renderTemplate,
 } from "@/lib/send/preflight";
@@ -47,6 +50,8 @@ interface SendContext {
    * has to be checked BEFORE the button is enabled.
    */
   readonly smsAllowanceRemaining: bigint | null;
+  /** Spendable SMS credits, or null when the balance could not be read (never assume zero). */
+  readonly smsTokensAvailable: bigint | null;
   readonly senders: readonly SenderId[];
   readonly optOuts: readonly OptOut[];
   readonly settings: MessagingSettings;
@@ -99,10 +104,29 @@ export default function SendPage() {
         const live = settings.delivery_mode === "live";
         const balances = live ? await getWallet() : [];
         const allowances = live ? null : await getSandboxAllowances();
-        return { balances, allowances, senders, consent, settings, templates };
+        // Best-effort: a failed credit read must not blank the composer, but it also must not read
+        // as "no credits" — null keeps the wallet gate in charge rather than inventing a zero.
+        const tokens = live ? await getTokenBalances().catch(() => null) : null;
+        return {
+          balances,
+          allowances,
+          tokens,
+          senders,
+          consent,
+          settings,
+          templates,
+        };
       })
       .then(
-        ({ balances, allowances, senders, consent, settings, templates }) => {
+        ({
+          balances,
+          allowances,
+          tokens,
+          senders,
+          consent,
+          settings,
+          templates,
+        }) => {
           if (!current) return;
           const ghs = balances.find(
             (balance) => balance.balance.currency === CURRENCY,
@@ -113,6 +137,11 @@ export default function SendPage() {
           setContext({
             balanceMinor: ghs ? BigInt(ghs.balance.minor) : 0n,
             smsAllowanceRemaining: sms ? BigInt(sms.remaining) : null,
+            smsTokensAvailable: tokens
+              ? (tokens.balances
+                  .filter((b) => b.channel === "sms")
+                  .reduce((sum, b) => sum + BigInt(b.available), 0n) ?? 0n)
+              : null,
             senders,
             optOuts: consent.optOuts,
             settings,
@@ -141,6 +170,7 @@ export default function SendPage() {
     report.raw === 1 && report.valid.length === 1 && report.invalid === 0;
   const recipient = oneValidRecipient ? (report.sendable[0] ?? null) : null;
   const deliveryMode = context?.settings.delivery_mode ?? null;
+  const smsTokensAvailable = context?.smsTokensAvailable ?? null;
   const senderOptions = useMemo(() => {
     if (!context || !deliveryMode) return [];
     if (deliveryMode === "virtual") {
@@ -148,15 +178,24 @@ export default function SendPage() {
         ...new Set(["Fabric", ...context.senders.map((s) => s.senderId)]),
       ];
     }
-    const country = to.trim().startsWith("+234") ? "NG" : "GH";
-    return [
-      ...new Set(
-        context.senders
-          .filter((s) => s.status === "active" && s.country === country)
-          .map((s) => s.senderId),
-      ),
-    ];
-  }, [context, deliveryMode, to]);
+    // Until there is a valid recipient there is no destination to filter by, so offer every active
+    // sender. The previous `startsWith("+234") ? "NG" : "GH"` resolved an EMPTY box to Ghana, which
+    // told anyone holding only a Nigerian sender they had none — while /senders showed it Active.
+    const active = context.senders.filter((s) => s.status === "active");
+    const country = recipient ? countryOf(recipient) : null;
+    const matching =
+      country === null || country === "other"
+        ? active
+        : active.filter((s) => s.country === country);
+    return [...new Set(matching.map((s) => s.senderId))];
+  }, [context, deliveryMode, recipient]);
+
+  // Only name a destination once one is actually known and it is a market we register senders in.
+  const senderDestination = useMemo(() => {
+    if (!recipient || deliveryMode === "virtual") return null;
+    const country = countryOf(recipient);
+    return country === "other" ? null : COUNTRY_LABEL[country];
+  }, [recipient, deliveryMode]);
 
   useEffect(() => {
     if (senderOptions.includes(senderId)) return;
@@ -189,12 +228,28 @@ export default function SendPage() {
     senderId,
   ]);
   const hasBlock = checks.some((check) => check.level === "block");
+  /**
+   * Whether prepaid credits cover this whole send.
+   *
+   * The engine claims tokens BEFORE the wallet (`prepare-send.ts`), and the hold is all-or-nothing:
+   * a 3-segment message needs 3 tokens or it falls back to cash entirely. Gating on the wallet alone
+   * blocked sends the API would have accepted, telling a workspace with 160 SMS credits and an empty
+   * wallet to "top up" for a send that costs it nothing.
+   */
+  const tokensCoverSend =
+    smsTokensAvailable !== null &&
+    recipient !== null &&
+    previewBody.trim().length > 0 &&
+    smsTokensAvailable >= BigInt(segmentation.segments);
+
   const estimateMinor =
-    recipient && previewBody.trim()
+    recipient && previewBody.trim() && !tokensCoverSend
       ? rateSegments(segmentation.segments, CURRENCY, DEFAULT_RATES)
       : 0n;
   const balanceAfterMinor = context ? context.balanceMinor - estimateMinor : 0n;
-  const insufficient = deliveryMode === "live" && balanceAfterMinor < 0n;
+  // Credits, not cash — the wallet is untouched, so its balance cannot block the send.
+  const insufficient =
+    deliveryMode === "live" && !tokensCoverSend && balanceAfterMinor < 0n;
   // The sandbox counterpart to `insufficient`. Without it the API's 429 is the FIRST time a customer
   // learns the send won't go through — after they've written it and pressed send.
   const allowanceRemaining = context?.smsAllowanceRemaining ?? null;
@@ -277,6 +332,7 @@ export default function SendPage() {
               onToChange={setTo}
               report={report}
               senderOptions={senderOptions}
+              senderDestination={senderDestination}
               senderId={senderId}
               onSenderChange={setSenderId}
               messageClass={messageClass}
@@ -311,6 +367,12 @@ export default function SendPage() {
               estimateMinor={estimateMinor}
               balanceAfterMinor={balanceAfterMinor}
               insufficient={insufficient}
+              tokenBacked={tokensCoverSend}
+              creditsAfter={
+                smsTokensAvailable === null
+                  ? null
+                  : smsTokensAvailable - BigInt(segmentation.segments)
+              }
               allowanceRemaining={allowanceRemaining}
               allowanceExceeded={allowanceExceeded}
               hasBlock={hasBlock}

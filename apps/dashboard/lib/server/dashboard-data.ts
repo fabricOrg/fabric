@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   autoTopupResponseSchema,
+  commercialOfferPurchaseListSchema,
   commercialOfferPurchaseReceiptSchema,
   customerCommercialOfferCatalogSchema,
   messageDetailResponse,
@@ -48,6 +49,12 @@ export async function getCommercialOfferCatalog() {
 export async function getTokenBalances() {
   return tokenBalancesResponseSchema.parse(
     await unwrap(dashboardApi("/v1/tokens", "wallet:read")),
+  );
+}
+
+export async function getCommercialOfferPurchases() {
+  return commercialOfferPurchaseListSchema.parse(
+    await unwrap(dashboardApi("/v1/tokens/purchases", "wallet:read")),
   );
 }
 

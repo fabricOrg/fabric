@@ -266,3 +266,67 @@
     background-color: var(--muted-foreground);
   }
 }
+
+@layer components {
+  /* Blueprint frame — registration marks at the four corners of a bordered box, drawn OUTSIDE it so
+   * the box reads as a drafted object rather than a rounded UI card. Consumed only by
+   * components/ui/blueprint.tsx; nothing else should reference these class names.
+   *
+   * Real CSS rather than utilities because each mark is a pair of ::before/::after hairlines. It only
+   * works on a squared box, which is the whole app (--radius: 0). */
+  .blueprint > .bp-corner {
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    /* Anchored to the card's own border rather than to the text colour, so the mark reads as the
+     * frame continuing past the corner. Mixing from --foreground instead made it far darker than the
+     * edge it belongs to and the crosses jumped off the card. */
+    color: color-mix(in srgb, var(--foreground) 12%, var(--border));
+  }
+  .blueprint > .bp-corner::before,
+  .blueprint > .bp-corner::after {
+    content: "";
+    position: absolute;
+    background: currentColor;
+  }
+  .blueprint > .bp-corner::before {
+    left: 5px;
+    top: 0;
+    width: 1px;
+    height: 100%;
+  }
+  .blueprint > .bp-corner::after {
+    top: 5px;
+    left: 0;
+    width: 100%;
+    height: 1px;
+  }
+  .blueprint > .bp-corner.tl {
+    top: -6px;
+    left: -6px;
+  }
+  .blueprint > .bp-corner.tr {
+    top: -6px;
+    right: -6px;
+  }
+  .blueprint > .bp-corner.bl {
+    bottom: -6px;
+    left: -6px;
+  }
+  .blueprint > .bp-corner.br {
+    bottom: -6px;
+    right: -6px;
+  }
+
+  /* Continues a spec table's rule rhythm into leftover vertical space, so cards holding different
+   * numbers of rows still line their footers up across a grid row. Decorative. */
+  .bp-ruled {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 45px,
+      color-mix(in srgb, var(--foreground) 8%, transparent) 45px,
+      color-mix(in srgb, var(--foreground) 8%, transparent) 46px
+    );
+  }
+}

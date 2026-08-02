@@ -53,6 +53,12 @@ export class TokensController {
         currency: balance.currency,
         available: balance.available,
         expires_next_at: balance.expiresNextAt,
+        expiry_groups: balance.expiryGroups.map((group) => ({
+          expires_at: group.expiresAt,
+          available: group.available,
+        })),
+        granted_total: balance.grantedTotal,
+        consumed_total: balance.consumedTotal,
       })),
     };
   }
@@ -61,6 +67,12 @@ export class TokensController {
   offers(@Req() req: AuthedRequest) {
     const tenant = requireTokenSession(req.tenant);
     return this.catalog.catalog(tenant.id);
+  }
+
+  @Get("purchases")
+  purchaseHistory(@Req() req: AuthedRequest) {
+    const tenant = requireTokenSession(req.tenant);
+    return this.catalog.purchases(tenant.id);
   }
 
   @Get("purchases/:reference")

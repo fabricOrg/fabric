@@ -149,17 +149,38 @@ export async function grantTokensForPurchase(
   });
 }
 
+export interface TokenExpiryGroup {
+  /** ISO timestamp, or null for credits that never lapse. */
+  expiresAt: string | null;
+  available: string;
+}
+
 export async function listTokenBalances(tx: TenantTx): Promise<
   {
     channel: string;
     currency: string;
     available: string;
     expiresNextAt: string | null;
+    expiryGroups: TokenExpiryGroup[];
+    /** Everything ever granted on this counter, including lots since spent or expired. */
+    grantedTotal: string;
+    /** Actually SPENT. Deliberately not `granted - available`: expiry also removes credits, and
+     *  calling forfeited breakage "used" would overstate what the workspace got for its money. */
+    consumedTotal: string;
   }[]
 > {
   await expireTokenLots(tx);
-  // The soonest unspent expiry per counter, so the balance can name the date checkout promised.
-  // Exhausted and already-processed lots carry nothing further to lose.
+  // A counter is ONE number per (channel, currency), so `expires_next_at` alone reports the soonest
+  // date across everything it holds — which reads as "all of it lapses then" for a workspace holding
+  // a dated package and a permanent one at once.
+  //
+  // The breakdown below goes back to the lots and groups them BY EXPIRY, rather than splitting into
+  // "expiring" and "permanent". Nothing about it is channel-specific, and it does not assume there
+  // are only two kinds: three packages with three different dates produce three groups.
+  //
+  // A lot's spendable remainder is `total - consumed - pending holds`, because a hold leaves the
+  // counter at reserve time but does not touch `quantity_consumed` until the send commits — summing
+  // without it would over-report mid-flight. Groups therefore reconcile to `available`.
   const rows = (await tx`
     SELECT c.channel, c.currency, c.available::text AS available,
       (
@@ -168,7 +189,40 @@ export async function listTokenBalances(tx: TenantTx): Promise<
           AND l.currency = c.currency AND l.expires_at IS NOT NULL
           AND l.expiry_processed_at IS NULL
           AND l.quantity_consumed < l.quantity_total
-      ) AS expires_next_at
+      ) AS expires_next_at,
+      COALESCE((
+        SELECT json_agg(
+                 json_build_object(
+                   'expires_at', g.expires_at,
+                   'available', g.available::text
+                 ) ORDER BY g.expires_at ASC NULLS LAST
+               )
+        FROM (
+          SELECT l.expires_at,
+                 SUM(l.quantity_total - l.quantity_consumed - COALESCE(h.held, 0)) AS available
+          FROM token_lots l
+          LEFT JOIN LATERAL (
+            SELECT SUM(th.quantity) AS held FROM token_holds th
+            WHERE th.lot_id = l.id AND th.status = 'pending'
+          ) h ON TRUE
+          WHERE l.tenant_id = c.tenant_id AND l.channel = c.channel
+            AND l.currency = c.currency
+            AND (l.expires_at IS NULL OR l.expiry_processed_at IS NULL)
+            AND l.quantity_consumed < l.quantity_total
+          GROUP BY l.expires_at
+          HAVING SUM(l.quantity_total - l.quantity_consumed - COALESCE(h.held, 0)) > 0
+        ) g
+      ), '[]'::json) AS expiry_groups,
+      COALESCE((
+        SELECT SUM(l.quantity_total) FROM token_lots l
+        WHERE l.tenant_id = c.tenant_id AND l.channel = c.channel
+          AND l.currency = c.currency
+      ), 0)::text AS granted_total,
+      COALESCE((
+        SELECT SUM(l.quantity_consumed) FROM token_lots l
+        WHERE l.tenant_id = c.tenant_id AND l.channel = c.channel
+          AND l.currency = c.currency
+      ), 0)::text AS consumed_total
     FROM token_counters c
     WHERE c.tenant_id = current_setting('app.tenant_id')::uuid AND c.available > 0
     ORDER BY c.channel, c.currency`) as {
@@ -176,6 +230,9 @@ export async function listTokenBalances(tx: TenantTx): Promise<
     currency: string;
     available: string;
     expires_next_at: Date | string | null;
+    expiry_groups: { expires_at: string | null; available: string }[];
+    granted_total: string;
+    consumed_total: string;
   }[];
   return rows.map((row) => ({
     channel: String(row.channel),
@@ -185,6 +242,15 @@ export async function listTokenBalances(tx: TenantTx): Promise<
       row.expires_next_at === null
         ? null
         : new Date(row.expires_next_at).toISOString(),
+    expiryGroups: (row.expiry_groups ?? []).map((group) => ({
+      expiresAt:
+        group.expires_at === null
+          ? null
+          : new Date(group.expires_at).toISOString(),
+      available: String(group.available),
+    })),
+    grantedTotal: String(row.granted_total),
+    consumedTotal: String(row.consumed_total),
   }));
 }
 

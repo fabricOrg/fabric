@@ -41,6 +41,12 @@ export const customerCommercialOfferSchema = z.object({
   minimum_pack_count: z.number().int().positive(),
   maximum_pack_count: z.number().int().positive().nullable(),
   effective_to: z.string().datetime().nullable(),
+  /**
+   * Packs of this PACKAGE the workspace has already paid for, across every version of it — a buyer
+   * who bought v1 should still see that history on v2. Defaulted so an older api reads as "never
+   * bought" rather than breaking the catalogue.
+   */
+  purchased_packs: z.number().int().nonnegative().default(0),
 });
 export type CustomerCommercialOffer = z.infer<
   typeof customerCommercialOfferSchema
@@ -74,4 +80,19 @@ export const commercialOfferPurchaseReceiptSchema = z.object({
 });
 export type CommercialOfferPurchaseReceipt = z.infer<
   typeof commercialOfferPurchaseReceiptSchema
+>;
+
+/**
+ * A workspace's package purchases, newest first.
+ *
+ * These are deliberately NOT wallet ledger lines: a package purchase posts to gateway clearing and
+ * deferred revenue, never to the customer wallet account, so it has no running balance and would be
+ * a lie inside the wallet statement. It still has to be visible somewhere — paying and finding no
+ * record of it is worse than the accounting being tidy.
+ */
+export const commercialOfferPurchaseListSchema = z.object({
+  purchases: z.array(commercialOfferPurchaseReceiptSchema),
+});
+export type CommercialOfferPurchaseList = z.infer<
+  typeof commercialOfferPurchaseListSchema
 >;

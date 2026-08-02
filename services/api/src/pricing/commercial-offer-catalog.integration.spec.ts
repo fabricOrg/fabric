@@ -5,6 +5,7 @@ import {
   offerCatalogAssignments,
   priceBooks,
 } from "@app/db";
+import type { ConfigService } from "@nestjs/config";
 import { eq, like } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { AuditService } from "../audit/audit.service.js";
@@ -32,6 +33,7 @@ describeDb("workspace offer catalog assignment", () => {
     db,
     new AuditService(db),
     new CommercialOfferMarginService(db),
+    { get: () => undefined } as unknown as ConfigService,
   );
   const catalogs = new OfferCatalogService(db, new AuditService(db));
   const fixtures: OfferFixtures = makeOfferFixtures(db);

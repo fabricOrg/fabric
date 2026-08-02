@@ -6,7 +6,6 @@ import type {
   CreateCommercialOfferVersionRequest,
   CreateCommercialPackageRequest,
   CreateCommercialPackageResponse,
-  Currency,
   ListCommercialOffersResponse,
   PreviewCommercialOfferMarginRequest,
 } from "@app/contracts";
@@ -18,10 +17,12 @@ import {
   pricingOfferVersions,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { eq, max } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
+import { cloneVersionRequest } from "./commercial-offer-clone.js";
 import {
   assertRegisteredOfferItems,
   createOfferIdentity,
@@ -63,6 +64,7 @@ export class CommercialOffersService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CommercialOfferMarginService)
     private readonly margin: CommercialOfferMarginService,
+    @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
   async list(): Promise<ListCommercialOffersResponse> {
@@ -71,7 +73,13 @@ export class CommercialOffersService {
       listChannelRegistry(this.provisioning.db),
       listRouteVocabulary(this.provisioning.db),
     ]);
-    return { offers, channels, route_vocabulary: routeVocabulary };
+    return {
+      offers,
+      channels,
+      route_vocabulary: routeVocabulary,
+      self_approval_allowed:
+        this.config.get<string>("PRICING_SELF_APPROVAL_ENABLED") === "true",
+    };
   }
 
   /** A staff actor is REQUIRED here: `created_by` / `approved_by` ARE the approval record. */
@@ -242,29 +250,7 @@ export class CommercialOffersService {
     );
     return this.createVersion(
       version.offerId,
-      {
-        currency: version.currency as Currency,
-        items: items.map((item) => ({
-          channel_code: item.channelCode,
-          unit_code: item.unitCode,
-          paid_units: item.paidUnits.toString(),
-          bonus_units: item.bonusUnits.toString(),
-          eligibility: {
-            destination_countries: [
-              ...(item.eligibility.destinationCountries ?? []),
-            ],
-            traffic_classes: [...(item.eligibility.trafficClasses ?? [])],
-            provider_vendors: [...(item.eligibility.providerVendors ?? [])],
-            service_classes: [...(item.eligibility.serviceClasses ?? [])],
-          },
-        })),
-        total_price_minor: version.totalPriceMinor.toString(),
-        credit_validity_days: version.creditValidityDays,
-        minimum_pack_count: version.minimumPackCount,
-        maximum_pack_count: version.maximumPackCount,
-        effective_from: version.effectiveFrom.toISOString(),
-        effective_to: version.effectiveTo?.toISOString() ?? null,
-      },
+      cloneVersionRequest(version, items),
       actor,
     );
   }

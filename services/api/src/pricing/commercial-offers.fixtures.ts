@@ -16,6 +16,7 @@ import {
   staffUsers,
   type TenantId,
 } from "@app/db";
+import type { ConfigService } from "@nestjs/config";
 import { eq, inArray } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { CommercialOfferMarginService } from "./commercial-offer-margin.service.js";
@@ -110,6 +111,7 @@ export function makeOfferFixtures(db: ProvisioningDb): OfferFixtures {
     db,
     new AuditService(db),
     new CommercialOfferMarginService(db),
+    { get: () => undefined } as unknown as ConfigService,
   );
 
   return {

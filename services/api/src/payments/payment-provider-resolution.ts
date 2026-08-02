@@ -51,6 +51,19 @@ export async function paymentModeFor(
  * Throws the same structured `payments_not_configured` either way, so the surface a customer sees
  * does not change with where the credential came from.
  */
+/**
+ * The mode a SECRET KEY belongs to — a different question from which mode a TENANT is in.
+ *
+ * The env fallback recorded the tenant's plan mode against the intent while the webhook side
+ * hardcoded "sandbox" for that same key, so `webhookModeMismatch` refused every webhook it created:
+ * a purchase by any non-sandbox tenant could never settle. Both sides now read the key, so they
+ * agree by construction, and the property that matters still holds — a test key cannot settle an
+ * intent created with a live one.
+ */
+export function modeForSecretKey(secretKey: string): "sandbox" | "live" {
+  return secretKey.startsWith("sk_live_") ? "live" : "sandbox";
+}
+
 export async function resolvePaymentContext(
   deps: PaymentResolutionDeps,
   tenantId: string,
@@ -74,11 +87,12 @@ export async function resolvePaymentContext(
     );
   }
   // The env fallback carries no instance or version — recorded as null so a webhook cannot be
-  // required to match a binding that never existed.
+  // required to match a binding that never existed. Its MODE describes the key, not the tenant:
+  // the webhook that settles this intent will be verified with this same key.
   return {
     provider: new PaystackProvider(),
     creds: { secretKey },
-    mode,
+    mode: modeForSecretKey(secretKey),
     instanceId: null,
     credentialVersion: null,
   };
@@ -135,7 +149,7 @@ export async function webhookVerificationCandidates(
     candidates.push({
       provider: new PaystackProvider(),
       creds: { secretKey },
-      mode: "sandbox",
+      mode: modeForSecretKey(secretKey),
       instanceId: null,
       credentialVersion: null,
     });

@@ -4,6 +4,7 @@ import {
   type SendSmsRequest,
   sandboxAllowancesResponse,
   sendSmsApiResponse,
+  tokenBalancesResponseSchema,
   virtualPhoneInbox,
   virtualPhoneReplyResponse,
   walletSnapshot,
@@ -24,6 +25,12 @@ export async function getWallet() {
     await bffRequest("/api/dashboard/wallet"),
   );
   return snapshot.balances;
+}
+
+export async function getTokenBalances() {
+  return tokenBalancesResponseSchema.parse(
+    await bffRequest("/api/dashboard/tokens"),
+  );
 }
 
 export async function getSandboxAllowances() {

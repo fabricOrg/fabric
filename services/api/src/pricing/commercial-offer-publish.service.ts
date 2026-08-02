@@ -12,6 +12,7 @@ import {
   pricingOfferVersions,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { and, eq } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { invalidRequest } from "../http/api-error.js";
@@ -48,7 +49,18 @@ export class CommercialOfferPublishService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CommercialOfferMarginService)
     private readonly margin: CommercialOfferMarginService,
+    @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
+
+  /**
+   * Whether one operator may approve their own version. Separation of duties is the default, but a
+   * deployment with a single staff admin has no second approver, and a rule that costs only a logout
+   * is ceremony, not control. Where it is enabled the reason is REQUIRED and recorded on the version
+   * and in the audit log, so a self-approval is always attributable.
+   */
+  private selfApprovalAllowed(): boolean {
+    return this.config.get<string>("PRICING_SELF_APPROVAL_ENABLED") === "true";
+  }
 
   async publish(
     versionId: string,
@@ -66,9 +78,11 @@ export class CommercialOfferPublishService {
         "Only a draft version can be published.",
       );
     }
-    // Separation of duties. Also a database CHECK (0110), so a caller bypassing this service is still
-    // refused — this is the readable error, not the only guard.
-    if (version.createdBy === actor.staffId) {
+    // Separation of duties, unless this deployment has explicitly accepted solo approval. The
+    // database CHECK still refuses a SILENT self-approval: it only permits one carrying a recorded
+    // reason, so no caller bypassing this service can approve its own work unattributably.
+    const selfApproved = version.createdBy === actor.staffId;
+    if (selfApproved && !this.selfApprovalAllowed()) {
       throw invalidRequest(
         "offer_publish_self_approval",
         "You authored this version — another staff admin must publish it.",
@@ -150,6 +164,7 @@ export class CommercialOfferPublishService {
           status: "published",
           costSnapshot: toStoredCostSnapshot(preview),
           approvedBy: actor.staffId,
+          selfApprovalReason: selfApproved ? request.reason : null,
           approvedAt,
           updatedAt: approvedAt,
         })
@@ -185,6 +200,7 @@ export class CommercialOfferPublishService {
       metadata: {
         offer_id: offer.id,
         author_staff_id: version.createdBy,
+        self_approved: selfApproved,
         currency: published.currency,
         item_count: items.length,
         total_price_minor: published.totalPriceMinor.toString(),

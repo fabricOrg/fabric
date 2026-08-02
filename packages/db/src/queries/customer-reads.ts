@@ -33,6 +33,8 @@ export interface CustomerMessageRead {
   currency: string;
   providerSlug: string | null;
   deliveryMode: string;
+  /** Which balance paid: wallet cash, prepaid tokens, or the sandbox allowance. */
+  backing: string | null;
   subjectId: string | null;
   errorCode: string | null;
   createdAt: Date;
@@ -97,6 +99,7 @@ const messageSelection = {
   currency: messages.currency,
   providerSlug: messages.providerSlug,
   deliveryMode: messages.deliveryMode,
+  backing: messages.backing,
   subjectId: messages.subjectId,
   errorCode: messages.errorCode,
   createdAt: messages.createdAt,

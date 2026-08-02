@@ -29,6 +29,12 @@ interface Props {
   readonly onToChange: (value: string) => void;
   readonly report: RecipientReport;
   readonly senderOptions: readonly string[];
+  /**
+   * The destination the sender list was filtered by, or null when no valid recipient has been
+   * entered yet. Drives the wording: "none for Ghana" is a different problem from "none at all",
+   * and claiming a destination before one exists sent people to a page showing an Active sender.
+   */
+  readonly senderDestination: string | null;
   readonly senderId: string;
   readonly onSenderChange: (value: string) => void;
   readonly messageClass: MessageClass;
@@ -101,10 +107,15 @@ export function SendComposerFields(props: Props) {
             </Select>
           ) : (
             <Alert>
-              <AlertTitle>No active sender ID</AlertTitle>
+              <AlertTitle>
+                {props.senderDestination
+                  ? `No active sender ID for ${props.senderDestination}`
+                  : "No active sender ID"}
+              </AlertTitle>
               <AlertDescription>
-                Register and activate a sender for this destination before using
-                live delivery.{" "}
+                {props.senderDestination
+                  ? `A sender ID is registered per country, and none of yours is active for ${props.senderDestination}.`
+                  : "Register and activate a sender ID before using live delivery."}{" "}
                 <Link className="underline" href="/senders">
                   Open Sender IDs
                 </Link>

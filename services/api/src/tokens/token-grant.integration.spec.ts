@@ -54,6 +54,7 @@ describeDb("token grant", () => {
       channel: string;
       currency: string;
       status: string;
+      creditValidityDays: number | null;
     }> = {},
   ): Promise<string> {
     const quantity = over.quantity ?? 100n;
@@ -63,6 +64,7 @@ describeDb("token grant", () => {
       channel: over.channel ?? "sms",
       quantity,
       totalPriceMinor: quantity * unitPrice,
+      creditValidityDays: over.creditValidityDays ?? null,
     });
     if (over.currency && over.currency !== "GHS") {
       await provisioning.db
@@ -99,6 +101,8 @@ describeDb("token grant", () => {
     for (const id of tenants) {
       // RESTRICT FKs everywhere on money history — delete children before the account.
       await owner`DELETE FROM ledger_entries WHERE tenant_id = ${id}::uuid`;
+      // Holds reference their lot with a RESTRICT FK, so they go before the lots they point at.
+      await owner`DELETE FROM token_holds WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM token_lots WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM ledger_transactions WHERE tenant_id = ${id}::uuid`;
       await owner`DELETE FROM ledger_accounts WHERE tenant_id = ${id}::uuid`;
