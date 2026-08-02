@@ -13,7 +13,7 @@ import {
   type TenantId,
 } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
-import { asc, count } from "drizzle-orm";
+import { asc, count, sql } from "drizzle-orm";
 import { APP_DB } from "../db/db.module.js";
 import { invalidRequest } from "../http/api-error.js";
 
@@ -83,8 +83,20 @@ export class ApplicationsService {
           "slug",
         );
       }
-      // A new application is born in sandbox: its sandbox env is active, its live env is locked until
-      // go-live unlocks it (go-live is workspace-wide today; per-application go-live is future work).
+      // The live environment follows the WORKSPACE's plan, because that is what already decides
+      // whether a send goes live (`virtual-phone.service.ts` treats any non-sandbox plan as live).
+      //
+      // Born locked for a sandbox workspace — go-live unlocks it, workspace-wide (per-application
+      // go-live is future work). Born ACTIVE for a workspace that is already past that gate, which is
+      // not a shortcut but a correction: locking it there produced a workspace that sends live from
+      // the dashboard yet can never mint a live API key, because the ONLY unlock in the codebase is
+      // the go_live proposal approval and its plan update is guarded on `plan = 'sandbox'`. A
+      // workspace provisioned straight onto a paid plan — seeded, admin-provisioned, or self-serve —
+      // could therefore never reach live over the API at all. Migration 0126 repairs existing rows.
+      const [account] = (await tx.execute(
+        sql`SELECT plan FROM accounts WHERE id = ${tenantId}::uuid`,
+      )) as unknown as Array<{ plan: string }>;
+      const liveStatus = account?.plan === "sandbox" ? "locked" : "active";
       const envs = await tx
         .insert(environments)
         .values([
@@ -98,7 +110,7 @@ export class ApplicationsService {
             tenantId: tenantId as TenantId,
             applicationId: app.id,
             type: "live",
-            status: "locked",
+            status: liveStatus,
           },
         ])
         .returning();
