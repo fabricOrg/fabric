@@ -63,8 +63,9 @@ export function DateTimePicker({
     onChange(base);
   }
 
-  // min-w-0 so the control can shrink inside a grid or flex parent: grid children default to
-  // min-width:auto, which makes the trigger text force the whole dialog to scroll sideways.
+  // The date trigger keeps a readable floor (min-w-32) and the time input a fixed width, so neither
+  // starves the other. Without the floor the button collapsed to just its icon; without min-w-0 on
+  // the row, grid children (min-width:auto) forced the whole dialog to scroll sideways.
   return (
     <div className="flex min-w-0 gap-2">
       <Popover open={open} onOpenChange={setOpen}>
@@ -73,7 +74,7 @@ export function DateTimePicker({
             type="button"
             variant="outline"
             data-empty={!value}
-            className="min-w-0 flex-1 justify-start overflow-hidden text-left font-normal data-[empty=true]:text-muted-foreground"
+            className="min-w-32 flex-1 justify-start overflow-hidden text-left font-normal data-[empty=true]:text-muted-foreground"
           >
             <CalendarIcon />
             <span className="truncate">
@@ -92,6 +93,7 @@ export function DateTimePicker({
         </PopoverContent>
       </Popover>
       <TimePicker
+        className="w-28 shrink-0"
         aria-label="Time"
         value={value ? timeValue(value) : ""}
         onChange={handleTime}
