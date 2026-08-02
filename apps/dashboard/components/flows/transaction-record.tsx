@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@app/ui/components/ui/card";
+import { formatDateTimeFull } from "@app/ui/lib/datetime";
 import {
   BadgeCheck,
   Banknote,
@@ -131,11 +132,7 @@ export function TransactionRecordView({
 
         <div className="flex items-center gap-1.5 border-t pt-4 text-xs text-muted-foreground">
           <ScrollText className="size-3.5" />
-          Audit · {record.audit.actor} ·{" "}
-          {new Date(record.audit.at).toLocaleString("en", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          })}
+          Audit · {record.audit.actor} · {formatDateTimeFull(record.audit.at)}
         </div>
       </CardContent>
     </Card>

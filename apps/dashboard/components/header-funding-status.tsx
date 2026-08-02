@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@app/ui/components/ui/button";
+import { formatDateTimeFull } from "@app/ui/lib/datetime";
 import { useQuery } from "@tanstack/react-query";
 import { Coins, Wallet } from "lucide-react";
 import Link from "next/link";
@@ -49,7 +50,7 @@ export function HeaderFundingStatus() {
         className="hidden h-9 items-center gap-2 rounded-md border px-3 text-xs font-medium sm:flex"
         title={
           allowances.data
-            ? `Resets ${new Date(allowances.data.reset_at).toLocaleString()}`
+            ? `Resets ${formatDateTimeFull(allowances.data.reset_at)}`
             : "Daily workspace sandbox allowance"
         }
       >

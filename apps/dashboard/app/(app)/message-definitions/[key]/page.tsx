@@ -33,7 +33,7 @@ import { listMessageDefinitions } from "@/lib/server/message-definitions-client"
 function sendSnippetFor(state: MessageDefinitionState): string {
   const schema = state.latest_version?.variable_schema;
   const fields = schema ? variablesFromSchema(schema) : [];
-  const data = fields.map((field) => "    " + field.name + ': "…"').join(",\n");
+  const data = fields.map((field) => `    ${field.name}: "…"`).join(",\n");
   const locale = state.latest_version?.default_locale ?? "en";
   const to =
     state.latest_version?.channel === "email" ? "user@example.com" : "+233…";

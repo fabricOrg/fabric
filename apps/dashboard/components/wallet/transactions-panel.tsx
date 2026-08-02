@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@app/ui/components/ui/table";
+import { formatDayMonth } from "@app/ui/lib/datetime";
 import { cn } from "@app/ui/lib/utils";
 import {
   ArrowDownLeft,
@@ -168,10 +169,7 @@ export function WalletLedgerCard({
                         {formatMoney(entry.runningBalance)}
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground">
-                        {new Date(entry.createdAt).toLocaleDateString("en", {
-                          month: "short",
-                          day: "numeric",
-                        })}
+                        {formatDayMonth(entry.createdAt)}
                       </TableCell>
                     </TableRow>
                   );
@@ -263,10 +261,7 @@ export function PackagePurchasesCard({
                         })}
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground">
-                        {new Date(purchase.created_at).toLocaleDateString(
-                          "en",
-                          { month: "short", day: "numeric" },
-                        )}
+                        {formatDayMonth(purchase.created_at)}
                       </TableCell>
                     </TableRow>
                   );

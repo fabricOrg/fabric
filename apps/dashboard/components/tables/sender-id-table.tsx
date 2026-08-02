@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@app/ui/components/ui/badge";
 import {
   DataTable,
   DataTableColumnHeader,
@@ -12,7 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
-import { cn } from "@app/ui/lib/utils";
+import {
+  StatusBadge as SharedStatusBadge,
+  type StatusTone,
+} from "@app/ui/components/ui/status-badge";
+import { formatDate } from "@app/ui/lib/datetime";
 import type { ColumnDef } from "@tanstack/react-table";
 import { BadgeCheck, CircleX, Clock, type LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -33,44 +36,23 @@ const TYPE_LABEL: Record<SenderId["type"], string> = {
   "short-code": "Short code",
 };
 
-// Colour is never the only signal (WCAG 1.4.1): each state pairs a semantic token with an icon.
+// Colour is never the only signal (WCAG 1.4.1): each state pairs a tone with an icon and a label.
 const STATUS_META: Record<
   SenderStatus,
-  { label: string; icon: LucideIcon; cls: string }
+  { label: string; icon: LucideIcon; tone: StatusTone }
 > = {
-  active: {
-    label: "Active",
-    icon: BadgeCheck,
-    cls: "bg-success/12 text-success",
-  },
-  pending: {
-    label: "Pending review",
-    icon: Clock,
-    cls: "bg-warning/15 text-warning-strong",
-  },
-  rejected: {
-    label: "Rejected",
-    icon: CircleX,
-    cls: "bg-destructive/12 text-destructive",
-  },
+  active: { label: "Active", icon: BadgeCheck, tone: "success" },
+  pending: { label: "Pending review", icon: Clock, tone: "warning" },
+  rejected: { label: "Rejected", icon: CircleX, tone: "danger" },
 };
 
 function StatusBadge({ status }: { status: SenderStatus }) {
-  const { label, icon: Icon, cls } = STATUS_META[status];
-  return (
-    <Badge variant="outline" className={cn("gap-1 border-transparent", cls)}>
-      <Icon />
-      {label}
-    </Badge>
-  );
+  const { label, icon, tone } = STATUS_META[status];
+  return <SharedStatusBadge tone={tone} label={label} icon={icon} />;
 }
 
 function formatSubmitted(iso: string): string {
-  return new Date(iso).toLocaleDateString("en", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return formatDate(iso);
 }
 
 const columns: ColumnDef<SenderId>[] = [

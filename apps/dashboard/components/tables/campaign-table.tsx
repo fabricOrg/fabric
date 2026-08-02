@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
+import { formatDateTime } from "@app/ui/lib/datetime";
 import type { ColumnDef } from "@tanstack/react-table";
 import { SearchX } from "lucide-react";
 import { useState } from "react";
@@ -41,12 +42,7 @@ const numberFmt = new Intl.NumberFormat("en-US");
 
 function formatWhen(campaign: Campaign): { label: string; hint: string } {
   const iso = campaign.scheduledAt ?? campaign.createdAt;
-  const label = new Date(iso).toLocaleString("en", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const label = formatDateTime(iso);
   return {
     label,
     hint: campaign.scheduledAt ? "Scheduled" : "Created",

@@ -9,6 +9,7 @@ import {
   PageHeaderTitle,
 } from "@app/ui/components/ui/page-header";
 import { ErrorState, TableEmptyState } from "@app/ui/components/ui/states";
+import { formatDate } from "@app/ui/lib/datetime";
 import { Boxes, KeyRound } from "lucide-react";
 import Link from "next/link";
 import { CreateApplicationDialog } from "@/components/forms/create-application-dialog";
@@ -40,11 +41,7 @@ function ApplicationCard({ application }: { application: ApplicationDto }) {
   const envs = application.environments
     .filter((e) => e.status === "active")
     .sort((a, b) => a.type.localeCompare(b.type));
-  const created = new Date(application.created_at).toLocaleDateString("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  const created = formatDate(application.created_at);
   return (
     <Link
       href={`/applications/${application.slug}`}

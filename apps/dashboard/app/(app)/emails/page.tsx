@@ -34,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@app/ui/components/ui/table";
+import { formatDateTimeFull } from "@app/ui/lib/datetime";
 import { useQuery } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
@@ -134,7 +135,7 @@ export default function EmailsPage() {
                         <StatusBadge status={message.status} />
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">
-                        {new Date(message.created_at).toLocaleString()}
+                        {formatDateTimeFull(message.created_at)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -187,7 +188,7 @@ function EmailContentDialog({
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               <StatusBadge status={message.status} />
-              <span>{new Date(message.created_at).toLocaleString()}</span>
+              <span>{formatDateTimeFull(message.created_at)}</span>
               <span>· {message.provider}</span>
               {message.error_code ? (
                 <span className="text-destructive">{message.error_code}</span>

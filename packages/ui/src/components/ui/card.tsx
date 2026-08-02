@@ -9,8 +9,12 @@ import type * as React from "react";
  * (`--radius: 0`); the marks are defined in theme.css and rendered by `BlueprintCorners`.
  *
  * Pass `corners={false}` where they cannot survive: inside a clipped parent (`overflow-hidden`),
- * flush against a viewport edge, or in a dense grid whose gap is under ~1rem, since adjacent marks
- * would collide. Grids of cards generally want `gap-6` or wider.
+ * flush against a viewport edge, or in a dense grid whose gap is under `gap-4`.
+ *
+ * The threshold is measurable, not a feel: each mark is positioned 6px outside the border, so two
+ * adjacent cards need 12px of gap before their marks touch. `gap-3` (12px) collides exactly,
+ * `gap-4` (16px) leaves 4px — used and accepted on the wallet and overview stat grids — and `gap-6`
+ * is what a list of full-width cards wants.
  */
 function Card({
   className,

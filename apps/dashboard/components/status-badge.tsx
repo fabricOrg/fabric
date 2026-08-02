@@ -1,5 +1,7 @@
-import { Badge } from "@app/ui/components/ui/badge";
-import { cn } from "@app/ui/lib/utils";
+import {
+  StatusBadge as Base,
+  type StatusTone,
+} from "@app/ui/components/ui/status-badge";
 import {
   Check,
   CheckCheck,
@@ -23,58 +25,31 @@ export type MessageStatus =
   | "expired";
 
 /**
- * Colour is never the only signal (WCAG): every state pairs a semantic token with an icon + label.
- * Green/amber/red are reserved for terminal outcomes; in-flight states use the neutral/brand ramp so
- * a status colour never reads as the brand.
+ * The message lifecycle's vocabulary. Only the mapping lives here — the styling is the shared
+ * `StatusBadge`'s single tone table, so this can never drift from the other status surfaces.
+ *
+ * Green/amber/red stay reserved for terminal outcomes; in-flight states take `info` so a status
+ * colour never reads as the brand.
  */
 const MAP: Record<
   MessageStatus,
-  { label: string; icon: LucideIcon; cls: string }
+  { label: string; icon: LucideIcon; tone: StatusTone }
 > = {
-  queued: {
-    label: "Queued",
-    icon: Clock,
-    cls: "bg-muted text-muted-foreground",
-  },
-  sending: {
-    label: "Sending",
-    icon: Loader,
-    cls: "bg-primary/10 text-primary",
-  },
-  accepted: {
-    label: "Accepted",
-    icon: Check,
-    cls: "bg-primary/10 text-primary",
-  },
-  sent: { label: "Sent", icon: Send, cls: "bg-primary/10 text-primary" },
-  delivered: {
-    label: "Delivered",
-    icon: CheckCheck,
-    cls: "bg-success/12 text-success",
-  },
+  queued: { label: "Queued", icon: Clock, tone: "neutral" },
+  sending: { label: "Sending", icon: Loader, tone: "info" },
+  accepted: { label: "Accepted", icon: Check, tone: "info" },
+  sent: { label: "Sent", icon: Send, tone: "info" },
+  delivered: { label: "Delivered", icon: CheckCheck, tone: "success" },
   undelivered: {
     label: "Undelivered",
     icon: TriangleAlert,
-    cls: "bg-warning/15 text-warning-strong",
+    tone: "warning",
   },
-  failed: {
-    label: "Failed",
-    icon: XCircle,
-    cls: "bg-destructive/12 text-destructive",
-  },
-  expired: {
-    label: "Expired",
-    icon: Clock,
-    cls: "bg-muted text-muted-foreground",
-  },
+  failed: { label: "Failed", icon: XCircle, tone: "danger" },
+  expired: { label: "Expired", icon: Clock, tone: "neutral" },
 };
 
 export function StatusBadge({ status }: { status: MessageStatus }) {
-  const { label, icon: Icon, cls } = MAP[status];
-  return (
-    <Badge variant="outline" className={cn("gap-1 border-transparent", cls)}>
-      <Icon />
-      {label}
-    </Badge>
-  );
+  const { label, icon, tone } = MAP[status];
+  return <Base tone={tone} label={label} icon={icon} />;
 }
