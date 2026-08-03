@@ -291,6 +291,14 @@ export async function checkSecurityLayerApplied(
     // `pricing_offer_versions.created_by`/`approved_by` are real FKs to it.
     "payments",
     "staff_users",
+    // 0130 — `price_book_rates.unit_price_minor` IS the charge, read on the send path through
+    // `EffectivePricingService`. A writable rate table is a pricing-integrity hole, not a disclosure
+    // one: the tenant-facing role could zero its own unit price and send for nothing, with every
+    // ledger movement internally consistent at the fabricated price. 0107 already revoked the
+    // neighbouring `price_book_versions` / `pricing_sell_rules` / `provider_cost_rates`; these two
+    // were missed, and that asymmetry is what surfaced them.
+    "price_books",
+    "price_book_rates",
   ]) {
     const runtimeReach = await db.query(`
       SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
