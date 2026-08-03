@@ -284,6 +284,13 @@ export async function checkSecurityLayerApplied(
     "pricing_offer_versions",
     "offer_catalog_assignments",
     "token_purchases",
+    // 0129 — the same class again, on the two worst of the remaining ten. `payments` is cross-tenant
+    // financial disclosure and, because settlement reads it to decide what to credit, a forged top-up.
+    // `staff_users` is not tenant-scoped at all, so no policy could ever protect it: read is the
+    // operator roster, and write manufactures the second approver maker-checker relies on, since
+    // `pricing_offer_versions.created_by`/`approved_by` are real FKs to it.
+    "payments",
+    "staff_users",
   ]) {
     const runtimeReach = await db.query(`
       SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
