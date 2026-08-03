@@ -1,0 +1,54 @@
+-- Close the same boundary on `payments` and `staff_users` that 0128 closed on `token_purchases`.
+--
+-- THE CLASS OF BUG. `ALTER DEFAULT PRIVILEGES` (0001) grants `app_runtime`
+-- SELECT/INSERT/UPDATE/DELETE on every table the migrator creates. A table is therefore protected by
+-- exactly one of two things: an RLS policy scoping rows to the ambient tenant, or an explicit REVOKE.
+-- A table with NEITHER is fully readable and writable by the tenant-facing role. Swept the whole
+-- schema against a prod-faithful database (all 68 tables owned by `app_migrator`, so default
+-- privileges genuinely apply): 45 tables carry a policy, 13 are protected by a REVOKE, and 10 have
+-- neither. These are the first two of those ten.
+--
+-- NOTE ON VERIFYING THIS CLASS: `pg_default_acl` is grantor-scoped to `app_migrator`, so a table owned
+-- by a local superuser shows NO runtime privileges and looks clean even with no REVOKE. Local
+-- databases with mixed ownership hide this bug entirely. Assert against `app_migrator`-owned tables,
+-- or drive the null hypothesis (re-grant, watch the check go red).
+--
+-- `payments` — CROSS-TENANT FINANCIAL DISCLOSURE. Like `token_purchases`, it is deliberately
+-- platform-level with no RLS: the provider webhook carries no tenant context and must look a charge
+-- up by `reference` alone. With no policy filtering rows, any tenant-scoped query reaching it returned
+-- every workspace's charges — amount, currency, provider reference, kind (`auto_topup` included), and
+-- the payer's email. Write access is worse than for `token_purchases`: `payment-settlement.ts` reads
+-- this row to decide what to credit the wallet, so a writable row is a forged top-up.
+--
+-- `staff_users` — STAFF IDENTITY, reachable from the customer data plane. It holds every operator's
+-- email, name, role, status and WorkOS subject id. It is not tenant-scoped at all (no `tenant_id`), so
+-- there is no policy that could ever protect it — only a REVOKE. Read is a roster of who administers
+-- the platform; write is worse, because `pricing_offer_versions.created_by`/`approved_by` are real FKs
+-- to this table, so the ability to insert a row is the ability to manufacture the second approver that
+-- maker-checker depends on.
+--
+-- SAFE TO REVOKE — every accessor was read individually, not grepped:
+--   payments      `payments.service.ts` (6 sites), `auto-topup.service.ts` (2),
+--                 `auto-topup-reconcile.ts` (2), `payment-settlement.ts` (1) — all on
+--                 `provisioning.db`. `payments.service.ts` and `payment-settlement.ts` DO hold an
+--                 `AppDb`, but it is used only for the ledger credit inside `withTenant`; the
+--                 settlement's `payments` update sits deliberately outside that block.
+--   staff_users   `staff.service.ts` injects only `PROVISIONING_DB` — the class holds no `AppDb` at
+--                 all, so it is provisioning-only by construction.
+--
+-- ON THE PROVISIONER GRANTS BELOW. Neither table currently carries an explicit `app_provisioner`
+-- grant — the ACL is just `{app_migrator, app_runtime}`. The provisioning path works anyway because
+-- locally that connection is a superuser, and in the cloud `prepareRoles()` grants
+-- `SELECT, INSERT, UPDATE, DELETE ON ALL TABLES` to `app_provisioner` before every `migrate()`. The
+-- explicit grants here are therefore belt-and-braces rather than load-bearing, stated so the intended
+-- reach is recorded at the table instead of depending on a deploy-time side effect. `staff_users` gets
+-- DELETE because `staff.service.ts:230` genuinely removes a staff row; nothing deletes `payments`.
+--
+-- Both REVOKEs aimed at `app_runtime` survive a redeploy: `prepareRoles()` re-grants to
+-- `app_provisioner` only, never to `app_runtime`. Both tables are added to the `db:assert security`
+-- loop regardless, because a boundary nothing re-checks drifts back.
+REVOKE ALL PRIVILEGES ON "payments" FROM PUBLIC, app_runtime;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON "payments" TO app_provisioner;--> statement-breakpoint
+
+REVOKE ALL PRIVILEGES ON "staff_users" FROM PUBLIC, app_runtime;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON "staff_users" TO app_provisioner;
