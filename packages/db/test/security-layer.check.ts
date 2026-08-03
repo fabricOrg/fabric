@@ -271,11 +271,19 @@ export async function checkSecurityLayerApplied(
   // its own. Migrations 0110 and 0117 revoke it; asserted here because `ALTER DEFAULT PRIVILEGES`
   // (0001) grants app_runtime DML on every table the migrator creates, so the REVOKE is the only thing
   // standing between a new commercial table and the tenant role — and a journaled migration runs once.
+  //
+  // `token_purchases` (0128) joins the list for the SAME reason, not a stronger one: none of these five
+  // tables has row-level security or a single policy, so grants are the entire boundary for every one
+  // of them. What makes this one urgent is the payload — the row carries `offer_snapshot` and
+  // `price_per_pack_minor_locked` (a workspace's negotiated package terms), `amount_minor`, and the
+  // buyer's `email` — and it is the provenance `grantTokensForPurchase` reconciles against precisely
+  // because a webhook payload cannot be trusted.
   for (const table of [
     "commercial_offer_channels",
     "pricing_offers",
     "pricing_offer_versions",
     "offer_catalog_assignments",
+    "token_purchases",
   ]) {
     const runtimeReach = await db.query(`
       SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
@@ -283,7 +291,7 @@ export async function checkSecurityLayerApplied(
     `);
     for (const r of runtimeReach.rows) {
       violations.push(
-        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — commercial catalog state must be unreachable from the tenant-facing role`,
+        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — commercial catalog and purchase state must be unreachable from the tenant-facing role`,
       );
     }
   }
