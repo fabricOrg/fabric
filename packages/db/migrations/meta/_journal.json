@@ -911,6 +911,13 @@
       "when": 1785659805026,
       "tag": "0129_platform_table_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1785659806026,
+      "tag": "0130_price_book_grants",
+      "breakpoints": true
     }
   ]
 }
