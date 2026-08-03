@@ -1,0 +1,41 @@
+-- Close the `token_purchases` grant hole: the table the checkout writes has been reachable by the
+-- tenant-facing role since it was created.
+--
+-- 0089 declared the boundary in a comment — "provisioner-only (no runtime grant): nothing on the data
+-- plane should be able to read or forge a purchase row" — and then only ran the GRANT. It never
+-- REVOKED, so `ALTER DEFAULT PRIVILEGES` (0001) has been handing `app_runtime`
+-- SELECT/INSERT/UPDATE/DELETE on it ever since. Verified against the LOCAL dev database before writing
+-- this: `has_table_privilege('app_runtime','token_purchases', …)` returned true for all four. The
+-- deployed environments were not inspected; the migration and the `db:assert` gate correct them.
+--
+-- THERE IS NO RLS TO FALL BACK ON. 0089 deliberately left this table outside row-level security because
+-- the provider webhook carries no tenant context and must read an intent by `reference` alone
+-- (`relrowsecurity` is false and it has zero policies). For this table, grants are the entire boundary,
+-- exactly as they are for `gl_accounts` (0112).
+--
+-- Two consequences, both live until now:
+--
+--  1. READ is cross-tenant disclosure, and this is the substantial one. With no policy filtering rows,
+--     any tenant-scoped query reaching this table returns EVERY workspace's purchases. Since packages
+--     shipped, that row carries `offer_snapshot` and `price_per_pack_minor_locked` — the negotiated
+--     package terms and what each workspace paid per pack — plus `amount_minor` and the buyer's `email`.
+--  2. WRITE let the provenance be FORGED. `grantTokensForPurchase` reconciles against this row
+--     precisely so a forged webhook payload cannot inflate a grant, and that reasoning holds only while
+--     the tenant-facing role cannot write the row it trusts. Note the narrow scope of the fix: this
+--     closes the forgeable-provenance path, NOT every path to an entitlement. `app_runtime` still holds
+--     INSERT/UPDATE on `token_lots` and INSERT/UPDATE/DELETE on `token_counters` — necessarily, since
+--     `grantTokensForPurchase` writes both inside `appDb.withTenant` — and nothing references
+--     `token_purchases` by foreign key, so a compromised data-plane connection holding a tenant context
+--     could still mint a lot directly. That reach is accepted design, not something 0128 addresses.
+--
+-- SAFE TO REVOKE: every production reader goes through the provisioning connection — verified by
+-- reading each one (`token-catalog.service.ts`, `token-grant.ts`, `token-purchase.service.ts`, and
+-- `commercial-offer-purchase.ts`, whose `tx` is a transaction on `this.provisioning.db`, not a tenant
+-- transaction). Nothing on the data plane touches it.
+--
+-- Unlike a REVOKE aimed at `app_provisioner`, this one SURVIVES a redeploy: `prepareRoles()` in
+-- cloud-migrate re-grants table privileges to `app_provisioner` only, never to `app_runtime`.
+-- `checkSecurityLayerApplied` asserts it regardless, because a boundary nothing re-checks is one that
+-- drifts back.
+REVOKE ALL PRIVILEGES ON "token_purchases" FROM PUBLIC, app_runtime;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON "token_purchases" TO app_provisioner;
