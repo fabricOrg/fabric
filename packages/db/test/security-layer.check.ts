@@ -299,6 +299,18 @@ export async function checkSecurityLayerApplied(
     // were missed, and that asymmetry is what surfaced them.
     "price_books",
     "price_book_rates",
+    // 0131 — the same class a fourth time, found by asking Postgres directly
+    // (`has_table_privilege` against `relrowsecurity`) instead of reading comments. All four carry a
+    // `tenant_id` column and NO row-level security, so the column looked like protection and was
+    // none. `auto_topup` and `payment_authorizations` are the auto-top-up mechanism: writable, they
+    // are an instruction to charge somebody else's saved card. `plugin_instances` names the vendor
+    // every channel dispatches through plus the pointer to its encrypted secret, so write is
+    // re-routing the platform's traffic. `proposals` IS maker-checker, and write to it defeats the
+    // separation of duties the queue exists to enforce.
+    "auto_topup",
+    "payment_authorizations",
+    "plugin_instances",
+    "proposals",
   ]) {
     const runtimeReach = await db.query(`
       SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
