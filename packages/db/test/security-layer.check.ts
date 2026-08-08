@@ -271,11 +271,54 @@ export async function checkSecurityLayerApplied(
   // its own. Migrations 0110 and 0117 revoke it; asserted here because `ALTER DEFAULT PRIVILEGES`
   // (0001) grants app_runtime DML on every table the migrator creates, so the REVOKE is the only thing
   // standing between a new commercial table and the tenant role — and a journaled migration runs once.
+  //
+  // `token_purchases` (0128) joins the list for the SAME reason, not a stronger one: none of these five
+  // tables has row-level security or a single policy, so grants are the entire boundary for every one
+  // of them. What makes this one urgent is the payload — the row carries `offer_snapshot` and
+  // `price_per_pack_minor_locked` (a workspace's negotiated package terms), `amount_minor`, and the
+  // buyer's `email` — and it is the provenance `grantTokensForPurchase` reconciles against precisely
+  // because a webhook payload cannot be trusted.
   for (const table of [
     "commercial_offer_channels",
     "pricing_offers",
     "pricing_offer_versions",
     "offer_catalog_assignments",
+    "token_purchases",
+    // 0129 — the same class again, on the two worst of the remaining ten. `payments` is cross-tenant
+    // financial disclosure and, because settlement reads it to decide what to credit, a forged top-up.
+    // `staff_users` is not tenant-scoped at all, so no policy could ever protect it: read is the
+    // operator roster, and write manufactures the second approver maker-checker relies on, since
+    // `pricing_offer_versions.created_by`/`approved_by` are real FKs to it.
+    "payments",
+    "staff_users",
+    // 0130 — `price_book_rates.unit_price_minor` IS the charge, read on the send path through
+    // `EffectivePricingService`. A writable rate table is a pricing-integrity hole, not a disclosure
+    // one: the tenant-facing role could zero its own unit price and send for nothing, with every
+    // ledger movement internally consistent at the fabricated price. 0107 already revoked the
+    // neighbouring `price_book_versions` / `pricing_sell_rules` / `provider_cost_rates`; these two
+    // were missed, and that asymmetry is what surfaced them.
+    "price_books",
+    "price_book_rates",
+    // 0131 — the same class a fourth time, found by asking Postgres directly
+    // (`has_table_privilege` against `relrowsecurity`) instead of reading comments. All four carry a
+    // `tenant_id` column and NO row-level security, so the column looked like protection and was
+    // none. `auto_topup` and `payment_authorizations` are the auto-top-up mechanism: writable, they
+    // are an instruction to charge somebody else's saved card. `plugin_instances` names the vendor
+    // every channel dispatches through plus the pointer to its encrypted secret, so write is
+    // re-routing the platform's traffic. `proposals` IS maker-checker, and write to it defeats the
+    // separation of duties the queue exists to enforce.
+    "auto_topup",
+    "payment_authorizations",
+    "plugin_instances",
+    "proposals",
+    // 0132 — the last two of this class, and the two whose comments each cited a SIBLING as the
+    // reason they were safe: kill-switches.ts named `plugin_instances`, audit.ts named
+    // `staff_users` and `plugin_instances`. All three of those were themselves holes when the
+    // comments were written. `kill_switches` IS the incident control, so write access is both a
+    // denial of service and a way to resume traffic staff halted; `audit_events` is a trail the
+    // audited party could otherwise rewrite or delete.
+    "kill_switches",
+    "audit_events",
   ]) {
     const runtimeReach = await db.query(`
       SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
@@ -283,7 +326,7 @@ export async function checkSecurityLayerApplied(
     `);
     for (const r of runtimeReach.rows) {
       violations.push(
-        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — commercial catalog state must be unreachable from the tenant-facing role`,
+        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — commercial catalog and purchase state must be unreachable from the tenant-facing role`,
       );
     }
   }

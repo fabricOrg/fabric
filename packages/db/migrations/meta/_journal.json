@@ -897,6 +897,41 @@
       "when": 1785659803026,
       "tag": "0127_unlock_live_envs_for_live_workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1785659804026,
+      "tag": "0128_token_purchase_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1785659805026,
+      "tag": "0129_platform_table_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1785659806026,
+      "tag": "0130_price_book_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1785659807026,
+      "tag": "0131_runtime_grant_sweep",
+      "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1785659808026,
+      "tag": "0132_kill_switch_audit_grants",
+      "breakpoints": true
     }
   ]
 }
