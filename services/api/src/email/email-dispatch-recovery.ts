@@ -6,9 +6,10 @@ type Row = Record<string, unknown>;
 
 export async function emailDispatchBlockReason(
   killSwitch: KillSwitchService,
+  tenantId: string,
 ): Promise<string | null> {
   try {
-    if (await killSwitch.isPaused("platform.email_sending")) {
+    if (await killSwitch.isPaused("platform.email_sending", tenantId)) {
       return "email_sending_paused";
     }
   } catch {

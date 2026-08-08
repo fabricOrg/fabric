@@ -1,5 +1,5 @@
 import { auditEvents, createProvisioningDb, killSwitches } from "@app/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { AuditService } from "../audit/audit.service.js";
 import { KillSwitchService } from "./kill-switches.service.js";
@@ -15,10 +15,12 @@ describeDb("kill switches", () => {
 
   afterAll(async () => {
     // Reset the shared catalog row + drop the audit rows this test created.
+    // Scoped to the PLATFORM row: since 0133 a bare `key =` also matches every tenant override,
+    // so an unqualified reset would silently resume another spec's (or an operator's) override.
     await db.db
       .update(killSwitches)
       .set({ enabled: true, lastReason: null, lastActorEmail: null })
-      .where(eq(killSwitches.key, KEY));
+      .where(and(eq(killSwitches.key, KEY), isNull(killSwitches.tenantId)));
     await db.db
       .delete(auditEvents)
       .where(
@@ -64,7 +66,12 @@ describeDb("kill switches", () => {
           eq(auditEvents.targetId, KEY),
         ),
       );
-    expect(event?.metadata).toEqual({ before: true, after: false });
+    // `tenantId: null` says which switch was flipped — the platform breaker, not an override.
+    expect(event?.metadata).toEqual({
+      before: true,
+      after: false,
+      tenantId: null,
+    });
   });
 
   it("returns null for an unknown switch", async () => {

@@ -932,6 +932,13 @@
       "when": 1785659808026,
       "tag": "0132_kill_switch_audit_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1786188328189,
+      "tag": "0133_kill_switch_tenant_scope",
+      "breakpoints": true
     }
   ]
 }

@@ -82,6 +82,11 @@ export class RateLimitService implements OnModuleDestroy {
       // Swallow connection-level error events: consume() already handles failures per call
       // (fail-open); without a listener ioredis emits unhandled 'error' events on every retry.
       client.on("error", () => undefined);
+      // ioredis 6 negotiates RESP3 by default — verified, not assumed: `CLIENT INFO` reports
+      // resp=3 for this exact construction. It is safe because `replyMapping` still defaults to
+      // "legacy", so replies keep their RESP2 shapes, and this script returns an integer either
+      // way. Do NOT set `replyMapping: "resp3"` without re-reading every call site: it turns map
+      // replies into objects and doubles into numbers.
       // defineCommand → EVALSHA with automatic script load; atomic on the server.
       client.defineCommand("takeToken", {
         numberOfKeys: 1,
