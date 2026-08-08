@@ -16,32 +16,66 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `03e51b1` | PR #250 + three Dependabot bumps |
-| `origin/testing` | `3d58df0` | deployed 2026-08-08, all jobs green incl. `Migrate · testing db` |
+| `origin/dev` | `899523b` | PRs #252 + #253 squash-merged 2026-08-08; post-merge CI green |
+| `origin/testing` | `3d58df0` | deployed 2026-08-08 — now BEHIND dev by #250, #252, #253 |
 
-Nothing uncommitted. `dev` and `testing` are in sync.
+Nothing uncommitted. `testing` has not been promoted since these landed; a `dev`→`testing` merge is
+what deploys them (merging to `dev` deploys nothing — the deploy workflows trigger on `testing` /
+`staging` pushes only).
 
-### Just shipped — every runtime grant hole is closed
+### Just shipped — tenant-targetable kill switches (#252)
 
-PR #250 (migrations 0131 + 0132) finished the sweep #242/#243/#244 began. Verified against the live
-schema after applying: **68 tables — 45 protected by RLS, 23 by REVOKE, 0 unprotected.**
+`kill_switches` gained a nullable `tenant_id` (migration 0133): NULL is the platform breaker as
+before, a workspace id is an override. Precedence is **platform OR tenant**, both rows read in one
+query — an override can pause one workspace but never resume one past a platform halt.
 
-Six tables had neither RLS nor a REVOKE, so `app_runtime` (the tenant-facing role) held full DML:
-`auto_topup`, `payment_authorizations`, `plugin_instances`, `proposals`, `kill_switches`,
-`audit_events`. All six are now in the `db:assert security` loop — that loop, not the prose, is what
-stops the boundary drifting back.
+This finished the work that was designed, implemented and WITHDRAWN. The three defects that sank it:
+the cache stored a value derived from the row just written (toggles now INVALIDATE, and a read that
+started before a toggle is discarded via a per-key generation); `tenantId` was not threaded through
+the 12 call sites, leaving it inert; and the unit spec's mock ignored its own `where()` argument, so
+the cache bug passed a green suite. The spec now runs on drizzle's `pg-proxy` driver — but note what
+that does NOT prove: the fake reconstructs the predicate from bound params, so the SQL is asserted
+directly for the tenant read and the six-combination matrix runs against real Postgres.
 
-**Find these by asking Postgres, never by reading comments.** `has_table_privilege('app_runtime', …)`
-against `relrowsecurity` plus the presence of `tenant_id`. Four of the six carried a schema comment
-asserting protection that did not exist, and two cited a SIBLING as the reason they were safe —
-`kill-switches.ts` named `plugin_instances`, `audit.ts` named `staff_users`. Every table so cited was
-itself a hole at the time. A comment is not a grant.
+Uniqueness uses `UNIQUE NULLS NOT DISTINCT (key, tenant_id)`, not the two partial indexes originally
+designed — the same constraint `uniq_plugin_instance` already relies on. A plain unique would be
+worse than what it replaced: NULLs are distinct in Postgres, so unlimited duplicate PLATFORM rows
+would be legal.
 
-One caveat recorded in 0132: the provisioner narrowing on `audit_events` (SELECT+INSERT, no
-UPDATE/DELETE) **records intent and does not enforce it** — `prepareRoles()`
-(`src/cloud-migrate.ts:123`) re-grants `app_provisioner` full DML on ALL TABLES every deploy.
-Enforcing append-only needs a re-assertion in `cloud-migrate-privileges.ts`, the mechanism the GL
-tables already use.
+Two defects found on the way: `platform.email_sending` was gated in `email.service.ts` since it
+shipped but **never seeded**, so it could not be flipped and always read operational; and
+`platform.signup` is now marked NOT tenant-scopable (it is read before any workspace exists, so an
+override would sit in the table looking meaningful while `signupEnabled()` never consults it).
+
+No grant change — `app_runtime` stays REVOKEd (0132). `tenant_id` here is a SCOPE, not a boundary:
+no RLS policy, provisioning connection still the only accessor. `security-layer.check.ts` uses an
+explicit allowlist, so the new column breaks no assertion.
+
+### Just shipped — bullmq 6 + ioredis 6 (#253)
+
+Supersedes Dependabot #248/#249, both closed. RESP3 was the held concern; it is settled by
+measurement, not reasoning: `CLIENT INFO` reports **resp=3** on both the rate-limiter client and
+BullMQ's own connection, so RESP3 really is in use and nothing fell back. It works because ioredis 6
+still defaults `replyMapping` to `"legacy"` (RESP2 reply shapes) and the Lua token bucket returns an
+integer either way. Do not flip `replyMapping` to `"resp3"` without re-reading every call site.
+
+bullmq 6 also drops `Queue#client` / `Worker#blockingClient` (unused here — the raw client comes from
+`getBackend()` now) and makes `Queue.resume()` async (the one call site already awaited it).
+
+**Closing a Dependabot PR manually means it will not re-raise that version.** #248/#249 were closed
+in favour of #253, which carried the same versions and merged — but the same move on a PR that is
+then abandoned silently drops the bump until a newer release appears.
+
+### Still open from the grant sweep
+
+The provisioner narrowing on `audit_events` (SELECT+INSERT, no UPDATE/DELETE) **records intent and
+does not enforce it** — `prepareRoles()` (`src/cloud-migrate.ts:123`) re-grants `app_provisioner`
+full DML on ALL TABLES every deploy. Enforcing append-only needs a re-assertion in
+`cloud-migrate-privileges.ts`, the mechanism the GL tables already use.
+
+**Find grant holes by asking Postgres, never by reading comments** — `has_table_privilege`, not
+prose. Four of the six tables #250 fixed carried a comment asserting protection that did not exist,
+and two cited a SIBLING as the reason they were safe while that sibling was itself a hole.
 
 ---
 
@@ -72,30 +106,22 @@ not configured. Money and credits are unaffected; only status. Route is
 
 ## Open work
 
-**Tenant-targetable kill switches — designed, implemented, WITHDRAWN.** Do not restart from scratch;
-the design survived review and only the implementation was wrong. Design: nullable `tenant_id` on
-`kill_switches` (NULL = platform breaker); two PARTIAL unique indexes, because a plain
-`unique(key, tenant_id)` lets NULLs repeat and would permit several platform rows per key;
-precedence is `platform OR tenant` so a tenant row may pause but never resume. Must fix before it
-ships:
+**`verify.integration.spec.ts` is FLAKY — one CI failure, cause NOT pinned.** Failed once on #253
+(`expected 400 to be 201` at :216, the "rejects an expired code" test), passed on re-run. Ruled out:
+the Redis bump (CI starts no Redis, so neither package is active there, and the same suite passed on
+#252 with ioredis 5) and the spec itself (6/6 in isolation locally, green in a local full-suite run).
 
-1. `toggle` must not cache a value derived from the tenant row alone — that defeated the precedence
-   rule the migration claimed to enforce.
-2. Thread `tenantId` through all 12 `isPaused` call sites, or the feature is inert (it was).
-3. Repair the `kill-switches.service.spec.ts` mock FIRST — it silently swallowed the rewrite, which
-   is how the cache bug survived.
-4. Tests for all six platform/tenant combinations plus toggle-then-read.
-5. `prune.integration.spec.ts:33` needs the same partial-index predicate as `ensureCatalog`.
-6. Admin console must render and send `tenant_id` — today its "Resume" resumes the platform breaker.
-7. Split the service under 300 lines; regenerate the drizzle snapshot for the schema change.
+The CI log narrows it: the failing `POST /v1/verify` returned a **234-byte** 400 in **41 ms**. The
+file's intentional throttle 400 is 211 bytes in 5 ms — `verify_resend_throttled`, whose envelope
+computes to exactly 211 — so this is a different error, and 41 ms means it reached the send pipeline
+rather than stopping at the throttle pre-check. `sms_sending_paused` (159) and `recipient_opted_out`
+(194) don't match the length either.
 
-**Dependabot — #248 (bullmq 6) and #249 (ioredis 6) held.** ioredis 6 defaults to **RESP3**, which
-changes reply shapes for the Lua/`EVALSHA` token bucket (`rate-limit.service.ts:78`) and the queue
-connection (`queue.service.ts:58`); neither passes `protocol`. bullmq 6 makes `ioredis` a peer
-(`>=5.0.0`) where 5.81 hard-pinned it, so the two interact. **No CI workflow starts a Redis**, so
-their green tick proves typecheck, not behaviour — `verify` is `validate && build`, and
-`integration:gate` is not wired into CI. Both Redis containers now run locally, so these can be
-tested for real before merging. Also open: #251, #214, #203 (typescript 7), #200.
+**It could not be diagnosed further because the spec asserts `statusCode` only** — a failure yields
+`400 ≠ 201` with no `error.code`, and the API does not log 4xx bodies. Make that assertion carry the
+body BEFORE hunting again; otherwise the next occurrence is equally opaque.
+
+Also open: #251, #214, #203 (typescript 7), #200.
 
 **Standards audit — safety net only.** Route error boundaries and shared `RouteError`/`RouteLoading`
 landed. Still open: ~25 missing `loading.tsx`; five empty-vs-error conflations where a fetch failure
@@ -111,6 +137,11 @@ app-wide — anything inside `overflow-hidden` or a grid tighter than `gap-6` ne
 Postgres and both Redis containers run under `channel-packages-*`. **Port 5432 is contested** — a
 different project's `lesson2_postgres` held it, which surfaces as `password authentication failed for
 user "app_owner"` rather than anything obviously about the wrong container. Check `docker ps` first.
+
+**"The Redis containers are running" is not "Redis is reachable."** Both were up with NO published
+host ports (`docker ps` showed a bare `6379/tcp`, `docker port` returned nothing), so every host
+process silently took the no-Redis path. `docker compose up -d redis-queue redis-cache` recreates
+them with the compose port mappings (6379, 6380). Check `docker port <container>`, not `docker ps`.
 
 `drizzle.config.ts` reads `process.env` with no dotenv loading, so `pnpm db:migrate` needs the env in
 process. Each worktree needs its own gitignored `.env`.
@@ -139,3 +170,21 @@ Durable ones live in [CLAUDE.md](./CLAUDE.md) §9. These are recent and not yet 
   every commit as unmerged. Use a two-dot `git diff` to ask whether content actually landed.
 - Windows: bash writes `/tmp/x`, node reads `D:\tmp\x`. Use an absolute scratchpad path. Heredocs
   also mangle backticks inside doc comments — use the Edit tool.
+- **CI DOES run the integration suite.** An earlier revision of this file claimed
+  "`integration:gate` is not wired into CI", and that claim was repeated into #253's commit message
+  before being checked. `ci.yml` runs `pnpm verify:full`, which includes `test:integration`. What is
+  actually true is narrower and still important: CI starts **Postgres but NOT Redis**, so
+  Redis-dependent specs take their disabled/inline path there and a queue or limiter regression can
+  still reach `dev` green. Verify a claim about the pipeline against `.github/workflows/`, not
+  against this file.
+- **A subset of specs is not the suite.** The Redis bump was validated locally against the 15 specs
+  found by grepping `REDIS_QUEUE_URL` — a defensible subset that still missed `verify.integration`,
+  which is what CI failed on. Grep-chosen scope answers "what mentions this", not "what this breaks".
+- **A literal control character in source makes git treat the file as BINARY.** A NUL used as a cache
+  key separator produced `Bin 0 -> 2498 bytes` in the diff: invisible in review, unmergeable on
+  conflict, and the comment explaining it was unreadable. Write `\u0000`, never the raw byte. Caught
+  in review, not by tests — every gate passed.
+- **A stale checkout against a migrated DB fails in a way that looks like a code defect.** Running the
+  pre-0133 kill-switch service against a DB that already had 0133 applied broke all three kill-switch
+  specs (`ON CONFLICT (key)` no longer matches a constraint once the composite unique replaces it).
+  Check which commit is checked out before believing a local integration failure.
