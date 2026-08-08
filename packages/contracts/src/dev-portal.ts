@@ -19,6 +19,7 @@ export const apiKeyScopeValues = [
   "sms:read",
   "email:send",
   "email:read",
+  "whatsapp:send",
   "wallet:read",
   "request_logs:read",
   "api_keys:read",

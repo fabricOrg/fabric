@@ -8,6 +8,7 @@ describe("API key scope contract", () => {
       "sms:read",
       "email:send",
       "email:read",
+      "whatsapp:send",
       "wallet:read",
       "request_logs:read",
       "api_keys:read",

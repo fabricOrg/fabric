@@ -49,6 +49,10 @@ const SCOPE_DETAILS: Record<
     label: "Read email activity",
     description: "Read email messages, delivery records, and content previews.",
   },
+  "whatsapp:send": {
+    label: "Send WhatsApp",
+    description: "Send approved WhatsApp templates through this environment.",
+  },
   "wallet:read": {
     label: "Wallet and payments",
     description: "Read wallet data and initiate payment transaction flows.",
