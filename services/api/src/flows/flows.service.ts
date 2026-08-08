@@ -104,7 +104,7 @@ export class FlowsService {
     tenantId: string,
     request: ConfirmFlowRequest,
   ): Promise<ConfirmFlowResponse> {
-    if (await this.killSwitch.isPaused("platform.payments")) {
+    if (await this.killSwitch.isPaused("platform.payments", tenantId)) {
       throw invalidRequest("payments_paused", "Collections are paused.");
     }
     const scoped = tenantId as TenantId;

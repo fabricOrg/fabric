@@ -68,7 +68,9 @@ export class EmailService {
     },
     input: SendEmailRequest,
   ): Promise<SendEmailApiResponse> {
-    if (await this.killSwitch.isPaused("platform.email_sending")) {
+    if (
+      await this.killSwitch.isPaused("platform.email_sending", context.tenantId)
+    ) {
       throw invalidRequest(
         "email_sending_paused",
         "Email sending is temporarily paused.",
@@ -103,7 +105,9 @@ export class EmailService {
   }
 
   async acceptManaged(input: ManagedEmailAcceptInput): Promise<void> {
-    if (await this.killSwitch.isPaused("platform.email_sending")) {
+    if (
+      await this.killSwitch.isPaused("platform.email_sending", input.tenantId)
+    ) {
       throw invalidRequest(
         "email_sending_paused",
         "Email sending is temporarily paused.",
@@ -135,7 +139,10 @@ export class EmailService {
         errorCode: "dispatch_material_unreadable",
       });
     }
-    const blocked = await emailDispatchBlockReason(this.killSwitch);
+    const blocked = await emailDispatchBlockReason(
+      this.killSwitch,
+      job.tenantId,
+    );
     if (blocked) {
       return this.resolve(job.tenantId, job.messageId, "failed", {
         errorCode: blocked,

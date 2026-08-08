@@ -64,7 +64,12 @@ describeDb("kill switches", () => {
           eq(auditEvents.targetId, KEY),
         ),
       );
-    expect(event?.metadata).toEqual({ before: true, after: false });
+    // `tenantId: null` says which switch was flipped — the platform breaker, not an override.
+    expect(event?.metadata).toEqual({
+      before: true,
+      after: false,
+      tenantId: null,
+    });
   });
 
   it("returns null for an unknown switch", async () => {

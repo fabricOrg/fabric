@@ -83,8 +83,8 @@ describe("SmsService provider kill-switch gate", () => {
     await expect(svc.send(input)).rejects.toSatisfy(
       (e) => e instanceof HttpException && e.getStatus() === 400,
     );
-    // Gated on the ACTIVE provider's slug — never faked a send.
-    expect(isPaused).toHaveBeenCalledWith("provider.fake-sms");
+    // Gated on the ACTIVE provider's slug, for THIS tenant — never faked a send.
+    expect(isPaused).toHaveBeenCalledWith("provider.fake-sms", input.tenantId);
   });
 
   it("checks the global switch before the provider switch", async () => {
@@ -92,6 +92,9 @@ describe("SmsService provider kill-switch gate", () => {
       "platform.sms_sending": true,
     });
     await expect(svc.send(input)).rejects.toBeInstanceOf(HttpException);
-    expect(isPaused).toHaveBeenCalledWith("platform.sms_sending");
+    expect(isPaused).toHaveBeenCalledWith(
+      "platform.sms_sending",
+      input.tenantId,
+    );
   });
 });

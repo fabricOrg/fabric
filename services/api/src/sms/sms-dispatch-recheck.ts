@@ -87,12 +87,12 @@ export async function dispatchBlockReason(deps: {
 }): Promise<string | null> {
   const { killSwitch, consent, senders, providerSlug, input, mode } = deps;
   try {
-    if (await killSwitch.isPaused("platform.sms_sending")) {
+    if (await killSwitch.isPaused("platform.sms_sending", input.tenantId)) {
       return "sms_sending_paused";
     }
     if (
       mode === "live" &&
-      (await killSwitch.isPaused(`provider.${providerSlug}`))
+      (await killSwitch.isPaused(`provider.${providerSlug}`, input.tenantId))
     ) {
       return "provider_unavailable";
     }

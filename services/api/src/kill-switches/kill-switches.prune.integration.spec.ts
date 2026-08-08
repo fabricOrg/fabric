@@ -30,7 +30,11 @@ describeDb("kill-switch catalog prune", () => {
         description: "No adapter — should be pruned.",
         scope: "provider",
       })
-      .onConflictDoNothing({ target: killSwitches.key });
+      // Same conflict target as ensureCatalog — the unique key is (key, tenant_id) since 0133, and
+      // a target naming `key` alone no longer matches a constraint.
+      .onConflictDoNothing({
+        target: [killSwitches.key, killSwitches.tenantId],
+      });
   });
 
   afterAll(async () => {

@@ -140,7 +140,7 @@ export class AutoTopupService {
         .where(eq(autoTopup.tenantId, scoped))
         .limit(1);
       if (!cfg?.enabled) return;
-      if (await this.killSwitch.isPaused("platform.payments")) return;
+      if (await this.killSwitch.isPaused("platform.payments", tenantId)) return;
 
       const balance = await this.customerBalance(scoped, cfg.currency);
       if (balance > cfg.thresholdMinor) return;

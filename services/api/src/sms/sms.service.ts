@@ -12,7 +12,6 @@ import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
-import { invalidRequest } from "../http/api-error.js";
 import type { KeysetCursor } from "../http/cursor.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
@@ -25,7 +24,10 @@ import { recheckedDispatch } from "./sms-dispatch-recheck.js";
 import { completeStoredDispatch } from "./sms-dispatch-store.js";
 import { ingestProviderDlr } from "./sms-dlr.js";
 import { resolveLiveSmsPricing } from "./sms-effective-pricing.js";
-import { assertLiveProviderAvailable } from "./sms-live-gate.js";
+import {
+  assertLiveProviderAvailable,
+  assertSmsSendingEnabled,
+} from "./sms-live-gate.js";
 import { replayManagedSend } from "./sms-managed-replay.js";
 import {
   enqueueSmsJob,
@@ -83,12 +85,7 @@ export class SmsService {
     applicationId?: string | null;
     managed?: ManagedSendContext;
   }): Promise<SendSmsResponse> {
-    if (await this.killSwitch.isPaused("platform.sms_sending")) {
-      throw invalidRequest(
-        "sms_sending_paused",
-        "SMS sending is temporarily paused.",
-      );
-    }
+    await assertSmsSendingEnabled(this.killSwitch, input.tenantId);
     // ADR-0004: route on the request's environment when known (a sandbox env can never reach a
     // carrier); fall back to the tenant/plan-based mode for the BFF token path (no environment yet).
     const deliveryMode = input.environmentId
@@ -102,6 +99,7 @@ export class SmsService {
       runtime: this.runtime,
       killSwitch: this.killSwitch,
       deliveryMode,
+      tenantId: input.tenantId,
     });
     // E10-S4/S5: compliance gates (sender registration, opt-outs, promo window) — see
     // sms-compliance.ts for the ordering + postures.
