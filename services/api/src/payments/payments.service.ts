@@ -66,7 +66,7 @@ export class PaymentsService {
     tenantId: string,
     request: InitiateTopUpRequest,
   ): Promise<InitiateTopUpResponse> {
-    if (await this.killSwitch.isPaused("platform.payments")) {
+    if (await this.killSwitch.isPaused("platform.payments", tenantId)) {
       throw invalidRequest("payments_paused", "Top-ups are paused right now.");
     }
     const { provider, creds, mode, instanceId, credentialVersion } =
@@ -124,7 +124,7 @@ export class PaymentsService {
     tenantId: string,
     p: { amountMinor: bigint; currency: string; email: string },
   ): Promise<{ authorizationUrl: string; reference: string }> {
-    if (await this.killSwitch.isPaused("platform.payments")) {
+    if (await this.killSwitch.isPaused("platform.payments", tenantId)) {
       throw invalidRequest("payments_paused", "Collections are paused.");
     }
     const { provider, creds, mode, instanceId, credentialVersion } =

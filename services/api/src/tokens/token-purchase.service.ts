@@ -55,7 +55,7 @@ export class TokenPurchaseService {
     tenantId: string,
     request: PurchaseCommercialOfferRequest,
   ): Promise<PurchaseCommercialOfferResponse> {
-    if (await this.killSwitch.isPaused("platform.payments")) {
+    if (await this.killSwitch.isPaused("platform.payments", tenantId)) {
       throw invalidRequest(
         "payments_paused",
         "Token purchases are paused right now.",

@@ -1,0 +1,112 @@
+/**
+ * KILL-SWITCH READ CACHE. `isPaused` sits in the SEND hot path and ARCHITECTURE Principle #7 says
+ * the control plane is never in the data plane's: one Map hit per send instead of a control-plane
+ * query, and the last-known-good value to serve when that store is down.
+ *
+ * An entry is keyed by (switch key, tenant) and holds the RESOLVED answer — platform OR tenant,
+ * already combined. That is deliberate and it is why toggling INVALIDATES rather than writes: the
+ * writer knows the row it just changed, not the other one, so caching from a write is how a tenant
+ * override came to mask a platform halt. Only a read of both rows may populate this.
+ */
+interface CachedState {
+  readonly paused: boolean;
+  readonly fetchedAt: number;
+}
+
+/**
+ * How long a cached state may serve reads before a fresh fetch. A flip lands within this window on
+ * other instances; the toggling instance drops its own entries immediately.
+ */
+export const CACHE_TTL_MS = 30_000;
+
+/**
+ * Entry ceiling. The old cache was bounded by the number of switch KEYS (a handful); keying by
+ * tenant makes it grow with the workspace count instead, and nothing else ever removes an entry —
+ * expiry deliberately keeps it so `lastKnownGood` has something to serve during an outage. Past
+ * this many entries we start reclaiming, accepting the trade: a cold tenant loses its
+ * last-known-good rather than the process leaking one entry per workspace per key forever.
+ */
+const MAX_ENTRIES = 10_000;
+
+/** How stale an entry must be before the reclaim pass may drop it. */
+const RECLAIM_AFTER_MS = CACHE_TTL_MS * 10;
+
+/** U+0000 separator: neither a switch key nor a uuid can contain one, so `key|tenant` cannot collide. */
+const SEPARATOR = "\u0000";
+
+function entryKey(key: string, tenantId: string | null): string {
+  return `${key}${SEPARATOR}${tenantId ?? ""}`;
+}
+
+export class KillSwitchCache {
+  private readonly entries = new Map<string, CachedState>();
+  /**
+   * Bumped per switch key on every toggle. A read that started BEFORE a toggle and returned after
+   * it must not be written back — `invalidateKey` cannot delete an entry that does not exist yet,
+   * so without this the toggling instance re-caches the pre-toggle answer and serves it for a full
+   * TTL. That is the same shape as the bug that sank the first implementation of this feature, one
+   * level down.
+   */
+  private readonly generations = new Map<string, number>();
+
+  /** Sample this BEFORE issuing the read, then hand it back to `set`. */
+  generation(key: string): number {
+    return this.generations.get(key) ?? 0;
+  }
+
+  /** The cached answer if still fresh, else undefined. */
+  fresh(
+    key: string,
+    tenantId: string | null,
+    now: number,
+  ): boolean | undefined {
+    const entry = this.entries.get(entryKey(key, tenantId));
+    if (!entry) return undefined;
+    return now - entry.fetchedAt < CACHE_TTL_MS ? entry.paused : undefined;
+  }
+
+  /** The cached answer regardless of age — the fallback when the control-plane read fails. */
+  lastKnownGood(key: string, tenantId: string | null): boolean | undefined {
+    return this.entries.get(entryKey(key, tenantId))?.paused;
+  }
+
+  set(
+    key: string,
+    tenantId: string | null,
+    paused: boolean,
+    now: number,
+    generation: number,
+  ): void {
+    // A toggle landed while this read was in flight — its result is already stale, so drop it.
+    if (generation !== this.generation(key)) return;
+    if (this.entries.size >= MAX_ENTRIES) this.reclaim(now);
+    this.entries.set(entryKey(key, tenantId), { paused, fetchedAt: now });
+  }
+
+  /**
+   * Drop every entry for a switch key — the platform one AND every tenant's — and invalidate reads
+   * still in flight. A platform flip changes the answer for tenants that have no row of their own,
+   * so invalidating only what was written would leave those serving the old value for a full TTL.
+   */
+  invalidateKey(key: string): void {
+    this.generations.set(key, this.generation(key) + 1);
+    const prefix = `${key}${SEPARATOR}`;
+    for (const entry of this.entries.keys()) {
+      if (entry.startsWith(prefix)) this.entries.delete(entry);
+    }
+  }
+
+  /** Drop entries too old to be a useful last-known-good. Oldest-first if that is not enough. */
+  private reclaim(now: number): void {
+    for (const [entry, state] of this.entries) {
+      if (now - state.fetchedAt > RECLAIM_AFTER_MS) this.entries.delete(entry);
+    }
+    if (this.entries.size < MAX_ENTRIES) return;
+    const byAge = [...this.entries].sort(
+      ([, a], [, b]) => a.fetchedAt - b.fetchedAt,
+    );
+    for (const [entry] of byAge.slice(0, Math.ceil(MAX_ENTRIES / 4))) {
+      this.entries.delete(entry);
+    }
+  }
+}
