@@ -248,6 +248,7 @@ export class PluginRegistryService {
    * Best-effort and never on the critical path — a status write must not fail a send that worked.
    */
   async markDispatchOutcome(
+    capability: "sms" | "email" | "payment" | "whatsapp",
     vendor: string,
     mode: "sandbox" | "live",
     outcome: "ok" | "error",
@@ -262,7 +263,7 @@ export class PluginRegistryService {
         .where(
           and(
             isNull(pluginInstances.tenantId),
-            eq(pluginInstances.capability, "sms"),
+            eq(pluginInstances.capability, capability),
             eq(pluginInstances.vendor, vendor),
             eq(pluginInstances.mode, mode),
           ),

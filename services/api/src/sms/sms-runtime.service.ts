@@ -242,6 +242,7 @@ export class SmsRuntimeService {
     // non-null); the env path has no row to mark.
     if (live?.vendor) {
       await this.registry?.markDispatchOutcome(
+        "sms",
         live.vendor,
         "live",
         result.status === "failed" ? "error" : "ok",
