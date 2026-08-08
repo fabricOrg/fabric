@@ -16,12 +16,25 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `899523b` | PRs #252 + #253 squash-merged 2026-08-08; post-merge CI green |
-| `origin/testing` | `3d58df0` | deployed 2026-08-08 — BEHIND dev by #252, #253 (#250 is already there) |
+| `origin/dev` | `742d943` | #252, #253, #255, #256 |
+| `origin/testing` | `2a20286` | promoted + DEPLOYED 2026-08-08 (#257); in sync with `dev` |
 
-Nothing uncommitted. `testing` has not been promoted since these landed; a `dev`→`testing` merge is
-what deploys them (merging to `dev` deploys nothing — the deploy workflows trigger on `testing` /
-`staging` pushes only).
+Nothing uncommitted. The testing deploy ran all six jobs green — gate, **`Migrate · testing db`
+(0133 applied)**, Render api, and the three Vercel apps — and the pipeline verifies the artefact
+itself, not just its own exit code: the api job polls `/health/readyz` on the live Render URL and
+each frontend job checks `/healthz`.
+
+**Two traps in reading that deploy.** The separate `Deploy` workflow reported **success while
+skipping all eight of its jobs** — it is the AWS/ECS path and is gated off, so its green tick is not
+evidence anything shipped. And a promotion PR title must be **Conventional Commits**: `promote: …`
+is rejected by the PR-policy check (`chore(ops): promote …` passes).
+
+**What the deploy did NOT prove.** The queue and rate limiter now run RESP3 (ioredis 6) against
+testing's Redis, and nothing has exercised that — `readyz` does not touch them and no CI job ever
+starts a Redis. A silent fall-through to the inline path looks identical to success from outside.
+Settle it the way §9 says: a send whose `provider_ref` is a real vendor id, not `fake-…`, plus the
+worker log line. Likewise the tenant kill-switch path is inert until an operator creates an override
+— the deploy proves the migration, not the feature.
 
 ### Just shipped — tenant-targetable kill switches (#252)
 
