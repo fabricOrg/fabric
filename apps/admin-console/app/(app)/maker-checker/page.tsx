@@ -25,13 +25,16 @@ export default async function MakerCheckerPage() {
   }
 
   // Tenants populate the proposal target select — best-effort so a tenant-list hiccup doesn't block
-  // reviewing the queue; the dialog just falls back to an empty select.
+  // reviewing the queue. Best-effort is NOT silent: swallowing the failure into `[]` made a broken
+  // fetch indistinguishable from "no tenants exist", and the operator got an empty select with no
+  // explanation for why they couldn't file anything. The flag is what lets the dialog say which.
   let tenants: TenantSummaryDto[] = [];
+  let tenantsFailed = false;
   if (canManage) {
     try {
       tenants = (await listTenants()).tenants;
     } catch {
-      tenants = [];
+      tenantsFailed = true;
     }
   }
 
@@ -46,7 +49,9 @@ export default async function MakerCheckerPage() {
             Sensitive changes need a second operator to approve.
           </p>
         </div>
-        {canManage ? <NewProposalDialog tenants={tenants} /> : null}
+        {canManage ? (
+          <NewProposalDialog tenants={tenants} tenantsFailed={tenantsFailed} />
+        ) : null}
       </div>
 
       {loadError ? (
