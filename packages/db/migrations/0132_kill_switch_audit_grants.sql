@@ -1,0 +1,62 @@
+-- Close the LAST TWO runtime grant holes. After 0131 these were the only two tables of 68 with
+-- neither row-level security nor a REVOKE, so `app_runtime` — the tenant-facing role — held full
+-- SELECT/INSERT/UPDATE/DELETE on both. This takes the count to zero.
+--
+-- THE CLASS OF BUG, one last time. `ALTER DEFAULT PRIVILEGES` (0001) grants `app_runtime` DML on
+-- every table the migrator creates, so a table is protected by exactly one of two things: an RLS
+-- policy scoping rows to the ambient tenant, or an explicit REVOKE. Neither of these had either.
+--
+-- WHAT MAKES THESE TWO WORTH A SEPARATE NOTE: each carried a schema comment asserting a protection
+-- that did not exist, and each named a SIBLING as the precedent for being safe —
+--
+--   `kill-switches.ts:6`  "Platform-level (no tenant/RLS, like plugin_instances)"
+--   `audit.ts:5`          "no tenant_id, no RLS — same shape as staff_users / plugin_instances;
+--                          read via the elevated provisioning connection"
+--
+-- — and every table so cited was itself a hole at the time the comment was written.
+-- `plugin_instances` was revoked by 0131, `staff_users` by 0129. A comment naming an unprotected
+-- table as the reason a second table is safe is not a boundary. That is four migrations in a row
+-- now; the durable fix is the `db:assert security` loop these two are added to, not the prose.
+--
+--   `kill_switches`  — these ARE the incident controls (pause all SMS, halt payments, gate signup).
+--                      Write access let the tenant-facing role flip `platform.payments` or
+--                      `platform.sms_sending` for the entire platform: a denial of service in one
+--                      direction, and in the other a way to RESUME traffic staff had deliberately
+--                      halted mid-incident. Read access alone discloses which capabilities are
+--                      currently degraded.
+--   `audit_events`   — an audit trail the audited party can rewrite is not an audit trail. Write
+--                      allowed forged rows; DELETE allowed removing real ones. Note this is a FULL
+--                      revoke rather than insert-only: no tenant-path code writes its own audit
+--                      row, so `app_runtime` needs nothing here at all.
+--
+-- SAFE TO REVOKE — accessors read individually, then re-derived independently by review:
+--   kill_switches   `kill-switches.service.ts` ONLY — ensureCatalog:83, list:107, isPaused:132,
+--                   signupEnabled:166, toggle:191/198, prune:95 (delete). All `this.provisioning.db`;
+--                   the class injects PROVISIONING_DB + AuditService and holds no `AppDb`. The
+--                   hot-path callers (`sms.service.ts:86`, `email.service.ts:71,106`,
+--                   `flows.service.ts:107`, `payments.service.ts:69,127`,
+--                   `auto-topup.service.ts:143`, `token-purchase.service.ts:58`,
+--                   `sms-live-gate.ts:34`, `sms-dispatch-recheck.ts:90,95`,
+--                   `email-dispatch-recovery.ts:11`) all go through KillSwitchService and never
+--                   touch the table.
+--   audit_events    `audit.service.ts` ONLY (:37 insert, :62-84 select), all `this.provisioning.db`.
+--   Neither table appears in any raw SQL: a repo-wide search across services/, packages/ and apps/
+--   for the literal table names returns only schema files, comments, and the assertion loop — no
+--   `tx`-tagged template and no `.execute(` site.
+--
+-- ON THE PROVISIONER GRANTS. `audit_events` is granted SELECT + INSERT and deliberately NOT
+-- UPDATE/DELETE, because nothing in application code amends or removes an audit row. As 0131 spelled
+-- out, this RECORDS intent and does not enforce it: `prepareRoles()` (`src/cloud-migrate.ts:123`)
+-- re-grants `app_provisioner` full DML on ALL TABLES before every `migrate()`, so the narrowing
+-- lapses on the next deploy. Enforcing append-only would need a re-assertion in
+-- `cloud-migrate-privileges.ts`, the mechanism the GL tables already use. Out of scope here, and
+-- called out so the grant is not mistaken for a guarantee.
+--
+-- The REVOKEs themselves DO survive redeploy: `prepareRoles()` grants `app_runtime` nothing, and the
+-- only post-migrate grant to that role is `SELECT, INSERT ON token_recognition_allocations`
+-- (`cloud-migrate-privileges.ts:28`).
+REVOKE ALL PRIVILEGES ON "kill_switches" FROM PUBLIC, app_runtime;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON "kill_switches" TO app_provisioner;--> statement-breakpoint
+
+REVOKE ALL PRIVILEGES ON "audit_events" FROM PUBLIC, app_runtime;--> statement-breakpoint
+GRANT SELECT, INSERT ON "audit_events" TO app_provisioner;

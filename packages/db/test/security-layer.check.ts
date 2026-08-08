@@ -299,6 +299,26 @@ export async function checkSecurityLayerApplied(
     // were missed, and that asymmetry is what surfaced them.
     "price_books",
     "price_book_rates",
+    // 0131 — the same class a fourth time, found by asking Postgres directly
+    // (`has_table_privilege` against `relrowsecurity`) instead of reading comments. All four carry a
+    // `tenant_id` column and NO row-level security, so the column looked like protection and was
+    // none. `auto_topup` and `payment_authorizations` are the auto-top-up mechanism: writable, they
+    // are an instruction to charge somebody else's saved card. `plugin_instances` names the vendor
+    // every channel dispatches through plus the pointer to its encrypted secret, so write is
+    // re-routing the platform's traffic. `proposals` IS maker-checker, and write to it defeats the
+    // separation of duties the queue exists to enforce.
+    "auto_topup",
+    "payment_authorizations",
+    "plugin_instances",
+    "proposals",
+    // 0132 — the last two of this class, and the two whose comments each cited a SIBLING as the
+    // reason they were safe: kill-switches.ts named `plugin_instances`, audit.ts named
+    // `staff_users` and `plugin_instances`. All three of those were themselves holes when the
+    // comments were written. `kill_switches` IS the incident control, so write access is both a
+    // denial of service and a way to resume traffic staff halted; `audit_events` is a trail the
+    // audited party could otherwise rewrite or delete.
+    "kill_switches",
+    "audit_events",
   ]) {
     const runtimeReach = await db.query(`
       SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
