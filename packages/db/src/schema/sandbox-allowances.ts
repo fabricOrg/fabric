@@ -48,7 +48,7 @@ export const sandboxUsageBuckets = pgTable(
     }),
     check(
       "sandbox_usage_buckets_channel_chk",
-      sql`${t.channel} in ('sms', 'email')`,
+      sql`${t.channel} in ('sms', 'email', 'whatsapp')`,
     ),
     check("sandbox_usage_buckets_used_chk", sql`${t.usedUnits} >= 0`),
     check("sandbox_usage_buckets_limit_chk", sql`${t.dailyLimit} > 0`),
@@ -88,7 +88,7 @@ export const sandboxUsageEvents = pgTable(
     ),
     check(
       "sandbox_usage_events_channel_chk",
-      sql`${t.channel} in ('sms', 'email')`,
+      sql`${t.channel} in ('sms', 'email', 'whatsapp')`,
     ),
     check("sandbox_usage_events_units_chk", sql`${t.units} > 0`),
     check(

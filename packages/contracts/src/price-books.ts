@@ -12,6 +12,15 @@ import { currency } from "./money.js";
 
 export const priceBookMode = z.enum(["subscription", "token"]);
 export type PriceBookMode = z.infer<typeof priceBookMode>;
+const pricingChannel = z.enum(["sms", "email", "whatsapp"]);
+const pricingTrafficClass = z.enum([
+  "promotional",
+  "transactional",
+  "otp",
+  "marketing",
+  "utility",
+  "authentication",
+]);
 
 /**
  * A STRICTLY POSITIVE integer amount of minor units (pesewas/kobo/cents) — a zero rate would price a
@@ -226,16 +235,13 @@ const positiveIntegerString = z
 
 export const providerCostRateInputSchema = z.object({
   provider_vendor: z.string().trim().min(1).max(120),
-  channel: messageChannel,
+  channel: pricingChannel,
   destination_country: z
     .string()
     .regex(/^[A-Z]{2}$/)
     .nullable()
     .default(null),
-  traffic_class: z
-    .enum(["promotional", "transactional", "otp"])
-    .nullable()
-    .default(null),
+  traffic_class: pricingTrafficClass.nullable().default(null),
   currency,
   numerator_minor: positiveIntegerString,
   denominator: positiveIntegerString,
@@ -264,7 +270,7 @@ export const listProviderCostRatesResponseSchema = z.object({
 export const publicPricingResponseSchema = z.object({
   rates: z.array(
     priceBookRateDtoSchema.extend({
-      unit_basis: z.enum(["segment", "send"]),
+      unit_basis: z.enum(["segment", "send", "message"]),
     }),
   ),
   effective_at: z.string(),

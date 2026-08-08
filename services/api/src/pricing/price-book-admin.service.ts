@@ -17,6 +17,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { AuditService } from "../audit/audit.service.js";
 import { invalidRequest } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
+import { UNIT_BASIS_BY_CHANNEL } from "./effective-pricing.js";
 import { EffectivePricingService } from "./effective-pricing.service.js";
 import {
   listPriceBooks,
@@ -205,7 +206,7 @@ export class PriceBookAdminService {
           destinationCountry: request.destination_country,
           trafficClass: request.traffic_class,
           currency: request.currency,
-          unitBasis: request.channel === "sms" ? "segment" : "recipient",
+          unitBasis: UNIT_BASIS_BY_CHANNEL[request.channel],
           numeratorMinor: BigInt(request.numerator_minor),
           denominator: BigInt(request.denominator),
           effectiveFrom,

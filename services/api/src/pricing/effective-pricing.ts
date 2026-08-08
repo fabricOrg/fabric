@@ -1,7 +1,20 @@
 import type { PricingSnapshot } from "@app/db";
 
-export type BillableChannel = "sms" | "email";
-export type TrafficClass = "promotional" | "transactional" | "otp";
+export type BillableChannel = "sms" | "email" | "whatsapp";
+export type TrafficClass =
+  | "promotional"
+  | "transactional"
+  | "otp"
+  | "marketing"
+  | "utility"
+  | "authentication";
+export type UnitBasis = "segment" | "recipient" | "message";
+
+export const UNIT_BASIS_BY_CHANNEL: Record<BillableChannel, UnitBasis> = {
+  sms: "segment",
+  email: "recipient",
+  whatsapp: "message",
+};
 
 export interface EffectivePriceInput {
   readonly accountId: string;
@@ -27,7 +40,7 @@ export interface EffectivePriceConfig {
   readonly sellRuleId: string;
   readonly providerCostRateId: string;
   readonly currency: string;
-  readonly unitBasis: "segment" | "recipient";
+  readonly unitBasis: UnitBasis;
   readonly unitPriceMinor: bigint;
   readonly providerCostNumeratorMinor: bigint;
   readonly providerCostDenominator: bigint;

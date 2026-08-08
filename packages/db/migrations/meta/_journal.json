@@ -953,6 +953,13 @@
       "when": 1786209052060,
       "tag": "0135_whatsapp_messages_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1786218480000,
+      "tag": "0136_whatsapp_pricing_vocabulary",
+      "breakpoints": true
     }
   ]
 }

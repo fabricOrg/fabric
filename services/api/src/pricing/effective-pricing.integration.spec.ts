@@ -138,4 +138,61 @@ describeDb("effective pricing", () => {
       }),
     ).rejects.toBeInstanceOf(EffectivePricingUnavailableError);
   });
+
+  it("allows whatsapp message pricing rows and rejects unknown channels", async () => {
+    await db.db.insert(pricingSellRules).values({
+      versionId,
+      channel: "whatsapp",
+      currency: "GHS",
+      unitBasis: "message",
+      unitPriceMinor: 19n as MinorUnits,
+      trafficClass: "marketing",
+    });
+    await db.db.insert(providerCostRates).values({
+      providerVendor,
+      channel: "whatsapp",
+      currency: "GHS",
+      unitBasis: "message",
+      numeratorMinor: 11n,
+      denominator: 2n,
+      trafficClass: "marketing",
+      sourceReference: "test-whatsapp-marketing",
+    });
+
+    let rejectedConstraint: string | null = null;
+    try {
+      await db.db.insert(providerCostRates).values({
+        providerVendor,
+        channel: "fax",
+        currency: "GHS",
+        unitBasis: "message",
+        numeratorMinor: 1n,
+        denominator: 1n,
+        sourceReference: "test-invalid-channel",
+      });
+    } catch (error) {
+      rejectedConstraint = constraintName(error);
+    }
+    expect(rejectedConstraint).toMatch(/provider_cost_rates_.*_chk/);
+
+    const quote = await service.quote({
+      accountId,
+      channel: "whatsapp",
+      units: 2n,
+      providerVendor,
+      trafficClass: "marketing",
+    });
+    expect(quote.totalPriceMinor).toBe(38n);
+    expect(quote.snapshot.unitBasis).toBe("message");
+    expect(quote.snapshot.trafficClass).toBe("marketing");
+  });
 });
+
+function constraintName(error: unknown): string | null {
+  if (!(error instanceof Error)) return null;
+  const cause = error.cause;
+  if (cause === null || typeof cause !== "object") return null;
+  if (!("constraint_name" in cause)) return null;
+  const name = cause.constraint_name;
+  return typeof name === "string" ? name : null;
+}
