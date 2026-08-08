@@ -311,6 +311,14 @@ export async function checkSecurityLayerApplied(
     "payment_authorizations",
     "plugin_instances",
     "proposals",
+    // 0132 — the last two of this class, and the two whose comments each cited a SIBLING as the
+    // reason they were safe: kill-switches.ts named `plugin_instances`, audit.ts named
+    // `staff_users` and `plugin_instances`. All three of those were themselves holes when the
+    // comments were written. `kill_switches` IS the incident control, so write access is both a
+    // denial of service and a way to resume traffic staff halted; `audit_events` is a trail the
+    // audited party could otherwise rewrite or delete.
+    "kill_switches",
+    "audit_events",
   ]) {
     const runtimeReach = await db.query(`
       SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
