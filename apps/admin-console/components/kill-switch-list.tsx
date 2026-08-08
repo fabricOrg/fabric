@@ -33,10 +33,15 @@ export interface WorkspaceOption {
   name: string;
 }
 
-/** What the dialog is about to do. `tenantId === undefined` = the operator still has to pick one. */
+/**
+ * What the dialog is about to do. `scope: "pick"` is the add-an-override flow, where `tenantId`
+ * starts undefined and the operator chooses — the picker stays on screen after the choice, so the
+ * workspace about to be paused is visible at the moment Confirm is pressed.
+ */
 interface Pending {
   target: KillSwitchDto;
   enabled: boolean;
+  scope: "platform" | "existing" | "pick";
   tenantId: string | null | undefined;
 }
 
@@ -67,8 +72,9 @@ export function KillSwitchList({
   }, [switches]);
 
   const willPause = pending?.enabled === false;
-  const needsWorkspace = pending?.tenantId === undefined;
-  const valid = reason.trim().length >= 8 && !needsWorkspace;
+  const picking = pending?.scope === "pick";
+  const chosen = workspaces.find((w) => w.id === pending?.tenantId);
+  const valid = reason.trim().length >= 8 && pending?.tenantId !== undefined;
 
   function open(next: Pending) {
     setReason("");
@@ -100,11 +106,23 @@ export function KillSwitchList({
         );
       }
       const scope = pending.tenantId
-        ? (workspaces.find((w) => w.id === pending.tenantId)?.name ??
-          "that workspace")
+        ? (chosen?.name ?? pending.target.tenant_name ?? "that workspace")
         : "every workspace";
+      // Don't claim a resume that precedence overrules: resuming one workspace while the platform
+      // breaker is down changes the row and nothing else.
+      const platformStillPaused =
+        pending.tenantId !== null &&
+        switches.some(
+          (s) =>
+            s.key === pending.target.key && s.tenant_id === null && !s.enabled,
+        );
+      const verb = willPause
+        ? "PAUSED"
+        : platformStillPaused
+          ? "resumed — but the platform switch is still paused, so nothing sends"
+          : "resumed";
       toast.success(
-        `${pending.target.label} ${willPause ? "PAUSED" : "resumed"} for ${scope} (reason logged)`,
+        `${pending.target.label} ${verb} for ${scope} (reason logged)`,
       );
       setPending(null);
       setReason("");
@@ -129,15 +147,22 @@ export function KillSwitchList({
             platform={platform}
             overrides={overrides}
             canManage={canManage}
+            canScopeToWorkspace={workspaces.length > 0}
             onToggle={(target) =>
               open({
                 target,
                 enabled: !target.enabled,
+                scope: target.tenant_id === null ? "platform" : "existing",
                 tenantId: target.tenant_id,
               })
             }
             onAddOverride={(target) =>
-              open({ target, enabled: false, tenantId: undefined })
+              open({
+                target,
+                enabled: false,
+                scope: "pick",
+                tenantId: undefined,
+              })
             }
           />
         ))}
@@ -158,23 +183,30 @@ export function KillSwitchList({
               {willPause ? "Pause" : "Resume"}: {pending?.target.label}
             </DialogTitle>
             <DialogDescription>
-              {pending?.tenantId === null
+              {pending?.scope === "platform"
                 ? "This affects live traffic for EVERY workspace. Enter a reason — it goes to the audit log."
-                : "This affects live traffic for one workspace. Enter a reason — it goes to the audit log."}
+                : `This affects live traffic for ${
+                    chosen?.name ??
+                    pending?.target.tenant_name ??
+                    "one workspace"
+                  } only. Enter a reason — it goes to the audit log.`}
             </DialogDescription>
           </DialogHeader>
 
-          {needsWorkspace && workspaces.length === 0 ? (
+          {picking && workspaces.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               The workspace list didn&apos;t load, so there is nothing to scope
               this to. Reload the page and try again.
             </p>
           ) : null}
 
-          {needsWorkspace && workspaces.length > 0 ? (
+          {picking && workspaces.length > 0 ? (
             <Field>
               <FieldLabel htmlFor="ks-workspace">Workspace</FieldLabel>
+              {/* Stays mounted after the choice: the workspace about to be paused must be on
+                  screen when Confirm is pressed, not swapped out by its own selection. */}
               <Select
+                value={pending?.tenantId ?? undefined}
                 onValueChange={(value) =>
                   setPending((p) => (p ? { ...p, tenantId: value } : p))
                 }

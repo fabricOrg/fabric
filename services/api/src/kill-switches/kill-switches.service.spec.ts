@@ -11,11 +11,16 @@ import { KillSwitchService } from "./kill-switches.service.js";
  * signupEnabled fails CLOSED, and precedence is platform OR tenant.
  *
  * THE FAKE DB IS A PROXY DRIVER, NOT A CHAINABLE STUB. The stub this replaced returned the same
- * rows for every query because its `where()` ignored its argument — so a query that forgot the
- * tenant predicate looked identical to one that had it, and the tenant/platform precedence bug it
- * was supposed to catch went straight through a green suite. Here the service builds REAL SQL and
- * this driver answers from a table, so dropping a predicate changes the answer, as it would in
- * Postgres.
+ * rows for every query because its `where()` ignored its argument, so a query that forgot the
+ * tenant predicate looked identical to one that had it. Here the service compiles REAL SQL and the
+ * driver answers from a table keyed on the BOUND PARAMS.
+ *
+ * Be precise about what that does and does not prove. The fake reconstructs the intended predicate
+ * from the params, so it cannot by itself detect a service that narrowed
+ * `key = $1 AND (tenant_id IS NULL OR tenant_id = $2)` to `key = $1 AND tenant_id = $2` — the
+ * params are identical and the fake would still hand back both rows while Postgres would not. The
+ * SQL assertions below pin that predicate directly, and the six-combination spec in
+ * `kill-switches.tenant.integration.spec.ts` re-proves the precedence against real Postgres.
  */
 
 interface Row {
@@ -174,6 +179,19 @@ describe("KillSwitchService.isPaused precedence", () => {
     ]);
     const svc = new KillSwitchService(provisioning, audit);
     expect(await svc.isPaused("platform.sms_sending", TENANT)).toBe(false);
+  });
+
+  it("asks for the platform row OR this tenant's — not the tenant's alone", async () => {
+    const { provisioning, queries } = fakeDb(() => [
+      { key: "platform.sms_sending", tenantId: null, enabled: true },
+    ]);
+    const svc = new KillSwitchService(provisioning, audit);
+    await svc.isPaused("platform.sms_sending", TENANT);
+    // Pinned on the SQL, because the param list alone cannot tell these two predicates apart: a
+    // service narrowed to `tenant_id = $2` binds exactly the same params and would drop the
+    // platform row — the precedence bug this whole feature turns on.
+    expect(queries[0]?.sql).toMatch(/tenant_id"? is null or/i);
+    expect(queries[0]?.params).toEqual(["platform.sms_sending", TENANT]);
   });
 
   it("asking without a tenant reads the platform row alone", async () => {

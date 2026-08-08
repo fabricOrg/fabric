@@ -25,7 +25,7 @@ import {
   requireTenantName,
   writePlatformSwitch,
   writeTenantOverride,
-} from "./kill-switch-writes.js";
+} from "./kill-switch-toggle-queries.js";
 import {
   CATALOG,
   LIVE_PROVIDER_KEYS,
@@ -123,13 +123,16 @@ export class KillSwitchService {
     const now = Date.now();
     const cached = this.cache.fresh(key, tenant, now);
     if (cached !== undefined) return cached;
+    // Sampled BEFORE the read: a toggle landing while this query is in flight must discard the
+    // answer rather than let it be written back over the invalidation.
+    const generation = this.cache.generation(key);
     try {
       const rows = await this.provisioning.db
         .select({ enabled: killSwitches.enabled })
         .from(killSwitches)
         .where(and(eq(killSwitches.key, key), scopedToTenant(tenant)));
       const paused = rows.some((r) => !r.enabled);
-      this.cache.set(key, tenant, paused, now);
+      this.cache.set(key, tenant, paused, now, generation);
       return paused;
     } catch (error) {
       const lastKnownGood = this.cache.lastKnownGood(key, tenant);
@@ -158,6 +161,7 @@ export class KillSwitchService {
     const now = Date.now();
     const cached = this.cache.fresh(key, null, now);
     if (cached !== undefined) return !cached;
+    const generation = this.cache.generation(key);
     try {
       const [row] = await this.provisioning.db
         .select({ enabled: killSwitches.enabled })
@@ -166,7 +170,7 @@ export class KillSwitchService {
         .limit(1);
       // Unseeded/unknown → DISABLED (fail closed). ensureCatalog (list/toggle) seeds it enabled:false.
       const enabled = row?.enabled ?? false;
-      this.cache.set(key, null, !enabled, now);
+      this.cache.set(key, null, !enabled, now, generation);
       return enabled;
     } catch (error) {
       this.logger.error(

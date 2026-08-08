@@ -38,12 +38,15 @@ export function KillSwitchCard({
   platform,
   overrides,
   canManage,
+  canScopeToWorkspace,
   onToggle,
   onAddOverride,
 }: {
   platform: KillSwitchDto;
   overrides: readonly KillSwitchDto[];
   canManage: boolean;
+  /** False when the workspace list failed to load — there would be nothing to pick from. */
+  canScopeToWorkspace: boolean;
   onToggle: (target: KillSwitchDto) => void;
   onAddOverride: (platform: KillSwitchDto) => void;
 }) {
@@ -115,16 +118,25 @@ export function KillSwitchCard({
           </div>
         ) : null}
 
-        {/* Not offered where an override would be inert — see `tenant_scopable`. */}
+        {/* Not offered where an override would be inert — see `tenant_scopable` — nor when the
+            workspace list is unavailable, which would be a live-looking button leading to a dialog
+            that can do nothing. */}
         {canManage && platform.tenant_scopable ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="self-start px-0 text-xs"
-            onClick={() => onAddOverride(platform)}
-          >
-            Pause a single workspace
-          </Button>
+          canScopeToWorkspace ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="self-start px-0 text-xs"
+              onClick={() => onAddOverride(platform)}
+            >
+              Pause a single workspace
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Per-workspace pausing is unavailable — the workspace list
+              didn&apos;t load.
+            </p>
+          )
         ) : null}
       </CardContent>
     </Card>

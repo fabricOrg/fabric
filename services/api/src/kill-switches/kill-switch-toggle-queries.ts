@@ -10,9 +10,9 @@ import { notFound } from "../http/api-error.js";
 import type { KillSwitchRow } from "./kill-switches.catalog.js";
 
 /**
- * The writes behind `KillSwitchService.toggle`, split out for the file-length guard. They stay dumb
- * on purpose: precedence and cache invalidation are the service's job, and a helper that decided
- * either would be a second place for the platform/tenant rule to disagree with itself.
+ * The row reads and writes behind `KillSwitchService.toggle`, split out for the file-length guard.
+ * They stay dumb on purpose: precedence and cache invalidation are the service's job, and a helper
+ * that decided either would be a second place for the platform/tenant rule to disagree with itself.
  */
 
 /** The workspace's display name — and the structured 404 for an id that names no workspace. */
