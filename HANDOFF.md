@@ -16,7 +16,7 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `742d943` | #252, #253, #255, #256 |
+| `origin/dev` | `86b5c38` | #252, #253, #255, #256, #258 |
 | `origin/testing` | `2a20286` | promoted + DEPLOYED 2026-08-08 (#257); in sync with `dev` |
 
 Nothing uncommitted. The testing deploy ran all six jobs green — gate, **`Migrate · testing db`
@@ -79,12 +79,16 @@ bullmq 6 also drops `Queue#client` / `Worker#blockingClient` (unused here — th
 in favour of #253, which carried the same versions and merged — but the same move on a PR that is
 then abandoned silently drops the bump until a newer release appears.
 
-### Still open from the grant sweep
+### Closed from the grant sweep — `audit_events` is now actually append-only
 
-The provisioner narrowing on `audit_events` (SELECT+INSERT, no UPDATE/DELETE) **records intent and
-does not enforce it** — `prepareRoles()` (`src/cloud-migrate.ts:123`) re-grants `app_provisioner`
-full DML on ALL TABLES every deploy. Enforcing append-only needs a re-assertion in
-`cloud-migrate-privileges.ts`, the mechanism the GL tables already use.
+The provisioner narrowing on `audit_events` (SELECT+INSERT, no UPDATE/DELETE) previously **recorded
+intent without enforcing it**, because `prepareRoles()` (`src/cloud-migrate.ts:123`) re-grants
+`app_provisioner` full DML on ALL TABLES every deploy. `cloud-migrate-privileges.ts` now re-asserts
+the REVOKE after migrations — the mechanism the GL tables already used — and
+`security-layer.check.ts` §8b asks Postgres via `has_table_privilege` whether the re-assertion
+actually ran. The check asserts **both** directions: no UPDATE/DELETE/TRUNCATE, and INSERT still
+held, because a too-aggressive REVOKE would leave a trail nothing can write and look identical to
+success from the other assertion alone.
 
 **Find grant holes by asking Postgres, never by reading comments** — `has_table_privilege`, not
 prose. Four of the six tables #250 fixed carried a comment asserting protection that did not exist,
@@ -130,17 +134,39 @@ computes to exactly 211 — so this is a different error, and 41 ms means it rea
 rather than stopping at the throttle pre-check. `sms_sending_paused` (159) and `recipient_opted_out`
 (194) don't match the length either.
 
-**It could not be diagnosed further because the spec asserts `statusCode` only** — a failure yields
-`400 ≠ 201` with no `error.code`, and the API does not log 4xx bodies. Make that assertion carry the
-body BEFORE hunting again; otherwise the next occurrence is equally opaque.
+**It could not be diagnosed further because the spec asserted `statusCode` only** — a failure yielded
+`400 ≠ 201` with no `error.code`, and the API does not log 4xx bodies. **Now fixed:** every status
+assertion in that spec goes through an `expectStatus` helper that asserts an object, so a mismatch
+carries the response body into the failure diff. The flake itself is still unpinned — this does not
+fix it, it makes the next occurrence diagnosable instead of opaque.
+
+While in that file: its masking assertion was **dead**. It searched the masked recipient for
+`"227189"`, a fragment of the removed pinned pilot number that no longer appears anywhere in the
+spec, so it could never match and proved nothing. It now asserts the exact expected mask
+(`maskMsisdn` keeps the first 6 chars and last 4).
 
 Also open: #251, #214, #203 (typescript 7), #200.
 
 **Standards audit — safety net only.** Route error boundaries and shared `RouteError`/`RouteLoading`
-landed. Still open: ~25 missing `loading.tsx`; five empty-vs-error conflations where a fetch failure
-renders as "you have nothing" (`dashboard/senders:121`, `dashboard/templates:236`,
-`admin-console/senders:40`, `admin-console/maker-checker:53`, `tenants/[slug]:182`); nine separate
-`StatusBadge` implementations; ~30 ad-hoc date formats. `Card` now draws blueprint corner marks
+landed. Still open: ~25 missing `loading.tsx`; nine separate `StatusBadge` implementations; ~30 ad-hoc
+date formats.
+
+**The "five empty-vs-error conflations" claim was WRONG and is retired.** An earlier revision of this
+file listed `dashboard/senders:121`, `dashboard/templates:236`, `admin-console/senders:40`,
+`admin-console/maker-checker:53` and `tenants/[slug]:182` as places a fetch failure renders as "you
+have nothing". Read individually, **four of the five already branch on the error with distinct copy**,
+and the two dashboard pages set `failed` AND `[]` in the same `.catch` with only one fetch on mount,
+so the error branch always wins — the stale-data case the claim implied cannot occur. The list was
+evidently produced by grepping for `length === 0` rather than by reading the files. Exactly one real
+defect existed, and it was four lines from where the claim pointed: `maker-checker` caught the
+**tenant-list** failure into `tenants = []`, so `NewProposalDialog` rendered an openable-but-empty
+select and the operator could not file a proposal or learn why. Fixed by passing `tenantsFailed`
+through, which lets the dialog separate "no tenants exist" from "we don't know".
+
+Genuinely still open on this theme, and much narrower than the retired claim: **no page offers a
+retry affordance** — every error state says "try again shortly" without a button — and
+`tenants/[slug]:182` styles its error with the same `text-muted-foreground` as its empty state, so
+the two read alike even though the copy differs. `Card` now draws blueprint corner marks
 app-wide — anything inside `overflow-hidden` or a grid tighter than `gap-6` needs `corners={false}`.
 
 ---
