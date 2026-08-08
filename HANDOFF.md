@@ -17,7 +17,7 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 | ref | sha | note |
 | --- | --- | --- |
 | `origin/dev` | `899523b` | PRs #252 + #253 squash-merged 2026-08-08; post-merge CI green |
-| `origin/testing` | `3d58df0` | deployed 2026-08-08 — now BEHIND dev by #250, #252, #253 |
+| `origin/testing` | `3d58df0` | deployed 2026-08-08 — BEHIND dev by #252, #253 (#250 is already there) |
 
 Nothing uncommitted. `testing` has not been promoted since these landed; a `dev`→`testing` merge is
 what deploys them (merging to `dev` deploys nothing — the deploy workflows trigger on `testing` /
