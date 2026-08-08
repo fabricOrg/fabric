@@ -18,3 +18,24 @@ allowBuilds:
   '@infisical/cli': false # deferred: build/bin linking is broken on Windows and we don't use the CLI yet
   '@nestjs/core': false # NestJS core's postinstall is a support/telemetry banner — not needed for the build
   msgpackr-extract: false # bullmq → msgpackr optional native ext; pure-JS fallback is fine, skip the build script
+
+# Transitive security bumps. These MUST live here, not in package.json's `pnpm.overrides` — pnpm 11
+# reads overrides from this file and IGNORES that legacy field SILENTLY, so an install with overrides
+# in the wrong place exits 0, reports "Lockfile is up to date, resolution step is skipped", and
+# changes nothing. Verify a bump with `pnpm why <pkg>`, never with the install's exit code.
+#
+# Every entry below is transitive — nothing here is a direct dependency, so a Dependabot PR cannot
+# fix them and the alert only clears once the resolved tree moves.
+overrides:
+  # GHSA-7p8r-x3mc-p8w7 (HIGH) — host confusion via a backslash authority introducer. Both copies
+  # arrive through fastify (ajv-compiler and fast-json-stringify), i.e. the API's HTTP adapter. Split
+  # by major deliberately: a blanket ^4 would drag fastify's 3.x consumers onto a major they were not
+  # written against.
+  fast-uri@3: ^3.1.5
+  fast-uri@4: ^4.1.2
+  # GHSA-6g55-p6wh-862q / -r28c-9q8g-f849 / -fxqj-rqcc-2cmp — three chained advisories, each an
+  # incomplete fix of the last: an attacker-controlled `sourceMappingURL` in a CSS comment reads
+  # arbitrary .map files when `from` is unset. Blanket is safe because every consumer wants ^8.x.
+  # Note this drags next@16's pinned 8.4.31 across a MINOR boundary, which is why this bump needs a
+  # real `next build` and not just a typecheck — it is the CSS pipeline for both dashboards.
+  postcss: ^8.5.23
