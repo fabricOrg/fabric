@@ -26,6 +26,12 @@ import {
  *     lands and keeps local dev functional without Redis.
  *
  * BullMQ requirement honored here: maxRetriesPerRequest must be null on worker connections.
+ *
+ * BullMQ 6 + ioredis 6: `ioredis` is now an optional PEER dependency (we depend on it directly for
+ * the rate limiter, so nothing to add), and BullMQ's own connection negotiates RESP3 — verified via
+ * `CLIENT INFO` (resp=3), not inferred from the changelog. v6 also stopped exposing Redis internals
+ * (`Queue#client`, `Worker#blockingClient` are gone); nothing here reached for them, and the raw
+ * client now comes from `getBackend()` if it is ever needed.
  */
 @Injectable()
 export class QueueService implements OnModuleDestroy {
