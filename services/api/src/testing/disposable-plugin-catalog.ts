@@ -10,13 +10,20 @@ import { isNotNull } from "drizzle-orm";
  * a configured live Arkesel instance and its encrypted credential; the registry then re-seeded a blank
  * catalog, so the loss was silent and unrecoverable — the credential ciphertext was the only copy.
  *
- * A configured credential is the signal, because it is the thing a test never creates and never needs:
- * catalog rows are re-seeded on demand, but `credentials_ref` means a human installed a secret here.
- * Failing loudly turns "your live integration is gone" into "point this at a scratch database".
+ * A configured credential is the signal — with one caveat that cost a CI run to learn. On a DEVELOPER
+ * database `credentials_ref` means a human installed a secret. In a parallel suite on an EPHEMERAL
+ * database it means a sibling spec armed one seconds ago, which is both expected and disposable. So the
+ * check is skipped when `CI` is set: the whole database is thrown away there, and the thing being
+ * protected does not exist.
+ *
+ * That asymmetry is the point rather than a hedge. The danger this guard exists for is a laptop whose
+ * `plugin_instances` holds a live carrier credential nobody can re-derive; CI has no such row to lose,
+ * and refusing there only breaks the suite that the guard was added to keep honest.
  */
 export async function assertDisposablePluginCatalog(
   db: ProvisioningDb,
 ): Promise<void> {
+  if (process.env.CI) return;
   const configured = await db.db
     .select({
       vendor: pluginInstances.vendor,
