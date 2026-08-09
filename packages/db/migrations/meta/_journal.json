@@ -1016,6 +1016,13 @@
       "when": 1786320122000,
       "tag": "0144_price_book_whatsapp_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1786320182000,
+      "tag": "0145_whatsapp_inbound",
+      "breakpoints": true
     }
   ]
 }

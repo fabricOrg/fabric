@@ -1,18 +1,7 @@
 import "reflect-metadata";
 import { createHmac, randomUUID } from "node:crypto";
 import { createAppDb } from "@app/db";
-import type {
-  CanonicalDlr,
-  Creds,
-  HealthState,
-  IncomingRequest,
-  NormalizedWhatsAppTemplateMessage,
-  ProviderResult,
-  RequestContext,
-  WhatsAppSenderPlugin,
-  WhatsAppTemplateRecord,
-} from "@app/integrations";
-import { MetaCloudProvider } from "@app/integrations";
+import type { Creds } from "@app/integrations";
 import { credit } from "@app/wallet";
 import { NestFactory } from "@nestjs/core";
 import {
@@ -26,7 +15,10 @@ import { AppModule } from "../app.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
 import { effectivePricingStub } from "../testing/effective-pricing.stub.js";
-import { whatsappPayload } from "./whatsapp.test-doubles.js";
+import {
+  MetaWebhookProvider,
+  whatsappPayload,
+} from "./whatsapp.test-doubles.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
@@ -82,7 +74,7 @@ describeDb("WhatsApp webhook ingress", () => {
     Object.assign(app.get(EffectivePricingService), effectivePricingStub());
     Object.assign(app.get(WhatsappRuntimeService), {
       resolve: async () => ({
-        provider: new WebhookMetaProvider(),
+        provider: new MetaWebhookProvider(),
         creds: WEBHOOK_CREDS,
       }),
     });
@@ -232,46 +224,6 @@ describeDb("WhatsApp webhook ingress", () => {
     });
   }
 });
-
-class WebhookMetaProvider implements WhatsAppSenderPlugin {
-  private readonly meta = new MetaCloudProvider();
-  readonly slug = "meta-cloud";
-  readonly capability = "whatsapp" as const;
-  readonly version = "0.1.0";
-  readonly billableStatuses = ["accepted"] as const;
-  readonly configSchema = {};
-
-  supports(_context: RequestContext): boolean {
-    return true;
-  }
-
-  healthCheck(): Promise<HealthState> {
-    return Promise.resolve({ status: "up" });
-  }
-
-  send(
-    message: NormalizedWhatsAppTemplateMessage,
-    _creds: Creds,
-  ): Promise<ProviderResult> {
-    return Promise.resolve({
-      status: "accepted",
-      providerRef: `wamid.${message.messageId}`,
-      raw: { fake: true },
-    });
-  }
-
-  verifyWebhook(request: IncomingRequest, creds: Creds): boolean {
-    return this.meta.verifyWebhook(request, creds);
-  }
-
-  parseDlr(payload: unknown): CanonicalDlr {
-    return this.meta.parseDlr(payload);
-  }
-
-  listTemplates(_creds: Creds): Promise<readonly WhatsAppTemplateRecord[]> {
-    return Promise.resolve([]);
-  }
-}
 
 function signed(rawBody: string): string {
   return `sha256=${createHmac("sha256", WEBHOOK_SECRET)

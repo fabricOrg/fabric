@@ -8,6 +8,8 @@ import {
   notFound,
   unauthorized,
 } from "../http/api-error.js";
+import { WhatsappInboundService } from "./whatsapp-inbound.service.js";
+import { parseInboundMessages } from "./whatsapp-inbound-parse.js";
 import { resolveWhatsappStatus } from "./whatsapp-resolve.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 import {
@@ -43,6 +45,8 @@ export class WhatsappWebhookService {
     private readonly runtime: WhatsappRuntimeService,
     @Inject(WhatsappTemplateService)
     private readonly templates: WhatsappTemplateService,
+    @Inject(WhatsappInboundService)
+    private readonly inbound: WhatsappInboundService,
   ) {}
 
   async verifyChallenge(input: {
@@ -106,6 +110,12 @@ export class WhatsappWebhookService {
     for (const event of metaTemplateEvents(payload)) {
       processed += await this.templates.applyWebhookEvent(event);
     }
+    // Inbound last, and counted separately: a replayed wamid contributes 0, so `processed` stays an
+    // honest count of what this delivery actually changed rather than of what it contained.
+    processed += await this.inbound.ingest(
+      providerSlug,
+      parseInboundMessages(payload, new Date()),
+    );
     return { processed };
   }
 

@@ -43,6 +43,8 @@ export const TENANT_TABLES = [
   "api_keys",
   "messages",
   "whatsapp_messages",
+  "whatsapp_inbound_messages",
+  "whatsapp_service_windows",
 ] as const;
 
 // The prod-faithful role model (653b45d): app_migrator OWNS the schema (non-super → FORCE RLS bites it
@@ -320,6 +322,10 @@ export async function checkSecurityLayerApplied(
     // audited party could otherwise rewrite or delete.
     "kill_switches",
     "audit_events",
+    // 0145 — a control-plane table by construction: it spans every tenant on the shared WABA, and the
+    // rows are inbound messages nobody could be attributed to (ADR-0015 §1). The tenant-facing role
+    // reading it would be reading the fact that OTHER workspaces' consumers wrote in.
+    "whatsapp_unattributed_inbound",
   ]) {
     const runtimeReach = await db.query(`
       SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
@@ -328,6 +334,35 @@ export async function checkSecurityLayerApplied(
     for (const r of runtimeReach.rows) {
       violations.push(
         `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — commercial catalog and purchase state must be unreachable from the tenant-facing role`,
+      );
+    }
+  }
+
+  // 8c. (ADR-0015) The inbound pair is INSERT/UPDATE-only for the tenant-facing role. An inbound
+  // message is the evidence a conversation happened, and the service window is what authorises a
+  // free-form reply — deleting a window row would let a workspace erase the record of when its right
+  // to send expired. Asserted in BOTH directions: the REVOKE landed AND the writes it needs survived,
+  // because a REVOKE that took INSERT with it would break ingestion in a way no read-only check sees.
+  for (const table of [
+    "whatsapp_inbound_messages",
+    "whatsapp_service_windows",
+  ]) {
+    const forbidden = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['DELETE','TRUNCATE']) AS p
+      WHERE has_table_privilege('${RUNTIME_ROLE}', '${table}', p)
+    `);
+    for (const r of forbidden.rows) {
+      violations.push(
+        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — inbound evidence and the service window are not the tenant-facing role's to destroy`,
+      );
+    }
+    const required = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE']) AS p
+      WHERE NOT has_table_privilege('${RUNTIME_ROLE}', '${table}', p)
+    `);
+    for (const r of required.rows) {
+      violations.push(
+        `'${RUNTIME_ROLE}' LACKS ${r.priv} on ${table} — inbound ingestion cannot work without it`,
       );
     }
   }
