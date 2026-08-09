@@ -4,6 +4,9 @@ import {
   smsAdapterFor,
   smsResolutionAdapterFor,
   supportedSmsVendors,
+  supportedWhatsappVendors,
+  whatsappAdapterFor,
+  whatsappResolutionAdapterFor,
 } from "./registry.js";
 
 describe("sms vendor registry (dispatch selection)", () => {
@@ -166,5 +169,30 @@ describe("credential/mode consistency", () => {
     expect(
       credentialModeViolation("sms", "hubtel", "live", { apiKey: "k" }),
     ).toBeNull();
+  });
+});
+
+describe("whatsapp vendor registry", () => {
+  it("maps Meta Cloud by vendor name", () => {
+    expect(whatsappAdapterFor(" meta-cloud ")?.().slug).toBe("meta-cloud");
+  });
+
+  it("does not dispatch through the sandbox provider as a live vendor", () => {
+    expect(whatsappAdapterFor("sandbox-whatsapp")).toBeNull();
+  });
+
+  it("resolves the sandbox WhatsApp provider slug for settled messages", () => {
+    expect(whatsappResolutionAdapterFor("sandbox-whatsapp")?.().slug).toBe(
+      "sandbox-whatsapp",
+    );
+  });
+
+  it("can settle every WhatsApp vendor it can dispatch to", () => {
+    for (const vendor of supportedWhatsappVendors()) {
+      const dispatched = whatsappAdapterFor(vendor)?.();
+      expect(dispatched, `vendor '${vendor}' has no adapter`).toBeDefined();
+      const slug = dispatched?.slug ?? "";
+      expect(whatsappResolutionAdapterFor(slug)?.().slug).toBe(slug);
+    }
   });
 });

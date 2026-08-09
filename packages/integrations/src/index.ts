@@ -17,6 +17,7 @@ export {
 // Real vendor adapters (sandbox-first). Paystack = payment (E4 wallet top-up); Arkesel = SMS (Ghana).
 export * from "./arkesel/provider.js";
 export * from "./aws-ses/provider.js";
+export * from "./meta-cloud/provider.js";
 export * from "./paystack/provider.js";
 export * from "./plugin.js";
 // ADR-0011: vendor string → adapter, so the send path never names a vendor.

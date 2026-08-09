@@ -15,6 +15,10 @@
     "./testing/email": {
       "development": "./src/testing/fake-email-provider.ts",
       "default": "./dist/testing/fake-email-provider.js"
+    },
+    "./testing/whatsapp": {
+      "development": "./src/testing/fake-whatsapp-provider.ts",
+      "default": "./dist/testing/fake-whatsapp-provider.js"
     }
   },
   "scripts": {
@@ -24,7 +28,8 @@
   },
   "dependencies": {
     "@app/contracts": "workspace:*",
-    "@aws-sdk/client-sesv2": "^3.1101.0"
+    "@aws-sdk/client-sesv2": "^3.1101.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.9.5"
