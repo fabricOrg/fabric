@@ -160,11 +160,16 @@ export const whatsappDispatches = pgTable(
   (t) => [
     check(
       "whatsapp_dispatches_status_chk",
-      sql`${t.status} in ('pending', 'sending', 'failed')`,
+      sql`${t.status} in ('pending', 'sending', 'completed', 'failed')`,
     ),
     index("idx_whatsapp_dispatches_pending")
       .on(t.availableAt, t.messageId)
       .where(sql`completed_at IS NULL AND status = 'pending'`),
+    // A dispatch that crashed between claim and resolve sits at 'sending' with a stale lease. The
+    // sweeper must find those to re-enqueue them, or their wallet reserve is never settled.
+    index("idx_whatsapp_dispatches_stale_lease")
+      .on(t.leasedAt)
+      .where(sql`completed_at IS NULL AND status = 'sending'`),
   ],
 );
 

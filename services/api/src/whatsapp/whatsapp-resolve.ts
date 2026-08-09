@@ -55,7 +55,8 @@ export async function resolveWhatsappStatus(
         error_code = COALESCE(${input.errorCode ?? null}, error_code), updated_at = now()
       WHERE id = ${messageId}`;
     await tx`
-      UPDATE whatsapp_dispatches SET completed_at = now(), updated_at = now()
+      UPDATE whatsapp_dispatches
+      SET status = 'completed', completed_at = now(), updated_at = now()
       WHERE message_id = ${messageId}`;
     await tx`
       INSERT INTO outbox_events (

@@ -6,6 +6,20 @@ import { isTerminalWhatsappStatus } from "./whatsapp-settlement.js";
 
 type Row = Record<string, unknown>;
 
+/**
+ * How long a claimed dispatch may stay claimed before another worker may take it.
+ *
+ * The claim exists to stop a double-send: two workers on one Redis queue must not both call Meta for
+ * the same message. But a claim with no expiry converts a crash into a permanent orphan — the row sits
+ * at 'sending' forever with its wallet reserve neither committed nor refunded. This is the horizon at
+ * which we prefer risking a duplicate over stranding money, and it is deliberately far longer than one
+ * Meta call plus its retries, so a slow send is never stolen from a worker that is still working.
+ *
+ * Bound as a PARAMETER cast to interval, not interpolated into a quoted literal — postgres.js would
+ * parameterise the placeholder and the surrounding quotes would make it a syntax error.
+ */
+const LEASE_TIMEOUT = "5 minutes";
+
 export type StoredWhatsappDispatch =
   | { kind: "skip"; status: WhatsappSendResponse["status"] }
   | { kind: "unreadable" }
@@ -31,7 +45,16 @@ export async function claimStoredWhatsapp(
         JOIN whatsapp_messages m ON m.id = d.message_id
         WHERE d.message_id = ${messageId}
           AND d.completed_at IS NULL
-          AND d.status = 'pending'
+          -- 'pending' is a fresh dispatch; the second arm RECLAIMS one whose worker died holding the
+          -- lease. Without it a crash between claim and resolve is unrecoverable (see LEASE_TIMEOUT).
+          AND (
+            d.status = 'pending'
+            OR (
+              d.status = 'sending'
+              AND d.leased_at IS NOT NULL
+              AND d.leased_at < now() - ${LEASE_TIMEOUT}::interval
+            )
+          )
           AND d.available_at <= now()
           AND m.status NOT IN ('delivered', 'failed', 'undelivered', 'expired')
         FOR UPDATE OF d SKIP LOCKED
@@ -102,7 +125,20 @@ export async function pendingWhatsappDispatches(
     tenantId,
     (tx) => tx`
       SELECT message_id FROM whatsapp_dispatches
-      WHERE completed_at IS NULL AND status = 'pending' AND available_at <= now()
+      WHERE completed_at IS NULL
+        AND available_at <= now()
+        -- Both a never-started dispatch AND one abandoned mid-flight. This filter used to demand
+        -- status = 'pending' alone, which meant a worker that died after claiming left the row
+        -- invisible to this sweeper forever, with its reserve stuck. claimStoredWhatsapp re-checks the
+        -- lease, so returning a stale one here cannot steal work from a live worker.
+        AND (
+          status = 'pending'
+          OR (
+            status = 'sending'
+            AND leased_at IS NOT NULL
+            AND leased_at < now() - ${LEASE_TIMEOUT}::interval
+          )
+        )
       ORDER BY available_at, message_id LIMIT ${limit}`,
   )) as Row[];
   return rows.map((row) => String(row.message_id));
