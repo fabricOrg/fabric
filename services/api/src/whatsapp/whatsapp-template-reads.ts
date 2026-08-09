@@ -1,6 +1,9 @@
 import type { WhatsappTemplateSummary } from "@app/contracts";
 import type { AppDb } from "@app/db";
-import { dateFrom } from "./whatsapp-template-cache.js";
+import {
+  dateFrom,
+  normalizeTemplateCategory,
+} from "./whatsapp-template-cache.js";
 import { templateShape } from "./whatsapp-template-shape.js";
 
 type Row = Record<string, unknown>;
@@ -42,26 +45,10 @@ export async function listApprovedTemplates(
       language: String(row.language),
       // Reported, never chosen. Meta owns the category, and ours drives the consent gate and the
       // pricing traffic class — so the template is the only honest source for it.
-      category: normalizeCategory(row.category),
+      category: normalizeTemplateCategory(row.category),
       variable_count: shape.variableCount,
       body_preview: shape.bodyPreview,
     } satisfies WhatsappTemplateSummary;
   });
   return { templates, syncedAt: latest };
-}
-
-/**
- * Meta reports UTILITY / MARKETING / AUTHENTICATION (and has historically used TRANSACTIONAL and
- * OTP). Anything we cannot map becomes null rather than a guess: null renders as "unknown" and the
- * send path refuses, which is better than silently classifying marketing traffic as utility and
- * skipping the promotional consent check.
- */
-function normalizeCategory(
-  value: unknown,
-): WhatsappTemplateSummary["category"] {
-  const code = typeof value === "string" ? value.trim().toUpperCase() : "";
-  if (code === "UTILITY") return "utility";
-  if (code === "MARKETING") return "marketing";
-  if (code === "AUTHENTICATION") return "authentication";
-  return null;
 }

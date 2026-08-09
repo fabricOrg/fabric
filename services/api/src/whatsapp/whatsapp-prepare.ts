@@ -41,6 +41,7 @@ export async function prepareWhatsapp(input: {
       creds: resolved.creds,
       templateName: input.content.template_name,
       templateLanguage: input.content.template_language,
+      templateCategory: input.content.template_category,
     });
   }
   const quote =

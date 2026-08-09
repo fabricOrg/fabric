@@ -9,6 +9,7 @@ import type { ResolvedWhatsappRuntime } from "./whatsapp-runtime.service.js";
 import {
   dateFrom,
   isStale,
+  normalizeTemplateCategory,
   optionalWabaId,
   templateStatusCode,
 } from "./whatsapp-template-cache.js";
@@ -52,6 +53,14 @@ export class WhatsappTemplateService {
     creds: Creds;
     templateName: string;
     templateLanguage: string;
+    /**
+     * The category the CALLER claims. Checked against Meta's, because it never reaches Meta and
+     * instead drives our consent gate and our pricing traffic class — so a caller claiming `utility`
+     * for a marketing template would skip the promotional consent check and bill the wrong class.
+     * Optional so existing callers keep compiling; when absent, nothing is claimed and nothing is
+     * checked.
+     */
+    templateCategory?: "marketing" | "utility" | "authentication";
   }): Promise<void> {
     // A sandbox send resolves to the fake provider and carries NO credentials, so there is no WABA and
     // no Meta template cache that could apply to it. Demanding a waba_id here made every sandbox send
@@ -86,12 +95,27 @@ export class WhatsappTemplateService {
     }
 
     const status = String(row.status).toUpperCase();
-    if (status === "APPROVED") return;
-    throw invalidRequest(
-      templateStatusCode(status),
-      `WhatsApp template '${input.templateName}' is ${status.toLowerCase()}.`,
-      "template_name",
-    );
+    if (status !== "APPROVED") {
+      throw invalidRequest(
+        templateStatusCode(status),
+        `WhatsApp template '${input.templateName}' is ${status.toLowerCase()}.`,
+        "template_name",
+      );
+    }
+
+    // Meta owns the category. Rejecting a mismatch rather than silently overriding it: overriding
+    // would change what the caller is BILLED and which consent rules apply without telling them,
+    // and the correct value is knowable, so the error can name it. An unmapped category (null) is
+    // not treated as a mismatch — we cannot claim to know better than the caller about a value we
+    // failed to recognise.
+    const actual = normalizeTemplateCategory(row.category);
+    if (input.templateCategory && actual && actual !== input.templateCategory) {
+      throw invalidRequest(
+        "whatsapp_template_category_mismatch",
+        `Meta classifies '${input.templateName}' as ${actual}, not ${input.templateCategory}. The category decides consent rules and pricing, so it must match.`,
+        "template_category",
+      );
+    }
   }
 
   private async upsertTemplate(
@@ -217,7 +241,7 @@ export class WhatsappTemplateService {
     const rows = (await this.db.withTenant(
       input.tenantId,
       (tx) => tx`
-        SELECT status::text, synced_at
+        SELECT status::text, category, synced_at
         FROM whatsapp_templates
         WHERE waba_id = ${input.wabaId}
           AND name = ${input.name}
