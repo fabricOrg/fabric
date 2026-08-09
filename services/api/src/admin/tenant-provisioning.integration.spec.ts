@@ -48,6 +48,7 @@ describeDb("tenant list", () => {
     await expect(service.sandboxAllowancePolicy(a)).resolves.toEqual({
       sms_segments_per_day: 100,
       email_messages_per_day: 200,
+      whatsapp_messages_per_day: 100,
     });
     await expect(
       service.updateSandboxAllowancePolicy(
@@ -55,6 +56,7 @@ describeDb("tenant list", () => {
         {
           sms_segments_per_day: 750,
           email_messages_per_day: 900,
+          whatsapp_messages_per_day: 125,
           reason: "Approved test capacity",
         },
         { email: "operator@example.com" },
@@ -62,10 +64,12 @@ describeDb("tenant list", () => {
     ).resolves.toEqual({
       sms_segments_per_day: 750,
       email_messages_per_day: 900,
+      whatsapp_messages_per_day: 125,
     });
     await expect(service.sandboxAllowancePolicy(a)).resolves.toEqual({
       sms_segments_per_day: 750,
       email_messages_per_day: 900,
+      whatsapp_messages_per_day: 125,
     });
   });
 

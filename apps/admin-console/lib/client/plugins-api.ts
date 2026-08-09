@@ -131,6 +131,38 @@ export const VENDOR_CREDENTIAL_FIELDS: Record<
         `Matches this ${mode} instance — SES refuses a credential that disagrees with it.`,
     },
   ],
+  // Snake_case, unlike every vendor above — the adapter reads `creds.app_secret` literally, so a
+  // camelCase form would install a credential it cannot see (see the Paystack note).
+  "meta-cloud": [
+    {
+      name: "phone_number_id",
+      label: "Phone number ID",
+      required: true,
+      hint: "The numeric ID, not the phone number.",
+    },
+    { name: "waba_id", label: "WhatsApp Business Account ID", required: true },
+    {
+      name: "access_token",
+      label: "Access token",
+      required: true,
+      secret: true,
+      hint: "Temporary tokens expire in 24h — use a System User token.",
+    },
+    {
+      name: "app_secret",
+      label: "App secret",
+      required: true,
+      secret: true,
+      hint: "Verifies inbound webhooks. Without it, callbacks are rejected.",
+    },
+    {
+      name: "webhook_verify_token",
+      label: "Webhook verify token",
+      required: true,
+      secret: true,
+      hint: "A string you choose.",
+    },
+  ],
 };
 
 async function bff(path: string, init?: RequestInit): Promise<unknown> {

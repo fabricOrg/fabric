@@ -3,6 +3,7 @@ import type { ConfigService } from "@nestjs/config";
 export interface SandboxAllowanceLimits {
   readonly sms: bigint;
   readonly email: bigint;
+  readonly whatsapp: bigint;
 }
 
 export function sandboxAllowanceDefaults(
@@ -19,6 +20,11 @@ export function sandboxAllowanceDefaults(
       "SANDBOX_EMAIL_MESSAGES_PER_DAY",
       200n,
     ),
+    whatsapp: configuredLimit(
+      config?.get<string>("SANDBOX_WHATSAPP_MESSAGES_PER_DAY"),
+      "SANDBOX_WHATSAPP_MESSAGES_PER_DAY",
+      100n,
+    ),
   };
 }
 
@@ -31,6 +37,9 @@ export function resolveSandboxAllowanceLimits(
   return {
     sms: positiveBigint(configured?.sms_segments_per_day) ?? defaults.sms,
     email: positiveBigint(configured?.email_messages_per_day) ?? defaults.email,
+    whatsapp:
+      positiveBigint(configured?.whatsapp_messages_per_day) ??
+      defaults.whatsapp,
   };
 }
 

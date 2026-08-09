@@ -35,6 +35,7 @@ export async function getTenantSandboxAllowancePolicy(
   return {
     sms_segments_per_day: Number(limits.sms),
     email_messages_per_day: Number(limits.email),
+    whatsapp_messages_per_day: Number(limits.whatsapp),
   };
 }
 
@@ -60,7 +61,8 @@ export async function setTenantSandboxAllowancePolicy(
         COALESCE(${accounts.settings}->'sandbox_allowances', '{}'::jsonb)
           || jsonb_build_object(
             'sms_segments_per_day', ${String(request.sms_segments_per_day)}::text,
-            'email_messages_per_day', ${String(request.email_messages_per_day)}::text
+            'email_messages_per_day', ${String(request.email_messages_per_day)}::text,
+            'whatsapp_messages_per_day', ${String(request.whatsapp_messages_per_day)}::text
           ),
         true
       )`,
@@ -73,6 +75,7 @@ export async function setTenantSandboxAllowancePolicy(
   const after = {
     sms_segments_per_day: request.sms_segments_per_day,
     email_messages_per_day: request.email_messages_per_day,
+    whatsapp_messages_per_day: request.whatsapp_messages_per_day,
   };
   await audit.record({
     actorStaffId: actor.staffId ?? null,

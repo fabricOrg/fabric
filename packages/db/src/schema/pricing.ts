@@ -20,9 +20,9 @@ export interface PricingSnapshot {
   readonly priceBookVersionId: string;
   readonly sellRuleId: string;
   readonly providerCostRateId: string;
-  readonly channel: "sms" | "email";
+  readonly channel: "sms" | "email" | "whatsapp";
   readonly currency: string;
-  readonly unitBasis: "segment" | "recipient";
+  readonly unitBasis: "segment" | "recipient" | "message";
   readonly units: string;
   readonly unitPriceMinor: string;
   readonly totalPriceMinor: string;
@@ -31,7 +31,13 @@ export interface PricingSnapshot {
   readonly estimatedProviderCostMinor: string;
   readonly expectedMarginMinor: string;
   readonly destinationCountry?: string;
-  readonly trafficClass?: "promotional" | "transactional" | "otp";
+  readonly trafficClass?:
+    | "promotional"
+    | "transactional"
+    | "otp"
+    | "marketing"
+    | "utility"
+    | "authentication";
   readonly providerVendor: string;
 }
 
@@ -93,16 +99,17 @@ export const pricingSellRules = pgTable(
   (t) => [
     check(
       "pricing_sell_rules_channel_chk",
-      sql`${t.channel} in ('sms', 'email')`,
+      sql`${t.channel} in ('sms', 'email', 'whatsapp')`,
     ),
     check(
       "pricing_sell_rules_basis_chk",
       sql`(${t.channel} = 'sms' and ${t.unitBasis} = 'segment')
-        or (${t.channel} = 'email' and ${t.unitBasis} = 'recipient')`,
+        or (${t.channel} = 'email' and ${t.unitBasis} = 'recipient')
+        or (${t.channel} = 'whatsapp' and ${t.unitBasis} = 'message')`,
     ),
     check(
       "pricing_sell_rules_class_chk",
-      sql`${t.trafficClass} is null or ${t.trafficClass} in ('promotional', 'transactional', 'otp')`,
+      sql`${t.trafficClass} is null or ${t.trafficClass} in ('promotional', 'transactional', 'otp', 'marketing', 'utility', 'authentication')`,
     ),
     check("pricing_sell_rules_price_chk", sql`${t.unitPriceMinor} > 0`),
     unique("uniq_pricing_sell_rule")
@@ -146,16 +153,17 @@ export const providerCostRates = pgTable(
   (t) => [
     check(
       "provider_cost_rates_channel_chk",
-      sql`${t.channel} in ('sms', 'email')`,
+      sql`${t.channel} in ('sms', 'email', 'whatsapp')`,
     ),
     check(
       "provider_cost_rates_basis_chk",
       sql`(${t.channel} = 'sms' and ${t.unitBasis} = 'segment')
-        or (${t.channel} = 'email' and ${t.unitBasis} = 'recipient')`,
+        or (${t.channel} = 'email' and ${t.unitBasis} = 'recipient')
+        or (${t.channel} = 'whatsapp' and ${t.unitBasis} = 'message')`,
     ),
     check(
       "provider_cost_rates_class_chk",
-      sql`${t.trafficClass} is null or ${t.trafficClass} in ('promotional', 'transactional', 'otp')`,
+      sql`${t.trafficClass} is null or ${t.trafficClass} in ('promotional', 'transactional', 'otp', 'marketing', 'utility', 'authentication')`,
     ),
     check(
       "provider_cost_rates_ratio_chk",

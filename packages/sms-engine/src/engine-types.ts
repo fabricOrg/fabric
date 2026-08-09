@@ -16,7 +16,7 @@ export interface TokenBackend {
   hold(
     tx: TenantTx,
     p: {
-      channel: "sms";
+      channel: "sms" | "whatsapp";
       currency: string;
       quantity: bigint;
       referenceId: string;
@@ -41,7 +41,7 @@ export interface SandboxAllowanceBackend {
   consume(
     tx: TenantTx,
     p: {
-      channel: "sms";
+      channel: "sms" | "whatsapp";
       units: bigint;
       referenceId: string;
       applicationId?: string | null;
