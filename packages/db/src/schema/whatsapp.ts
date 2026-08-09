@@ -9,6 +9,7 @@ import {
   jsonb,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -101,4 +102,35 @@ export const whatsappMessages = pgTable(
   ],
 );
 
+export const whatsappDispatches = pgTable(
+  "whatsapp_dispatches",
+  {
+    messageId: uuid("message_id")
+      .primaryKey()
+      .references(() => whatsappMessages.id, { onDelete: "cascade" }),
+    tenantId: tenantIdCol().references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    attempts: integer("attempts").notNull().default(0),
+    status: text("status").notNull().default("pending"),
+    leasedAt: timestamp("leased_at", { withTimezone: true }),
+    availableAt: timestamp("available_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    ...timestamps,
+  },
+  (t) => [
+    check(
+      "whatsapp_dispatches_status_chk",
+      sql`${t.status} in ('pending', 'sending', 'failed')`,
+    ),
+    index("idx_whatsapp_dispatches_pending")
+      .on(t.availableAt, t.messageId)
+      .where(sql`completed_at IS NULL AND status = 'pending'`),
+  ],
+);
+
 export type WhatsappMessage = typeof whatsappMessages.$inferSelect;
+export type WhatsappDispatch = typeof whatsappDispatches.$inferSelect;

@@ -6,9 +6,20 @@ export const whatsappTemplateCategory = z.enum([
   "marketing",
   "utility",
   "authentication",
-  "service",
 ]);
 export type WhatsappTemplateCategory = z.infer<typeof whatsappTemplateCategory>;
+
+export const whatsappSendRequest = z
+  .object({
+    to: z.string().regex(/^\+[1-9]\d{7,14}$/, "Must be one E.164 number."),
+    template_name: z.string().trim().min(1).max(512),
+    template_language: z.string().trim().min(1).max(35),
+    template_category: whatsappTemplateCategory,
+    variables: z.array(z.string().max(1024)).default([]),
+    currency: z.enum(["GHS", "NGN", "USD"]).default("GHS"),
+  })
+  .strict();
+export type WhatsappSendRequest = z.infer<typeof whatsappSendRequest>;
 
 export const whatsappMessage = z.object({
   id: z.string().uuid(),
@@ -22,6 +33,11 @@ export const whatsappMessage = z.object({
   error_code: z.string().nullable(),
 });
 export type WhatsappMessage = z.infer<typeof whatsappMessage>;
+
+export const whatsappSendResponse = whatsappMessage.extend({
+  request_id: z.string(),
+});
+export type WhatsappSendResponse = z.infer<typeof whatsappSendResponse>;
 
 export const whatsappMessageResponse = z.object({
   message: whatsappMessage,

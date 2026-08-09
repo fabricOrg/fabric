@@ -21,6 +21,13 @@ export const CATALOG: NewKillSwitch[] = [
     scope: "platform",
   },
   {
+    key: "platform.whatsapp_sending",
+    label: "Platform WhatsApp sending",
+    description:
+      "Master switch - pauses ALL outbound WhatsApp across every tenant.",
+    scope: "platform",
+  },
+  {
     key: "platform.payments",
     label: "Payments",
     description:
@@ -50,6 +57,13 @@ export const CATALOG: NewKillSwitch[] = [
     label: "Arkesel provider",
     description:
       "Halt sends via Arkesel (incident). No failover target yet, so this refuses Arkesel sends rather than rerouting.",
+    scope: "provider",
+  },
+  {
+    key: "provider.meta-cloud",
+    label: "Meta Cloud provider",
+    description:
+      "Halt WhatsApp sends via Meta Cloud. No failover target yet, so this refuses Meta sends rather than rerouting.",
     scope: "provider",
   },
 ];

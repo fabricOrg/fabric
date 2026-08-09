@@ -960,6 +960,20 @@
       "when": 1786218480000,
       "tag": "0136_whatsapp_pricing_vocabulary",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1786220000000,
+      "tag": "0137_whatsapp_dispatches",
+      "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1786220100000,
+      "tag": "0138_whatsapp_dispatch_claims",
+      "breakpoints": true
     }
   ]
 }
