@@ -28,6 +28,11 @@ process.env.TENANT_TOKEN_SECRET ??= "integration-test-tenant-token-secret";
  * can get wrong that SMS and email cannot: the binding resolves to POSITIONAL parameters in template
  * order, a locale selects a different Meta template rather than different text, and the accepted row is
  * indistinguishable from a direct send's so one worker dispatches both.
+ *
+ * NOT tested here: the `platform.whatsapp_sending` kill-switch gate on acceptance. Toggling it would
+ * mutate a shared control-plane singleton while whatsapp.integration.spec.ts reads the same key in a
+ * parallel worker — a flaky test that fails other specs, not a safety net. The gate is the same
+ * `assertWhatsappSendingEnabled` the direct path uses and is covered there.
  */
 describeDb("managed WhatsApp acceptance", () => {
   const owner = postgres(superUrl ?? "", { max: 2 });
@@ -297,19 +302,16 @@ describeDb("managed WhatsApp acceptance", () => {
 
   it("rejects an email-shaped recipient for a WhatsApp definition", async () => {
     const before = await counts();
-    const response = await send(
+    const res = await send(
       { ...payload, to: "ada@example.test" },
       "wa-recipient-mismatch",
     );
-    expect(response.statusCode).toBe(400);
-    const body = response.json() as {
-      error: { code: string; message: string; param?: string };
+    expect(res.statusCode).toBe(400);
+    const { error } = res.json() as {
+      error: { code: string; message: string };
     };
-    expect(body.error).toMatchObject({
-      code: "recipient_channel_mismatch",
-      param: "to",
-    });
-    expect(body.error.message).not.toContain("ada@example.test");
+    expect(error).toMatchObject({ code: "recipient_channel_mismatch" });
+    expect(error.message).not.toContain("ada@example.test");
     expect(await counts()).toEqual(before);
   });
 

@@ -19,6 +19,10 @@ import { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.
 import { assertWhatsappCompliant } from "./whatsapp-compliance.js";
 import { resolveWhatsappEnvironment } from "./whatsapp-environment.js";
 import {
+  assertWhatsappSendingEnabled,
+  whatsappDispatchBlockReason,
+} from "./whatsapp-gates.js";
+import {
   claimStoredWhatsapp,
   pendingWhatsappDispatches,
   recordUnknownWhatsappDispatchOutcome,
@@ -67,7 +71,7 @@ export class WhatsappService {
     },
     input: WhatsappSendRequest,
   ): Promise<WhatsappSendResponse> {
-    await this.assertSendingEnabled(context.tenantId);
+    await assertWhatsappSendingEnabled(this.killSwitch, context.tenantId);
     const mode = await resolveWhatsappEnvironment(this.db, context);
     const resolved = await this.runtime.resolve(mode);
     if (
@@ -125,7 +129,22 @@ export class WhatsappService {
    * dispatches both, because the row it reads is identical.
    */
   async acceptManaged(input: ManagedWhatsappAcceptInput): Promise<void> {
-    await this.assertSendingEnabled(input.tenantId);
+    await assertWhatsappSendingEnabled(this.killSwitch, input.tenantId);
+    // Same pre-acceptance gate the direct path applies. Without it a paused provider still reserves
+    // money and writes a delivery, only for the worker to fail and refund it — churn the caller sees
+    // as an accepted-then-failed message rather than an honest refusal.
+    const mode = await resolveWhatsappEnvironment(this.db, input);
+    const blocked = await whatsappDispatchBlockReason(
+      { killSwitch: this.killSwitch, runtime: this.runtime },
+      input.tenantId,
+      mode,
+    );
+    if (blocked) {
+      throw invalidRequest(
+        blocked,
+        "The WhatsApp provider is temporarily unavailable. Try again shortly.",
+      );
+    }
     await assertWhatsappCompliant({
       consent: this.consent,
       tenantId: input.tenantId,
@@ -162,7 +181,11 @@ export class WhatsappService {
       });
     }
     const mode = stored.backing === "sandbox_allowance" ? "sandbox" : "live";
-    const paused = await this.dispatchBlockReason(job.tenantId, mode);
+    const paused = await whatsappDispatchBlockReason(
+      { killSwitch: this.killSwitch, runtime: this.runtime },
+      job.tenantId,
+      mode,
+    );
     if (paused) {
       return resolveWhatsappStatus(this.db, this.runtime, {
         tenantId: job.tenantId,
@@ -250,36 +273,6 @@ export class WhatsappService {
     const messageIds = await pendingWhatsappDispatches(this.db, tenantId);
     for (const messageId of messageIds) await this.enqueue(tenantId, messageId);
     return messageIds.length;
-  }
-
-  private async assertSendingEnabled(tenantId: string): Promise<void> {
-    if (await this.killSwitch.isPaused("platform.whatsapp_sending", tenantId)) {
-      throw invalidRequest(
-        "whatsapp_sending_paused",
-        "WhatsApp sending is temporarily paused.",
-      );
-    }
-  }
-
-  private async dispatchBlockReason(
-    tenantId: string,
-    mode: "sandbox" | "live",
-  ): Promise<string | null> {
-    if (await this.killSwitch.isPaused("platform.whatsapp_sending", tenantId)) {
-      return "whatsapp_sending_paused";
-    }
-    if (mode === "live") {
-      const resolved = await this.runtime.resolve("live");
-      if (
-        await this.killSwitch.isPaused(
-          `provider.${resolved.provider.slug}`,
-          tenantId,
-        )
-      ) {
-        return "provider_unavailable";
-      }
-    }
-    return null;
   }
 
   private async enqueue(tenantId: string, messageId: string): Promise<void> {
