@@ -13,6 +13,8 @@ import { WhatsappController } from "./whatsapp.controller.js";
 import { WhatsappService } from "./whatsapp.service.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 import { WhatsappSendWorker } from "./whatsapp-send.worker.js";
+import { WhatsappWebhookController } from "./whatsapp-webhook.controller.js";
+import { WhatsappWebhookService } from "./whatsapp-webhook.service.js";
 
 @Module({
   imports: [
@@ -27,8 +29,13 @@ import { WhatsappSendWorker } from "./whatsapp-send.worker.js";
     QueueModule,
     SandboxAllowanceModule,
   ],
-  controllers: [WhatsappController],
-  providers: [WhatsappService, WhatsappRuntimeService, WhatsappSendWorker],
+  controllers: [WhatsappController, WhatsappWebhookController],
+  providers: [
+    WhatsappService,
+    WhatsappRuntimeService,
+    WhatsappWebhookService,
+    WhatsappSendWorker,
+  ],
   exports: [WhatsappService, WhatsappRuntimeService],
 })
 export class WhatsappModule {}

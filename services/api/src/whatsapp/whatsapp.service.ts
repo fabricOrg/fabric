@@ -5,7 +5,7 @@ import type {
   WhatsappSendResponse,
 } from "@app/contracts";
 import type { AppDb } from "@app/db";
-import { MetaCloudError, STATUS_RANK } from "@app/integrations";
+import { MetaCloudError } from "@app/integrations";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
@@ -25,18 +25,12 @@ import {
 } from "./whatsapp-load.js";
 import { prepareWhatsapp } from "./whatsapp-prepare.js";
 import { getWhatsappMessage, listWhatsappMessages } from "./whatsapp-reads.js";
+import { resolveWhatsappStatus } from "./whatsapp-resolve.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 import {
   WHATSAPP_SEND_QUEUE,
   type WhatsappSendJob,
 } from "./whatsapp-send.job.js";
-import {
-  isTerminalWhatsappStatus,
-  settleResolvedOutcome,
-} from "./whatsapp-settlement.js";
-
-type Row = Record<string, unknown>;
-
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
@@ -128,20 +122,29 @@ export class WhatsappService {
     );
     if (stored.kind === "skip") return stored.status;
     if (stored.kind === "unreadable") {
-      return this.resolve(job.tenantId, job.messageId, "failed", {
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: "failed",
         errorCode: "dispatch_material_unreadable",
       });
     }
     const mode = stored.backing === "sandbox_allowance" ? "sandbox" : "live";
     const paused = await this.dispatchBlockReason(job.tenantId, mode);
     if (paused) {
-      return this.resolve(job.tenantId, job.messageId, "failed", {
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: "failed",
         errorCode: paused,
       });
     }
     const resolved = await this.runtime.resolve(mode);
     if (resolved.provider.slug !== stored.providerSlug) {
-      return this.resolve(job.tenantId, job.messageId, "failed", {
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: "failed",
         errorCode: "whatsapp_provider_selection_changed",
       });
     }
@@ -157,12 +160,18 @@ export class WhatsappService {
         },
         resolved.creds,
       );
-      return this.resolve(job.tenantId, job.messageId, result.status, {
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: result.status,
         ...(result.providerRef ? { providerRef: result.providerRef } : {}),
       });
     } catch (error) {
       if (error instanceof MetaCloudError) {
-        return this.resolve(job.tenantId, job.messageId, "failed", {
+        return resolveWhatsappStatus(this.db, this.runtime, {
+          tenantId: job.tenantId,
+          messageRef: job.messageId,
+          status: "failed",
           errorCode: error.code,
         });
       }
@@ -251,46 +260,5 @@ export class WhatsappService {
         removeOnComplete: { count: 1_000 },
         removeOnFail: true,
       });
-  }
-
-  private async resolve(
-    tenantId: string,
-    messageId: string,
-    status: WhatsappSendResponse["status"],
-    detail: { providerRef?: string; errorCode?: string },
-  ): Promise<WhatsappSendResponse["status"]> {
-    return this.db.withTenant(tenantId, async (tx) => {
-      const rows = (await tx`
-        SELECT status::text, status_rank, backing, application_id, environment_id
-        FROM whatsapp_messages WHERE id = ${messageId} FOR UPDATE`) as Row[];
-      const current = rows[0];
-      if (!current) return "failed";
-      const prior = String(current.status) as WhatsappSendResponse["status"];
-      if (isTerminalWhatsappStatus(prior)) return prior;
-      await settleResolvedOutcome(tx, {
-        runtime: this.runtime,
-        messageId,
-        backing: String(current.backing),
-        priorRank: Number(current.status_rank),
-        nextStatus: status,
-      });
-      await tx`
-        UPDATE whatsapp_messages SET status = ${status}, status_rank = ${STATUS_RANK[status]},
-          provider_ref = COALESCE(${detail.providerRef ?? null}, provider_ref),
-          error_code = COALESCE(${detail.errorCode ?? null}, error_code), updated_at = now()
-        WHERE id = ${messageId}`;
-      await tx`
-        UPDATE whatsapp_dispatches SET completed_at = now(), updated_at = now()
-        WHERE message_id = ${messageId}`;
-      await tx`
-        INSERT INTO outbox_events (
-          tenant_id, application_id, environment_id, event_type, payload
-        ) VALUES (
-          current_setting('app.tenant_id')::uuid, ${String(current.application_id)},
-          ${String(current.environment_id)}, 'message.updated',
-          ${JSON.stringify({ message_id: messageId, channel: "whatsapp", status, previous_status: prior })}::jsonb
-        )`;
-      return status;
-    });
   }
 }
