@@ -18,7 +18,11 @@ import { QueueService } from "../queue/queue.service.js";
 import { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.service.js";
 import { assertWhatsappCompliant } from "./whatsapp-compliance.js";
 import { resolveWhatsappEnvironment } from "./whatsapp-environment.js";
-import { loadStoredWhatsapp } from "./whatsapp-load.js";
+import {
+  claimStoredWhatsapp,
+  pendingWhatsappDispatches,
+  recordUnknownWhatsappDispatchOutcome,
+} from "./whatsapp-load.js";
 import { prepareWhatsapp } from "./whatsapp-prepare.js";
 import { getWhatsappMessage, listWhatsappMessages } from "./whatsapp-reads.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
@@ -117,7 +121,7 @@ export class WhatsappService {
   }
 
   async process(job: WhatsappSendJob): Promise<WhatsappSendResponse["status"]> {
-    const stored = await loadStoredWhatsapp(
+    const stored = await claimStoredWhatsapp(
       this.db,
       this.vault,
       job.tenantId,
@@ -163,6 +167,12 @@ export class WhatsappService {
           errorCode: error.code,
         });
       }
+      await recordUnknownWhatsappDispatchOutcome(
+        this.db,
+        job.tenantId,
+        job.messageId,
+        error instanceof Error ? error.message : "unknown_provider_outcome",
+      );
       throw error;
     }
   }
@@ -197,16 +207,9 @@ export class WhatsappService {
 
   async enqueuePending(tenantId: string): Promise<number> {
     if (!this.queue.enabled) return 0;
-    const rows = (await this.db.withTenant(
-      tenantId,
-      (tx) => tx`
-        SELECT message_id FROM whatsapp_dispatches
-        WHERE completed_at IS NULL AND available_at <= now()
-        ORDER BY available_at, message_id LIMIT 100`,
-    )) as Row[];
-    for (const row of rows)
-      await this.enqueue(tenantId, String(row.message_id));
-    return rows.length;
+    const messageIds = await pendingWhatsappDispatches(this.db, tenantId);
+    for (const messageId of messageIds) await this.enqueue(tenantId, messageId);
+    return messageIds.length;
   }
 
   private async assertSendingEnabled(tenantId: string): Promise<void> {

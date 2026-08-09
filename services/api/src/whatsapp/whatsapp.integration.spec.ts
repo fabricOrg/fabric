@@ -1,6 +1,12 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import { createAppDb } from "@app/db";
+import type {
+  Creds,
+  NormalizedWhatsAppTemplateMessage,
+  ProviderResult,
+  WhatsAppSenderPlugin,
+} from "@app/integrations";
 import { FakeWhatsAppProvider } from "@app/integrations/testing/whatsapp";
 import { credit } from "@app/wallet";
 import { NestFactory } from "@nestjs/core";
@@ -14,7 +20,11 @@ import { hashApiKey } from "../api-keys/api-key.crypto.js";
 import { AppModule } from "../app.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
+import { PiiVaultService } from "../privacy/pii-vault.service.js";
+import { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.service.js";
 import { effectivePricingStub } from "../testing/effective-pricing.stub.js";
+import { WhatsappService } from "./whatsapp.service.js";
+import { prepareWhatsapp } from "./whatsapp-prepare.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
@@ -42,6 +52,7 @@ describeDb("public WhatsApp API", () => {
   const noScopeKey = `sk_test_${keySalt}${"6".repeat(8)}`;
   let app: NestFastifyApplication;
   let messageId = "";
+  let whatsappProvider: WhatsAppSenderPlugin = new FakeWhatsAppProvider();
 
   beforeAll(async () => {
     await owner`
@@ -73,7 +84,7 @@ describeDb("public WhatsApp API", () => {
     Object.assign(app.get(EffectivePricingService), effectivePricingStub());
     Object.assign(app.get(WhatsappRuntimeService), {
       resolve: async () => ({
-        provider: new FakeWhatsAppProvider(),
+        provider: whatsappProvider,
         creds: {},
       }),
     });
@@ -157,6 +168,34 @@ describeDb("public WhatsApp API", () => {
       WHERE tenant_id = ${tenantId}
         AND whatsapp_messages::text LIKE '%+233545227189%'`;
     expect(Number(rawLeak[0]?.leaks)).toBe(0);
+
+    const blockingProvider = new BlockingWhatsAppProvider();
+    whatsappProvider = blockingProvider;
+    const claimedMessageId = await prepareWhatsapp({
+      db,
+      vault: app.get(PiiVaultService),
+      sandboxAllowance: app.get(SandboxAllowanceService),
+      runtime: app.get(WhatsappRuntimeService),
+      context: {
+        tenantId,
+        applicationId: appId,
+        environmentId: sandboxId,
+      },
+      content: whatsappPayload(),
+    });
+
+    const firstProcess = app
+      .get(WhatsappService)
+      .process({ tenantId, messageId: claimedMessageId });
+    await blockingProvider.started;
+    const second = await app
+      .get(WhatsappService)
+      .process({ tenantId, messageId: claimedMessageId });
+    expect(second).toBe("sending");
+    blockingProvider.release();
+    await expect(firstProcess).resolves.toBe("accepted");
+    expect(blockingProvider.calls).toBe(1);
+    whatsappProvider = new FakeWhatsAppProvider();
   });
 
   it("has the WhatsApp kill switch seeded and blocks when flipped", async () => {
@@ -241,13 +280,57 @@ describeDb("public WhatsApp API", () => {
         "idempotency-key": idempotencyKey,
       },
       payload: {
-        to: "+233545227189",
-        template_name: "order_update",
-        template_language: "en",
-        template_category: "utility",
-        variables: ["A123"],
-        currency: "GHS",
+        ...whatsappPayload(),
       },
     });
   }
 });
+
+function whatsappPayload() {
+  return {
+    to: "+233545227189",
+    template_name: "order_update",
+    template_language: "en",
+    template_category: "utility" as const,
+    variables: ["A123"],
+    currency: "GHS" as const,
+  };
+}
+
+class BlockingWhatsAppProvider
+  extends FakeWhatsAppProvider
+  implements WhatsAppSenderPlugin
+{
+  calls = 0;
+  private releaseSend: (() => void) | undefined;
+  readonly started: Promise<void>;
+  private markStarted: () => void;
+
+  constructor() {
+    super();
+    this.markStarted = () => {};
+    this.started = new Promise<void>((resolve) => {
+      this.markStarted = resolve;
+    });
+  }
+
+  override async send(
+    message: NormalizedWhatsAppTemplateMessage,
+    _creds: Creds,
+  ): Promise<ProviderResult> {
+    this.calls++;
+    this.markStarted();
+    await new Promise<void>((resolve) => {
+      this.releaseSend = resolve;
+    });
+    return {
+      status: "accepted",
+      providerRef: `blocked-whatsapp-${message.messageId}`,
+      raw: { fake: true },
+    };
+  }
+
+  release(): void {
+    this.releaseSend?.();
+  }
+}

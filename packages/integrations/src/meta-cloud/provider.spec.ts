@@ -90,6 +90,18 @@ describe("MetaCloudProvider.send", () => {
     });
   });
 
+  it("throws a structured anomaly when Meta omits the message id", async () => {
+    const provider = new MetaCloudProvider(
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({}), { status: 200 })),
+    );
+
+    await expect(provider.send(MESSAGE, CREDS)).rejects.toMatchObject({
+      code: "whatsapp_provider_anomaly",
+    });
+  });
+
   it("throws a structured provider error for auth and server faults", async () => {
     const provider = new MetaCloudProvider(
       vi.fn().mockResolvedValue(

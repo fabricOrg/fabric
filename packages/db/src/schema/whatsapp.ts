@@ -112,6 +112,8 @@ export const whatsappDispatches = pgTable(
       onDelete: "restrict",
     }),
     attempts: integer("attempts").notNull().default(0),
+    status: text("status").notNull().default("pending"),
+    leasedAt: timestamp("leased_at", { withTimezone: true }),
     availableAt: timestamp("available_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -120,9 +122,13 @@ export const whatsappDispatches = pgTable(
     ...timestamps,
   },
   (t) => [
+    check(
+      "whatsapp_dispatches_status_chk",
+      sql`${t.status} in ('pending', 'sending', 'failed')`,
+    ),
     index("idx_whatsapp_dispatches_pending")
       .on(t.availableAt, t.messageId)
-      .where(sql`completed_at IS NULL`),
+      .where(sql`completed_at IS NULL AND status = 'pending'`),
   ],
 );
 

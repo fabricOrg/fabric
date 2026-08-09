@@ -60,6 +60,13 @@ export class WhatsappController {
         parsed.error.issues[0]?.path.join(".") || undefined,
       );
     }
+    if (!idempotencyKey) {
+      throw invalidRequest(
+        "idempotency_key_required",
+        "WhatsApp sends require an Idempotency-Key header.",
+        "Idempotency-Key",
+      );
+    }
     const execute = () =>
       this.whatsapp
         .send(tenant, parsed.data)
@@ -69,8 +76,6 @@ export class WhatsappController {
             "The wallet balance can't cover this WhatsApp message.",
           ),
         );
-    if (idempotencyKey === undefined) return execute();
-
     const fingerprint = this.idempotency.fingerprint({
       channel: "whatsapp",
       ...parsed.data,

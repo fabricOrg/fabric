@@ -116,7 +116,10 @@ export class MetaCloudProvider implements WhatsAppSenderPlugin {
 
     const providerRef = extractProviderRef(payload);
     if (!providerRef) {
-      return { status: "sending", raw: payload };
+      throw new MetaCloudError(
+        "whatsapp_provider_anomaly",
+        "Meta Cloud accepted the request without returning a message id.",
+      );
     }
     return { status: "accepted", providerRef, raw: payload };
   }
