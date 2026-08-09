@@ -18,7 +18,7 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 | --- | --- | --- |
 | `origin/dev` | `86b5c38` | #252, #253, #255, #256, #258 |
 | `origin/testing` | `2a20286` | promoted + DEPLOYED 2026-08-08 (#257); **behind `dev`** |
-| `feature/ops-whatsapp-managed` | `679411a` | PR #265 — top of the WhatsApp stack |
+| `feature/ops-whatsapp-managed` | `42fb4df` | PR #265 — top of the WhatsApp stack |
 
 **The WhatsApp channel sits in a six-PR stack that is open and unmerged.** Order matters:
 #261 (1a, on `dev`) → #263 (1b) → #264 (1c) → #262 (1d) → #265 (1e + templates + SDK +
@@ -42,12 +42,28 @@ Settle it the way §9 says: a send whose `provider_ref` is a real vendor id, not
 worker log line. Likewise the tenant kill-switch path is inert until an operator creates an override
 — the deploy proves the migration, not the feature.
 
-### Just shipped — the WhatsApp channel, direct and managed (PR stack #261–#265)
+### Just shipped — the WhatsApp channel, VERIFIED LIVE END TO END (PR stack #261–#265)
 
 Meta Cloud API as a first-class channel: adapter, persistence, money vocabulary, outbound send,
-signed webhook ingress, template lifecycle, SDK resource, dashboard surface, and managed sends
-through `POST /v1/message-deliveries`. A live send to a real handset was verified during the
-build; the direct path is proven against Meta, not against a fake.
+signed webhook ingress, template lifecycle, SDK resource, dashboard surface, managed sends
+through `POST /v1/message-deliveries`, inbound + the service window, and costable offers.
+
+**Proven against real Meta on 2026-08-09, not against a fake** — one round trip, both directions:
+
+| step | evidence |
+| --- | --- |
+| outbound | `provider_ref = wamid.HBgMMjMzNTQ1MjI3MTg5…` — a vendor id, never `fake-…` (§9) |
+| delivery | webhook returned through ngrok, message → `delivered` |
+| settlement | ledger `pending → committed`, GHS 0.30, on the delivered transition |
+| inbound | a real handset reply attributed to the right tenant with NO tenant in the payload |
+| window | opened on the inbound, expires exactly +24h |
+| event | `message.received` carrying a subject-id surrogate, no PII |
+| vault | inbound body decrypts back out; `whatsapp_inbound_messages` has no plaintext column |
+
+Two earlier fixes were confirmed by real failures rather than by tests: an expired Meta token
+produced a `failed` send that was correctly REFUNDED (reserve `pending` → `refunded`, customer not
+charged) — the exact defect that once charged for a message that never left; and watching a
+successful send exposed a stranded-reserve bug in the dispatch claim (see 0147 below).
 
 **The idea to carry forward: WhatsApp content is not ours.** It lives in a Meta-approved
 template, so a WhatsApp definition holds a BINDING, not a body, and `parameters` is an ORDERED
@@ -132,7 +148,11 @@ dashboard, managed sends, inbound + the service window, and costable offers.
   legitimate senders, so no rule available to us separates them — the fix is per-tenant numbers,
   a commercial/onboarding change. A test asserts the current behaviour, so read the ADR before
   treating a mis-delivered reply as a bug.
-- `whatsapp_dispatches` leaves `status='sending'` after completion (task #16).
+- ~~`whatsapp_dispatches` leaves `status='sending'`~~ — fixed (0147). Worth knowing WHY it
+  mattered: the mislabelling was cosmetic, but it hid that a dispatch whose worker died holding
+  the claim was invisible to the sweeper forever, with its wallet reserve neither committed nor
+  refunded. `leased_at` had existed unread since the claim was added. SMS has no claim step, so
+  the same sweeper query is correct there — WhatsApp inherited the query without the assumption.
 - The SMS send path still carries the double-send defect fixed in WhatsApp (task #15) —
   untouched on purpose, it is the live money path.
 - The preview route gates on the `sms:read` scope for EVERY channel. Pre-existing, applies to
@@ -167,6 +187,31 @@ maker-checker tenant fetch was real, and it is fixed.) `Card` now draws blueprin
 app-wide — anything inside `overflow-hidden` or a grid tighter than `gap-6` needs `corners={false}`.
 
 ---
+
+### WhatsApp live-test operations
+
+Two scripts exist because this recovery had to be done by hand once. Both run under Infisical and
+neither prints a secret:
+
+```
+infisical run --env=dev -- pnpm --filter @app/api exec tsx scripts/rearm-whatsapp.ts
+infisical run --env=dev -- pnpm --filter @app/api exec tsx scripts/live-whatsapp-send.ts +233XXXXXXXXX
+```
+
+- The WABA is Meta's **test number** (`+1 555-630-9347`, verified_name "Test Number"), so it can
+  only message pre-registered recipients. Approved templates: `hello_world` plus four
+  `jaspers_market_*` samples — all `en_US`.
+- **The Meta access token is the recurring failure**, not the code. It has expired mid-work three
+  times. `WHATSAPP_ACCESS_TOKEN` lives in Infisical **dev only**; a System User token with
+  expiration "Never" is the fix. Diagnose with a Graph GET: 401/190/463 is expiry, and 400/100/33
+  means the id or bearer is empty (usually the wrong Infisical environment).
+- `PLUGIN_MASTER_KEY` is now set in dev. It matters more than it looks: without it credentials are
+  sealed with a derived development key, and **re-sealing is required after it changes** — the old
+  ciphertext will not open. Still ABSENT in staging and prod, where production does not warn, it
+  REFUSES TO BOOT.
+- `plugin_instances` has no tenant column and two specs delete the whole table. Their guard now
+  covers teardown as well as setup, but the rule stands: never point `DATABASE_URL_SUPER` at a
+  database holding armed credentials while running the full integration suite.
 
 ## Local environment
 
