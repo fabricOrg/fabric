@@ -23,7 +23,8 @@ export async function listWhatsappMessages(
     tenantId,
     (tx) => tx`
       SELECT id, subject_id, status::text, provider_slug, template_name,
-             template_language, template_category, error_code, created_at,
+             template_language, template_category, error_code,
+             cost_minor::text AS cost_minor, currency, created_at,
              to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_ts
       FROM whatsapp_messages
       WHERE environment_id = ${environmentId}
@@ -61,7 +62,8 @@ export async function getWhatsappMessage(
     tenantId,
     (tx) => tx`
       SELECT id, subject_id, status::text, provider_slug, template_name,
-             template_language, template_category, error_code, created_at
+             template_language, template_category, error_code,
+             cost_minor::text AS cost_minor, currency, created_at
       FROM whatsapp_messages
       WHERE id = ${messageId} AND environment_id = ${environmentId}
       LIMIT 1`,

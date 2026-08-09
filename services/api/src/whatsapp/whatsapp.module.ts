@@ -11,6 +11,7 @@ import { QueueModule } from "../queue/queue.module.js";
 import { SandboxAllowanceModule } from "../sandbox-allowance/sandbox-allowance.module.js";
 import { WhatsappController } from "./whatsapp.controller.js";
 import { WhatsappService } from "./whatsapp.service.js";
+import { WhatsappInboxController } from "./whatsapp-inbox.controller.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 import { WhatsappSendWorker } from "./whatsapp-send.worker.js";
 import { WhatsappWebhookController } from "./whatsapp-webhook.controller.js";
@@ -29,7 +30,11 @@ import { WhatsappWebhookService } from "./whatsapp-webhook.service.js";
     QueueModule,
     SandboxAllowanceModule,
   ],
-  controllers: [WhatsappController, WhatsappWebhookController],
+  controllers: [
+    WhatsappController,
+    WhatsappInboxController,
+    WhatsappWebhookController,
+  ],
   providers: [
     WhatsappService,
     WhatsappRuntimeService,
