@@ -8,6 +8,7 @@ import type {
   ProviderResult,
   RequestContext,
   WhatsAppSenderPlugin,
+  WhatsAppTemplateRecord,
 } from "../plugin.js";
 
 export class FakeWhatsAppProviderError extends Error {}
@@ -59,5 +60,9 @@ export class FakeWhatsAppProvider implements WhatsAppSenderPlugin {
 
   verifyWebhook(_req: IncomingRequest, _creds: Creds): boolean {
     return true;
+  }
+
+  listTemplates(_creds: Creds): Promise<readonly WhatsAppTemplateRecord[]> {
+    return Promise.resolve([]);
   }
 }

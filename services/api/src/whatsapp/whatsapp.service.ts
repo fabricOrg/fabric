@@ -31,6 +31,7 @@ import {
   WHATSAPP_SEND_QUEUE,
   type WhatsappSendJob,
 } from "./whatsapp-send.job.js";
+import { WhatsappTemplateService } from "./whatsapp-template.service.js";
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
@@ -44,6 +45,8 @@ export class WhatsappService {
     @Inject(ConsentService) private readonly consent: ConsentService,
     @Inject(WhatsappRuntimeService)
     private readonly runtime: WhatsappRuntimeService,
+    @Inject(WhatsappTemplateService)
+    private readonly templates: WhatsappTemplateService,
     @Optional()
     @Inject(SandboxAllowanceService)
     sandboxAllowance?: SandboxAllowanceService,
@@ -88,6 +91,7 @@ export class WhatsappService {
       vault: this.vault,
       sandboxAllowance: this.sandboxAllowance,
       runtime: this.runtime,
+      templates: this.templates,
       ...(this.effectivePricing
         ? { effectivePricing: this.effectivePricing }
         : {}),

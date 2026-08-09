@@ -10,6 +10,10 @@ import {
 } from "../http/api-error.js";
 import { resolveWhatsappStatus } from "./whatsapp-resolve.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
+import {
+  WhatsappTemplateService,
+  type WhatsappTemplateWebhookEvent,
+} from "./whatsapp-template.service.js";
 
 type Row = Record<string, unknown>;
 
@@ -17,12 +21,12 @@ const metaStatusEnvelope = z.object({
   entry: z
     .array(
       z.object({
+        id: z.string().trim().min(1).optional(),
         changes: z
           .array(
             z.object({
-              value: z.object({
-                statuses: z.array(z.unknown()).optional(),
-              }),
+              field: z.string().trim().min(1).optional(),
+              value: z.record(z.string(), z.unknown()),
             }),
           )
           .optional(),
@@ -37,6 +41,8 @@ export class WhatsappWebhookService {
     @Inject(APP_DB) private readonly db: AppDb,
     @Inject(WhatsappRuntimeService)
     private readonly runtime: WhatsappRuntimeService,
+    @Inject(WhatsappTemplateService)
+    private readonly templates: WhatsappTemplateService,
   ) {}
 
   async verifyChallenge(input: {
@@ -96,6 +102,9 @@ export class WhatsappWebhookService {
         ...(dlr.errorCode ? { errorCode: dlr.errorCode } : {}),
       });
       processed += 1;
+    }
+    for (const event of metaTemplateEvents(payload)) {
+      processed += await this.templates.applyWebhookEvent(event);
     }
     return { processed };
   }
@@ -167,10 +176,104 @@ function metaStatuses(payload: unknown): unknown[] {
   const statuses: unknown[] = [];
   for (const entry of parsed.data.entry ?? []) {
     for (const change of entry.changes ?? []) {
-      statuses.push(...(change.value.statuses ?? []));
+      const rawStatuses = change.value.statuses;
+      if (Array.isArray(rawStatuses)) statuses.push(...rawStatuses);
     }
   }
   return statuses;
+}
+
+function metaTemplateEvents(payload: unknown): WhatsappTemplateWebhookEvent[] {
+  const parsed = metaStatusEnvelope.safeParse(payload);
+  if (!parsed.success) {
+    throw invalidRequest(
+      "invalid_whatsapp_webhook",
+      "WhatsApp webhook body is not a valid Meta webhook payload.",
+    );
+  }
+  const events: WhatsappTemplateWebhookEvent[] = [];
+  for (const entry of parsed.data.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      const field = change.field ?? "";
+      if (!isTemplateField(field)) continue;
+      const event = parseTemplateEvent(entry.id, field, change.value);
+      if (event) events.push(event);
+    }
+  }
+  return events;
+}
+
+function isTemplateField(field: string): boolean {
+  return (
+    field === "message_template_status_update" ||
+    field === "message_template_quality_update" ||
+    field === "template_category_update"
+  );
+}
+
+function parseTemplateEvent(
+  entryWabaId: string | undefined,
+  field: string,
+  value: Row,
+): WhatsappTemplateWebhookEvent | null {
+  const wabaId = stringValue(value, "waba_id") ?? entryWabaId;
+  const name =
+    stringValue(value, "message_template_name") ??
+    stringValue(value, "template_name");
+  const language =
+    stringValue(value, "message_template_language") ??
+    stringValue(value, "template_language");
+  if (!wabaId || !name || !language) return null;
+
+  const occurredAt = eventDate(value);
+  if (field === "message_template_status_update") {
+    const status =
+      stringValue(value, "event") ??
+      stringValue(value, "status") ??
+      stringValue(value, "template_status");
+    return status
+      ? { kind: "status", wabaId, name, language, value: status, occurredAt }
+      : null;
+  }
+  if (field === "message_template_quality_update") {
+    const quality =
+      stringValue(value, "new_quality_score") ??
+      stringValue(value, "quality_score") ??
+      stringValue(value, "quality_rating") ??
+      stringValue(value, "event");
+    return quality
+      ? { kind: "quality", wabaId, name, language, value: quality, occurredAt }
+      : null;
+  }
+  const category =
+    stringValue(value, "new_category") ??
+    stringValue(value, "correct_category") ??
+    stringValue(value, "category");
+  return category
+    ? { kind: "category", wabaId, name, language, value: category, occurredAt }
+    : null;
+}
+
+function stringValue(row: Row, key: string): string | null {
+  const value = row[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function eventDate(row: Row): Date {
+  const timestamp =
+    numberValue(row, "timestamp") ??
+    numberValue(row, "event_timestamp") ??
+    numberValue(row, "webhook_trigger_timestamp") ??
+    numberValue(row, "category_update_timestamp");
+  return timestamp ? new Date(timestamp * 1000) : new Date();
+}
+
+function numberValue(row: Row, key: string): number | null {
+  const value = row[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function singleStatusPayload(status: unknown): unknown {

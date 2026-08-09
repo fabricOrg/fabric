@@ -10,6 +10,7 @@ import type {
   ProviderResult,
   RequestContext,
   WhatsAppSenderPlugin,
+  WhatsAppTemplateRecord,
 } from "../plugin.js";
 import { updateWithRawBody } from "../plugin.js";
 import { parseMetaDlr } from "./dlr.js";
@@ -39,12 +40,29 @@ const metaErrorResponseSchema = z.object({
   error: z.object({ message: z.string().trim().min(1).optional() }).optional(),
 });
 
+const metaTemplateSchema = z.object({
+  name: z.string().trim().min(1),
+  language: z.string().trim().min(1),
+  category: z.string().trim().min(1).nullable().optional(),
+  status: z.string().trim().min(1),
+  quality_score: z
+    .object({ score: z.string().trim().min(1).nullable().optional() })
+    .nullable()
+    .optional(),
+  components: z.array(z.unknown()).optional(),
+});
+
+const metaTemplatePageSchema = z.object({
+  data: z.array(metaTemplateSchema),
+  paging: z.object({ next: z.string().url().optional() }).optional(),
+});
+
 type MetaFetch = (
   input: string,
   init: {
-    readonly method: "POST";
+    readonly method: "GET" | "POST";
     readonly headers: Readonly<Record<string, string>>;
-    readonly body: string;
+    readonly body?: string;
   },
 ) => Promise<Response>;
 
@@ -124,6 +142,47 @@ export class MetaCloudProvider implements WhatsAppSenderPlugin {
     return { status: "accepted", providerRef, raw: payload };
   }
 
+  async listTemplates(
+    creds: Creds,
+  ): Promise<readonly WhatsAppTemplateRecord[]> {
+    const credential = parseCredentials(creds);
+    const templates: WhatsAppTemplateRecord[] = [];
+    let nextUrl: string | null =
+      `${BASE_URL}/${encodeURIComponent(credential.waba_id)}/message_templates` +
+      "?fields=name,language,category,status,quality_score,components&limit=100";
+
+    while (nextUrl) {
+      const response = await this.transport(nextUrl, {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${credential.access_token}`,
+        },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new MetaCloudError(
+          "whatsapp_template_sync_failed",
+          metaErrorMessage(payload, response.status),
+        );
+      }
+      const page = parseTemplatePage(payload);
+      templates.push(
+        ...page.data.map((template) => ({
+          wabaId: credential.waba_id,
+          name: template.name,
+          language: template.language,
+          category: template.category ?? null,
+          status: template.status,
+          qualityRating: template.quality_score?.score ?? null,
+          components: template.components ?? [],
+        })),
+      );
+      nextUrl = page.next;
+    }
+
+    return templates;
+  }
+
   verifyWebhook(req: IncomingRequest, creds: Creds): boolean {
     const appSecret = creds.app_secret?.trim();
     if (!appSecret) return false;
@@ -163,6 +222,23 @@ function parseCredentials(creds: Creds): MetaCloudCredentials {
       : "Meta Cloud credentials are invalid.",
     field,
   );
+}
+
+function parseTemplatePage(payload: unknown): {
+  readonly data: readonly z.infer<typeof metaTemplateSchema>[];
+  readonly next: string | null;
+} {
+  const parsed = metaTemplatePageSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new MetaCloudError(
+      "whatsapp_template_sync_failed",
+      "Meta Cloud returned an unparseable template list.",
+    );
+  }
+  return {
+    data: parsed.data.data,
+    next: parsed.data.paging?.next ?? null,
+  };
 }
 
 function toMetaMessage(message: NormalizedWhatsAppTemplateMessage): unknown {

@@ -14,6 +14,8 @@ import { WhatsappService } from "./whatsapp.service.js";
 import { WhatsappInboxController } from "./whatsapp-inbox.controller.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 import { WhatsappSendWorker } from "./whatsapp-send.worker.js";
+import { WhatsappTemplateService } from "./whatsapp-template.service.js";
+import { WhatsappTemplateSyncScheduler } from "./whatsapp-template-sync.scheduler.js";
 import { WhatsappWebhookController } from "./whatsapp-webhook.controller.js";
 import { WhatsappWebhookService } from "./whatsapp-webhook.service.js";
 
@@ -39,6 +41,8 @@ import { WhatsappWebhookService } from "./whatsapp-webhook.service.js";
     WhatsappService,
     WhatsappRuntimeService,
     WhatsappWebhookService,
+    WhatsappTemplateService,
+    WhatsappTemplateSyncScheduler,
     WhatsappSendWorker,
   ],
   exports: [WhatsappService, WhatsappRuntimeService],

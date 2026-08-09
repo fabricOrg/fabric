@@ -10,6 +10,7 @@ import type {
   ProviderResult,
   RequestContext,
   WhatsAppSenderPlugin,
+  WhatsAppTemplateRecord,
 } from "@app/integrations";
 import { MetaCloudProvider } from "@app/integrations";
 import { credit } from "@app/wallet";
@@ -265,6 +266,10 @@ class WebhookMetaProvider implements WhatsAppSenderPlugin {
 
   parseDlr(payload: unknown): CanonicalDlr {
     return this.meta.parseDlr(payload);
+  }
+
+  listTemplates(_creds: Creds): Promise<readonly WhatsAppTemplateRecord[]> {
+    return Promise.resolve([]);
   }
 }
 

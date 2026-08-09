@@ -120,6 +120,72 @@ describe("MetaCloudProvider.send", () => {
   });
 });
 
+describe("MetaCloudProvider.listTemplates", () => {
+  it("lists paginated WABA templates without making a live call in tests", async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                name: "order_update",
+                language: "en",
+                category: "UTILITY",
+                status: "APPROVED",
+                quality_score: { score: "GREEN" },
+                components: [{ type: "BODY", text: "Hi" }],
+              },
+            ],
+            paging: { next: "https://graph.facebook.com/v20.0/next" },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                name: "promo",
+                language: "en",
+                category: "MARKETING",
+                status: "PAUSED",
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+    const provider = new MetaCloudProvider(transport);
+
+    await expect(provider.listTemplates(CREDS)).resolves.toEqual([
+      {
+        wabaId: "987654321",
+        name: "order_update",
+        language: "en",
+        category: "UTILITY",
+        status: "APPROVED",
+        qualityRating: "GREEN",
+        components: [{ type: "BODY", text: "Hi" }],
+      },
+      {
+        wabaId: "987654321",
+        name: "promo",
+        language: "en",
+        category: "MARKETING",
+        status: "PAUSED",
+        qualityRating: null,
+        components: [],
+      },
+    ]);
+    expect(transport).toHaveBeenCalledTimes(2);
+    expect(transport.mock.calls[0]?.[0]).toContain(
+      "/987654321/message_templates",
+    );
+  });
+});
+
 describe("MetaCloudProvider.verifyWebhook", () => {
   const provider = new MetaCloudProvider();
   const rawBody = JSON.stringify({ object: "whatsapp_business_account" });

@@ -95,6 +95,16 @@ export interface NormalizedWhatsAppTemplateMessage {
   readonly variables: readonly string[];
 }
 
+export interface WhatsAppTemplateRecord {
+  readonly wabaId: string;
+  readonly name: string;
+  readonly language: string;
+  readonly category: string | null;
+  readonly status: string;
+  readonly qualityRating: string | null;
+  readonly components: readonly unknown[];
+}
+
 /**
  * Result of a `send()` — the status the provider reports at submit time, and its ref id IF it
  * acknowledged. `providerRef` is OPTIONAL: on a normal accept it's present (the key the DLR arrives
@@ -183,6 +193,7 @@ export interface WhatsAppSenderPlugin extends PluginManifest {
   ): Promise<ProviderResult>;
   parseDlr(payload: unknown): CanonicalDlr;
   verifyWebhook(req: IncomingRequest, creds: Creds): boolean;
+  listTemplates(creds: Creds): Promise<readonly WhatsAppTemplateRecord[]>;
 }
 
 // ---- Payment capability (E4 top-up) --------------------------------------------------------------
