@@ -32,5 +32,15 @@ export async function enforceRestrictedPrivileges(sql: Sql): Promise<void> {
       ON token_lots, token_holds, token_counters
       FROM app_runtime, app_provisioner;
     REVOKE DELETE, TRUNCATE ON token_purchases FROM app_provisioner;
+
+    -- An audit trail the audited party can amend is not an audit trail. 0132 granted the provisioner
+    -- SELECT + INSERT and withheld UPDATE/DELETE, but said so in a comment only — the narrowing
+    -- lapsed on the next deploy like every other one, because prepareRoles() re-grants full DML on
+    -- ALL TABLES first. Nothing in application code amends or removes an audit row
+    -- (audit.service.ts inserts at :37 and selects at :62-84, nothing else), so append-only is now
+    -- re-asserted here rather than documented. app_runtime is absent deliberately: 0132 revoked it
+    -- entirely and prepareRoles() grants that role nothing, so its REVOKE already survives.
+    REVOKE UPDATE, DELETE, TRUNCATE ON audit_events FROM app_provisioner;
+    GRANT SELECT, INSERT ON audit_events TO app_provisioner;
   `);
 }

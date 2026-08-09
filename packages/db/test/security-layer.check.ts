@@ -331,6 +331,32 @@ export async function checkSecurityLayerApplied(
     }
   }
 
+  // 8b. (0132) `audit_events` append-only, from the PROVISIONER side. The loop above proves the
+  // tenant-facing role holds nothing on it, which says nothing about the role that actually writes
+  // the trail. 0132 granted SELECT + INSERT and withheld UPDATE/DELETE in a comment that openly
+  // admitted it enforced nothing: prepareRoles() re-grants full DML on ALL TABLES before every
+  // migrate(), so the narrowing lapsed on the very next deploy. cloud-migrate-privileges.ts now
+  // re-asserts it after migrations; this is the check that proves the re-assertion actually ran.
+  const auditRewrite = await db.query(`
+    SELECT p AS priv FROM unnest(ARRAY['UPDATE','DELETE','TRUNCATE']) AS p
+    WHERE has_table_privilege('app_provisioner', 'audit_events', p)
+  `);
+  for (const r of auditRewrite.rows) {
+    violations.push(
+      `'app_provisioner' holds ${r.priv} on audit_events — the audit trail must be append-only (did prepareRoles re-grant?)`,
+    );
+  }
+  // A trail nothing can write is equally broken, and a too-aggressive REVOKE would look identical to
+  // success here. Assert the positive half in the same breath.
+  const auditInsert = await db.query(
+    `SELECT has_table_privilege('app_provisioner', 'audit_events', 'INSERT') AS held`,
+  );
+  if (auditInsert.rows[0]?.held !== true) {
+    violations.push(
+      "'app_provisioner' cannot INSERT into audit_events — no audit row could be recorded at all",
+    );
+  }
+
   // 9. (ADR-0012 §6/§8) Commercial write-time invariants. Unlike the grants above these survive a
   // re-grant, but they are asserted for the same reason the GL triggers are: if one is missing, a
   // published price is editable after purchase, or a workspace can be pointed at a catalog whose
