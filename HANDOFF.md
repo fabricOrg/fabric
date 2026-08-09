@@ -1,6 +1,6 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-08. Point-in-time. **Verify against code and git before treating any of it as
+_Snapshot: 2026-08-09. Point-in-time. **Verify against code and git before treating any of it as
 fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 [CLAUDE.md](./CLAUDE.md) (how we build) and `docs/`. Superseded entries live in
 [docs/HANDOFF-ARCHIVE.md](./docs/HANDOFF-ARCHIVE.md)._
@@ -16,8 +16,20 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `86b5c38` | #252, #253, #255, #256, #258 |
-| `origin/testing` | `2a20286` | promoted + DEPLOYED 2026-08-08 (#257); in sync with `dev` |
+| `origin/dev` | `1e77b3c` | #252, #253, #255, #256, #258, then the WhatsApp stack #259–#265 |
+| `origin/testing` | `2a20286` | DEPLOYED 2026-08-08 (#257); promoted again with the channel |
+
+**The WhatsApp stack is MERGED into `dev`** — #259, #260, #261, #263, #264, #262, #265 in that
+order. Two things that cost real time and will again:
+
+- **The repo's CI forbids stacked PRs** (`metadata` fails with *"Work branches must target dev"*),
+  so every PR in a stack must be retargeted to `dev` one at a time as the one below it lands.
+- **Squash-merging a stack destroys the merge base.** After each squash, the next branch's shared
+  history is gone, so every file the stack touched comes back as an `add/add` conflict. The
+  resolution rule that made this safe and checkable: for each conflicted path, compare dev's blob
+  to the blob at the commit the branch actually built on — if they are equal, dev added nothing the
+  branch lacks and taking the branch's side is provably correct rather than a guess. Only the files
+  where dev had genuinely diverged (HANDOFF, `security-layer.check.ts`) needed reading.
 
 Nothing uncommitted. The testing deploy ran all six jobs green — gate, **`Migrate · testing db`
 (0133 applied)**, Render api, and the three Vercel apps — and the pipeline verifies the artefact
@@ -36,48 +48,57 @@ Settle it the way §9 says: a send whose `provider_ref` is a real vendor id, not
 worker log line. Likewise the tenant kill-switch path is inert until an operator creates an override
 — the deploy proves the migration, not the feature.
 
-### Just shipped — tenant-targetable kill switches (#252)
+### Just shipped — the WhatsApp channel, VERIFIED LIVE END TO END (PR stack #261–#265)
 
-`kill_switches` gained a nullable `tenant_id` (migration 0133): NULL is the platform breaker as
-before, a workspace id is an override. Precedence is **platform OR tenant**, both rows read in one
-query — an override can pause one workspace but never resume one past a platform halt.
+Meta Cloud API as a first-class channel: adapter, persistence, money vocabulary, outbound send,
+signed webhook ingress, template lifecycle, SDK resource, dashboard surface, managed sends
+through `POST /v1/message-deliveries`, inbound + the service window, and costable offers.
 
-This finished the work that was designed, implemented and WITHDRAWN. The three defects that sank it:
-the cache stored a value derived from the row just written (toggles now INVALIDATE, and a read that
-started before a toggle is discarded via a per-key generation); `tenantId` was not threaded through
-the 12 call sites, leaving it inert; and the unit spec's mock ignored its own `where()` argument, so
-the cache bug passed a green suite. The spec now runs on drizzle's `pg-proxy` driver — but note what
-that does NOT prove: the fake reconstructs the predicate from bound params, so the SQL is asserted
-directly for the tenant read and the six-combination matrix runs against real Postgres.
+**Proven against real Meta on 2026-08-09, not against a fake** — one round trip, both directions:
 
-Uniqueness uses `UNIQUE NULLS NOT DISTINCT (key, tenant_id)`, not the two partial indexes originally
-designed — the same constraint `uniq_plugin_instance` already relies on. A plain unique would be
-worse than what it replaced: NULLs are distinct in Postgres, so unlimited duplicate PLATFORM rows
-would be legal.
+| step | evidence |
+| --- | --- |
+| outbound | `provider_ref = wamid.HBgMMjMzNTQ1MjI3MTg5…` — a vendor id, never `fake-…` (§9) |
+| delivery | webhook returned through ngrok, message → `delivered` |
+| settlement | ledger `pending → committed`, GHS 0.30, on the delivered transition |
+| inbound | a real handset reply attributed to the right tenant with NO tenant in the payload |
+| window | opened on the inbound, expires exactly +24h |
+| event | `message.received` carrying a subject-id surrogate, no PII |
+| vault | inbound body decrypts back out; `whatsapp_inbound_messages` has no plaintext column |
 
-Two defects found on the way: `platform.email_sending` was gated in `email.service.ts` since it
-shipped but **never seeded**, so it could not be flipped and always read operational; and
-`platform.signup` is now marked NOT tenant-scopable (it is read before any workspace exists, so an
-override would sit in the table looking meaningful while `signupEnabled()` never consults it).
+Two earlier fixes were confirmed by real failures rather than by tests: an expired Meta token
+produced a `failed` send that was correctly REFUNDED (reserve `pending` → `refunded`, customer not
+charged) — the exact defect that once charged for a message that never left; and watching a
+successful send exposed a stranded-reserve bug in the dispatch claim (see 0147 below).
 
-No grant change — `app_runtime` stays REVOKEd (0132). `tenant_id` here is a SCOPE, not a boundary:
-no RLS policy, provisioning connection still the only accessor. `security-layer.check.ts` uses an
-explicit allowlist, so the new column breaks no assertion.
+**The idea to carry forward: WhatsApp content is not ours.** It lives in a Meta-approved
+template, so a WhatsApp definition holds a BINDING, not a body, and `parameters` is an ORDERED
+list of variable names — Meta body params are positional and carry no names on the wire, so
+reordering that array silently changes which value lands where. It is content, not config.
 
-### Just shipped — bullmq 6 + ioredis 6 (#253)
+That relocates the security question rather than removing it. Nothing is interpolated into
+authored markup, so no escaping is required; the surface is Meta's parameter grammar, and a
+parameter with a newline, a tab, 5+ consecutive spaces or over 1024 chars is rejected by Meta
+AFTER the reserve and after the delivery row exists. The pure core blocks it pre-acceptance.
 
-Supersedes Dependabot #248/#249, both closed. RESP3 was the held concern; it is settled by
-measurement, not reasoning: `CLIENT INFO` reports **resp=3** on both the rate-limiter client and
-BullMQ's own connection, so RESP3 really is in use and nothing fell back. It works because ioredis 6
-still defaults `replyMapping` to `"legacy"` (RESP2 reply shapes) and the Lua token bucket returns an
-integer either way. Do not flip `replyMapping` to `"resp3"` without re-reading every call site.
+Locale also means something different: Meta stores one template per name+language, so "the
+French version" IS a different template row. An override carries a `template_language`, not
+text, and an unsupported locale BLOCKS rather than quietly sending the default language.
 
-bullmq 6 also drops `Queue#client` / `Worker#blockingClient` (unused here — the raw client comes from
-`getBackend()` now) and makes `Queue.resume()` async (the one call site already awaited it).
+Pricing is flat per template message (ADR-0014 §3), superseding ADR-0012's conversation guess.
+Meta bills per 24-hour conversation, but a conversation's boundary depends on the customer's
+replies — nothing a caller can price against before sending. We sell one priced message.
 
-**Closing a Dependabot PR manually means it will not re-raise that version.** #248/#249 were closed
-in favour of #253, which carried the same versions and merged — but the same move on a PR that is
-then abandoned silently drops the bump until a newer release appears.
+**Three latent defects, all the same shape: a two-channel ternary that mis-files a third.**
+`PricingService` filed every non-email rate row under SMS (a WhatsApp rate would have repriced
+every text message on that account); `persistManagedAcceptance` and the managed delivery read
+would have written/read attempt rows claiming the wrong message. Plus
+`price_book_rates_channel_chk` still admitted only `sms|email` while its two sibling tables
+already listed `whatsapp` — the seed broke the moment WhatsApp got a compiled rate, and the
+admin price-book form would have 500'd on the first WhatsApp rate saved.
+
+**Template state is a CACHE with a stated posture**, not a fact: a fresh negative blocks before
+money moves; an absent or stale row fails OPEN so our sync lag is not a channel outage.
 
 ### Closed from the grant sweep — `audit_events` is now actually append-only
 
@@ -122,6 +143,34 @@ not configured. Money and credits are unaffected; only status. Route is
 ---
 
 ## Open work
+
+### WhatsApp — what is NOT built
+
+The channel is otherwise complete: direct sends, webhook ingress, template lifecycle, SDK,
+dashboard, managed sends, inbound + the service window, and costable offers.
+
+- **Free-form sends inside the service window.** ADR-0015 §6: the window makes them legal, it
+  does not make them PRICED. A free-form reply is a *service conversation* in Meta's billing.
+  Phase 4 gave that sell rate somewhere to live; nobody has set one, and serving a send we
+  cannot cost is what ADR-0012's costability rule forbids. This is the last WhatsApp gap.
+- **Inbound attribution cross-attributes on a shared WABA, by design** (ADR-0015 §2): two
+  tenants messaging the same consumer inside one window, and the second one wins. Both are
+  legitimate senders, so no rule available to us separates them — the fix is per-tenant numbers,
+  a commercial/onboarding change. A test asserts the current behaviour, so read the ADR before
+  treating a mis-delivered reply as a bug.
+- ~~`whatsapp_dispatches` leaves `status='sending'`~~ — fixed (0147). Worth knowing WHY it
+  mattered: the mislabelling was cosmetic, but it hid that a dispatch whose worker died holding
+  the claim was invisible to the sweeper forever, with its wallet reserve neither committed nor
+  refunded. `leased_at` had existed unread since the claim was added. SMS has no claim step, so
+  the same sweeper query is correct there — WhatsApp inherited the query without the assumption.
+- The SMS send path still carries the double-send defect fixed in WhatsApp (task #15) —
+  untouched on purpose, it is the live money path.
+- The preview route gates on the `sms:read` scope for EVERY channel. Pre-existing, applies to
+  email too; renaming a scope is a separate breaking change.
+- **The drizzle snapshot chain is broken from 0135 onward** (0135/0136 share an id, 0137–0144
+  have no snapshots), so `drizzle-kit generate` errors and every migration since is
+  hand-written. Journal entries are appended by hand. Repair this before the next schema change
+  that would benefit from generation.
 
 **`verify.integration.spec.ts` is FLAKY — one CI failure, cause NOT pinned.** Failed once on #253
 (`expected 400 to be 201` at :216, the "rejects an expired code" test), passed on re-run. Ruled out:
@@ -170,6 +219,31 @@ the two read alike even though the copy differs. `Card` now draws blueprint corn
 app-wide — anything inside `overflow-hidden` or a grid tighter than `gap-6` needs `corners={false}`.
 
 ---
+
+### WhatsApp live-test operations
+
+Two scripts exist because this recovery had to be done by hand once. Both run under Infisical and
+neither prints a secret:
+
+```
+infisical run --env=dev -- pnpm --filter @app/api exec tsx scripts/rearm-whatsapp.ts
+infisical run --env=dev -- pnpm --filter @app/api exec tsx scripts/live-whatsapp-send.ts +233XXXXXXXXX
+```
+
+- The WABA is Meta's **test number** (`+1 555-630-9347`, verified_name "Test Number"), so it can
+  only message pre-registered recipients. Approved templates: `hello_world` plus four
+  `jaspers_market_*` samples — all `en_US`.
+- **The Meta access token is the recurring failure**, not the code. It has expired mid-work three
+  times. `WHATSAPP_ACCESS_TOKEN` lives in Infisical **dev only**; a System User token with
+  expiration "Never" is the fix. Diagnose with a Graph GET: 401/190/463 is expiry, and 400/100/33
+  means the id or bearer is empty (usually the wrong Infisical environment).
+- `PLUGIN_MASTER_KEY` is now set in dev. It matters more than it looks: without it credentials are
+  sealed with a derived development key, and **re-sealing is required after it changes** — the old
+  ciphertext will not open. Still ABSENT in staging and prod, where production does not warn, it
+  REFUSES TO BOOT.
+- `plugin_instances` has no tenant column and two specs delete the whole table. Their guard now
+  covers teardown as well as setup, but the rule stands: never point `DATABASE_URL_SUPER` at a
+  database holding armed credentials while running the full integration suite.
 
 ## Local environment
 

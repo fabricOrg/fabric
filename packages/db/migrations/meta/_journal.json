@@ -974,6 +974,69 @@
       "when": 1786220100000,
       "tag": "0138_whatsapp_dispatch_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1786220101000,
+      "tag": "0139_whatsapp_provider_ref_lookup",
+      "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1786320000000,
+      "tag": "0140_whatsapp_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1786320001000,
+      "tag": "0141_whatsapp_templates_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1786320002000,
+      "tag": "0142_managed_whatsapp_channel",
+      "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1786320062000,
+      "tag": "0143_message_definition_whatsapp_channel",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1786320122000,
+      "tag": "0144_price_book_whatsapp_channel",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1786320182000,
+      "tag": "0145_whatsapp_inbound",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1786320242000,
+      "tag": "0146_whatsapp_offer_channel",
+      "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1786320302000,
+      "tag": "0147_whatsapp_dispatch_completed",
+      "breakpoints": true
     }
   ]
 }

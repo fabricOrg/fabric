@@ -102,6 +102,42 @@ export const whatsappMessages = pgTable(
   ],
 );
 
+export const whatsappTemplates = pgTable(
+  "whatsapp_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: tenantIdCol().references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    wabaId: text("waba_id").notNull(),
+    name: text("name").notNull(),
+    language: text("language").notNull(),
+    category: text("category"),
+    status: text("status").notNull(),
+    qualityRating: text("quality_rating"),
+    components: jsonb("components").notNull().default(sql`'[]'::jsonb`),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull(),
+    statusUpdatedAt: timestamp("status_updated_at", {
+      withTimezone: true,
+    }).notNull(),
+    qualityUpdatedAt: timestamp("quality_updated_at", {
+      withTimezone: true,
+    }).notNull(),
+    categoryUpdatedAt: timestamp("category_updated_at", {
+      withTimezone: true,
+    }).notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("uniq_whatsapp_templates_waba_name_language").on(
+      t.wabaId,
+      t.name,
+      t.language,
+    ),
+    index("idx_whatsapp_templates_tenant_synced").on(t.tenantId, t.syncedAt),
+  ],
+);
+
 export const whatsappDispatches = pgTable(
   "whatsapp_dispatches",
   {
@@ -124,13 +160,19 @@ export const whatsappDispatches = pgTable(
   (t) => [
     check(
       "whatsapp_dispatches_status_chk",
-      sql`${t.status} in ('pending', 'sending', 'failed')`,
+      sql`${t.status} in ('pending', 'sending', 'completed', 'failed')`,
     ),
     index("idx_whatsapp_dispatches_pending")
       .on(t.availableAt, t.messageId)
       .where(sql`completed_at IS NULL AND status = 'pending'`),
+    // A dispatch that crashed between claim and resolve sits at 'sending' with a stale lease. The
+    // sweeper must find those to re-enqueue them, or their wallet reserve is never settled.
+    index("idx_whatsapp_dispatches_stale_lease")
+      .on(t.leasedAt)
+      .where(sql`completed_at IS NULL AND status = 'sending'`),
   ],
 );
 
 export type WhatsappMessage = typeof whatsappMessages.$inferSelect;
+export type WhatsappTemplate = typeof whatsappTemplates.$inferSelect;
 export type WhatsappDispatch = typeof whatsappDispatches.$inferSelect;

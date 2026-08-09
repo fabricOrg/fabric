@@ -7,7 +7,9 @@ import {
   tokenBalancesResponseSchema,
   virtualPhoneInbox,
   virtualPhoneReplyResponse,
+  type WhatsappSendRequest,
   walletSnapshot,
+  whatsappSendResponse,
 } from "@app/contracts";
 
 async function bffRequest(path: string, init?: RequestInit): Promise<unknown> {
@@ -49,6 +51,19 @@ export async function getMessage(id: string) {
 export async function sendSms(input: SendSmsRequest, idempotencyKey: string) {
   return sendSmsApiResponse.parse(
     await bffRequest("/api/dashboard/sms/send", {
+      method: "POST",
+      headers: { "idempotency-key": idempotencyKey },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function sendWhatsapp(
+  input: WhatsappSendRequest,
+  idempotencyKey: string,
+) {
+  return whatsappSendResponse.parse(
+    await bffRequest("/api/dashboard/whatsapp", {
       method: "POST",
       headers: { "idempotency-key": idempotencyKey },
       body: JSON.stringify(input),

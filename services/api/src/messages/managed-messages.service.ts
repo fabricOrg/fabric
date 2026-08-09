@@ -19,6 +19,7 @@ import {
   invalidRequest,
 } from "../http/api-error.js";
 import { SmsService } from "../sms/sms.service.js";
+import { WhatsappService } from "../whatsapp/whatsapp.service.js";
 import {
   listDeliveries,
   listDeliveryWebhookStatus,
@@ -45,6 +46,7 @@ export class ManagedMessagesService {
     private readonly previews: MessagePreviewService,
     @Inject(SmsService) private readonly sms: SmsService,
     @Inject(EmailService) private readonly email: EmailService,
+    @Inject(WhatsappService) private readonly whatsapp: WhatsappService,
   ) {}
 
   async send(input: {
@@ -122,7 +124,22 @@ export class ManagedMessagesService {
           costMinor: rendered.costMinor,
           managed,
         });
-      } else {
+      } else if (rendered.channel === "whatsapp") {
+        await this.whatsapp.acceptManaged({
+          tenantId: input.tenantId,
+          deliveryId,
+          applicationId: input.applicationId,
+          environmentId: input.environmentId,
+          to: input.request.to,
+          templateName: rendered.templateName,
+          templateLanguage: rendered.templateLanguage,
+          templateCategory: rendered.templateCategory,
+          parameters: rendered.parameters,
+          currency: input.request.currency,
+          costMinor: rendered.costMinor,
+          managed,
+        });
+      } else if (rendered.channel === "sms") {
         await this.sms.send({
           tenantId: input.tenantId,
           messageId: deliveryId,
@@ -135,6 +152,16 @@ export class ManagedMessagesService {
           messageClass: preview.message_class,
           managed,
         });
+      } else {
+        // EXHAUSTIVENESS GUARD, and the reason it exists. This dispatch used to be
+        // `if (email) {…} else { sms }`, so anything that was not email was SENT AS AN SMS. The
+        // `never` assignment stops compiling the moment `AcceptedPreview` gains an arm nothing here
+        // handles. That is the point: a new channel must break the BUILD rather than quietly deliver
+        // down the wrong one, with the wrong provider and the wrong billing.
+        const unreachable: never = rendered;
+        throw new Error(
+          `unhandled managed channel: ${String((unreachable as { channel?: string }).channel)}`,
+        );
       }
     } catch (error) {
       if (error instanceof ManagedIdempotencyConflictError) {
@@ -183,6 +210,10 @@ export class ManagedMessagesService {
         email: {
           get: (tenantId, id, environmentId) =>
             this.email.get(tenantId, environmentId ?? "", id),
+        },
+        whatsapp: {
+          get: (tenantId, id, environmentId) =>
+            this.whatsapp.get(tenantId, environmentId ?? "", id),
         },
       },
       input,

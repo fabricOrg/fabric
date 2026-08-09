@@ -79,7 +79,7 @@ describeDb("public WhatsApp API", () => {
     app = await NestFactory.create<NestFastifyApplication>(
       AppModule,
       new FastifyAdapter(),
-      { logger: false },
+      { logger: false, rawBody: true },
     );
     Object.assign(app.get(EffectivePricingService), effectivePricingStub());
     Object.assign(app.get(WhatsappRuntimeService), {

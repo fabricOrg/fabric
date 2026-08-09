@@ -1,4 +1,5 @@
 import {
+  currency,
   type WhatsappMessage,
   type WhatsappSendRequest,
   whatsappSendRequest,
@@ -38,6 +39,10 @@ export async function hydrateWhatsappRows(
         template_category: nullableString(
           row.template_category,
         ) as WhatsappMessage["template_category"],
+        cost: {
+          minor: String(row.cost_minor ?? "0"),
+          currency: currency.parse(row.currency),
+        },
         created_at:
           row.created_at instanceof Date
             ? row.created_at.toISOString()

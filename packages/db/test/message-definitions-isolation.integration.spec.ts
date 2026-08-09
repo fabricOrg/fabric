@@ -310,13 +310,25 @@ describe("SDK-003 — message definition isolation + invariants", () => {
     expect(first(seen).n).toBe(1);
   });
 
-  it("rejects a version whose channel is neither sms nor email (channel CHECK)", async () => {
+  it("accepts 'whatsapp' and rejects a channel with no adapter (channel CHECK)", async () => {
+    // 'whatsapp' used to be THE example of an unsupported channel here. 0143 made it legal, so testing
+    // the CHECK with it now asserts the opposite of the truth. Both directions are pinned instead: a
+    // real channel is admitted, an invented one is refused — that is what makes the CHECK a boundary
+    // rather than a list nobody maintains.
+    await db.withTenant(TENANT_A, async (tx) => {
+      await tx`
+        INSERT INTO message_definition_versions
+          (tenant_id, definition_id, application_id, version, channel, variable_schema, content, default_locale)
+        VALUES (${TENANT_A}, ${defA}, ${appA}, 3, 'whatsapp',
+          ${JSON.stringify({ type: "object", properties: {} })}::jsonb,
+          ${JSON.stringify({ template_name: "x", template_language: "en_US", template_category: "utility" })}::jsonb, 'en')`;
+    });
     await expect(
       db.withTenant(TENANT_A, async (tx) => {
         await tx`
           INSERT INTO message_definition_versions
             (tenant_id, definition_id, application_id, version, channel, variable_schema, content, default_locale)
-          VALUES (${TENANT_A}, ${defA}, ${appA}, 3, 'whatsapp',
+          VALUES (${TENANT_A}, ${defA}, ${appA}, 4, 'telepathy',
             ${JSON.stringify({ type: "object", properties: {} })}::jsonb,
             ${JSON.stringify({ body: "x" })}::jsonb, 'en')`;
       }),
@@ -324,7 +336,7 @@ describe("SDK-003 — message definition isolation + invariants", () => {
     ).rejects.toThrow();
   });
 
-  it("message_deliveries + attempts accept channel 'email' and reject a third value", async () => {
+  it("message_deliveries + attempts accept 'email', admit 'whatsapp', reject the unknown", async () => {
     const deliveryId = randomUUID();
     // A fully valid email delivery + attempt (superuser bypasses RLS/grants; the CHECK still applies).
     await owner.unsafe(
@@ -362,18 +374,21 @@ describe("SDK-003 — message definition isolation + invariants", () => {
     );
     expect(first(seen).n).toBe(1);
 
-    // A third channel value is rejected on both tables by the relaxed CHECK.
+    // 'whatsapp' is a LEGAL channel since 0142 — asserting it is rejected would now be asserting a bug.
+    // An unknown channel still is rejected, which is the property this test was really about.
     await expect(
       owner.unsafe(
         `INSERT INTO message_deliveries
            (id, tenant_id, application_id, environment_id, definition_id, version_id, key, locale, channel,
             currency, idempotency_key, request_fingerprint, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, 'order.shipped', 'en', 'whatsapp',
-            'GHS', 'idem-wa-1', $7, now() + interval '1 day')`,
+         VALUES ($1, $2, $3, $4, $5, $6, 'order.shipped', 'en', 'telepathy',
+            'GHS', 'idem-bogus-1', $7, now() + interval '1 day')`,
         [randomUUID(), TENANT_A, appA, envA, defA, verA1, "b".repeat(64)],
       ),
-      "message_delivery_channel_check must reject 'whatsapp'",
+      "message_delivery_channel_check must reject an unknown channel",
     ).rejects.toThrow();
+    // And the attempt XOR still bites: 'whatsapp' is legal, but only WITH a whatsapp_message_id. A
+    // channel-matching reference is what the constraint is for, so a bare insert must still fail.
     await expect(
       owner.unsafe(
         `INSERT INTO message_delivery_attempts
@@ -381,7 +396,7 @@ describe("SDK-003 — message definition isolation + invariants", () => {
          VALUES ($1, $2, $3, $4, 2, 'whatsapp', 'GHS')`,
         [TENANT_A, appA, envA, deliveryId],
       ),
-      "message_delivery_attempt_channel_check must reject 'whatsapp'",
+      "a whatsapp attempt with no whatsapp_message_id must violate the channel-message XOR",
     ).rejects.toThrow();
   });
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { messageStatus } from "./message-status.js";
+import { money } from "./money.js";
 import { nextCursor } from "./pagination.js";
 
 export const whatsappTemplateCategory = z.enum([
@@ -29,6 +30,7 @@ export const whatsappMessage = z.object({
   template_name: z.string().nullable(),
   template_language: z.string().nullable(),
   template_category: whatsappTemplateCategory.nullable(),
+  cost: money,
   created_at: z.string(),
   error_code: z.string().nullable(),
 });

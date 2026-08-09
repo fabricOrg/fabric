@@ -1,10 +1,15 @@
 import type {
+  CanonicalDlr,
   Creds,
+  HealthState,
+  IncomingRequest,
   NormalizedWhatsAppTemplateMessage,
   ProviderResult,
+  RequestContext,
   WhatsAppSenderPlugin,
+  WhatsAppTemplateRecord,
 } from "@app/integrations";
-import { MetaCloudError } from "@app/integrations";
+import { MetaCloudError, MetaCloudProvider } from "@app/integrations";
 import { FakeWhatsAppProvider } from "@app/integrations/testing/whatsapp";
 
 /**
@@ -82,5 +87,50 @@ export class BlockingWhatsAppProvider
 
   release(): void {
     this.releaseSend?.();
+  }
+}
+
+/**
+ * Accepts every send, but delegates signature verification and DLR parsing to the REAL MetaCloud
+ * adapter — so a webhook spec exercises the actual HMAC path while the send never leaves the process.
+ * Shared by the webhook and inbound specs; a second copy would drift from the first.
+ */
+export class MetaWebhookProvider implements WhatsAppSenderPlugin {
+  private readonly meta = new MetaCloudProvider();
+  readonly slug = "meta-cloud";
+  readonly capability = "whatsapp" as const;
+  readonly version = "0.1.0";
+  readonly billableStatuses = ["accepted"] as const;
+  readonly configSchema = {};
+
+  supports(_context: RequestContext): boolean {
+    return true;
+  }
+
+  healthCheck(): Promise<HealthState> {
+    return Promise.resolve({ status: "up" });
+  }
+
+  send(
+    message: NormalizedWhatsAppTemplateMessage,
+    _creds: Creds,
+  ): Promise<ProviderResult> {
+    return Promise.resolve({
+      status: "accepted",
+      providerRef: `wamid.${message.messageId}`,
+      raw: { fake: true },
+    });
+  }
+
+  verifyWebhook(request: IncomingRequest, creds: Creds): boolean {
+    return this.meta.verifyWebhook(request, creds);
+  }
+
+  parseDlr(payload: unknown): CanonicalDlr {
+    return this.meta.parseDlr(payload);
+  }
+
+  listTemplates(_creds: Creds): Promise<readonly WhatsAppTemplateRecord[]> {
+    return Promise.resolve([]);
   }
 }

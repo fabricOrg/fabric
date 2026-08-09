@@ -19,6 +19,14 @@ describeDb("plugin registry", () => {
     await db.db.delete(pluginInstances);
   });
   afterAll(async () => {
+    // Guarded AGAIN, not just in beforeAll. The beforeAll check proves the catalog was disposable when
+    // this spec STARTED; it says nothing about the end of a parallel suite run, where another spec (or
+    // the registry's own on-demand seeding) can arm an instance in between. That gap is not
+    // theoretical: it wiped two configured `whatsapp/meta-cloud` instances on 2026-08-09, in a run
+    // where the sibling credentials spec's beforeAll guard had already refused for exactly those rows.
+    // Leaving the table dirty is the lesser evil — a stale catalog re-seeds, a credential ciphertext
+    // is the only copy.
+    await assertDisposablePluginCatalog(db);
     await db.db.delete(pluginInstances);
     await db.end();
   });

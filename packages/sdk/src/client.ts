@@ -8,6 +8,7 @@ import type { FabricEnvironment } from "./types.js";
 import { VerifyResource } from "./verify.js";
 import { WalletResource } from "./wallet.js";
 import { WebhooksResource } from "./webhooks.js";
+import { WhatsAppResource } from "./whatsapp.js";
 
 const VERSION = "0.1.0-beta.6";
 // The SDK owns endpoint selection. Consumers only provide a key; `baseUrl` is reserved for
@@ -32,6 +33,7 @@ export class Fabric<Catalog extends DefinitionCatalog = UngeneratedCatalog> {
   readonly wallet: WalletResource;
   readonly webhooks: WebhooksResource;
   readonly messages: MessagesResource<Catalog>;
+  readonly whatsapp: WhatsAppResource;
 
   constructor(config: FabricConfig) {
     assertServerRuntime();
@@ -66,6 +68,7 @@ export class Fabric<Catalog extends DefinitionCatalog = UngeneratedCatalog> {
     this.wallet = new WalletResource(transport);
     this.webhooks = new WebhooksResource(transport);
     this.messages = new MessagesResource<Catalog>(transport);
+    this.whatsapp = new WhatsAppResource(transport);
   }
 }
 

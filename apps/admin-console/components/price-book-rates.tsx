@@ -7,15 +7,21 @@ function formatMinor(minor: string): string {
   return (n / 100).toFixed(2);
 }
 
-/** SMS is metered per segment, email flat per send — stated once per row, not once per cell. */
+/**
+ * SMS is metered per segment, email flat per send, WhatsApp per template message — stated once per
+ * row, not once per cell. Typed as a total Record on purpose: a new channel breaks the build here
+ * rather than rendering a blank unit.
+ */
 const UNIT: Record<PriceBookRateDto["channel"], string> = {
   sms: "per segment",
   email: "per send",
+  whatsapp: "per message",
 };
 
 const CHANNEL_LABEL: Record<PriceBookRateDto["channel"], string> = {
   sms: "SMS",
   email: "Email",
+  whatsapp: "WhatsApp",
 };
 
 /**

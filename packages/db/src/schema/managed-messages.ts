@@ -28,6 +28,7 @@ import {
   messageDefinitionVersions,
 } from "./message-definitions.js";
 import { messages } from "./sms.js";
+import { whatsappMessages } from "./whatsapp.js";
 
 export const messageDeliveries = pgTable(
   "message_deliveries",
@@ -78,7 +79,7 @@ export const messageDeliveries = pgTable(
       .where(sql`legal_hold = false`),
     check(
       "message_delivery_channel_check",
-      sql`${table.channel} in ('sms', 'email')`,
+      sql`${table.channel} in ('sms', 'email', 'whatsapp')`,
     ),
     check(
       "message_delivery_status_check",
@@ -152,12 +153,18 @@ export const messageDeliveryAttempts = pgTable(
     ordinal: integer("ordinal").notNull(),
     channel: text("channel").notNull(),
     // Per-channel message reference (ADR-0005 Amendment A1): an SMS attempt points at `messages`, an
-    // Email attempt at `email_messages`. Exactly one is set, matching `channel` (CHECK below).
+    // Email attempt at `email_messages`, a WhatsApp attempt at `whatsapp_messages`. Exactly one is
+    // set, matching `channel` (CHECK below). One nullable FK per channel is the shape this table
+    // already chose; adding a third arm keeps that honest rather than degrading to an untyped id.
     messageId: uuid("message_id").references(() => messages.id, {
       onDelete: "restrict",
     }),
     emailMessageId: uuid("email_message_id").references(
       () => emailMessages.id,
+      { onDelete: "restrict" },
+    ),
+    whatsappMessageId: uuid("whatsapp_message_id").references(
+      () => whatsappMessages.id,
       { onDelete: "restrict" },
     ),
     status: text("status").notNull().default("accepted"),
@@ -183,15 +190,22 @@ export const messageDeliveryAttempts = pgTable(
       table.deliveryId,
     ),
     check("message_delivery_attempt_ordinal_check", sql`${table.ordinal} > 0`),
+    uniqueIndex("uniq_message_delivery_attempt_whatsapp_message").on(
+      table.whatsappMessageId,
+    ),
     check(
       "message_delivery_attempt_channel_check",
-      sql`${table.channel} in ('sms', 'email')`,
+      sql`${table.channel} in ('sms', 'email', 'whatsapp')`,
     ),
-    // Exactly the channel-matching message reference is set: sms ⇒ message_id, email ⇒ email_message_id.
+    // Exactly the channel-matching reference is set, and the other two are NULL. Stating both halves
+    // per arm is what makes this an XOR rather than a presence check: without the IS NULL clauses a row
+    // could carry two references and satisfy the constraint, and the attempt would then be readable as
+    // either channel depending on which column the reader happened to look at.
     check(
       "message_delivery_attempt_channel_message_check",
-      sql`(${table.channel} = 'sms' AND ${table.messageId} IS NOT NULL AND ${table.emailMessageId} IS NULL)
-        OR (${table.channel} = 'email' AND ${table.emailMessageId} IS NOT NULL AND ${table.messageId} IS NULL)`,
+      sql`(${table.channel} = 'sms' AND ${table.messageId} IS NOT NULL AND ${table.emailMessageId} IS NULL AND ${table.whatsappMessageId} IS NULL)
+        OR (${table.channel} = 'email' AND ${table.emailMessageId} IS NOT NULL AND ${table.messageId} IS NULL AND ${table.whatsappMessageId} IS NULL)
+        OR (${table.channel} = 'whatsapp' AND ${table.whatsappMessageId} IS NOT NULL AND ${table.messageId} IS NULL AND ${table.emailMessageId} IS NULL)`,
     ),
     check(
       "message_delivery_attempt_status_check",

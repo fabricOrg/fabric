@@ -223,6 +223,7 @@ describe("canonical contract parity", () => {
         currency: "GHS",
       },
       email_preview: null,
+      whatsapp_preview: null,
       request_id: "req_1",
     });
     await expect(

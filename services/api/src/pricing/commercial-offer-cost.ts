@@ -1,5 +1,6 @@
 import {
   type CommercialOfferEligibility,
+  trafficClassesForChannel,
   unsupportedEligibilityDimensions,
 } from "@app/contracts";
 import type { CommercialOfferRouteRate } from "@app/domain";
@@ -16,14 +17,7 @@ import type { CommercialOfferRouteRate } from "@app/domain";
  */
 
 /** Channels that have a provider-cost representation today. A registry entry is not cost evidence. */
-export const COSTABLE_CHANNELS = ["sms", "email"] as const;
-
-/** The traffic classes `provider_cost_rates` can express (its CHECK constraint). */
-export const COSTABLE_TRAFFIC_CLASSES = [
-  "promotional",
-  "transactional",
-  "otp",
-] as const;
+export const COSTABLE_CHANNELS = ["sms", "email", "whatsapp"] as const;
 
 /**
  * A permitted-route ceiling. Eligibility can express 250 countries × 50 traffic classes × 50 vendors,
@@ -129,7 +123,11 @@ export function resolveOfferCostBasis(
   eligibility: CommercialOfferEligibility,
   rates: readonly CostRateRow[],
 ): CostBasisResult {
-  if (!COSTABLE_CHANNELS.includes(channelCode as "sms" | "email")) {
+  if (
+    !COSTABLE_CHANNELS.includes(
+      channelCode as (typeof COSTABLE_CHANNELS)[number],
+    )
+  ) {
     return {
       ok: false,
       failure: {
@@ -164,11 +162,13 @@ export function resolveOfferCostBasis(
       },
     };
   }
+  // Per CHANNEL, not one flat list. The DB CHECK on `provider_cost_rates.traffic_class` is the union
+  // of every channel's vocabulary — one column serves them all — so it cannot tell an SMS offer
+  // restricted to `utility` from a WhatsApp one, and would let the SMS case through to become credits
+  // no send can ever draw.
+  const costableClasses = trafficClassesForChannel(channelCode);
   const unknownClass = eligibility.traffic_classes.find(
-    (value) =>
-      !COSTABLE_TRAFFIC_CLASSES.includes(
-        value as (typeof COSTABLE_TRAFFIC_CLASSES)[number],
-      ),
+    (value) => !costableClasses.includes(value),
   );
   if (unknownClass) {
     return {

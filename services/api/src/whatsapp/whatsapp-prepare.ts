@@ -15,12 +15,14 @@ import type { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allow
 import { destinationCountry } from "../sms/sms-compliance.js";
 import { resolveWhatsappEnvironment } from "./whatsapp-environment.js";
 import type { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
+import type { WhatsappTemplateService } from "./whatsapp-template.service.js";
 
 export async function prepareWhatsapp(input: {
   db: AppDb;
   vault: PiiVaultService;
   sandboxAllowance: SandboxAllowanceService;
   runtime: WhatsappRuntimeService;
+  templates?: WhatsappTemplateService;
   effectivePricing?: EffectivePricingService;
   context: {
     tenantId: string;
@@ -31,6 +33,16 @@ export async function prepareWhatsapp(input: {
 }): Promise<string> {
   const mode = await resolveWhatsappEnvironment(input.db, input.context);
   const resolved = await input.runtime.resolve(mode);
+  if (mode === "live") {
+    // Template state is a Meta-owned control-plane cache. A fresh negative blocks before money is
+    // reserved; an absent/stale row fails open so our sync lag does not become a channel outage.
+    await input.templates?.assertSendable({
+      tenantId: input.context.tenantId,
+      creds: resolved.creds,
+      templateName: input.content.template_name,
+      templateLanguage: input.content.template_language,
+    });
+  }
   const quote =
     mode === "live"
       ? await resolveWhatsappQuote({

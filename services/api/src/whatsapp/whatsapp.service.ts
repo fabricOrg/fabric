@@ -5,7 +5,7 @@ import type {
   WhatsappSendResponse,
 } from "@app/contracts";
 import type { AppDb } from "@app/db";
-import { MetaCloudError, STATUS_RANK } from "@app/integrations";
+import { MetaCloudError } from "@app/integrations";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConsentService } from "../consent/consent.service.js";
 import { APP_DB } from "../db/db.module.js";
@@ -19,24 +19,25 @@ import { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.
 import { assertWhatsappCompliant } from "./whatsapp-compliance.js";
 import { resolveWhatsappEnvironment } from "./whatsapp-environment.js";
 import {
+  assertWhatsappSendingEnabled,
+  whatsappDispatchBlockReason,
+} from "./whatsapp-gates.js";
+import {
   claimStoredWhatsapp,
   pendingWhatsappDispatches,
   recordUnknownWhatsappDispatchOutcome,
 } from "./whatsapp-load.js";
+import type { ManagedWhatsappAcceptInput } from "./whatsapp-managed-accept.js";
+import { prepareManagedWhatsapp } from "./whatsapp-managed-prepare.js";
 import { prepareWhatsapp } from "./whatsapp-prepare.js";
 import { getWhatsappMessage, listWhatsappMessages } from "./whatsapp-reads.js";
+import { resolveWhatsappStatus } from "./whatsapp-resolve.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 import {
   WHATSAPP_SEND_QUEUE,
   type WhatsappSendJob,
 } from "./whatsapp-send.job.js";
-import {
-  isTerminalWhatsappStatus,
-  settleResolvedOutcome,
-} from "./whatsapp-settlement.js";
-
-type Row = Record<string, unknown>;
-
+import { WhatsappTemplateService } from "./whatsapp-template.service.js";
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
@@ -50,6 +51,8 @@ export class WhatsappService {
     @Inject(ConsentService) private readonly consent: ConsentService,
     @Inject(WhatsappRuntimeService)
     private readonly runtime: WhatsappRuntimeService,
+    @Inject(WhatsappTemplateService)
+    private readonly templates: WhatsappTemplateService,
     @Optional()
     @Inject(SandboxAllowanceService)
     sandboxAllowance?: SandboxAllowanceService,
@@ -68,7 +71,7 @@ export class WhatsappService {
     },
     input: WhatsappSendRequest,
   ): Promise<WhatsappSendResponse> {
-    await this.assertSendingEnabled(context.tenantId);
+    await assertWhatsappSendingEnabled(this.killSwitch, context.tenantId);
     const mode = await resolveWhatsappEnvironment(this.db, context);
     const resolved = await this.runtime.resolve(mode);
     if (
@@ -94,6 +97,7 @@ export class WhatsappService {
       vault: this.vault,
       sandboxAllowance: this.sandboxAllowance,
       runtime: this.runtime,
+      templates: this.templates,
       ...(this.effectivePricing
         ? { effectivePricing: this.effectivePricing }
         : {}),
@@ -119,6 +123,47 @@ export class WhatsappService {
     return { ...message, request_id: newRequestId() };
   }
 
+  /**
+   * Accept a managed WhatsApp delivery. The managed engine has already rendered the template binding
+   * and priced it; this seam is accept-only, exactly like the direct path's prepare — the same worker
+   * dispatches both, because the row it reads is identical.
+   */
+  async acceptManaged(input: ManagedWhatsappAcceptInput): Promise<void> {
+    await assertWhatsappSendingEnabled(this.killSwitch, input.tenantId);
+    // Same pre-acceptance gate the direct path applies. Without it a paused provider still reserves
+    // money and writes a delivery, only for the worker to fail and refund it — churn the caller sees
+    // as an accepted-then-failed message rather than an honest refusal.
+    const mode = await resolveWhatsappEnvironment(this.db, input);
+    const blocked = await whatsappDispatchBlockReason(
+      { killSwitch: this.killSwitch, runtime: this.runtime },
+      input.tenantId,
+      mode,
+    );
+    if (blocked) {
+      throw invalidRequest(
+        blocked,
+        "The WhatsApp provider is temporarily unavailable. Try again shortly.",
+      );
+    }
+    await assertWhatsappCompliant({
+      consent: this.consent,
+      tenantId: input.tenantId,
+      to: input.to,
+      category: input.templateCategory,
+    });
+    await prepareManagedWhatsapp({
+      db: this.db,
+      vault: this.vault,
+      sandboxAllowance: this.sandboxAllowance,
+      runtime: this.runtime,
+      templates: this.templates,
+      ...(this.effectivePricing
+        ? { effectivePricing: this.effectivePricing }
+        : {}),
+      message: input,
+    });
+  }
+
   async process(job: WhatsappSendJob): Promise<WhatsappSendResponse["status"]> {
     const stored = await claimStoredWhatsapp(
       this.db,
@@ -128,20 +173,33 @@ export class WhatsappService {
     );
     if (stored.kind === "skip") return stored.status;
     if (stored.kind === "unreadable") {
-      return this.resolve(job.tenantId, job.messageId, "failed", {
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: "failed",
         errorCode: "dispatch_material_unreadable",
       });
     }
     const mode = stored.backing === "sandbox_allowance" ? "sandbox" : "live";
-    const paused = await this.dispatchBlockReason(job.tenantId, mode);
+    const paused = await whatsappDispatchBlockReason(
+      { killSwitch: this.killSwitch, runtime: this.runtime },
+      job.tenantId,
+      mode,
+    );
     if (paused) {
-      return this.resolve(job.tenantId, job.messageId, "failed", {
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: "failed",
         errorCode: paused,
       });
     }
     const resolved = await this.runtime.resolve(mode);
     if (resolved.provider.slug !== stored.providerSlug) {
-      return this.resolve(job.tenantId, job.messageId, "failed", {
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: "failed",
         errorCode: "whatsapp_provider_selection_changed",
       });
     }
@@ -157,12 +215,18 @@ export class WhatsappService {
         },
         resolved.creds,
       );
-      return this.resolve(job.tenantId, job.messageId, result.status, {
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: result.status,
         ...(result.providerRef ? { providerRef: result.providerRef } : {}),
       });
     } catch (error) {
       if (error instanceof MetaCloudError) {
-        return this.resolve(job.tenantId, job.messageId, "failed", {
+        return resolveWhatsappStatus(this.db, this.runtime, {
+          tenantId: job.tenantId,
+          messageRef: job.messageId,
+          status: "failed",
           errorCode: error.code,
         });
       }
@@ -211,36 +275,6 @@ export class WhatsappService {
     return messageIds.length;
   }
 
-  private async assertSendingEnabled(tenantId: string): Promise<void> {
-    if (await this.killSwitch.isPaused("platform.whatsapp_sending", tenantId)) {
-      throw invalidRequest(
-        "whatsapp_sending_paused",
-        "WhatsApp sending is temporarily paused.",
-      );
-    }
-  }
-
-  private async dispatchBlockReason(
-    tenantId: string,
-    mode: "sandbox" | "live",
-  ): Promise<string | null> {
-    if (await this.killSwitch.isPaused("platform.whatsapp_sending", tenantId)) {
-      return "whatsapp_sending_paused";
-    }
-    if (mode === "live") {
-      const resolved = await this.runtime.resolve("live");
-      if (
-        await this.killSwitch.isPaused(
-          `provider.${resolved.provider.slug}`,
-          tenantId,
-        )
-      ) {
-        return "provider_unavailable";
-      }
-    }
-    return null;
-  }
-
   private async enqueue(tenantId: string, messageId: string): Promise<void> {
     await this.queue
       .queue(WHATSAPP_SEND_QUEUE)
@@ -251,46 +285,5 @@ export class WhatsappService {
         removeOnComplete: { count: 1_000 },
         removeOnFail: true,
       });
-  }
-
-  private async resolve(
-    tenantId: string,
-    messageId: string,
-    status: WhatsappSendResponse["status"],
-    detail: { providerRef?: string; errorCode?: string },
-  ): Promise<WhatsappSendResponse["status"]> {
-    return this.db.withTenant(tenantId, async (tx) => {
-      const rows = (await tx`
-        SELECT status::text, status_rank, backing, application_id, environment_id
-        FROM whatsapp_messages WHERE id = ${messageId} FOR UPDATE`) as Row[];
-      const current = rows[0];
-      if (!current) return "failed";
-      const prior = String(current.status) as WhatsappSendResponse["status"];
-      if (isTerminalWhatsappStatus(prior)) return prior;
-      await settleResolvedOutcome(tx, {
-        runtime: this.runtime,
-        messageId,
-        backing: String(current.backing),
-        priorRank: Number(current.status_rank),
-        nextStatus: status,
-      });
-      await tx`
-        UPDATE whatsapp_messages SET status = ${status}, status_rank = ${STATUS_RANK[status]},
-          provider_ref = COALESCE(${detail.providerRef ?? null}, provider_ref),
-          error_code = COALESCE(${detail.errorCode ?? null}, error_code), updated_at = now()
-        WHERE id = ${messageId}`;
-      await tx`
-        UPDATE whatsapp_dispatches SET completed_at = now(), updated_at = now()
-        WHERE message_id = ${messageId}`;
-      await tx`
-        INSERT INTO outbox_events (
-          tenant_id, application_id, environment_id, event_type, payload
-        ) VALUES (
-          current_setting('app.tenant_id')::uuid, ${String(current.application_id)},
-          ${String(current.environment_id)}, 'message.updated',
-          ${JSON.stringify({ message_id: messageId, channel: "whatsapp", status, previous_status: prior })}::jsonb
-        )`;
-      return status;
-    });
   }
 }

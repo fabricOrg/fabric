@@ -61,3 +61,30 @@ export function rateEmailFlat(
   if (per === undefined) throw new UnknownCurrencyError(currency);
   return per;
 }
+
+// ---- WhatsApp flat per-template-message pricing (ADR-0014 §3) ------------------------------------
+// WhatsApp is priced FLAT per template message. Meta's own billing is CONVERSATION-based (a 24-hour
+// window covering many messages), but that is our COST, not our unit of sale: a conversation's
+// boundaries depend on the customer's replies, which is not something a caller can price against
+// before sending. ADR-0014 §3 therefore supersedes ADR-0012's conversation guess — we sell one priced
+// message and absorb the conversation-vs-message spread in the margin.
+
+/** Flat WhatsApp price per template message in minor units, keyed by currency. */
+export const DEFAULT_WHATSAPP_BASE_RATES: RateTable = {
+  GHS: 12n, // 0.12 GHS / message (pesewas)
+  NGN: 1_200n, // 12.00 NGN (kobo)
+  USD: 5n, // 0.05 USD (cents)
+};
+
+/**
+ * cost_minor = the flat per-message price for `currency`. Rejects an unpriced currency (never silently
+ * charge zero — mirrors rateSegments / rateEmailFlat).
+ */
+export function rateWhatsappFlat(
+  currency: string,
+  rates: RateTable = DEFAULT_WHATSAPP_BASE_RATES,
+): bigint {
+  const per = rates[currency];
+  if (per === undefined) throw new UnknownCurrencyError(currency);
+  return per;
+}

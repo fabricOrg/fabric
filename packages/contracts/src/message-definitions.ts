@@ -5,6 +5,7 @@ import {
   messageChannel,
   messageVariantContent,
   smsVariantContent,
+  whatsappVariantContent,
 } from "./message-definition-content.js";
 import { withoutDuplicateDefaultLocale } from "./message-definition-locale.js";
 import { variableSchema } from "./message-definition-variable-schema.js";
@@ -119,6 +120,16 @@ export const createMessageDefinitionRequest = z
       content: emailVariantContent,
       default_locale: localeTag,
     }),
+    // WhatsApp needs no sender_id: the sending identity is the WABA phone number carried by the
+    // workspace's Meta credentials, resolved at dispatch. There is nothing for an author to choose.
+    z.object({
+      channel: z.literal("whatsapp"),
+      application_id: z.string().uuid().optional(),
+      key: stableKey,
+      variable_schema: variableSchema,
+      content: whatsappVariantContent,
+      default_locale: localeTag,
+    }),
   ])
   .superRefine(withoutDuplicateDefaultLocale);
 export type CreateMessageDefinitionRequest = z.infer<
@@ -141,6 +152,12 @@ export const addMessageDefinitionVersionRequest = z
       channel: z.literal("email"),
       variable_schema: variableSchema,
       content: emailVariantContent,
+      default_locale: localeTag,
+    }),
+    z.object({
+      channel: z.literal("whatsapp"),
+      variable_schema: variableSchema,
+      content: whatsappVariantContent,
       default_locale: localeTag,
     }),
   ])

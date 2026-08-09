@@ -62,7 +62,7 @@ export const priceBookRates = pgTable(
     priceBookId: uuid("price_book_id")
       .notNull()
       .references(() => priceBooks.id, { onDelete: "cascade" }),
-    channel: text("channel").notNull(), // sms | email
+    channel: text("channel").notNull(), // sms | email | whatsapp
     currency: text("currency").notNull(), // ISO 4217, e.g. GHS
     unitPriceMinor: moneyMinor("unit_price_minor").notNull(),
     ...timestamps,
@@ -71,7 +71,7 @@ export const priceBookRates = pgTable(
     unique("uniq_price_book_rate").on(t.priceBookId, t.channel, t.currency),
     check(
       "price_book_rates_channel_chk",
-      sql`${t.channel} in ('sms', 'email')`,
+      sql`${t.channel} in ('sms', 'email', 'whatsapp')`,
     ),
     // Money invariant at the DB layer (correct-by-construction): a unit price is strictly positive.
     // A zero row would price a free send — the per-channel resolution guard checks key PRESENCE, not

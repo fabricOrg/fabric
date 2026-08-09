@@ -1,5 +1,5 @@
 import type { ProvisioningDb } from "@app/db";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { assertDisposablePluginCatalog } from "./disposable-plugin-catalog.js";
 
 /**
@@ -21,6 +21,28 @@ function dbWithConfigured(
 }
 
 describe("assertDisposablePluginCatalog", () => {
+  // The guard short-circuits when CI is set, so these cases must own that variable rather than inherit
+  // it. Without this the refusal case passes vacuously ON CI — the one place it is guaranteed to run.
+  const priorCi = process.env.CI;
+  beforeEach(() => {
+    delete process.env.CI;
+  });
+  afterEach(() => {
+    if (priorCi === undefined) delete process.env.CI;
+    else process.env.CI = priorCi;
+  });
+
+  it("skips entirely under CI, where the database is thrown away anyway", async () => {
+    process.env.CI = "true";
+    await expect(
+      assertDisposablePluginCatalog(
+        dbWithConfigured([
+          { capability: "whatsapp", vendor: "meta-cloud", mode: "live" },
+        ]),
+      ),
+    ).resolves.toBeUndefined();
+  });
+
   it("allows a catalog with no installed credentials", async () => {
     await expect(
       assertDisposablePluginCatalog(dbWithConfigured([])),

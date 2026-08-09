@@ -1,6 +1,5 @@
 import {
   accounts,
-  type MinorUnits,
   type NewPriceBookRate,
   type ProvisioningDb,
   priceBookRates,
@@ -12,11 +11,14 @@ import {
 import {
   DEFAULT_EMAIL_BASE_RATES,
   DEFAULT_RATES,
+  DEFAULT_WHATSAPP_BASE_RATES,
   type RateTable,
 } from "@app/domain";
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
+import type { BillableChannel } from "./effective-pricing.js";
+import { pick, ratesFor, versionedRatesFor } from "./pricing-defaults.js";
 
 /**
  * PRICING (ADR-0010 Phase 1) — resolves the per-account rate table the wallet send path prices
@@ -26,8 +28,8 @@ import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
  * last-known-good — or the compiled default rates — rather than failing the send. The WALLET still
  * fails closed downstream (no funds → no send); only the PRICE resolution fails open.
  *
- * SMS is priced per segment, email FLAT per send (the size tier is retired in slice 2). A currency
- * with no configured rate is UNPRICED — resolveRates surfaces the book's rates as-is and the pure
+ * SMS is priced per segment, email FLAT per send (the size tier is retired in slice 2), WhatsApp FLAT
+ * per template message (ADR-0014 §3). A currency with no configured rate is UNPRICED — resolveRates surfaces the book's rates as-is and the pure
  * rating functions reject the missing currency (UnknownCurrencyError), never charging zero.
  */
 
@@ -35,6 +37,7 @@ import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 export interface ResolvedRates {
   readonly sms: RateTable;
   readonly email: RateTable;
+  readonly whatsapp: RateTable;
 }
 
 interface CachedRates {
@@ -47,6 +50,7 @@ const COMPILED_DEFAULT: ResolvedRates = {
   sms: DEFAULT_RATES,
   // Email flat per send = the standard-tier base (the retired 1/3/6 multiplier's ×1 band).
   email: DEFAULT_EMAIL_BASE_RATES,
+  whatsapp: DEFAULT_WHATSAPP_BASE_RATES,
 };
 
 /** The default book seeded for subscription accounts. Values MUST match COMPILED_DEFAULT. */
@@ -145,15 +149,23 @@ export class PricingService implements OnModuleInit {
 
     // An assigned-but-empty book must not silently reprice everything to zero: fall to the compiled
     // default per channel when the book carries no rows for that channel.
-    const sms: Record<string, bigint> = {};
-    const email: Record<string, bigint> = {};
+    const tables: Record<BillableChannel, Record<string, bigint>> = {
+      sms: {},
+      email: {},
+      whatsapp: {},
+    };
     for (const row of rateRows) {
-      const table = row.channel === "email" ? email : sms;
+      // Keyed by the row's own channel. This used to be `row.channel === "email" ? email : sms`, which
+      // was correct only while sms and email were the whole catalog — the moment the price book could
+      // hold a whatsapp row, that fallthrough filed it under SMS and repriced every text message.
+      const table = tables[row.channel as BillableChannel];
+      if (!table) continue;
       table[row.currency] = row.unitPriceMinor;
     }
     return {
-      sms: Object.keys(sms).length > 0 ? sms : COMPILED_DEFAULT.sms,
-      email: Object.keys(email).length > 0 ? email : COMPILED_DEFAULT.email,
+      sms: pick(tables.sms, COMPILED_DEFAULT.sms),
+      email: pick(tables.email, COMPILED_DEFAULT.email),
+      whatsapp: pick(tables.whatsapp, COMPILED_DEFAULT.whatsapp),
     };
   }
 
@@ -194,6 +206,7 @@ export class PricingService implements OnModuleInit {
     const rates: NewPriceBookRate[] = [
       ...ratesFor(bookId, "sms", COMPILED_DEFAULT.sms),
       ...ratesFor(bookId, "email", COMPILED_DEFAULT.email),
+      ...ratesFor(bookId, "whatsapp", COMPILED_DEFAULT.whatsapp),
     ];
     await this.provisioning.db
       .insert(priceBookRates)
@@ -230,6 +243,7 @@ export class PricingService implements OnModuleInit {
       .values([
         ...versionedRatesFor(version.id, "sms", COMPILED_DEFAULT.sms),
         ...versionedRatesFor(version.id, "email", COMPILED_DEFAULT.email),
+        ...versionedRatesFor(version.id, "whatsapp", COMPILED_DEFAULT.whatsapp),
       ]);
   }
 
@@ -250,32 +264,4 @@ export class PricingService implements OnModuleInit {
       if (now - entry.fetchedAt >= CACHE_TTL_MS) this.cache.delete(key);
     }
   }
-}
-
-function versionedRatesFor(
-  versionId: string,
-  channel: "sms" | "email",
-  table: RateTable,
-) {
-  return Object.entries(table).map(([currency, unitPriceMinor]) => ({
-    versionId,
-    channel,
-    currency,
-    unitBasis:
-      channel === "sms" ? ("segment" as const) : ("recipient" as const),
-    unitPriceMinor: unitPriceMinor as MinorUnits,
-  }));
-}
-
-function ratesFor(
-  bookId: string,
-  channel: "sms" | "email",
-  table: RateTable,
-): NewPriceBookRate[] {
-  return Object.entries(table).map(([currency, unitPriceMinor]) => ({
-    priceBookId: bookId,
-    channel,
-    currency,
-    unitPriceMinor: unitPriceMinor as MinorUnits,
-  }));
 }

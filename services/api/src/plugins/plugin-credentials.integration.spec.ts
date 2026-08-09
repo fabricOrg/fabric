@@ -36,6 +36,10 @@ describeDb("plugin credentials → resolution (ADR-0011 slices 1+2+4)", () => {
     await registry.list(); // seeds the catalog
   });
   afterAll(async () => {
+    // Same reason as the registry spec: the beforeAll guard proves the catalog was disposable when this
+    // spec started, not when a parallel suite finished. An unguarded teardown delete is what actually
+    // destroys a credential — the ciphertext is the only copy, so refuse and leave the table dirty.
+    await assertDisposablePluginCatalog(db);
     await db.db.delete(pluginInstances);
     await db.end();
   });

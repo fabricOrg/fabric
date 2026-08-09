@@ -46,3 +46,4 @@ export * from "./virtual-phone.js";
 export * from "./wallet.js";
 export * from "./webhooks.js";
 export * from "./whatsapp.js";
+export * from "./whatsapp-inbound.js";
