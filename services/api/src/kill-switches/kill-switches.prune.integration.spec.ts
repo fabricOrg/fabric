@@ -2,6 +2,7 @@ import { createProvisioningDb, killSwitches } from "@app/db";
 import { and, eq, like } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AuditService } from "../audit/audit.service.js";
+import { LIVE_PROVIDER_KEYS } from "./kill-switches.catalog.js";
 import { KillSwitchService } from "./kill-switches.service.js";
 
 /**
@@ -44,18 +45,26 @@ describeDb("kill-switch catalog prune", () => {
     await provisioning.end();
   });
 
-  it("prunes adapter-less provider switches, keeps the real one + platform switches", async () => {
+  it("prunes adapter-less provider switches, keeps every real one + platform switches", async () => {
     const { switches } = await svc.list(); // triggers ensureCatalog (seed + prune)
     const keys = switches.map((s) => s.key);
 
     expect(keys).not.toContain("provider.zombie");
     expect(keys).not.toContain("provider.africas-talking");
     expect(keys).not.toContain("provider.hubtel");
-    expect(keys).toContain("provider.arkesel-sms"); // the one real adapter
     expect(keys).toContain("platform.sms_sending"); // platform switch untouched
     expect(keys).toContain("platform.payments");
 
-    // Belt-and-braces: nothing provider-scoped survives that isn't the real adapter.
+    // Derived from the catalog rather than naming one adapter. This used to assert
+    // `provider.arkesel-sms` as "the one real adapter", which stopped being true the moment a second
+    // channel shipped a provider — and it failed by naming meta-cloud, i.e. by finding a REAL switch,
+    // which is the least useful way for a test to break. Deriving keeps the assertion meaningful in
+    // both directions: every live adapter survives, and nothing else provider-scoped does.
+    for (const key of LIVE_PROVIDER_KEYS) {
+      expect(keys).toContain(key);
+    }
+    expect(LIVE_PROVIDER_KEYS.length).toBeGreaterThan(0);
+
     const strays = await provisioning.db
       .select({ key: killSwitches.key })
       .from(killSwitches)
@@ -63,7 +72,7 @@ describeDb("kill-switch catalog prune", () => {
         and(eq(killSwitches.scope, "provider"), like(killSwitches.key, "%")),
       );
     for (const row of strays) {
-      expect(row.key).toBe("provider.arkesel-sms");
+      expect(LIVE_PROVIDER_KEYS).toContain(row.key);
     }
   });
 });

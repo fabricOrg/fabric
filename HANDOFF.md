@@ -16,14 +16,20 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `86b5c38` | #252, #253, #255, #256, #258 |
-| `origin/testing` | `2a20286` | promoted + DEPLOYED 2026-08-08 (#257); **behind `dev`** |
-| `feature/ops-whatsapp-managed` | `42fb4df` | PR #265 — top of the WhatsApp stack |
+| `origin/dev` | `1e77b3c` | #252, #253, #255, #256, #258, then the WhatsApp stack #259–#265 |
+| `origin/testing` | `2a20286` | DEPLOYED 2026-08-08 (#257); promoted again with the channel |
 
-**The WhatsApp channel sits in a six-PR stack that is open and unmerged.** Order matters:
-#261 (1a, on `dev`) → #263 (1b) → #264 (1c) → #262 (1d) → #265 (1e + templates + SDK +
-dashboard + managed). #259 (HANDOFF backlog) and #260 (CVE overrides) sit independently on
-`dev`. Nothing WhatsApp has reached `dev`, so nothing WhatsApp is deployed.
+**The WhatsApp stack is MERGED into `dev`** — #259, #260, #261, #263, #264, #262, #265 in that
+order. Two things that cost real time and will again:
+
+- **The repo's CI forbids stacked PRs** (`metadata` fails with *"Work branches must target dev"*),
+  so every PR in a stack must be retargeted to `dev` one at a time as the one below it lands.
+- **Squash-merging a stack destroys the merge base.** After each squash, the next branch's shared
+  history is gone, so every file the stack touched comes back as an `add/add` conflict. The
+  resolution rule that made this safe and checkable: for each conflicted path, compare dev's blob
+  to the blob at the commit the branch actually built on — if they are equal, dev added nothing the
+  branch lacks and taking the branch's side is provably correct rather than a guess. Only the files
+  where dev had genuinely diverged (HANDOFF, `security-layer.check.ts`) needed reading.
 
 Nothing uncommitted. The testing deploy ran all six jobs green — gate, **`Migrate · testing db`
 (0133 applied)**, Render api, and the three Vercel apps — and the pipeline verifies the artefact
@@ -94,12 +100,16 @@ admin price-book form would have 500'd on the first WhatsApp rate saved.
 **Template state is a CACHE with a stated posture**, not a fact: a fresh negative blocks before
 money moves; an absent or stale row fails OPEN so our sync lag is not a channel outage.
 
-### Still open from the grant sweep
+### Closed from the grant sweep — `audit_events` is now actually append-only
 
-The provisioner narrowing on `audit_events` (SELECT+INSERT, no UPDATE/DELETE) **records intent and
-does not enforce it** — `prepareRoles()` (`src/cloud-migrate.ts:123`) re-grants `app_provisioner`
-full DML on ALL TABLES every deploy. Enforcing append-only needs a re-assertion in
-`cloud-migrate-privileges.ts`, the mechanism the GL tables already use.
+The provisioner narrowing on `audit_events` (SELECT+INSERT, no UPDATE/DELETE) previously **recorded
+intent without enforcing it**, because `prepareRoles()` (`src/cloud-migrate.ts:123`) re-grants
+`app_provisioner` full DML on ALL TABLES every deploy. `cloud-migrate-privileges.ts` now re-asserts
+the REVOKE after migrations — the mechanism the GL tables already used — and
+`security-layer.check.ts` §8b asks Postgres via `has_table_privilege` whether the re-assertion
+actually ran. The check asserts **both** directions: no UPDATE/DELETE/TRUNCATE, and INSERT still
+held, because a too-aggressive REVOKE would leave a trail nothing can write and look identical to
+success from the other assertion alone.
 
 **Find grant holes by asking Postgres, never by reading comments** — `has_table_privilege`, not
 prose. Four of the six tables #250 fixed carried a comment asserting protection that did not exist,
@@ -173,17 +183,39 @@ computes to exactly 211 — so this is a different error, and 41 ms means it rea
 rather than stopping at the throttle pre-check. `sms_sending_paused` (159) and `recipient_opted_out`
 (194) don't match the length either.
 
-**It could not be diagnosed further because the spec asserts `statusCode` only** — a failure yields
-`400 ≠ 201` with no `error.code`, and the API does not log 4xx bodies. Make that assertion carry the
-body BEFORE hunting again; otherwise the next occurrence is equally opaque.
+**It could not be diagnosed further because the spec asserted `statusCode` only** — a failure yielded
+`400 ≠ 201` with no `error.code`, and the API does not log 4xx bodies. **Now fixed:** every status
+assertion in that spec goes through an `expectStatus` helper that asserts an object, so a mismatch
+carries the response body into the failure diff. The flake itself is still unpinned — this does not
+fix it, it makes the next occurrence diagnosable instead of opaque.
+
+While in that file: its masking assertion was **dead**. It searched the masked recipient for
+`"227189"`, a fragment of the removed pinned pilot number that no longer appears anywhere in the
+spec, so it could never match and proved nothing. It now asserts the exact expected mask
+(`maskMsisdn` keeps the first 6 chars and last 4).
 
 Also open: #251, #214, #203 (typescript 7), #200.
 
 **Standards audit — safety net only.** Route error boundaries and shared `RouteError`/`RouteLoading`
-landed. Still open: ~25 missing `loading.tsx`; nine separate
-`StatusBadge` implementations; ~30 ad-hoc date formats. (The "five empty-vs-error conflations"
-this list used to claim were RETIRED — four of the five already branched correctly; only the
-maker-checker tenant fetch was real, and it is fixed.) `Card` now draws blueprint corner marks
+landed. Still open: ~25 missing `loading.tsx`; nine separate `StatusBadge` implementations; ~30 ad-hoc
+date formats.
+
+**The "five empty-vs-error conflations" claim was WRONG and is retired.** An earlier revision of this
+file listed `dashboard/senders:121`, `dashboard/templates:236`, `admin-console/senders:40`,
+`admin-console/maker-checker:53` and `tenants/[slug]:182` as places a fetch failure renders as "you
+have nothing". Read individually, **four of the five already branch on the error with distinct copy**,
+and the two dashboard pages set `failed` AND `[]` in the same `.catch` with only one fetch on mount,
+so the error branch always wins — the stale-data case the claim implied cannot occur. The list was
+evidently produced by grepping for `length === 0` rather than by reading the files. Exactly one real
+defect existed, and it was four lines from where the claim pointed: `maker-checker` caught the
+**tenant-list** failure into `tenants = []`, so `NewProposalDialog` rendered an openable-but-empty
+select and the operator could not file a proposal or learn why. Fixed by passing `tenantsFailed`
+through, which lets the dialog separate "no tenants exist" from "we don't know".
+
+Genuinely still open on this theme, and much narrower than the retired claim: **no page offers a
+retry affordance** — every error state says "try again shortly" without a button — and
+`tenants/[slug]:182` styles its error with the same `text-muted-foreground` as its empty state, so
+the two read alike even though the copy differs. `Card` now draws blueprint corner marks
 app-wide — anything inside `overflow-hidden` or a grid tighter than `gap-6` needs `corners={false}`.
 
 ---

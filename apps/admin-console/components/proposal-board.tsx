@@ -31,7 +31,12 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@app/ui/components/ui/empty";
-import { Field, FieldLabel } from "@app/ui/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import {
   Select,
@@ -43,7 +48,7 @@ import {
 import { formatUtcTimestamp } from "@app/ui/lib/datetime";
 import { ArrowRight, Plus, ShieldQuestion, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
 const KIND_LABEL: Record<ProposalDto["kind"], string> = {
@@ -207,8 +212,16 @@ export function ProposalBoard({
 
 export function NewProposalDialog({
   tenants,
+  tenantsFailed = false,
 }: {
   tenants: readonly { tenant_id: string; name: string }[];
+  /**
+   * The tenant list is fetched best-effort so a hiccup there does not block reviewing the queue —
+   * but that leaves THREE states an empty array cannot tell apart: loaded-and-empty means no tenants
+   * exist, failed means we do not know. Without this flag both render as a select you can open and
+   * find nothing in, saying nothing about which one happened.
+   */
+  tenantsFailed?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -218,21 +231,48 @@ export function NewProposalDialog({
   const [after, setAfter] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  // The target must still be RESOLVABLE, not merely non-empty. `tenantId` is client state that
+  // survives a re-render, so a refresh that fails or empties the tenant list would otherwise leave
+  // the select disabled while submit stayed enabled — posting a stale id with an empty
+  // `tenant_label` into the maker-checker queue, which is the audit-sensitive path.
+  const selectedTenant = tenants.find((t) => t.tenant_id === tenantId) ?? null;
   const valid =
-    tenantId.length > 0 && after.trim().length > 0 && reason.trim().length >= 8;
+    selectedTenant !== null &&
+    !tenantsFailed &&
+    after.trim().length > 0 &&
+    reason.trim().length >= 8;
+
+  let tenantHint: ReactNode = null;
+  if (tenantsFailed) {
+    tenantHint = (
+      <FieldError>
+        Couldn&apos;t load the tenant list, so a proposal can&apos;t be targeted
+        right now. Reviewing and approving existing proposals still works —
+        reload to try again.
+      </FieldError>
+    );
+  } else if (tenants.length === 0) {
+    tenantHint = (
+      <FieldDescription>
+        No tenants exist yet, so there is nothing to target.
+      </FieldDescription>
+    );
+  }
 
   async function submit() {
+    // `valid` gates the button, but state can change between render and click. Resolving the tenant
+    // here rather than falling back to an empty label means an unresolvable target cannot be posted.
+    if (!selectedTenant) return;
     setBusy(true);
     try {
       // Send the real tenant_id from the select plus its name as the label the queue renders.
-      const selected = tenants.find((t) => t.tenant_id === tenantId);
       const response = await fetch("/api/admin/proposals", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           kind,
-          tenant_id: tenantId,
-          tenant_label: selected?.name ?? "",
+          tenant_id: selectedTenant.tenant_id,
+          tenant_label: selectedTenant.name,
           before_value: before.trim(),
           after_value: after.trim(),
           reason: reason.trim(),
@@ -298,9 +338,19 @@ export function NewProposalDialog({
           </Field>
           <Field>
             <FieldLabel htmlFor="p-tenant">Tenant</FieldLabel>
-            <Select value={tenantId} onValueChange={setTenantId}>
+            <Select
+              value={tenantId}
+              onValueChange={setTenantId}
+              disabled={tenantsFailed || tenants.length === 0}
+            >
               <SelectTrigger id="p-tenant">
-                <SelectValue placeholder="Select a tenant" />
+                <SelectValue
+                  placeholder={
+                    tenantsFailed
+                      ? "Tenant list unavailable"
+                      : "Select a tenant"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 {tenants.map((t) => (
@@ -310,6 +360,7 @@ export function NewProposalDialog({
                 ))}
               </SelectContent>
             </Select>
+            {tenantHint}
           </Field>
           <div className="flex gap-3">
             <Field className="flex-1">
