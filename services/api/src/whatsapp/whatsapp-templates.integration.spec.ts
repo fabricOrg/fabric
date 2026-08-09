@@ -203,7 +203,11 @@ describeDb("WhatsApp template lifecycle", () => {
     );
   }
 
-  function send(templateName: string, idempotencyKey: string) {
+  function send(
+    templateName: string,
+    idempotencyKey: string,
+    templateCategory: "utility" | "marketing" | "authentication" = "utility",
+  ) {
     return app.inject({
       method: "POST",
       url: "/v1/whatsapp/messages",
@@ -216,7 +220,7 @@ describeDb("WhatsApp template lifecycle", () => {
         to: "+233545227189",
         template_name: templateName,
         template_language: "en",
-        template_category: "utility",
+        template_category: templateCategory,
         variables: ["A123"],
         currency: "GHS",
       },

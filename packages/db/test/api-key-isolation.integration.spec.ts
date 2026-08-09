@@ -16,6 +16,7 @@ import { createHash } from "node:crypto";
 import { createAppDb } from "@app/db";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { assertDisposableDatabase } from "./disposable-database.js";
 
 // Prod-faithful owner (653b45d): seeds cross-tenant api_keys as the test-only superuser (bypasses FORCE RLS).
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
@@ -55,12 +56,26 @@ async function seedKey(tenant: string, slug: string, rawKey: string) {
 
 describe("L2 — api_keys possession-scoped auth (app.api_key_hash GUC)", () => {
   beforeAll(async () => {
+    // Guarded in BOTH hooks. A precondition checked once does not hold for the whole run:
+    // specs execute in parallel, and a sibling guard that checked only setup destroyed a live
+    // credential this way.
+    await assertDisposableDatabase(owner, {
+      fixtureTenantIds: [TENANT_A, TENANT_B],
+      spec: "L2 api_keys possession-scoped auth",
+    });
     await owner.unsafe("DELETE FROM api_keys");
     await owner.unsafe("DELETE FROM accounts");
     await seedKey(TENANT_A, "tenant-a", KEY_A);
     await seedKey(TENANT_B, "tenant-b", KEY_B);
   });
   afterAll(async () => {
+    // Guarded in BOTH hooks. A precondition checked once does not hold for the whole run:
+    // specs execute in parallel, and a sibling guard that checked only setup destroyed a live
+    // credential this way.
+    await assertDisposableDatabase(owner, {
+      fixtureTenantIds: [TENANT_A, TENANT_B],
+      spec: "L2 api_keys possession-scoped auth",
+    });
     await owner.unsafe("DELETE FROM api_keys");
     await owner.unsafe("DELETE FROM accounts");
     await db.end();

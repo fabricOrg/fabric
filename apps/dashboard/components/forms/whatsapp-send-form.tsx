@@ -1,6 +1,10 @@
 "use client";
 
-import { whatsappSendRequest } from "@app/contracts";
+import {
+  type WhatsappSendRequest,
+  type WhatsappTemplateSummary,
+  whatsappSendRequest,
+} from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Field,
@@ -9,20 +13,15 @@ import {
 } from "@app/ui/components/ui/field";
 import { FieldError, fieldInvalid } from "@app/ui/components/ui/form";
 import { Input } from "@app/ui/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@app/ui/components/ui/select";
 import { Textarea } from "@app/ui/components/ui/textarea";
 import { useForm } from "@tanstack/react-form";
+import { useQuery } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { sendWhatsapp } from "@/lib/client/dashboard-api";
+import { getWhatsappTemplates, sendWhatsapp } from "@/lib/client/dashboard-api";
 import { toastApiError } from "@/lib/error-toast";
+import { WhatsappTemplatePicker } from "./whatsapp-template-picker";
 
 const variableLines = z.string().refine(
   (value) =>
@@ -52,6 +51,37 @@ const DEFAULTS: FormValues = {
   variables: "",
 };
 
+/**
+ * The template's own category, or `utility` when we cannot tell.
+ *
+ * The fallback is the conservative direction ONLY for billing; it is not a licence to send marketing
+ * traffic. A template whose category Meta did not report renders as "unknown" in the picker, and the
+ * send path still applies the consent rules for whatever it is given — the point here is simply never
+ * to leave a stale `marketing` selection attached to a utility template.
+ */
+function categoryFor(
+  templates: readonly WhatsappTemplateSummary[] | undefined,
+  name: string,
+  language: string,
+): WhatsappSendRequest["template_category"] {
+  const match = templates?.find(
+    (t) => t.name === name && t.language === language,
+  );
+  return match?.category ?? "utility";
+}
+
+/** How many variables the chosen template expects, or null when nothing is chosen yet. */
+function expectedVariables(
+  templates: readonly WhatsappTemplateSummary[] | undefined,
+  name: string,
+  language: string,
+): number | null {
+  const match = templates?.find(
+    (t) => t.name === name && t.language === language,
+  );
+  return match ? match.variable_count : null;
+}
+
 function variablesFromText(value: string): string[] {
   return value
     .split(/\r?\n/)
@@ -60,6 +90,14 @@ function variablesFromText(value: string): string[] {
 }
 
 export function WhatsappSendForm({ onSent }: { onSent: () => void }) {
+  const templates = useQuery({
+    queryKey: ["whatsapp-templates"],
+    queryFn: getWhatsappTemplates,
+    // The catalog is a cache of Meta's state that a scheduled sync refreshes hourly; re-reading it on
+    // every mount is wasted work, and a minute of staleness cannot make an approved template invalid
+    // in a way the SEND path does not re-check anyway (whatsapp-prepare asserts sendability).
+    staleTime: 60_000,
+  });
   const form = useForm({
     defaultValues: DEFAULTS,
     validators: { onChange: formSchema },
@@ -120,119 +158,134 @@ export function WhatsappSendForm({ onSent }: { onSent: () => void }) {
             );
           }}
         </form.Field>
-
-        <form.Field name="template_name">
-          {(field) => {
-            const invalid = fieldInvalid(field);
-            return (
-              <Field data-invalid={invalid || undefined}>
-                <FieldLabel htmlFor="whatsapp-template">
-                  Template name
-                </FieldLabel>
-                <Input
-                  id="whatsapp-template"
-                  placeholder="order_update"
-                  value={field.state.value}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  onBlur={field.handleBlur}
-                  aria-invalid={invalid || undefined}
-                />
-                {invalid ? <FieldError field={field} /> : null}
-              </Field>
-            );
-          }}
-        </form.Field>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <form.Field name="template_language">
-          {(field) => {
-            const invalid = fieldInvalid(field);
-            return (
-              <Field data-invalid={invalid || undefined}>
-                <FieldLabel htmlFor="whatsapp-language">
-                  Template language
-                </FieldLabel>
-                <Input
-                  id="whatsapp-language"
-                  placeholder="en"
-                  value={field.state.value}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  onBlur={field.handleBlur}
-                  aria-invalid={invalid || undefined}
-                />
-                {invalid ? <FieldError field={field} /> : null}
-              </Field>
-            );
-          }}
-        </form.Field>
+      <form.Subscribe
+        selector={(state) => [
+          state.values.template_name,
+          state.values.template_language,
+        ]}
+      >
+        {([templateName, templateLanguage]) => (
+          <WhatsappTemplatePicker
+            templates={templates.data?.templates ?? []}
+            isLoading={templates.isPending}
+            error={templates.isError}
+            onRetry={() => void templates.refetch()}
+            name={templateName ?? ""}
+            language={templateLanguage ?? ""}
+            onNameChange={(name, language) => {
+              form.setFieldValue("template_name", name);
+              form.setFieldValue("template_language", language);
+              // Category is derived, never chosen — see WhatsappTemplatePicker.
+              form.setFieldValue(
+                "template_category",
+                categoryFor(templates.data?.templates, name, language),
+              );
+            }}
+            onLanguageChange={(language) => {
+              form.setFieldValue("template_language", language);
+              form.setFieldValue(
+                "template_category",
+                categoryFor(
+                  templates.data?.templates,
+                  templateName ?? "",
+                  language,
+                ),
+              );
+            }}
+          />
+        )}
+      </form.Subscribe>
 
-        <form.Field name="template_category">
-          {(field) => (
-            <Field>
-              <FieldLabel htmlFor="whatsapp-category">
-                Template category
-              </FieldLabel>
-              <Select
-                value={field.state.value}
-                onValueChange={(value) => {
-                  if (
-                    value === "marketing" ||
-                    value === "utility" ||
-                    value === "authentication"
-                  ) {
-                    field.handleChange(value);
-                  }
-                }}
-              >
-                <SelectTrigger id="whatsapp-category">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="utility">Utility</SelectItem>
-                  <SelectItem value="marketing">Marketing</SelectItem>
-                  <SelectItem value="authentication">Authentication</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          )}
-        </form.Field>
-      </div>
-
-      <form.Field name="variables">
-        {(field) => {
-          const invalid = fieldInvalid(field);
+      <form.Subscribe
+        selector={(state) => [
+          state.values.template_name,
+          state.values.template_language,
+          state.values.variables,
+        ]}
+      >
+        {([templateName, templateLanguage, variablesText]) => {
+          const expected = expectedVariables(
+            templates.data?.templates,
+            templateName ?? "",
+            templateLanguage ?? "",
+          );
+          const supplied = variablesFromText(variablesText ?? "").length;
+          // Meta rejects a parameter count that differs from the template's, and that rejection lands
+          // AFTER the wallet reserve — so the count is checked here, where it costs nothing.
+          const mismatch = expected !== null && supplied !== expected;
+          if (expected === 0) return null;
           return (
-            <Field data-invalid={invalid || undefined}>
-              <FieldLabel htmlFor="whatsapp-variables">Variables</FieldLabel>
-              <Textarea
-                id="whatsapp-variables"
-                rows={4}
-                placeholder={"Ada\nORD-1042"}
-                value={field.state.value}
-                onChange={(event) => field.handleChange(event.target.value)}
-                onBlur={field.handleBlur}
-                aria-invalid={invalid || undefined}
-              />
-              {invalid ? (
-                <FieldError field={field} />
-              ) : (
-                <FieldDescription>
-                  One variable per line, in template placeholder order.
-                </FieldDescription>
-              )}
-            </Field>
+            <form.Field name="variables">
+              {(field) => {
+                const invalid = fieldInvalid(field);
+                return (
+                  <Field data-invalid={invalid || mismatch || undefined}>
+                    <FieldLabel htmlFor="whatsapp-variables">
+                      Variables
+                    </FieldLabel>
+                    <Textarea
+                      id="whatsapp-variables"
+                      rows={Math.max(2, expected ?? 4)}
+                      placeholder={["Ada", "ORD-1042"].join("\n")}
+                      value={field.state.value}
+                      onChange={(event) =>
+                        field.handleChange(event.target.value)
+                      }
+                      onBlur={field.handleBlur}
+                      aria-invalid={invalid || mismatch || undefined}
+                    />
+                    {invalid ? (
+                      <FieldError field={field} />
+                    ) : (
+                      <FieldDescription
+                        className={mismatch ? "text-destructive" : undefined}
+                      >
+                        {expected === null
+                          ? "One variable per line, in template placeholder order."
+                          : `${supplied} of ${expected} — one per line, in placeholder order.`}
+                      </FieldDescription>
+                    )}
+                  </Field>
+                );
+              }}
+            </form.Field>
           );
         }}
-      </form.Field>
+      </form.Subscribe>
 
-      <form.Subscribe selector={(state) => state.isSubmitting}>
-        {(isSubmitting) => (
-          <Button type="submit" loading={isSubmitting} className="self-start">
-            <Send data-icon="inline-start" />
-            Send WhatsApp
-          </Button>
-        )}
+      <form.Subscribe
+        selector={(state) => ({
+          isSubmitting: state.isSubmitting,
+          name: state.values.template_name,
+          language: state.values.template_language,
+          variables: state.values.variables,
+        })}
+      >
+        {({ isSubmitting, name, language, variables }) => {
+          const expected = expectedVariables(
+            templates.data?.templates,
+            name,
+            language,
+          );
+          const ready =
+            name.length > 0 &&
+            language.length > 0 &&
+            (expected === null ||
+              variablesFromText(variables).length === expected);
+          return (
+            <Button
+              type="submit"
+              loading={isSubmitting}
+              disabled={!ready}
+              className="self-start"
+            >
+              <Send data-icon="inline-start" />
+              Send WhatsApp
+            </Button>
+          );
+        }}
       </form.Subscribe>
     </form>
   );

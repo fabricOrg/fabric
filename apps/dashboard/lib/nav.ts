@@ -91,51 +91,13 @@ export const navGroups: readonly NavGroup[] = [
     ],
   },
   {
-    label: "Messaging",
+    // Grouped by what someone is DOING, not by channel. Ten flat entries under one "Messaging" label
+    // had stopped being a list and become a pile — and channel-shaped groups would fragment further
+    // with every channel we add (SMS alone would own three of them, WhatsApp one). Activity groups
+    // stay the same size as the channel count grows.
+    label: "Send",
     items: [
       { title: "Send SMS", href: "/send", icon: Send, permission: "sms:send" },
-      {
-        title: "SMS Templates",
-        href: "/templates",
-        icon: Library,
-        permission: "sms:send",
-      },
-      {
-        title: "Virtual phone",
-        href: "/virtual-phone",
-        icon: Smartphone,
-        permission: "sms:read",
-      },
-      {
-        title: "Campaigns",
-        href: "/campaigns",
-        icon: Megaphone,
-        preview: true,
-        permission: "sms:send",
-      },
-      {
-        title: "Messages",
-        href: "/messages",
-        icon: List,
-        permission: "sms:read",
-      },
-      // Definitions sit immediately before deliveries because they are the two halves of the same
-      // feature: author a versioned message here, watch what it sent there. The page shipped without
-      // ANY nav entry, so it was reachable only by typing the URL — a whole surface effectively
-      // undiscoverable. Gated on `messages:read` (its pair's gate, and one every role holds);
-      // `definitions:write` / `definitions:publish` gate the actions inside the page, not seeing it.
-      {
-        title: "Message definitions",
-        href: "/message-definitions",
-        icon: FileCode2,
-        permission: "messages:read",
-      },
-      {
-        title: "Managed deliveries",
-        href: "/message-deliveries",
-        icon: PackageCheck,
-        permission: "messages:read",
-      },
       {
         title: "Emails",
         href: "/emails",
@@ -149,10 +111,67 @@ export const navGroups: readonly NavGroup[] = [
         permission: "whatsapp:read",
       },
       {
+        title: "Campaigns",
+        href: "/campaigns",
+        icon: Megaphone,
+        preview: true,
+        permission: "sms:send",
+      },
+    ],
+  },
+  {
+    label: "Content",
+    items: [
+      {
+        title: "SMS Templates",
+        href: "/templates",
+        icon: Library,
+        permission: "sms:send",
+      },
+      // Definitions sit with templates rather than with deliveries: both answer "what will we send",
+      // which is a different question from "what did we send". Gated on `messages:read` (one every
+      // role holds); `definitions:write` / `definitions:publish` gate the actions inside the page,
+      // not seeing it. This page originally shipped with NO nav entry at all and was reachable only
+      // by typing the URL.
+      {
+        title: "Message definitions",
+        href: "/message-definitions",
+        icon: FileCode2,
+        permission: "messages:read",
+      },
+    ],
+  },
+  {
+    label: "Activity",
+    items: [
+      {
+        title: "Messages",
+        href: "/messages",
+        icon: List,
+        permission: "sms:read",
+      },
+      {
+        title: "Managed deliveries",
+        href: "/message-deliveries",
+        icon: PackageCheck,
+        permission: "messages:read",
+      },
+    ],
+  },
+  {
+    label: "Verify & test",
+    items: [
+      {
         title: "Number verification",
         href: "/verify",
         icon: ShieldCheck,
         permission: "sms:send",
+      },
+      {
+        title: "Virtual phone",
+        href: "/virtual-phone",
+        icon: Smartphone,
+        permission: "sms:read",
       },
     ],
   },

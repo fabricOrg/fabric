@@ -1,6 +1,7 @@
 import {
   type WhatsappMessageListResponse,
   type WhatsappSendResponse,
+  type WhatsappTemplateListResponse,
   whatsappSendRequest,
   whatsappSendResponse,
 } from "@app/contracts";
@@ -27,6 +28,7 @@ import { parsePageQuery } from "../http/cursor.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { WhatsappService } from "./whatsapp.service.js";
+import { listApprovedTemplates } from "./whatsapp-template-reads.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -64,6 +66,28 @@ export class WhatsappInboxController {
         environment.environmentId,
         parsePageQuery(query),
       )),
+      request_id: newRequestId(),
+    };
+  }
+
+  /**
+   * The APPROVED template catalog for the picker. Read-only, and it exists so a sender never types a
+   * template name from memory — a name Meta does not have fails at the provider AFTER the reserve.
+   */
+  @Get(":tenantId/whatsapp/templates")
+  async templates(
+    @Param("tenantId") tenantId: string,
+  ): Promise<WhatsappTemplateListResponse> {
+    const normalizedTenantId = parseUuid(tenantId);
+    const { templates, syncedAt } = await listApprovedTemplates(
+      this.db,
+      normalizedTenantId,
+    );
+    return {
+      templates,
+      // Surfaced rather than hidden: the catalog is a cache of Meta's state (ADR-0014 §4), so a
+      // stale list is a real condition the UI should be able to say out loud.
+      synced_at: syncedAt ? syncedAt.toISOString() : null,
       request_id: newRequestId(),
     };
   }

@@ -9,6 +9,7 @@
 import { createAppDb } from "@app/db";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { assertDisposableDatabase } from "./disposable-database.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
@@ -40,6 +41,13 @@ async function seedTenant(id: string, slug: string) {
 
 describe("ADR-0004 — applications/environments tenant isolation", () => {
   beforeAll(async () => {
+    // Guarded in BOTH hooks. A precondition checked once does not hold for the whole run:
+    // specs execute in parallel, and a sibling guard that checked only setup destroyed a live
+    // credential this way.
+    await assertDisposableDatabase(owner, {
+      fixtureTenantIds: [TENANT_A, TENANT_B],
+      spec: "ADR-0004 applications/environments isolation",
+    });
     await owner.unsafe("DELETE FROM environments");
     await owner.unsafe("DELETE FROM applications");
     await owner.unsafe("DELETE FROM accounts WHERE id IN ($1, $2)", [
@@ -59,6 +67,13 @@ describe("ADR-0004 — applications/environments tenant isolation", () => {
     });
   });
   afterAll(async () => {
+    // Guarded in BOTH hooks. A precondition checked once does not hold for the whole run:
+    // specs execute in parallel, and a sibling guard that checked only setup destroyed a live
+    // credential this way.
+    await assertDisposableDatabase(owner, {
+      fixtureTenantIds: [TENANT_A, TENANT_B],
+      spec: "ADR-0004 applications/environments isolation",
+    });
     await owner.unsafe("DELETE FROM environments");
     await owner.unsafe("DELETE FROM applications");
     await owner.unsafe("DELETE FROM accounts WHERE id IN ($1, $2)", [

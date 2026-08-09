@@ -16,20 +16,31 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `1e77b3c` | #252, #253, #255, #256, #258, then the WhatsApp stack #259–#265 |
-| `origin/testing` | `2a20286` | DEPLOYED 2026-08-08 (#257); promoted again with the channel |
+| `origin/dev` | `62f3bed` | the WhatsApp stack #259–#265, all merged |
+| `origin/testing` | `af3f89e` | promoted + **DEPLOYED 2026-08-09** (#266); in sync with `dev` |
 
-**The WhatsApp stack is MERGED into `dev`** — #259, #260, #261, #263, #264, #262, #265 in that
-order. Two things that cost real time and will again:
+**The WhatsApp channel is DEPLOYED to testing.** All six jobs green including
+`Migrate · testing db`, which applied 14 migrations (`0136`–`0147`) and then ran `db:assert` on the
+real database: *security layer applied ✓*, ledger + general-ledger invariants OK. That assertion
+covering the two new tenant tables is what proves the RLS and the grant REVOKEs landed in a place
+other than my laptop.
 
-- **The repo's CI forbids stacked PRs** (`metadata` fails with *"Work branches must target dev"*),
-  so every PR in a stack must be retargeted to `dev` one at a time as the one below it lands.
-- **Squash-merging a stack destroys the merge base.** After each squash, the next branch's shared
-  history is gone, so every file the stack touched comes back as an `add/add` conflict. The
-  resolution rule that made this safe and checkable: for each conflicted path, compare dev's blob
-  to the blob at the commit the branch actually built on — if they are equal, dev added nothing the
-  branch lacks and taking the branch's side is provably correct rather than a guess. Only the files
-  where dev had genuinely diverged (HANDOFF, `security-layer.check.ts`) needed reading.
+**What the deploy does NOT prove.** Live WhatsApp in testing needs a `meta-cloud` credential armed
+THERE; the code travels, the credential does not. So testing has the channel and no way to send
+until an operator arms it. `PLUGIN_MASTER_KEY` must exist in the testing environment or credential
+resolution silently falls back to a derived development key.
+
+Two process facts that cost real time and will again:
+
+- **CI forbids stacked PRs** (`metadata` fails with *"Work branches must target dev"*), so each PR
+  in a stack must be retargeted to `dev` as the one below it lands.
+- **Squash-merging a stack destroys the merge base**, so every file the stack touched returns as an
+  `add/add` conflict. The rule that made this checkable rather than a guess: for each conflicted
+  path compare dev's blob to the blob at the commit the branch actually built on — equal means dev
+  added nothing the branch lacks, so taking the branch's side is provably correct. Only the two
+  files where dev had genuinely diverged needed reading.
+- **`Deploy` reports success while skipping all its jobs** — it is the gated AWS/ECS path. The real
+  one is `Deploy testing (Vercel + Render)`. Its green tick is not evidence anything shipped.
 
 Nothing uncommitted. The testing deploy ran all six jobs green — gate, **`Migrate · testing db`
 (0133 applied)**, Render api, and the three Vercel apps — and the pipeline verifies the artefact

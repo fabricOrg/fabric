@@ -4,8 +4,10 @@ import {
   type WhatsappMessageListResponse,
   type WhatsappSendRequest,
   type WhatsappSendResponse,
+  type WhatsappTemplateListResponse,
   whatsappMessageListResponse,
   whatsappSendResponse,
+  whatsappTemplateListResponse,
 } from "@app/contracts";
 import { BffError } from "./api-client";
 
@@ -52,6 +54,18 @@ export async function listWhatsappMessages(
 ): Promise<WhatsappMessageListResponse> {
   return whatsappMessageListResponse.parse(
     await request(tenantId, `/whatsapp?env=${env}`),
+  );
+}
+
+/**
+ * The APPROVED template catalog for the compose picker. Parsed against the contract like every other
+ * BFF read, so a malformed catalog fails here rather than rendering a picker of `undefined`.
+ */
+export async function listWhatsappTemplates(
+  tenantId: string,
+): Promise<WhatsappTemplateListResponse> {
+  return whatsappTemplateListResponse.parse(
+    await request(tenantId, "/whatsapp/templates"),
   );
 }
 

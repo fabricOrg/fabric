@@ -10,6 +10,7 @@
 import { createAppDb, InvalidTenantIdError } from "@app/db";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { assertDisposableDatabase } from "./disposable-database.js";
 
 // Prod-faithful owner model (653b45d): app_migrator (migration owner) is NON-super → subject to FORCE
 // RLS, so cross-tenant seeds/cleanup need the superuser (DATABASE_URL_SUPER = app_owner, test-only).
@@ -48,6 +49,13 @@ async function seedTenant(id: string, slug: string) {
 
 describe("B3 — runtime tenant isolation (L1 withTenant + SET LOCAL)", () => {
   beforeAll(async () => {
+    // Guarded in BOTH hooks. A precondition checked once does not hold for the whole run:
+    // specs execute in parallel, and a sibling guard that checked only setup destroyed a live
+    // credential this way.
+    await assertDisposableDatabase(owner, {
+      fixtureTenantIds: [TENANT_A, TENANT_B],
+      spec: "B3 runtime tenant isolation",
+    });
     await owner.unsafe(
       "TRUNCATE ledger_entries, ledger_transactions, ledger_accounts CASCADE",
     );
@@ -57,6 +65,13 @@ describe("B3 — runtime tenant isolation (L1 withTenant + SET LOCAL)", () => {
     await seedTenant(TENANT_B, "tenant-b");
   });
   afterAll(async () => {
+    // Guarded in BOTH hooks. A precondition checked once does not hold for the whole run:
+    // specs execute in parallel, and a sibling guard that checked only setup destroyed a live
+    // credential this way.
+    await assertDisposableDatabase(owner, {
+      fixtureTenantIds: [TENANT_A, TENANT_B],
+      spec: "B3 runtime tenant isolation",
+    });
     // Good-citizen cleanup on the SHARED test DB: drop the rows I created so the next spec file's
     // setup (e.g. a plain `DELETE FROM accounts`) isn't blocked by my `ledger_accounts` children
     // (FK RESTRICT, F4). Broader fix = a per-file isolated DB for `test:integration` — flagged to fifi.
