@@ -18,7 +18,7 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 | --- | --- | --- |
 | `origin/dev` | `86b5c38` | #252, #253, #255, #256, #258 |
 | `origin/testing` | `2a20286` | promoted + DEPLOYED 2026-08-08 (#257); **behind `dev`** |
-| `feature/ops-whatsapp-managed` | `a2a9f4e` | PR #265 — top of the WhatsApp stack |
+| `feature/ops-whatsapp-managed` | `679411a` | PR #265 — top of the WhatsApp stack |
 
 **The WhatsApp channel sits in a six-PR stack that is open and unmerged.** Order matters:
 #261 (1a, on `dev`) → #263 (1b) → #264 (1c) → #262 (1d) → #265 (1e + templates + SDK +
@@ -120,15 +120,18 @@ not configured. Money and credits are unaffected; only status. Route is
 
 ### WhatsApp — what is NOT built
 
-- **Phase 2: inbound messages + the 24-hour customer service window.** The webhook parses
-  `statuses` and template events; `value.messages[]` is ignored. This is not just plumbing — a
-  SHARED WABA cannot attribute an inbound reply to one tenant without a rule, the same
-  structural problem SMS MO is parked on. `tenantsForWaba()` returns EVERY tenant that has sent
-  live, which is fine for broadcasting a template-cache update and useless for attributing a
-  message. The defensible rule is "the tenant of the most recent outbound to that number inside
-  the window"; it cross-attributes when two tenants message the same consumer, and that
-  trade-off should be recorded in ADR-0014 before it is coded.
-- **Phase 4: commercial offers** — WhatsApp costability + eligibility.
+The channel is otherwise complete: direct sends, webhook ingress, template lifecycle, SDK,
+dashboard, managed sends, inbound + the service window, and costable offers.
+
+- **Free-form sends inside the service window.** ADR-0015 §6: the window makes them legal, it
+  does not make them PRICED. A free-form reply is a *service conversation* in Meta's billing.
+  Phase 4 gave that sell rate somewhere to live; nobody has set one, and serving a send we
+  cannot cost is what ADR-0012's costability rule forbids. This is the last WhatsApp gap.
+- **Inbound attribution cross-attributes on a shared WABA, by design** (ADR-0015 §2): two
+  tenants messaging the same consumer inside one window, and the second one wins. Both are
+  legitimate senders, so no rule available to us separates them — the fix is per-tenant numbers,
+  a commercial/onboarding change. A test asserts the current behaviour, so read the ADR before
+  treating a mis-delivered reply as a bug.
 - `whatsapp_dispatches` leaves `status='sending'` after completion (task #16).
 - The SMS send path still carries the double-send defect fixed in WhatsApp (task #15) —
   untouched on purpose, it is the live money path.
