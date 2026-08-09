@@ -10,6 +10,7 @@ import {
   type WhatsappSendRequest,
   walletSnapshot,
   whatsappSendResponse,
+  whatsappTemplateListResponse,
 } from "@app/contracts";
 
 async function bffRequest(path: string, init?: RequestInit): Promise<unknown> {
@@ -68,6 +69,13 @@ export async function sendWhatsapp(
       headers: { "idempotency-key": idempotencyKey },
       body: JSON.stringify(input),
     }),
+  );
+}
+
+/** The APPROVED WhatsApp template catalog for the compose picker. */
+export async function getWhatsappTemplates() {
+  return whatsappTemplateListResponse.parse(
+    await bffRequest("/api/dashboard/whatsapp/templates"),
   );
 }
 
