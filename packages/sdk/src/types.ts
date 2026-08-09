@@ -238,57 +238,10 @@ export interface MessageDelivery {
   readonly updatedAt: string;
 }
 
-/** A field-path error that blocks a preview. Carries a path + stable code, never the rejected value. */
-export interface PreviewBlocker {
-  readonly path: string;
-  readonly code: string;
-}
-
-/** The rendered SMS a preview produced (present only for an SMS channel with no blockers). */
-export interface SmsPreview {
-  readonly body: string;
-  readonly encoding: "gsm7" | "ucs2";
-  readonly length: number;
-  readonly segments: number;
-  readonly costMinor: string;
-  readonly currency: string;
-}
-
-/** The rendered email a preview produced (present only for an Email channel with no blockers). */
-export interface EmailPreview {
-  readonly subject: string;
-  readonly text: string | null;
-  readonly html: string | null;
-  /** Rendered UTF-8 byte size (measured to enforce the 256 KiB ceiling; email is priced flat per send). */
-  readonly sizeBytes: number;
-  readonly costMinor: string;
-  readonly currency: string;
-}
-
-/**
- * Result of previewing a released definition — equals what a subsequent send would render. `channel`
- * discriminates the rendered result: `preview` is set for SMS, `emailPreview` for Email; the other is
- * null. An SMS consumer written before Email shipped reads `preview` and is unaffected.
- */
-export interface MessagePreview {
-  readonly versionId: string;
-  readonly channel: "sms" | "email";
-  readonly environment: "sandbox" | "live";
-  readonly resolvedLocale: string;
-  readonly blockers: readonly PreviewBlocker[];
-  readonly warnings: readonly PreviewBlocker[];
-  readonly eligible: boolean;
-  readonly sender: {
-    readonly senderId: string;
-    readonly status:
-      | "sandbox"
-      | "active"
-      | "pending"
-      | "rejected"
-      | "unregistered"
-      | "not_evaluated";
-  };
-  readonly messageClass: "transactional" | "promotional";
-  readonly preview: SmsPreview | null;
-  readonly emailPreview: EmailPreview | null;
-}
+export type {
+  EmailPreview,
+  MessagePreview,
+  PreviewBlocker,
+  SmsPreview,
+  WhatsappPreview,
+} from "./preview-types.js";

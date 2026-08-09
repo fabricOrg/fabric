@@ -23,6 +23,8 @@ import {
   pendingWhatsappDispatches,
   recordUnknownWhatsappDispatchOutcome,
 } from "./whatsapp-load.js";
+import type { ManagedWhatsappAcceptInput } from "./whatsapp-managed-accept.js";
+import { prepareManagedWhatsapp } from "./whatsapp-managed-prepare.js";
 import { prepareWhatsapp } from "./whatsapp-prepare.js";
 import { getWhatsappMessage, listWhatsappMessages } from "./whatsapp-reads.js";
 import { resolveWhatsappStatus } from "./whatsapp-resolve.js";
@@ -115,6 +117,32 @@ export class WhatsappService {
       messageId,
     );
     return { ...message, request_id: newRequestId() };
+  }
+
+  /**
+   * Accept a managed WhatsApp delivery. The managed engine has already rendered the template binding
+   * and priced it; this seam is accept-only, exactly like the direct path's prepare — the same worker
+   * dispatches both, because the row it reads is identical.
+   */
+  async acceptManaged(input: ManagedWhatsappAcceptInput): Promise<void> {
+    await this.assertSendingEnabled(input.tenantId);
+    await assertWhatsappCompliant({
+      consent: this.consent,
+      tenantId: input.tenantId,
+      to: input.to,
+      category: input.templateCategory,
+    });
+    await prepareManagedWhatsapp({
+      db: this.db,
+      vault: this.vault,
+      sandboxAllowance: this.sandboxAllowance,
+      runtime: this.runtime,
+      templates: this.templates,
+      ...(this.effectivePricing
+        ? { effectivePricing: this.effectivePricing }
+        : {}),
+      message: input,
+    });
   }
 
   async process(job: WhatsappSendJob): Promise<WhatsappSendResponse["status"]> {

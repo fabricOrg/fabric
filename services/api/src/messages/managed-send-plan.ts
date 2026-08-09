@@ -17,7 +17,15 @@ export type AcceptedPreview =
       text?: string;
       html?: string;
     }
-  | { channel: "sms"; costMinor: string; body: string };
+  | { channel: "sms"; costMinor: string; body: string }
+  | {
+      channel: "whatsapp";
+      costMinor: string;
+      templateName: string;
+      templateLanguage: string;
+      templateCategory: "marketing" | "utility" | "authentication";
+      parameters: readonly string[];
+    };
 
 /**
  * The definition's channel is authoritative; the request's `to` must match it. Rejects pre-acceptance
@@ -58,6 +66,18 @@ export function acceptedPreview(
       "The managed message is not eligible to send.",
       blocker?.path || undefined,
     );
+  if (preview.channel === "whatsapp") {
+    const whatsapp = preview.whatsapp_preview;
+    if (blocker || !whatsapp || !preview.eligible) throw ineligible();
+    return {
+      channel: "whatsapp",
+      costMinor: whatsapp.cost_minor,
+      templateName: whatsapp.template_name,
+      templateLanguage: whatsapp.template_language,
+      templateCategory: whatsapp.template_category,
+      parameters: whatsapp.parameters,
+    };
+  }
   if (preview.channel === "email") {
     const email = preview.email_preview;
     if (blocker || !email || !preview.eligible) throw ineligible();

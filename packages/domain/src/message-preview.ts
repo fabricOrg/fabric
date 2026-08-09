@@ -2,6 +2,10 @@ import type { VariableSchema } from "@app/contracts";
 import { type EmailPreviewOutcome, previewEmail } from "./email-render.js";
 import { type PreviewOutcome, previewSms } from "./message-render.js";
 import type { RateTable } from "./rating.js";
+import {
+  previewWhatsapp,
+  type WhatsappPreviewOutcome,
+} from "./whatsapp-render.js";
 
 /**
  * Channel dispatcher over the pure per-channel preview cores (SDK-007 slice 2). The managed engine
@@ -27,17 +31,32 @@ export type MessagePreviewInput =
       readonly data: unknown;
       readonly currency: string;
       readonly rates?: RateTable;
+    }
+  | {
+      readonly channel: "whatsapp";
+      readonly templateName: string;
+      readonly templateLanguage: string;
+      readonly templateCategory: "marketing" | "utility" | "authentication";
+      readonly parameters: readonly string[];
+      readonly schema: VariableSchema;
+      readonly data: unknown;
+      readonly currency: string;
+      readonly rates?: RateTable;
     };
 
 export type MessagePreviewOutcome =
   | ({ readonly channel: "sms" } & PreviewOutcome)
-  | ({ readonly channel: "email" } & EmailPreviewOutcome);
+  | ({ readonly channel: "email" } & EmailPreviewOutcome)
+  | ({ readonly channel: "whatsapp" } & WhatsappPreviewOutcome);
 
 export function previewMessage(
   input: MessagePreviewInput,
 ): MessagePreviewOutcome {
   if (input.channel === "email") {
     return { channel: "email", ...previewEmail(input) };
+  }
+  if (input.channel === "whatsapp") {
+    return { channel: "whatsapp", ...previewWhatsapp(input) };
   }
   return { channel: "sms", ...previewSms(input) };
 }

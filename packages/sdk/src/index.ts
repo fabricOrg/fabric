@@ -60,6 +60,7 @@ export type {
   WebhookDelivery,
   WebhookEndpoint,
   WhatsAppTemplateCategory,
+  WhatsappPreview,
   WriteOptions,
 } from "./types.js";
 export type {

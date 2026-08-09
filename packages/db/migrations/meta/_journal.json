@@ -1002,6 +1002,20 @@
       "when": 1786320002000,
       "tag": "0142_managed_whatsapp_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1786320062000,
+      "tag": "0143_message_definition_whatsapp_channel",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1786320122000,
+      "tag": "0144_price_book_whatsapp_channel",
+      "breakpoints": true
     }
   ]
 }

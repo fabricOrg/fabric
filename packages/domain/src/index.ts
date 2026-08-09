@@ -17,3 +17,4 @@ export * from "./message-preview.js";
 export * from "./message-render.js";
 export * from "./rating.js";
 export * from "./segmentation.js";
+export * from "./whatsapp-render.js";

@@ -3,6 +3,7 @@ import type {
   PreviewMessageRequest,
   SmsVariantContent,
   VariableSchema,
+  WhatsappVariantContent,
 } from "@app/contracts";
 import {
   type AppDb,
@@ -14,13 +15,7 @@ import {
   messageDefinitionVersions,
   type TenantId,
 } from "@app/db";
-import {
-  type EmailPreview,
-  previewEmail,
-  previewSms,
-  type RenderError,
-  type SmsPreview,
-} from "@app/domain";
+import { previewEmail, previewSms, type RenderError } from "@app/domain";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, eq, sql } from "drizzle-orm";
 import { ConsentService } from "../consent/consent.service.js";
@@ -33,31 +28,11 @@ import {
   defaultSandboxEnv,
   resolveEmailParts,
 } from "./message-preview-helpers.js";
+import type { PreviewOutput } from "./message-preview-output.js";
+import { whatsappPreview } from "./message-preview-whatsapp.js";
 
-export interface PreviewOutput {
-  readonly channel: "sms" | "email";
-  readonly definition_id: string;
-  readonly version_id: string;
-  readonly environment: "sandbox" | "live";
-  readonly resolved_locale: string;
-  readonly blockers: readonly RenderError[];
-  readonly warnings: readonly RenderError[];
-  readonly eligible: boolean;
-  readonly sender: {
-    readonly sender_id: string;
-    readonly status:
-      | "sandbox"
-      | "active"
-      | "pending"
-      | "rejected"
-      | "unregistered"
-      | "not_evaluated";
-  };
-  readonly message_class: "transactional" | "promotional";
-  readonly preview: SmsPreview | null;
-  readonly email_preview: EmailPreview | null;
-  readonly email_from: string | null;
-}
+// Re-exported so existing importers (managed-send-plan, controllers) keep their import path.
+export type { PreviewOutput } from "./message-preview-output.js";
 
 /**
  * Public message preview (SDK-003 slice 5). Resolves the RELEASED definition for the presenting key's
@@ -153,6 +128,21 @@ export class MessagePreviewService {
       // ---- Email channel (SDK-007 slice 3): render + price via the pure core. No SMS sender or
       // recipient compliance — email sending-domain binding is a later slice (readiness gap), reported
       // here as sender.status = "not_evaluated". READ-ONLY like the SMS path. ----
+      if (released.channel === "whatsapp") {
+        return whatsappPreview({
+          content: released.content as WhatsappVariantContent,
+          schema: released.schema as VariableSchema,
+          data: request.data ?? {},
+          currency: request.currency ?? "GHS",
+          rates: rates.whatsapp,
+          resolvedLocale,
+          defaultLocale: released.locale,
+          definitionId: released.definitionId,
+          versionId: released.versionId,
+          environment: released.envType,
+        });
+      }
+
       if (released.channel === "email") {
         const email = released.content as EmailVariantContent;
         const parts = resolveEmailParts(email, resolvedLocale, released.locale);
@@ -185,6 +175,7 @@ export class MessagePreviewService {
           message_class: "transactional",
           preview: null,
           email_preview: outcome.blockers.length === 0 ? outcome.preview : null,
+          whatsapp_preview: null,
           email_from: email.from ?? null,
         };
       }
@@ -249,6 +240,7 @@ export class MessagePreviewService {
         message_class: messageClass,
         preview: blockers.length === 0 ? outcome.preview : null,
         email_preview: null,
+        whatsapp_preview: null,
         email_from: null,
       };
     });

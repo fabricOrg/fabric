@@ -71,6 +71,7 @@ describe("MessagesResource", () => {
           message_class: "transactional",
           preview: null,
           email_preview: null,
+          whatsapp_preview: null,
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),
@@ -124,6 +125,7 @@ describe("MessagesResource", () => {
         cost_minor: "5",
         currency: "GHS",
       },
+      whatsapp_preview: null,
       request_id: "req_preview_email",
     });
     const { resource } = resourceReturning(payload);
@@ -140,6 +142,50 @@ describe("MessagesResource", () => {
       html: null,
       sizeBytes: 34,
       costMinor: "5",
+      currency: "GHS",
+    });
+  });
+
+  it("maps a whatsapp preview as a binding, preserving parameter order", async () => {
+    const payload = previewMessageResponse.parse({
+      channel: "whatsapp",
+      version_id: "2ccb4b9f-384e-4f4e-8983-ff12555223d0",
+      environment: "sandbox",
+      resolved_locale: "en",
+      blockers: [],
+      warnings: [],
+      eligible: true,
+      // The WABA number comes from credentials at dispatch — there is no authored WhatsApp sender.
+      sender: { sender_id: "", status: "not_evaluated" },
+      message_class: "transactional",
+      preview: null,
+      email_preview: null,
+      whatsapp_preview: {
+        template_name: "order_shipped",
+        template_language: "en_US",
+        template_category: "utility",
+        parameters: ["Ada", "2"],
+        cost_minor: "12",
+        currency: "GHS",
+      },
+      request_id: "req_preview_whatsapp",
+    });
+    const { resource } = resourceReturning(payload);
+
+    const result = await resource.preview("order.shipped", {
+      data: { name: "Ada" },
+    });
+
+    expect(result.data.channel).toBe("whatsapp");
+    expect(result.data.preview).toBeNull();
+    expect(result.data.emailPreview).toBeNull();
+    expect(result.data.whatsappPreview).toEqual({
+      templateName: "order_shipped",
+      templateLanguage: "en_US",
+      templateCategory: "utility",
+      // Meta body params are positional — the array order IS the mapping.
+      parameters: ["Ada", "2"],
+      costMinor: "12",
       currency: "GHS",
     });
   });

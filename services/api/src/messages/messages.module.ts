@@ -5,6 +5,7 @@ import { EmailModule } from "../email/email.module.js";
 import { PricingModule } from "../pricing/pricing.module.js";
 import { SendersModule } from "../senders/senders.module.js";
 import { SmsModule } from "../sms/sms.module.js";
+import { WhatsappModule } from "../whatsapp/whatsapp.module.js";
 import { ManagedMessagesController } from "./managed-messages.controller.js";
 import { ManagedMessagesService } from "./managed-messages.service.js";
 import { MessagePreviewService } from "./message-preview.service.js";
@@ -23,6 +24,7 @@ import { MessagesController } from "./messages.controller.js";
     PricingModule,
     SendersModule,
     SmsModule,
+    WhatsappModule,
   ],
   controllers: [MessagesController, ManagedMessagesController],
   providers: [MessagePreviewService, ManagedMessagesService],

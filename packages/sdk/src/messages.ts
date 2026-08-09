@@ -14,6 +14,7 @@ import type {
   MessagePreview,
   RequestOptions,
   SmsPreview,
+  WhatsappPreview,
 } from "./types.js";
 import {
   booleanField,
@@ -170,9 +171,10 @@ function parsePreview(data: Record<string, unknown>): MessagePreview {
   const sender = record(data.sender);
   const previewValue = data.preview;
   const emailPreviewValue = data.email_preview;
+  const whatsappPreviewValue = data.whatsapp_preview;
   return {
     versionId: stringField(data.version_id, "version_id"),
-    channel: enumField(data.channel, ["sms", "email"], "channel"),
+    channel: enumField(data.channel, ["sms", "email", "whatsapp"], "channel"),
     environment: enumField(
       data.environment,
       ["sandbox", "live"],
@@ -220,6 +222,10 @@ function parsePreview(data: Record<string, unknown>): MessagePreview {
       emailPreviewValue == null
         ? null
         : parseEmailPreview(record(emailPreviewValue)),
+    whatsappPreview:
+      whatsappPreviewValue == null
+        ? null
+        : parseWhatsappPreview(record(whatsappPreviewValue)),
   };
 }
 
@@ -231,6 +237,31 @@ function parseSmsPreview(data: Record<string, unknown>): SmsPreview {
     segments: numberField(data.segments, "segments"),
     costMinor: stringField(data.cost_minor, "cost_minor"),
     currency: stringField(data.currency, "currency"),
+  };
+}
+
+function parseWhatsappPreview(data: Record<string, unknown>): WhatsappPreview {
+  const rawParameters = Array.isArray(data.parameters) ? data.parameters : [];
+  return {
+    templateName: stringField(
+      data.template_name,
+      "whatsapp_preview.template_name",
+    ),
+    templateLanguage: stringField(
+      data.template_language,
+      "whatsapp_preview.template_language",
+    ),
+    templateCategory: enumField(
+      data.template_category,
+      ["marketing", "utility", "authentication"],
+      "whatsapp_preview.template_category",
+    ),
+    // Order preserved verbatim — reordering here would silently reassign values to placeholders.
+    parameters: rawParameters.map((value, index) =>
+      stringField(value, `whatsapp_preview.parameters.${index}`),
+    ),
+    costMinor: stringField(data.cost_minor, "whatsapp_preview.cost_minor"),
+    currency: stringField(data.currency, "whatsapp_preview.currency"),
   };
 }
 
