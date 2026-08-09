@@ -1,12 +1,7 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import { createAppDb } from "@app/db";
-import type {
-  Creds,
-  NormalizedWhatsAppTemplateMessage,
-  ProviderResult,
-  WhatsAppSenderPlugin,
-} from "@app/integrations";
+import type { WhatsAppSenderPlugin } from "@app/integrations";
 import { FakeWhatsAppProvider } from "@app/integrations/testing/whatsapp";
 import { credit } from "@app/wallet";
 import { NestFactory } from "@nestjs/core";
@@ -24,6 +19,11 @@ import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.service.js";
 import { effectivePricingStub } from "../testing/effective-pricing.stub.js";
 import { WhatsappService } from "./whatsapp.service.js";
+import {
+  BlockingWhatsAppProvider,
+  FailingWhatsAppProvider,
+  whatsappPayload,
+} from "./whatsapp.test-doubles.js";
 import { prepareWhatsapp } from "./whatsapp-prepare.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 
@@ -270,6 +270,39 @@ describeDb("public WhatsApp API", () => {
     expect(Number(sends[0]?.count)).toBe(1);
   });
 
+  it("refunds a live send the provider never accepted", async () => {
+    await db.withTenant(tenantId, (tx) =>
+      credit(tx, {
+        currency: "GHS",
+        amountMinor: 10_000n,
+        idempotencyKey: "topup:whatsapp-refund",
+      }),
+    );
+    const previous = whatsappProvider;
+    whatsappProvider = new FailingWhatsAppProvider();
+    try {
+      const res = await send(liveKey, `wa-live-fail-${randomUUID()}`);
+      expect(res.statusCode).toBe(201);
+      const id = (res.json() as { id: string }).id;
+
+      const [msg] = await owner`
+        SELECT status::text, provider_ref FROM whatsapp_messages WHERE id = ${id}`;
+      expect(msg?.status).toBe("failed");
+      expect(msg?.provider_ref).toBeNull();
+
+      // The money question: a send that never reached the provider must RELEASE the reservation, not
+      // recognise it. Asserting the terminal transaction is `refunded` rather than merely "some
+      // terminal row exists" is the difference between catching this and re-shipping it — the bug
+      // committed, which also looks terminal.
+      const [txn] = await owner`
+        SELECT status FROM ledger_transactions
+         WHERE reference_id = ${id} AND status IN ('committed', 'refunded')`;
+      expect(txn?.status).toBe("refunded");
+    } finally {
+      whatsappProvider = previous;
+    }
+  });
+
   function send(rawKey: string, idempotencyKey: string) {
     return app.inject({
       method: "POST",
@@ -285,52 +318,3 @@ describeDb("public WhatsApp API", () => {
     });
   }
 });
-
-function whatsappPayload() {
-  return {
-    to: "+233545227189",
-    template_name: "order_update",
-    template_language: "en",
-    template_category: "utility" as const,
-    variables: ["A123"],
-    currency: "GHS" as const,
-  };
-}
-
-class BlockingWhatsAppProvider
-  extends FakeWhatsAppProvider
-  implements WhatsAppSenderPlugin
-{
-  calls = 0;
-  private releaseSend: (() => void) | undefined;
-  readonly started: Promise<void>;
-  private markStarted: () => void;
-
-  constructor() {
-    super();
-    this.markStarted = () => {};
-    this.started = new Promise<void>((resolve) => {
-      this.markStarted = resolve;
-    });
-  }
-
-  override async send(
-    message: NormalizedWhatsAppTemplateMessage,
-    _creds: Creds,
-  ): Promise<ProviderResult> {
-    this.calls++;
-    this.markStarted();
-    await new Promise<void>((resolve) => {
-      this.releaseSend = resolve;
-    });
-    return {
-      status: "accepted",
-      providerRef: `blocked-whatsapp-${message.messageId}`,
-      raw: { fake: true },
-    };
-  }
-
-  release(): void {
-    this.releaseSend?.();
-  }
-}

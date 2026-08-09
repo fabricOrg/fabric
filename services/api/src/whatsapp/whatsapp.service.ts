@@ -32,8 +32,7 @@ import {
 } from "./whatsapp-send.job.js";
 import {
   isTerminalWhatsappStatus,
-  parseWhatsappBacking,
-  settleWhatsappBacking,
+  settleResolvedOutcome,
 } from "./whatsapp-settlement.js";
 
 type Row = Record<string, unknown>;
@@ -268,11 +267,12 @@ export class WhatsappService {
       if (!current) return "failed";
       const prior = String(current.status) as WhatsappSendResponse["status"];
       if (isTerminalWhatsappStatus(prior)) return prior;
-      await settleWhatsappBacking(tx, {
-        backing: parseWhatsappBacking(String(current.backing)),
+      await settleResolvedOutcome(tx, {
+        runtime: this.runtime,
+        messageId,
+        backing: String(current.backing),
         priorRank: Number(current.status_rank),
         nextStatus: status,
-        messageId,
       });
       await tx`
         UPDATE whatsapp_messages SET status = ${status}, status_rank = ${STATUS_RANK[status]},
