@@ -34,6 +34,7 @@ interface MessageReader {
 interface DeliveryReaders {
   sms: MessageReader;
   email: MessageReader;
+  whatsapp: MessageReader;
 }
 
 const summaryColumns = {
@@ -153,16 +154,20 @@ export async function retrieveDelivery(
     return { delivery, attempts };
   });
   const firstAttempt = state.attempts[0];
-  const channelMessageId =
-    state.delivery.channel === "email"
-      ? firstAttempt?.emailMessageId
-      : firstAttempt?.messageId;
-  const message = channelMessageId
-    ? await (state.delivery.channel === "email"
-        ? readers.email
-        : readers.sms
-      ).get(input.tenantId, channelMessageId, input.environmentId)
-    : null;
+  // Keyed by channel rather than an email-vs-else ternary: under that shape a whatsapp delivery read
+  // the SMS reference with the SMS reader and 404'd, or worse, resolved a foreign row.
+  const channel = state.delivery.channel as keyof DeliveryReaders;
+  const references: Record<keyof DeliveryReaders, string | null | undefined> = {
+    sms: firstAttempt?.messageId,
+    email: firstAttempt?.emailMessageId,
+    whatsapp: firstAttempt?.whatsappMessageId,
+  };
+  const reader = readers[channel];
+  const channelMessageId = references[channel];
+  const message =
+    channelMessageId && reader
+      ? await reader.get(input.tenantId, channelMessageId, input.environmentId)
+      : null;
   return messageDeliverySchema.parse({
     ...toSummary(state.delivery),
     recipient: message?.to ?? "redacted",
@@ -170,6 +175,8 @@ export async function retrieveDelivery(
       id: attempt.id,
       ordinal: attempt.ordinal,
       channel: attempt.channel,
+      // The public `message_id` is the SMS message resource id. Email and WhatsApp attempts expose
+      // theirs through their own channel resources, not this field.
       message_id: attempt.channel === "sms" ? attempt.messageId : null,
       status: attempt.status,
       cost: {

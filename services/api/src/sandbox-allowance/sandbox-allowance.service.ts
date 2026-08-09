@@ -11,7 +11,7 @@ import {
   sandboxAllowanceDefaults,
 } from "./sandbox-allowance-limits.js";
 
-type Channel = "sms" | "email";
+type Channel = "sms" | "email" | "whatsapp";
 type Row = Record<string, unknown>;
 interface UsageRow {
   usage_date: string;
@@ -47,7 +47,7 @@ export class SandboxAllowanceService {
           channels.channel,
           COALESCE(b.used_units, 0)::text AS used_units,
           b.daily_limit::text
-        FROM (VALUES ('sms'::text), ('email'::text)) AS channels(channel)
+        FROM (VALUES ('sms'::text), ('email'::text), ('whatsapp'::text)) AS channels(channel)
         LEFT JOIN sandbox_usage_buckets b
           ON b.tenant_id = current_setting('app.tenant_id')::uuid
           AND b.usage_date = (now() AT TIME ZONE 'UTC')::date

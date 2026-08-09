@@ -125,6 +125,59 @@ export async function seedManagedEmailDefinition(input: {
   return { definitionId, versionId };
 }
 
+/**
+ * A released WhatsApp definition. Note what the content does NOT contain: a body. `parameters` names
+ * the definition's variables in TEMPLATE ORDER, because Meta body params are positional.
+ */
+export async function seedManagedWhatsappDefinition(input: {
+  owner: postgres.Sql;
+  tenantId: string;
+  applicationId: string;
+  environmentId: string;
+  key: string;
+  category?: "marketing" | "utility" | "authentication";
+  parameters?: string[];
+}): Promise<{ definitionId: string; versionId: string }> {
+  const definitionId = randomUUID();
+  const versionId = randomUUID();
+  const content = {
+    template_name: "order_shipped",
+    template_language: "en_US",
+    template_category: input.category ?? "utility",
+    parameters: input.parameters ?? ["name", "count"],
+    locales: { fr: { template_language: "fr" } },
+  };
+  await input.owner`
+    INSERT INTO message_definitions (id, tenant_id, application_id, key, status)
+    VALUES (${definitionId}, ${input.tenantId}, ${input.applicationId}, ${input.key}, 'active')`;
+  await input.owner`
+    INSERT INTO message_definition_versions (
+      id, tenant_id, definition_id, application_id, version, channel,
+      variable_schema, content, default_locale
+    ) VALUES (
+      ${versionId}, ${input.tenantId}, ${definitionId}, ${input.applicationId},
+      1, 'whatsapp',
+      ${input.owner.json({
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          count: { type: "integer", minimum: 0 },
+        },
+        required: ["name", "count"],
+      })}::jsonb,
+      ${input.owner.json(content)}::jsonb,
+      'en'
+    )`;
+  await input.owner`
+    INSERT INTO message_definition_releases (
+      tenant_id, application_id, environment_id, definition_id, version_id
+    ) VALUES (
+      ${input.tenantId}, ${input.applicationId}, ${input.environmentId},
+      ${definitionId}, ${versionId}
+    )`;
+  return { definitionId, versionId };
+}
+
 export async function cleanManagedTenant(
   owner: postgres.Sql,
   tenantId: string,
@@ -135,6 +188,8 @@ export async function cleanManagedTenant(
   await owner`DELETE FROM message_delivery_attempts WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM message_deliveries WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM email_dispatches WHERE tenant_id = ${tenantId}`;
+  await owner`DELETE FROM whatsapp_dispatches WHERE tenant_id = ${tenantId}`;
+  await owner`DELETE FROM whatsapp_messages WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM email_messages WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM messages WHERE tenant_id = ${tenantId}`;
   await owner`DELETE FROM sandbox_usage_events WHERE tenant_id = ${tenantId}`;

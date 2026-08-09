@@ -1,0 +1,289 @@
+import type {
+  WhatsappMessage,
+  WhatsappMessageListResponse,
+  WhatsappSendRequest,
+  WhatsappSendResponse,
+} from "@app/contracts";
+import type { AppDb } from "@app/db";
+import { MetaCloudError } from "@app/integrations";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import { ConsentService } from "../consent/consent.service.js";
+import { APP_DB } from "../db/db.module.js";
+import { invalidRequest, newRequestId } from "../http/api-error.js";
+import type { PageInput } from "../http/cursor.js";
+import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
+import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
+import { PiiVaultService } from "../privacy/pii-vault.service.js";
+import { QueueService } from "../queue/queue.service.js";
+import { SandboxAllowanceService } from "../sandbox-allowance/sandbox-allowance.service.js";
+import { assertWhatsappCompliant } from "./whatsapp-compliance.js";
+import { resolveWhatsappEnvironment } from "./whatsapp-environment.js";
+import {
+  assertWhatsappSendingEnabled,
+  whatsappDispatchBlockReason,
+} from "./whatsapp-gates.js";
+import {
+  claimStoredWhatsapp,
+  pendingWhatsappDispatches,
+  recordUnknownWhatsappDispatchOutcome,
+} from "./whatsapp-load.js";
+import type { ManagedWhatsappAcceptInput } from "./whatsapp-managed-accept.js";
+import { prepareManagedWhatsapp } from "./whatsapp-managed-prepare.js";
+import { prepareWhatsapp } from "./whatsapp-prepare.js";
+import { getWhatsappMessage, listWhatsappMessages } from "./whatsapp-reads.js";
+import { resolveWhatsappStatus } from "./whatsapp-resolve.js";
+import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
+import {
+  WHATSAPP_SEND_QUEUE,
+  type WhatsappSendJob,
+} from "./whatsapp-send.job.js";
+import { WhatsappTemplateService } from "./whatsapp-template.service.js";
+@Injectable()
+export class WhatsappService {
+  private readonly logger = new Logger(WhatsappService.name);
+  private readonly sandboxAllowance: SandboxAllowanceService;
+
+  constructor(
+    @Inject(APP_DB) private readonly db: AppDb,
+    @Inject(QueueService) private readonly queue: QueueService,
+    @Inject(PiiVaultService) private readonly vault: PiiVaultService,
+    @Inject(KillSwitchService) private readonly killSwitch: KillSwitchService,
+    @Inject(ConsentService) private readonly consent: ConsentService,
+    @Inject(WhatsappRuntimeService)
+    private readonly runtime: WhatsappRuntimeService,
+    @Inject(WhatsappTemplateService)
+    private readonly templates: WhatsappTemplateService,
+    @Optional()
+    @Inject(SandboxAllowanceService)
+    sandboxAllowance?: SandboxAllowanceService,
+    @Optional()
+    @Inject(EffectivePricingService)
+    private readonly effectivePricing?: EffectivePricingService,
+  ) {
+    this.sandboxAllowance = sandboxAllowance ?? new SandboxAllowanceService();
+  }
+
+  async send(
+    context: {
+      tenantId: string;
+      applicationId: string;
+      environmentId: string;
+    },
+    input: WhatsappSendRequest,
+  ): Promise<WhatsappSendResponse> {
+    await assertWhatsappSendingEnabled(this.killSwitch, context.tenantId);
+    const mode = await resolveWhatsappEnvironment(this.db, context);
+    const resolved = await this.runtime.resolve(mode);
+    if (
+      mode === "live" &&
+      (await this.killSwitch.isPaused(
+        `provider.${resolved.provider.slug}`,
+        context.tenantId,
+      ))
+    ) {
+      throw invalidRequest(
+        "provider_unavailable",
+        "The WhatsApp provider is temporarily unavailable. Try again shortly.",
+      );
+    }
+    await assertWhatsappCompliant({
+      consent: this.consent,
+      tenantId: context.tenantId,
+      to: input.to,
+      category: input.template_category,
+    });
+    const messageId = await prepareWhatsapp({
+      db: this.db,
+      vault: this.vault,
+      sandboxAllowance: this.sandboxAllowance,
+      runtime: this.runtime,
+      templates: this.templates,
+      ...(this.effectivePricing
+        ? { effectivePricing: this.effectivePricing }
+        : {}),
+      context,
+      content: input,
+    });
+    if (this.queue.enabled) {
+      await this.enqueue(context.tenantId, messageId).catch(
+        (error: unknown) => {
+          this.logger.warn(
+            `whatsapp-send enqueue deferred for ${messageId}: ${error instanceof Error ? error.message : "unknown"}`,
+          );
+        },
+      );
+    } else {
+      await this.process({ tenantId: context.tenantId, messageId });
+    }
+    const message = await this.get(
+      context.tenantId,
+      context.environmentId,
+      messageId,
+    );
+    return { ...message, request_id: newRequestId() };
+  }
+
+  /**
+   * Accept a managed WhatsApp delivery. The managed engine has already rendered the template binding
+   * and priced it; this seam is accept-only, exactly like the direct path's prepare — the same worker
+   * dispatches both, because the row it reads is identical.
+   */
+  async acceptManaged(input: ManagedWhatsappAcceptInput): Promise<void> {
+    await assertWhatsappSendingEnabled(this.killSwitch, input.tenantId);
+    // Same pre-acceptance gate the direct path applies. Without it a paused provider still reserves
+    // money and writes a delivery, only for the worker to fail and refund it — churn the caller sees
+    // as an accepted-then-failed message rather than an honest refusal.
+    const mode = await resolveWhatsappEnvironment(this.db, input);
+    const blocked = await whatsappDispatchBlockReason(
+      { killSwitch: this.killSwitch, runtime: this.runtime },
+      input.tenantId,
+      mode,
+    );
+    if (blocked) {
+      throw invalidRequest(
+        blocked,
+        "The WhatsApp provider is temporarily unavailable. Try again shortly.",
+      );
+    }
+    await assertWhatsappCompliant({
+      consent: this.consent,
+      tenantId: input.tenantId,
+      to: input.to,
+      category: input.templateCategory,
+    });
+    await prepareManagedWhatsapp({
+      db: this.db,
+      vault: this.vault,
+      sandboxAllowance: this.sandboxAllowance,
+      runtime: this.runtime,
+      templates: this.templates,
+      ...(this.effectivePricing
+        ? { effectivePricing: this.effectivePricing }
+        : {}),
+      message: input,
+    });
+  }
+
+  async process(job: WhatsappSendJob): Promise<WhatsappSendResponse["status"]> {
+    const stored = await claimStoredWhatsapp(
+      this.db,
+      this.vault,
+      job.tenantId,
+      job.messageId,
+    );
+    if (stored.kind === "skip") return stored.status;
+    if (stored.kind === "unreadable") {
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: "failed",
+        errorCode: "dispatch_material_unreadable",
+      });
+    }
+    const mode = stored.backing === "sandbox_allowance" ? "sandbox" : "live";
+    const paused = await whatsappDispatchBlockReason(
+      { killSwitch: this.killSwitch, runtime: this.runtime },
+      job.tenantId,
+      mode,
+    );
+    if (paused) {
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: "failed",
+        errorCode: paused,
+      });
+    }
+    const resolved = await this.runtime.resolve(mode);
+    if (resolved.provider.slug !== stored.providerSlug) {
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: "failed",
+        errorCode: "whatsapp_provider_selection_changed",
+      });
+    }
+    try {
+      const result = await resolved.provider.send(
+        {
+          messageId: job.messageId,
+          to: stored.content.to,
+          templateName: stored.content.template_name,
+          templateLanguage: stored.content.template_language,
+          templateCategory: stored.content.template_category,
+          variables: stored.content.variables,
+        },
+        resolved.creds,
+      );
+      return resolveWhatsappStatus(this.db, this.runtime, {
+        tenantId: job.tenantId,
+        messageRef: job.messageId,
+        status: result.status,
+        ...(result.providerRef ? { providerRef: result.providerRef } : {}),
+      });
+    } catch (error) {
+      if (error instanceof MetaCloudError) {
+        return resolveWhatsappStatus(this.db, this.runtime, {
+          tenantId: job.tenantId,
+          messageRef: job.messageId,
+          status: "failed",
+          errorCode: error.code,
+        });
+      }
+      await recordUnknownWhatsappDispatchOutcome(
+        this.db,
+        job.tenantId,
+        job.messageId,
+        error instanceof Error ? error.message : "unknown_provider_outcome",
+      );
+      throw error;
+    }
+  }
+
+  async list(
+    tenantId: string,
+    environmentId: string,
+    page: PageInput,
+  ): Promise<Omit<WhatsappMessageListResponse, "request_id">> {
+    return listWhatsappMessages(
+      this.db,
+      this.vault,
+      tenantId,
+      environmentId,
+      page,
+    );
+  }
+
+  async get(
+    tenantId: string,
+    environmentId: string,
+    messageId: string,
+  ): Promise<WhatsappMessage> {
+    return getWhatsappMessage(
+      this.db,
+      this.vault,
+      tenantId,
+      environmentId,
+      messageId,
+    );
+  }
+
+  async enqueuePending(tenantId: string): Promise<number> {
+    if (!this.queue.enabled) return 0;
+    const messageIds = await pendingWhatsappDispatches(this.db, tenantId);
+    for (const messageId of messageIds) await this.enqueue(tenantId, messageId);
+    return messageIds.length;
+  }
+
+  private async enqueue(tenantId: string, messageId: string): Promise<void> {
+    await this.queue
+      .queue(WHATSAPP_SEND_QUEUE)
+      .add("send", { tenantId, messageId } satisfies WhatsappSendJob, {
+        jobId: messageId,
+        attempts: 5,
+        backoff: { type: "exponential", delay: 2_000 },
+        removeOnComplete: { count: 1_000 },
+        removeOnFail: true,
+      });
+  }
+}

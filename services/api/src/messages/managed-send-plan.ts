@@ -2,7 +2,7 @@
 // projection per channel, the request fingerprint, and the deterministic delivery id. No I/O — split
 // out of managed-messages.service.ts to keep that file under the length guard.
 import { createHash } from "node:crypto";
-import type { SendManagedMessageRequest } from "@app/contracts";
+import type { MessageChannel, SendManagedMessageRequest } from "@app/contracts";
 import { emailAddress } from "@app/contracts";
 import { invalidRequest } from "../http/api-error.js";
 import type { PreviewOutput } from "./message-preview.service.js";
@@ -17,16 +17,27 @@ export type AcceptedPreview =
       text?: string;
       html?: string;
     }
-  | { channel: "sms"; costMinor: string; body: string };
+  | { channel: "sms"; costMinor: string; body: string }
+  | {
+      channel: "whatsapp";
+      costMinor: string;
+      templateName: string;
+      templateLanguage: string;
+      templateCategory: "marketing" | "utility" | "authentication";
+      parameters: readonly string[];
+    };
 
 /**
  * The definition's channel is authoritative; the request's `to` must match it. Rejects pre-acceptance
  * with a stable code and never echoes the recipient value.
  */
 export function assertRecipientMatchesChannel(
-  channel: "sms" | "email",
+  channel: MessageChannel,
   recipient: string,
 ): void {
+  // WhatsApp is phone-addressed like SMS, so it shares the E.164 rule. Written as an explicit arm
+  // rather than folded into the `else` because the two channels agreeing today is a coincidence of
+  // addressing, not a rule — a future channel must not inherit E.164 by falling through.
   const valid =
     channel === "email"
       ? emailAddress.safeParse(recipient).success
@@ -55,6 +66,18 @@ export function acceptedPreview(
       "The managed message is not eligible to send.",
       blocker?.path || undefined,
     );
+  if (preview.channel === "whatsapp") {
+    const whatsapp = preview.whatsapp_preview;
+    if (blocker || !whatsapp || !preview.eligible) throw ineligible();
+    return {
+      channel: "whatsapp",
+      costMinor: whatsapp.cost_minor,
+      templateName: whatsapp.template_name,
+      templateLanguage: whatsapp.template_language,
+      templateCategory: whatsapp.template_category,
+      parameters: whatsapp.parameters,
+    };
+  }
   if (preview.channel === "email") {
     const email = preview.email_preview;
     if (blocker || !email || !preview.eligible) throw ineligible();

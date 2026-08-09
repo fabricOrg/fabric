@@ -58,6 +58,21 @@ export const emailPreviewResult = z.object({
 });
 export type EmailPreviewResult = z.infer<typeof emailPreviewResult>;
 
+// WhatsApp preview result (ADR-0014). Note what is NOT here: a rendered body. WhatsApp content lives in
+// a Meta-approved template we don't own, so the previewable artefact is the ARGUMENT LIST plus which
+// template it binds to — enough for a caller to confirm the right values land in the right positions,
+// which is the only thing a preview can promise about a message assembled on Meta's side.
+export const whatsappPreviewResult = z.object({
+  template_name: z.string(),
+  template_language: z.string(),
+  template_category: z.enum(["marketing", "utility", "authentication"]),
+  // ORDERED. Position is meaning: Meta body params are positional and carry no names on the wire.
+  parameters: z.array(z.string()),
+  cost_minor: z.string(),
+  currency: z.string(),
+});
+export type WhatsappPreviewResult = z.infer<typeof whatsappPreviewResult>;
+
 export const previewMessageResponse = z.object({
   channel: messageChannel,
   version_id: z.string().uuid(),
@@ -66,8 +81,10 @@ export const previewMessageResponse = z.object({
   blockers: z.array(previewBlocker),
   warnings: z.array(previewBlocker),
   eligible: z.boolean(),
-  // SMS sender/compliance. For an Email release these are not applicable — sender_id is empty and status
-  // is `not_evaluated` (email sending-domain binding is a later slice); message_class defaults transactional.
+  // SMS sender/compliance. For an Email or WhatsApp release these are not applicable — sender_id is empty
+  // and status is `not_evaluated` (email sending-domain binding is a later slice; a WhatsApp sender is the
+  // WABA phone number, resolved from credentials at dispatch, not an authored binding); message_class
+  // defaults transactional.
   sender: z.object({
     sender_id: z.string(),
     status: z.enum([
@@ -82,6 +99,7 @@ export const previewMessageResponse = z.object({
   message_class: z.enum(["transactional", "promotional"]),
   preview: smsPreviewResult.nullable(),
   email_preview: emailPreviewResult.nullable(),
+  whatsapp_preview: whatsappPreviewResult.nullable(),
   request_id: z.string(),
 });
 export type PreviewMessageResponse = z.infer<typeof previewMessageResponse>;

@@ -122,7 +122,16 @@ no secret in logs/prose, respect RLS + the redlines below.
 - **Only advance `dev` via squash-merge** — never rebase/reset a shared ref out from under others.
 - **`verify:push`** (build + lint + typecheck + tests) runs on pre-push; **do not** `--no-verify`.
   A transient failure re-runs clean; a real failure gets fixed.
-- **No `Co-Authored-By` trailers.** Keep the `Claude-Session:` trailer.
+- **No trailers of any kind.** No `Co-Authored-By`, no `Claude-Session:`, no generated-by footer. A
+  commit is authored by the committer's own GitHub profile and carries nothing after the body.
+- **Commit as your GitHub identity**, not a placeholder. This repo's history carries both
+  `ABOAGYE SOLOMON <123629842+dacostaaboagye@users.noreply.github.com>` and a local
+  `app-platform team <team@app-platform.local>` that does not link to a GitHub account — the former is
+  correct. Check `git config user.email` before your first commit in a fresh clone or worktree.
+- **The pre-commit hook cannot run during a rebase.** `validate-branch-name.mjs` rejects `<detached>`,
+  which is what HEAD always is mid-rebase, so `git rebase --exec 'git commit --amend …'` fails on a
+  false negative. Author-only rewrites need `--no-verify` on the *amend* — this is the one sanctioned
+  exception and it does not extend to the pre-push gate above, which still runs in full.
 - Biome formats + lints (`biome.jsonc`). Run `biome check --write` on changed files before commit.
 
 ## 6. Deploy (see docs/DEPLOYMENT-AND-DEVOPS.md)

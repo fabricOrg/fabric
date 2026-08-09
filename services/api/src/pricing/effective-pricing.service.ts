@@ -16,6 +16,7 @@ import {
   type EffectivePriceInput,
   type EffectivePriceQuote,
   EffectivePricingUnavailableError,
+  UNIT_BASIS_BY_CHANNEL,
 } from "./effective-pricing.js";
 
 interface CachedEffectivePrice {
@@ -161,7 +162,7 @@ export class EffectivePricingService {
       sellRuleId: sellRule.id,
       providerCostRateId: costRate.id,
       currency: account.billingCurrency,
-      unitBasis: input.channel === "sms" ? "segment" : "recipient",
+      unitBasis: UNIT_BASIS_BY_CHANNEL[input.channel],
       unitPriceMinor: sellRule.unitPriceMinor,
       providerCostNumeratorMinor: costRate.numeratorMinor,
       providerCostDenominator: costRate.denominator,

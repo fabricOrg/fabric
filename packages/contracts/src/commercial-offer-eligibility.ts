@@ -42,7 +42,38 @@ export const CHANNEL_SUPPORTED_ELIGIBILITY: Readonly<
   // The email path supplies only the resolved provider; it has no rated destination, and its
   // traffic class is a fixed literal rather than a routed value.
   email: ["provider_vendors"],
+  // Like SMS, and for the same reason: prepare-send quotes with the resolved vendor, the destination
+  // country derived from the recipient, and a traffic class. WhatsApp's traffic class is the TEMPLATE
+  // CATEGORY — marketing / utility / authentication — which is a different vocabulary from SMS's
+  // promotional / transactional / otp, not a renaming of it. See CHANNEL_TRAFFIC_CLASSES.
+  whatsapp: ["provider_vendors", "destination_countries", "traffic_classes"],
 };
+
+/**
+ * The traffic-class vocabulary each channel's send path actually presents at quote time.
+ *
+ * Kept per-channel rather than as one union because a union would silently authorise nonsense: an SMS
+ * item restricted to `utility` would pass authoring and then match no hold forever, since the SMS send
+ * path only ever supplies promotional / transactional / otp. That is the unspendable-credit failure
+ * this module exists to prevent, one level up.
+ *
+ * The DB CHECK on `provider_cost_rates.traffic_class` is the union of these — it has to be, one column
+ * serves every channel — so the constraint cannot make this distinction and this map must.
+ */
+export const CHANNEL_TRAFFIC_CLASSES: Readonly<
+  Record<string, readonly string[]>
+> = {
+  sms: ["promotional", "transactional", "otp"],
+  email: ["promotional", "transactional", "otp"],
+  whatsapp: ["marketing", "utility", "authentication"],
+};
+
+/** The traffic classes an offer on this channel may restrict to. Empty for an unknown channel. */
+export function trafficClassesForChannel(
+  channelCode: string,
+): readonly string[] {
+  return CHANNEL_TRAFFIC_CLASSES[channelCode] ?? [];
+}
 
 /** Conservative default for a registry channel with no declared capability yet. */
 const DEFAULT_SUPPORTED_ELIGIBILITY: readonly (keyof CommercialOfferEligibility)[] =

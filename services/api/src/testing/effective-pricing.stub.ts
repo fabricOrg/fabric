@@ -4,6 +4,7 @@ import type {
   EffectivePriceInput,
   EffectivePriceQuote,
 } from "../pricing/effective-pricing.js";
+import { UNIT_BASIS_BY_CHANNEL } from "../pricing/effective-pricing.js";
 import type { EffectivePricingService } from "../pricing/effective-pricing.service.js";
 
 export function effectivePricingStub(): EffectivePricingService {
@@ -17,7 +18,7 @@ export function effectivePricingStub(): EffectivePricingService {
         providerCostRateId: "00000000-0000-4000-8000-000000000003",
         channel: input.channel,
         currency: "GHS",
-        unitBasis: input.channel === "sms" ? "segment" : "recipient",
+        unitBasis: UNIT_BASIS_BY_CHANNEL[input.channel],
         units: input.units.toString(),
         unitPriceMinor: unitPriceMinor.toString(),
         totalPriceMinor: totalPriceMinor.toString(),

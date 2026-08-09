@@ -102,8 +102,10 @@ export const messageDefinitionVersions = pgTable(
     // Portable, closed JSON-Schema subset (docs/sdk/sdk-003-slice0-design.md §2). Validated + compiled
     // to zod at the API boundary; never executed.
     variableSchema: jsonb("variable_schema").notNull(),
-    // SMS or Email variant content + locale rules, discriminated by `channel`. Rendered server-side; the
-    // renderer is the single source both preview (SDK-003) and managed send (SDK-005/007) consume.
+    // SMS, Email or WhatsApp variant content + locale rules, discriminated by `channel`. Rendered
+    // server-side; the renderer is the single source both preview (SDK-003) and managed send
+    // (SDK-005/007) consume. A WhatsApp variant holds a TEMPLATE BINDING rather than a body — the
+    // content itself lives in a Meta-approved template (ADR-0014).
     content: jsonb("content").notNull(),
     defaultLocale: text("default_locale").notNull(),
     createdBy: uuid("created_by").$type<UserId>(),
@@ -125,7 +127,7 @@ export const messageDefinitionVersions = pgTable(
     check("message_def_version_positive_check", sql`${t.version} > 0`),
     check(
       "message_definition_version_channel_check",
-      sql`${t.channel} in ('sms', 'email')`,
+      sql`${t.channel} in ('sms', 'email', 'whatsapp')`,
     ),
     foreignKey({
       columns: [t.definitionId, t.tenantId, t.applicationId],

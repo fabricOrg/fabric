@@ -4,6 +4,7 @@ import {
   currency,
   type PriceBookDto,
   type PriceBookMode,
+  type PriceBookRateDto,
 } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import { Field, FieldLabel } from "@app/ui/components/ui/field";
@@ -30,7 +31,9 @@ const CURRENCIES = currency.options;
 
 interface RateRow {
   id: string;
-  channel: "sms" | "email";
+  // Derived from the DTO rather than restated, so a new billable channel cannot leave this form
+  // silently unable to represent a rate the backend already accepts.
+  channel: PriceBookRateDto["channel"];
   currency: string;
   price: string;
 }
@@ -250,7 +253,7 @@ export function PriceBookForm({ book }: { book: PriceBookDto | null }) {
             <Select
               value={row.channel}
               onValueChange={(v) =>
-                setRow(index, { channel: v as "sms" | "email" })
+                setRow(index, { channel: v as PriceBookRateDto["channel"] })
               }
             >
               <SelectTrigger className="w-28" aria-label="Channel">
@@ -259,6 +262,7 @@ export function PriceBookForm({ book }: { book: PriceBookDto | null }) {
               <SelectContent>
                 <SelectItem value="sms">SMS</SelectItem>
                 <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
               </SelectContent>
             </Select>
             <Select

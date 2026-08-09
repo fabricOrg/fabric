@@ -31,6 +31,7 @@ import { SmsTemplatesModule } from "./sms-templates/sms-templates.module.js";
 import { VerifyModule } from "./verify/verify.module.js";
 import { WalletModule } from "./wallet/wallet.module.js";
 import { WebhooksModule } from "./webhooks/webhooks.module.js";
+import { WhatsappModule } from "./whatsapp/whatsapp.module.js";
 
 /**
  * Root module. ConfigModule (global) loads env (.env locally; Secrets Manager in cloud). DbModule
@@ -74,6 +75,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module.js";
     VerifyModule,
     WalletModule,
     WebhooksModule,
+    WhatsappModule,
   ],
 })
 export class AppModule {}

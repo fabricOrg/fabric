@@ -13,6 +13,7 @@ import type {
   PaymentProviderPlugin,
   RequestContext,
 } from "../plugin.js";
+import { updateWithRawBody } from "../plugin.js";
 
 /**
  * Paystack payment adapter (E4 top-up). Sandbox = the `sk_test_` secret. Speaks ONLY to Paystack:
@@ -179,9 +180,10 @@ export class PaystackProvider implements PaymentProviderPlugin {
     const secretKey = requireSecret(creds);
     const provided = req.headers["x-paystack-signature"];
     if (!provided) return false;
-    const expected = createHmac("sha512", secretKey)
-      .update(req.rawBody, "utf8")
-      .digest("hex");
+    const expected = updateWithRawBody(
+      createHmac("sha512", secretKey),
+      req.rawBody,
+    ).digest("hex");
     const a = Buffer.from(provided);
     const b = Buffer.from(expected);
     return a.length === b.length && timingSafeEqual(a, b);

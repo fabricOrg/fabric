@@ -42,6 +42,9 @@ export const TENANT_TABLES = [
   "token_recognition_allocations",
   "api_keys",
   "messages",
+  "whatsapp_messages",
+  "whatsapp_inbound_messages",
+  "whatsapp_service_windows",
 ] as const;
 
 // The prod-faithful role model (653b45d): app_migrator OWNS the schema (non-super → FORCE RLS bites it
@@ -319,6 +322,10 @@ export async function checkSecurityLayerApplied(
     // audited party could otherwise rewrite or delete.
     "kill_switches",
     "audit_events",
+    // 0145 — control-plane by construction: it spans every tenant on the shared WABA, and its
+    // rows are inbound messages nobody could be attributed to (ADR-0015 §1). The tenant-facing
+    // role reading it would be reading that OTHER workspaces' consumers wrote in.
+    "whatsapp_unattributed_inbound",
   ]) {
     const runtimeReach = await db.query(`
       SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p
@@ -327,6 +334,61 @@ export async function checkSecurityLayerApplied(
     for (const r of runtimeReach.rows) {
       violations.push(
         `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — commercial catalog and purchase state must be unreachable from the tenant-facing role`,
+      );
+    }
+  }
+
+  // 8b. (0132) `audit_events` append-only, from the PROVISIONER side. The loop above proves the
+  // tenant-facing role holds nothing on it, which says nothing about the role that actually writes
+  // the trail. 0132 granted SELECT + INSERT and withheld UPDATE/DELETE in a comment that openly
+  // admitted it enforced nothing: prepareRoles() re-grants full DML on ALL TABLES before every
+  // migrate(), so the narrowing lapsed on the very next deploy. cloud-migrate-privileges.ts now
+  // re-asserts it after migrations; this is the check that proves the re-assertion actually ran.
+  const auditRewrite = await db.query(`
+    SELECT p AS priv FROM unnest(ARRAY['UPDATE','DELETE','TRUNCATE']) AS p
+    WHERE has_table_privilege('app_provisioner', 'audit_events', p)
+  `);
+  for (const r of auditRewrite.rows) {
+    violations.push(
+      `'app_provisioner' holds ${r.priv} on audit_events — the audit trail must be append-only (did prepareRoles re-grant?)`,
+    );
+  }
+  // A trail nothing can write is equally broken, and a too-aggressive REVOKE would look identical to
+  // success here. Assert the positive half in the same breath.
+  const auditInsert = await db.query(
+    `SELECT has_table_privilege('app_provisioner', 'audit_events', 'INSERT') AS held`,
+  );
+  if (auditInsert.rows[0]?.held !== true) {
+    violations.push(
+      "'app_provisioner' cannot INSERT into audit_events — no audit row could be recorded at all",
+    );
+  }
+
+  // 8c. (ADR-0015) The inbound pair is INSERT/UPDATE-only for the tenant-facing role. An inbound
+  // message is the evidence a conversation happened, and the service window is what authorises a
+  // free-form reply — deleting a window row would let a workspace erase the record of when its right
+  // to send expired. Asserted in BOTH directions: the REVOKE landed AND the writes it needs survived,
+  // because a REVOKE that took INSERT with it would break ingestion in a way no read-only check sees.
+  for (const table of [
+    "whatsapp_inbound_messages",
+    "whatsapp_service_windows",
+  ]) {
+    const forbidden = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['DELETE','TRUNCATE']) AS p
+      WHERE has_table_privilege('${RUNTIME_ROLE}', '${table}', p)
+    `);
+    for (const r of forbidden.rows) {
+      violations.push(
+        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — inbound evidence and the service window are not the tenant-facing role's to destroy`,
+      );
+    }
+    const required = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE']) AS p
+      WHERE NOT has_table_privilege('${RUNTIME_ROLE}', '${table}', p)
+    `);
+    for (const r of required.rows) {
+      violations.push(
+        `'${RUNTIME_ROLE}' LACKS ${r.priv} on ${table} — inbound ingestion cannot work without it`,
       );
     }
   }

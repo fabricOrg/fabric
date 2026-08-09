@@ -62,6 +62,13 @@ export class MessagesController {
       message_class: out.message_class,
       preview: out.preview,
       email_preview: out.email_preview,
+      // Copied, not passed through: the domain preview holds it readonly and the DTO is mutable.
+      whatsapp_preview: out.whatsapp_preview
+        ? {
+            ...out.whatsapp_preview,
+            parameters: [...out.whatsapp_preview.parameters],
+          }
+        : null,
       request_id: newRequestId(),
     };
   }

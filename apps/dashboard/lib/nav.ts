@@ -9,6 +9,7 @@ import {
   type LucideIcon,
   Mail,
   Megaphone,
+  MessageCircle,
   PackageCheck,
   Send,
   ShieldCheck,
@@ -140,6 +141,12 @@ export const navGroups: readonly NavGroup[] = [
         href: "/emails",
         icon: Mail,
         permission: "email:read",
+      },
+      {
+        title: "WhatsApp",
+        href: "/whatsapp",
+        icon: MessageCircle,
+        permission: "whatsapp:read",
       },
       {
         title: "Number verification",

@@ -1,12 +1,15 @@
 import { ArkeselSmsProvider } from "./arkesel/provider.js";
 import { AwsSesEmailProvider } from "./aws-ses/provider.js";
+import { MetaCloudProvider } from "./meta-cloud/provider.js";
 import { PaystackProvider } from "./paystack/provider.js";
 import type {
   EmailSenderPlugin,
   PaymentProviderPlugin,
   SmsSenderPlugin,
+  WhatsAppSenderPlugin,
 } from "./plugin.js";
 import { FakeProvider } from "./testing/fake-provider.js";
+import { FakeWhatsAppProvider } from "./testing/fake-whatsapp-provider.js";
 import { VirtualPhoneProvider } from "./virtual-phone/provider.js";
 
 /**
@@ -98,6 +101,35 @@ export function supportedEmailVendors(): readonly string[] {
   return Object.keys(EMAIL_ADAPTERS);
 }
 
+export type WhatsAppAdapterFactory = () => WhatsAppSenderPlugin;
+
+const WHATSAPP_ADAPTERS: Readonly<Record<string, WhatsAppAdapterFactory>> = {
+  "meta-cloud": () => new MetaCloudProvider(),
+};
+
+export function whatsappAdapterFor(
+  vendor: string,
+): WhatsAppAdapterFactory | null {
+  return WHATSAPP_ADAPTERS[vendor.trim().toLowerCase()] ?? null;
+}
+
+const WHATSAPP_RESOLUTION_ADAPTERS: Readonly<
+  Record<string, WhatsAppAdapterFactory>
+> = {
+  "meta-cloud": () => new MetaCloudProvider(),
+  "sandbox-whatsapp": () => new FakeWhatsAppProvider(),
+};
+
+export function whatsappResolutionAdapterFor(
+  slug: string,
+): WhatsAppAdapterFactory | null {
+  return WHATSAPP_RESOLUTION_ADAPTERS[slug.trim().toLowerCase()] ?? null;
+}
+
+export function supportedWhatsappVendors(): readonly string[] {
+  return Object.keys(WHATSAPP_ADAPTERS);
+}
+
 /**
  * VENDOR → PAYMENT ADAPTER. Deliberately the same contract as SMS: the plugin system has to behave
  * identically whichever capability you configure, or staff learn a different set of rules per vendor.
@@ -143,6 +175,9 @@ export function adapterConfigSchemaFor(
   }
   if (capability === "email") {
     return emailAdapterFor(vendor)?.().configSchema ?? null;
+  }
+  if (capability === "whatsapp") {
+    return whatsappAdapterFor(vendor)?.().configSchema ?? null;
   }
   return null;
 }

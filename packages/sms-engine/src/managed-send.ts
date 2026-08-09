@@ -49,15 +49,23 @@ export async function persistManagedAcceptance(
     currency: string;
     managed: ManagedSendContext;
     // The channel and its message reference. `messageId` is the SMS `messages.id`; `emailMessageId` is
-    // the `email_messages.id`. Exactly the channel-matching one is set (enforced by the attempt CHECK).
-    channel: "sms" | "email";
+    // the `email_messages.id`; `whatsappMessageId` is the `whatsapp_messages.id`. Exactly the
+    // channel-matching one is set (enforced by the attempt CHECK).
+    channel: "sms" | "email" | "whatsapp";
     messageId?: string;
     emailMessageId?: string;
+    whatsappMessageId?: string;
     costMinor: string;
   },
 ): Promise<{ messageId: string; replayed: boolean }> {
-  const channelMessageId =
-    input.channel === "email" ? input.emailMessageId : input.messageId;
+  // Keyed lookup rather than `channel === "email" ? … : messageId`: under that ternary a new channel
+  // would silently resolve to the SMS reference and write an attempt row claiming the wrong message.
+  const references: Record<typeof input.channel, string | undefined> = {
+    sms: input.messageId,
+    email: input.emailMessageId,
+    whatsapp: input.whatsappMessageId,
+  };
+  const channelMessageId = references[input.channel];
   if (!channelMessageId) {
     throw new Error(
       `persistManagedAcceptance: missing ${input.channel} message id`,
@@ -88,12 +96,13 @@ export async function persistManagedAcceptance(
   await tx`
     INSERT INTO message_delivery_attempts (
       tenant_id, application_id, environment_id, delivery_id, ordinal, channel,
-      message_id, email_message_id, status, cost_minor, currency
+      message_id, email_message_id, whatsapp_message_id, status, cost_minor, currency
     ) VALUES (
       current_setting('app.tenant_id')::uuid, ${input.applicationId ?? null},
       ${input.environmentId ?? null}, ${input.managed.deliveryId}, 1, ${input.channel},
       ${input.channel === "sms" ? channelMessageId : null},
       ${input.channel === "email" ? channelMessageId : null},
+      ${input.channel === "whatsapp" ? channelMessageId : null},
       'accepted', ${input.costMinor}::bigint, ${input.currency}
     )`;
   await tx`

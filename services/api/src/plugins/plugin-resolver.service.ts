@@ -5,16 +5,16 @@ import {
   pluginInstances,
   unwrapCredentialDek,
 } from "@app/db";
-import type {
-  Creds,
-  EmailSenderPlugin,
-  PaymentProviderPlugin,
-  SmsSenderPlugin,
-} from "@app/integrations";
 import {
+  type Creds,
+  type EmailSenderPlugin,
   emailAdapterFor,
+  type PaymentProviderPlugin,
   paymentAdapterFor,
+  type SmsSenderPlugin,
   smsAdapterFor,
+  type WhatsAppSenderPlugin,
+  whatsappAdapterFor,
 } from "@app/integrations";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -27,39 +27,30 @@ import {
 } from "./plugin-webhook-credentials.js";
 
 /** A resolved provider: the adapter plus the credentials it needs. */
-export interface ResolvedProvider {
+interface ResolvedPlugin<TProvider> {
   readonly vendor: string;
   readonly instanceId: string;
-  readonly provider: SmsSenderPlugin;
+  readonly provider: TProvider;
   readonly creds: Creds;
   /** Which credential version supplied `creds` — recorded by callers that must verify later. */
   readonly credentialVersion: number;
 }
 
-/** A resolved PAYMENT provider. Same shape, different adapter contract. */
-export interface ResolvedPaymentProvider {
-  readonly vendor: string;
-  readonly instanceId: string;
-  readonly provider: PaymentProviderPlugin;
-  readonly creds: Creds;
-  /** Stored on the payment intent so its webhook still verifies after a key rotation. */
-  readonly credentialVersion: number;
-}
+export type ResolvedProvider = ResolvedPlugin<SmsSenderPlugin>;
 
-export interface ResolvedEmailProvider {
-  readonly vendor: string;
-  readonly instanceId: string;
-  readonly provider: EmailSenderPlugin;
-  readonly creds: Creds;
-  readonly credentialVersion: number;
-}
+export type ResolvedPaymentProvider = ResolvedPlugin<PaymentProviderPlugin>;
 
+export type ResolvedEmailProvider = ResolvedPlugin<EmailSenderPlugin>;
+
+export type ResolvedWhatsappProvider = ResolvedPlugin<WhatsAppSenderPlugin>;
+
+type ResolvedAnyProvider =
+  | ResolvedProvider
+  | ResolvedPaymentProvider
+  | ResolvedEmailProvider
+  | ResolvedWhatsappProvider;
 interface CacheEntry {
-  readonly resolved:
-    | ResolvedProvider
-    | ResolvedPaymentProvider
-    | ResolvedEmailProvider
-    | null;
+  readonly resolved: ResolvedAnyProvider | null;
   readonly at: number;
 }
 
@@ -127,17 +118,24 @@ export class PluginResolverService {
     ) as Promise<ResolvedEmailProvider | null>;
   }
 
+  async resolveWhatsapp(
+    mode: "sandbox" | "live",
+  ): Promise<ResolvedWhatsappProvider | null> {
+    return this.resolveCached(
+      "whatsapp",
+      mode,
+    ) as Promise<ResolvedWhatsappProvider | null>;
+  }
+
   /**
    * The shared cache + failure posture for every capability. Identical rules whichever provider you
    * are resolving: short TTL so the control plane stays off the hot path, last-known-good on a blip,
    * and FAIL CLOSED with nothing cached rather than guessing a provider.
    */
   private async resolveCached(
-    capability: "sms" | "email" | "payment",
+    capability: "sms" | "email" | "payment" | "whatsapp",
     mode: "sandbox" | "live",
-  ): Promise<
-    ResolvedProvider | ResolvedEmailProvider | ResolvedPaymentProvider | null
-  > {
+  ): Promise<ResolvedAnyProvider | null> {
     const key = `${capability}:${mode}`;
     const cached = this.cache.get(key);
     if (cached && Date.now() - cached.at < TTL_MS) return cached.resolved;
@@ -182,11 +180,26 @@ export class PluginResolverService {
   }
 
   private async read(
-    capability: "sms" | "email" | "payment",
+    capability: "sms" | "email" | "payment" | "whatsapp",
     mode: "sandbox" | "live",
-  ): Promise<
-    ResolvedProvider | ResolvedEmailProvider | ResolvedPaymentProvider | null
-  > {
+  ): Promise<ResolvedAnyProvider | null> {
+    if (capability === "sms") {
+      return this.readWithAdapter(capability, mode, smsAdapterFor);
+    }
+    if (capability === "email") {
+      return this.readWithAdapter(capability, mode, emailAdapterFor);
+    }
+    if (capability === "payment") {
+      return this.readWithAdapter(capability, mode, paymentAdapterFor);
+    }
+    return this.readWithAdapter(capability, mode, whatsappAdapterFor);
+  }
+
+  private async readWithAdapter<TProvider>(
+    capability: "sms" | "email" | "payment" | "whatsapp",
+    mode: "sandbox" | "live",
+    adapterFor: (vendor: string) => (() => TProvider) | null,
+  ): Promise<ResolvedPlugin<TProvider> | null> {
     // Enabled instances for this capability+mode, primary (priority 0) first — the failover chain.
     // The first one with a usable adapter AND readable credentials wins; a misconfigured primary
     // falls through to its backup rather than taking sending down.
@@ -212,12 +225,7 @@ export class PluginResolverService {
       .orderBy(asc(pluginInstances.priority));
 
     for (const row of rows) {
-      const factory =
-        capability === "sms"
-          ? smsAdapterFor(row.vendor)
-          : capability === "email"
-            ? emailAdapterFor(row.vendor)
-            : paymentAdapterFor(row.vendor);
+      const factory = adapterFor(row.vendor);
       if (!factory) {
         // Enabled in the control plane, but this build has no adapter. Skip rather than throw: a
         // catalog row for a vendor we cannot dispatch must not block a working fallback.
@@ -229,17 +237,13 @@ export class PluginResolverService {
       const credential = await this.credentialsFor(row.id, row.credentialsRef);
       if (!credential) continue;
       const { creds, version } = credential;
-      // The cast is safe by construction: the factory was chosen from the capability-matching
-      // registry three lines up, so an sms capability yields an SmsSenderPlugin and a payment
-      // capability a PaymentProviderPlugin. The public resolveSms/resolvePayment wrappers are what
-      // callers see, and each narrows back to its own type.
       return {
         vendor: row.vendor,
         instanceId: row.id,
         provider: factory(),
         creds,
         credentialVersion: version,
-      } as ResolvedProvider | ResolvedEmailProvider | ResolvedPaymentProvider;
+      };
     }
     return null;
   }

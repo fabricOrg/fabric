@@ -1,5 +1,21 @@
+import type { Hmac } from "node:crypto";
 import type { MessageStatus } from "@app/contracts";
 import type { PlatformFaultCause } from "./status.js";
+
+/**
+ * Feed a raw webhook body into an HMAC without guessing at the encoding. Bytes go in untouched; a
+ * string is encoded as utf8 exactly once. Calling `.update(rawBody, "utf8")` directly does not
+ * type-check against the `string | Uint8Array` union and would need a cast — and a cast is precisely
+ * how the wrong branch gets chosen silently on a signature check.
+ */
+export function updateWithRawBody(
+  hmac: Hmac,
+  rawBody: string | Uint8Array,
+): Hmac {
+  return typeof rawBody === "string"
+    ? hmac.update(rawBody, "utf8")
+    : hmac.update(rawBody);
+}
 
 /**
  * The vendor-agnostic plugin contract (F5.1 / INTEGRATIONS §3). A provider = an adapter implementing
@@ -37,10 +53,18 @@ export interface HealthState {
 /**
  * Transport-neutral inbound webhook, for `verifyWebhook` (signature over the RAW bytes + headers).
  * `rawBody` is the exact received body (never a re-serialized object) so HMAC verification is stable.
+ *
+ * PREFER `Uint8Array`. A signature is over BYTES, and a `string` only round-trips losslessly if the
+ * ingress decoded it correctly — which is an assumption the adapter cannot check. `string` remains
+ * accepted because the Paystack ingress passes one today and rewriting a live payments webhook is not
+ * worth the risk here, but any NEW ingress must hand over the real buffer (Fastify exposes it as
+ * `request.rawBody`; the app is created with `{ rawBody: true }` in `services/api/src/main.ts`).
+ * Build the HMAC input with `updateWithRawBody` rather than calling `.update()` directly, so neither
+ * branch can silently pick the wrong encoding.
  */
 export interface IncomingRequest {
   readonly headers: Readonly<Record<string, string>>;
-  readonly rawBody: string;
+  readonly rawBody: string | Uint8Array;
 }
 
 /**
@@ -55,6 +79,30 @@ export interface NormalizedMessage {
   readonly body: string; // message text (transient PII)
   readonly encoding: "gsm7" | "ucs2"; // determines segment size (153 / 67 concatenated)
   readonly segments: number; // computed segment count (drives rating)
+}
+
+export type WhatsAppTemplateCategory =
+  | "authentication"
+  | "marketing"
+  | "utility";
+
+export interface NormalizedWhatsAppTemplateMessage {
+  readonly messageId: string;
+  readonly to: string;
+  readonly templateName: string;
+  readonly templateLanguage: string;
+  readonly templateCategory: WhatsAppTemplateCategory;
+  readonly variables: readonly string[];
+}
+
+export interface WhatsAppTemplateRecord {
+  readonly wabaId: string;
+  readonly name: string;
+  readonly language: string;
+  readonly category: string | null;
+  readonly status: string;
+  readonly qualityRating: string | null;
+  readonly components: readonly unknown[];
 }
 
 /**
@@ -89,7 +137,7 @@ export interface CanonicalDlr {
 /** Generic base — every plugin declares what it is and what it can do. */
 export interface PluginManifest {
   readonly slug: string; // 'hubtel-sms', 'fake-sms', 'paystack'
-  readonly capability: "sms" | "email" | "payment";
+  readonly capability: "sms" | "email" | "payment" | "whatsapp";
   readonly version: string;
   supports(ctx: RequestContext): boolean; // country/currency/sender-id eligibility
   readonly configSchema: JsonSchema;
@@ -134,6 +182,18 @@ export interface EmailSenderPlugin extends PluginManifest {
   /** The first provider state at which its upstream cost is incurred. */
   readonly billableStatuses: readonly MessageStatus[];
   send(message: NormalizedEmail, creds: Creds): Promise<EmailProviderResult>;
+}
+
+export interface WhatsAppSenderPlugin extends PluginManifest {
+  readonly capability: "whatsapp";
+  readonly billableStatuses: readonly MessageStatus[];
+  send(
+    message: NormalizedWhatsAppTemplateMessage,
+    creds: Creds,
+  ): Promise<ProviderResult>;
+  parseDlr(payload: unknown): CanonicalDlr;
+  verifyWebhook(req: IncomingRequest, creds: Creds): boolean;
+  listTemplates(creds: Creds): Promise<readonly WhatsAppTemplateRecord[]>;
 }
 
 // ---- Payment capability (E4 top-up) --------------------------------------------------------------

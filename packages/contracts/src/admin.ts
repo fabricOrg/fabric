@@ -76,6 +76,7 @@ export type UpdateTenantStatusRequest = z.infer<
 export const sandboxAllowancePolicySchema = z.object({
   sms_segments_per_day: z.number().int().positive().max(1_000_000_000),
   email_messages_per_day: z.number().int().positive().max(1_000_000_000),
+  whatsapp_messages_per_day: z.number().int().positive().max(1_000_000_000),
 });
 export type SandboxAllowancePolicy = z.infer<
   typeof sandboxAllowancePolicySchema

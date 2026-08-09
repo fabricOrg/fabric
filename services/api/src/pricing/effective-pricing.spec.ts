@@ -3,6 +3,7 @@ import {
   buildEffectiveQuote,
   type EffectivePriceConfig,
   PricingMarginViolationError,
+  UNIT_BASIS_BY_CHANNEL,
 } from "./effective-pricing.js";
 
 const config: EffectivePriceConfig = {
@@ -18,6 +19,14 @@ const config: EffectivePriceConfig = {
 };
 
 describe("buildEffectiveQuote", () => {
+  it("maps each billable channel to its unit basis", () => {
+    expect(UNIT_BASIS_BY_CHANNEL).toEqual({
+      sms: "segment",
+      email: "recipient",
+      whatsapp: "message",
+    });
+  });
+
   it("uses exact bigint arithmetic and snapshots the resolved inputs", () => {
     const quote = buildEffectiveQuote(
       {
@@ -66,5 +75,39 @@ describe("buildEffectiveQuote", () => {
         { ...config, unitPriceMinor: 5n, minimumMarginBps: 2_000 },
       ),
     ).toThrow(PricingMarginViolationError);
+  });
+
+  it("uses exact bigint minor-unit arithmetic for whatsapp messages", () => {
+    const quote = buildEffectiveQuote(
+      {
+        accountId: "account-1",
+        channel: "whatsapp",
+        units: 7n,
+        providerVendor: "meta-cloud",
+        destinationCountry: "GH",
+        trafficClass: "marketing",
+      },
+      {
+        ...config,
+        unitBasis: "message",
+        unitPriceMinor: 13n,
+        providerCostNumeratorMinor: 31n,
+        providerCostDenominator: 4n,
+      },
+    );
+
+    expect(quote.totalPriceMinor).toBe(91n);
+    expect(quote.estimatedProviderCostMinor).toBe(55n);
+    expect(quote.expectedMarginMinor).toBe(36n);
+    expect(quote.snapshot).toEqual(
+      expect.objectContaining({
+        channel: "whatsapp",
+        unitBasis: "message",
+        units: "7",
+        totalPriceMinor: "91",
+        estimatedProviderCostMinor: "55",
+        trafficClass: "marketing",
+      }),
+    );
   });
 });
