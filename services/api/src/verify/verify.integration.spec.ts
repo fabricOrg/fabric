@@ -97,6 +97,22 @@ async function post(rawKey: string, url: string, payload: unknown) {
   });
 }
 
+type Injected = Awaited<ReturnType<typeof post>>;
+
+/**
+ * A bare `expect(res.statusCode).toBe(201)` fails as "expected 400 to be 201" and carries nothing
+ * else. The API does not log 4xx bodies, so this spec's one CI failure (2026-08-08) was undiagnosable
+ * after the fact — the status alone could not say WHICH error fired. Asserting an object instead
+ * means the structured `error.code` rides along in the failure diff.
+ */
+function expectStatus(res: Injected, expected: number): void {
+  const actual =
+    res.statusCode === expected
+      ? { statusCode: expected }
+      : { statusCode: res.statusCode, body: res.body.slice(0, 400) };
+  expect(actual).toEqual({ statusCode: expected });
+}
+
 beforeAll(async () => {
   await seedTenant(SANDBOX_TENANT, "sandbox", SANDBOX_KEY);
   await seedTenant(LIVE_TENANT, "free", LIVE_KEY);
@@ -121,7 +137,7 @@ afterAll(async () => {
 describe("Verify V1 (golden path core)", () => {
   it("start → metered OTP SMS (sandbox allowance, virtual phone) → wrong codes bounded → verify → idempotent re-check", async () => {
     const started = await post(SANDBOX_KEY, "/v1/verify", { to: PHONE });
-    expect(started.statusCode).toBe(201);
+    expectStatus(started, 201);
     const startBody = started.json() as {
       id: string;
       status: string;
@@ -129,7 +145,10 @@ describe("Verify V1 (golden path core)", () => {
       to: string;
     };
     expect(startBody.status).toBe("pending");
-    expect(startBody.to).not.toContain("227189"); // masked, never the raw number
+    // Assert the EXACT mask, not a substring probe. The previous assertion searched for "227189" — a
+    // fragment of the pinned pilot number that no longer exists anywhere in this spec, so it could
+    // never match and proved nothing. `maskMsisdn` keeps the first 6 chars and last 4.
+    expect(startBody.to).toBe(`+23354•••${SUFFIX.slice(-3)}1`);
     // Sandbox quickstart affordance: the OTP is visible without a real phone.
     expect(startBody.debug_code).toMatch(/^\d{6}$/);
 
@@ -156,7 +175,7 @@ describe("Verify V1 (golden path core)", () => {
       id: startBody.id,
       code: wrongCode,
     });
-    expect(wrong.statusCode).toBe(400);
+    expectStatus(wrong, 400);
     expect((wrong.json() as { error: { code: string } }).error.code).toBe(
       "verification_invalid_code",
     );
@@ -166,7 +185,7 @@ describe("Verify V1 (golden path core)", () => {
       id: startBody.id,
       code: startBody.debug_code,
     });
-    expect(ok.statusCode).toBe(201);
+    expectStatus(ok, 201);
     expect((ok.json() as { status: string }).status).toBe("verified");
 
     // Re-check of a verified id = idempotent success.
@@ -179,7 +198,7 @@ describe("Verify V1 (golden path core)", () => {
 
   it("throttles an immediate resend to the same number", async () => {
     const res = await post(SANDBOX_KEY, "/v1/verify", { to: PHONE });
-    expect(res.statusCode).toBe(400);
+    expectStatus(res, 400);
     expect((res.json() as { error: { code: string } }).error.code).toBe(
       "verify_resend_throttled",
     );
@@ -189,7 +208,7 @@ describe("Verify V1 (golden path core)", () => {
     const started = await post(SANDBOX_KEY, "/v1/verify", {
       to: `+23324${SUFFIX}2`,
     });
-    expect(started.statusCode).toBe(201); // a throttled/failed start would cascade confusingly
+    expectStatus(started, 201); // a throttled/failed start would cascade confusingly
     const { id, debug_code } = started.json() as {
       id: string;
       debug_code: string;
@@ -203,7 +222,7 @@ describe("Verify V1 (golden path core)", () => {
       id,
       code: debug_code,
     });
-    expect(after.statusCode).toBe(400);
+    expectStatus(after, 400);
     expect((after.json() as { error: { code: string } }).error.code).toBe(
       "verification_exhausted",
     );
@@ -213,7 +232,9 @@ describe("Verify V1 (golden path core)", () => {
     const started = await post(SANDBOX_KEY, "/v1/verify", {
       to: `+23324${SUFFIX}3`,
     });
-    expect(started.statusCode).toBe(201);
+    // This is the assertion that failed once in CI (#253) as a bare `400 ≠ 201`. It now reports the
+    // error body, which is the only way the next occurrence gets diagnosed.
+    expectStatus(started, 201);
     const { id, debug_code } = started.json() as {
       id: string;
       debug_code: string;
@@ -228,7 +249,7 @@ describe("Verify V1 (golden path core)", () => {
       id,
       code: debug_code,
     });
-    expect(res.statusCode).toBe(400);
+    expectStatus(res, 400);
     expect((res.json() as { error: { code: string } }).error.code).toBe(
       "verification_expired",
     );
@@ -240,7 +261,7 @@ describe("Verify V1 (golden path core)", () => {
       url: "/v1/verify/overview",
       headers: { authorization: `Bearer ${SANDBOX_KEY}` },
     });
-    expect(res.statusCode).toBe(200);
+    expectStatus(res, 200);
     const overview = res.json() as {
       recent: Array<{ msisdn: string; status: string }>;
       stats: { sent: number; delivered: number; verified: number };
@@ -261,7 +282,7 @@ describe("Verify V1 (golden path core)", () => {
     const started = await post(LIVE_KEY, "/v1/verify", {
       to: `+23324${SUFFIX}4`,
     });
-    expect(started.statusCode).toBe(201);
+    expectStatus(started, 201);
     expect(
       (started.json() as { debug_code?: string }).debug_code,
     ).toBeUndefined();
