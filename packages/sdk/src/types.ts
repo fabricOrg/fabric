@@ -66,6 +66,33 @@ export interface SentSms {
   readonly cost: Money;
 }
 
+export type WhatsAppTemplateCategory =
+  | "marketing"
+  | "utility"
+  | "authentication";
+
+export interface SendWhatsAppParams {
+  readonly to: string;
+  readonly templateName: string;
+  readonly templateLanguage: string;
+  readonly templateCategory: WhatsAppTemplateCategory;
+  readonly variables?: readonly string[];
+  readonly currency?: "GHS" | "NGN" | "USD";
+}
+
+export interface SentWhatsAppMessage {
+  readonly id: string;
+  readonly status: MessageStatus;
+  /** Masked recipient returned by the API, not a caller-supplied E.164 number. */
+  readonly to: string;
+  readonly provider: string;
+  readonly templateName: string | null;
+  readonly templateLanguage: string | null;
+  readonly templateCategory: WhatsAppTemplateCategory | null;
+  readonly createdAt: string;
+  readonly errorCode: string | null;
+}
+
 export interface SendSmsBatchItem extends SendSmsParams {
   readonly clientReference: string;
 }

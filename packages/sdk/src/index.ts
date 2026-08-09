@@ -51,12 +51,15 @@ export type {
   SenderId,
   SendSmsBatchItem,
   SendSmsParams,
+  SendWhatsAppParams,
   SentSms,
+  SentWhatsAppMessage,
   SmsBatch,
   SmsBatchItemResult,
   SmsPreview,
   WebhookDelivery,
   WebhookEndpoint,
+  WhatsAppTemplateCategory,
   WriteOptions,
 } from "./types.js";
 export type {
@@ -81,3 +84,4 @@ export type {
   ListWebhookDeliveriesParams,
   VerifyWebhookParams,
 } from "./webhooks.js";
+export { WhatsAppResource } from "./whatsapp.js";
