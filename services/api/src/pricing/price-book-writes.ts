@@ -1,5 +1,6 @@
 import type {
   PriceBookDto,
+  PriceBookRateDto,
   PublicPricingResponse,
   UpsertPriceBookRequest,
 } from "@app/contracts";
@@ -25,6 +26,16 @@ type Db = ProvisioningDb["db"];
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /** All books with their full rate tables, newest first. */
+type PriceBookRateChannel = PriceBookRateDto["channel"];
+
+/** The unit each channel's price is quoted in. Total by construction: a new channel breaks the build. */
+const UNIT_BASIS: Record<PriceBookRateChannel, "segment" | "send" | "message"> =
+  {
+    sms: "segment",
+    email: "send",
+    whatsapp: "message",
+  };
+
 export async function listPriceBooks(db: Db): Promise<PriceBookDto[]> {
   const books = await db.select().from(priceBooks).orderBy(priceBooks.name);
   const rates = await db.select().from(priceBookRates);
@@ -190,12 +201,18 @@ export async function readPublicPricing(
     .where(eq(priceBookRates.priceBookId, book.id))
     .orderBy(priceBookRates.currency, priceBookRates.channel);
   return {
-    rates: rates.map((rate) => ({
-      channel: rate.channel as "sms" | "email",
-      currency: rate.currency,
-      unit_price_minor: rate.unitPriceMinor.toString(),
-      unit_basis: rate.channel === "sms" ? "segment" : "send",
-    })),
+    rates: rates.map((rate) => {
+      const channel = rate.channel as PriceBookRateChannel;
+      return {
+        channel,
+        currency: rate.currency,
+        unit_price_minor: rate.unitPriceMinor.toString(),
+        // Keyed, not a two-way ternary. Under `channel === "sms" ? "segment" : "send"` a WhatsApp rate
+        // reported "send", which is not a unit anyone sells WhatsApp in and not what the sell rules
+        // record (ADR-0014 §3 prices per template message).
+        unit_basis: UNIT_BASIS[channel],
+      };
+    }),
     effective_at: book.updatedAt.toISOString(),
   };
 }
@@ -240,7 +257,7 @@ function toDto(
     rates: allRates
       .filter((r) => r.priceBookId === book.id)
       .map((r) => ({
-        channel: r.channel as "sms" | "email",
+        channel: r.channel as PriceBookRateChannel,
         currency: r.currency,
         unit_price_minor: r.unitPriceMinor.toString(),
       })),

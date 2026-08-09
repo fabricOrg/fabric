@@ -1023,6 +1023,13 @@
       "when": 1786320182000,
       "tag": "0145_whatsapp_inbound",
       "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1786320242000,
+      "tag": "0146_whatsapp_offer_channel",
+      "breakpoints": true
     }
   ]
 }

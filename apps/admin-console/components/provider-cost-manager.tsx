@@ -17,6 +17,34 @@ import { toast } from "sonner";
 
 const WILDCARD = "*";
 
+type CostChannel = "sms" | "email" | "whatsapp";
+
+/**
+ * Offered per channel because provider costs are recorded per channel. WhatsApp's classes are Meta's
+ * TEMPLATE CATEGORIES, which is a different vocabulary from SMS's, not a renaming of it — a rate filed
+ * under the wrong one matches no send and silently never applies.
+ */
+const TRAFFIC_CLASSES: Record<
+  CostChannel,
+  ReadonlyArray<{ value: string; label: string }>
+> = {
+  sms: [
+    { value: "transactional", label: "Transactional" },
+    { value: "promotional", label: "Promotional" },
+    { value: "otp", label: "OTP" },
+  ],
+  email: [
+    { value: "transactional", label: "Transactional" },
+    { value: "promotional", label: "Promotional" },
+    { value: "otp", label: "OTP" },
+  ],
+  whatsapp: [
+    { value: "utility", label: "Utility" },
+    { value: "marketing", label: "Marketing" },
+    { value: "authentication", label: "Authentication" },
+  ],
+};
+
 export function ProviderCostManager({
   rates,
   canManage,
@@ -26,7 +54,7 @@ export function ProviderCostManager({
 }) {
   const router = useRouter();
   const [vendor, setVendor] = useState("arkesel-sms");
-  const [channel, setChannel] = useState<"sms" | "email">("sms");
+  const [channel, setChannel] = useState<CostChannel>("sms");
   const [country, setCountry] = useState(WILDCARD);
   const [trafficClass, setTrafficClass] = useState(WILDCARD);
   const [currency, setCurrency] = useState<"GHS" | "NGN" | "USD">("GHS");
@@ -99,7 +127,15 @@ export function ProviderCostManager({
           />
           <Select
             value={channel}
-            onValueChange={(value) => setChannel(value as "sms" | "email")}
+            onValueChange={(value) => {
+              const next = value as CostChannel;
+              setChannel(next);
+              // The traffic-class vocabularies do not overlap: SMS rates are recorded against
+              // promotional/transactional/otp, WhatsApp's against Meta's template categories. Carrying
+              // the old selection across would post a class this channel never quotes with, and the
+              // rate would sit in the table matching nothing.
+              setTrafficClass(WILDCARD);
+            }}
           >
             <SelectTrigger aria-label="Channel">
               <SelectValue />
@@ -107,6 +143,7 @@ export function ProviderCostManager({
             <SelectContent>
               <SelectItem value="sms">SMS / segment</SelectItem>
               <SelectItem value="email">Email / recipient</SelectItem>
+              <SelectItem value="whatsapp">WhatsApp / message</SelectItem>
             </SelectContent>
           </Select>
           <Select value={country} onValueChange={setCountry}>
@@ -125,9 +162,11 @@ export function ProviderCostManager({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={WILDCARD}>Any class</SelectItem>
-              <SelectItem value="transactional">Transactional</SelectItem>
-              <SelectItem value="promotional">Promotional</SelectItem>
-              <SelectItem value="otp">OTP</SelectItem>
+              {TRAFFIC_CLASSES[channel].map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select

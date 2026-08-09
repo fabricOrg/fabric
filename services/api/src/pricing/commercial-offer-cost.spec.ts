@@ -180,4 +180,62 @@ describe("commercial offer cost basis", () => {
     if (result.ok) return;
     expect(result.failure.code).toBe("offer_eligibility_too_broad");
   });
+
+  it("costs a WhatsApp offer against Meta's template categories", () => {
+    const result = resolveOfferCostBasis(
+      "whatsapp",
+      {
+        ...UNRESTRICTED,
+        destination_countries: ["GH"],
+        traffic_classes: ["utility"],
+        provider_vendors: ["meta-cloud"],
+      },
+      [
+        rate({
+          id: "rate-wa-gh",
+          providerVendor: "meta-cloud",
+          destinationCountry: "GH",
+          trafficClass: "utility",
+          numeratorMinor: 8n,
+        }),
+      ],
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("refuses an SMS offer restricted to a WhatsApp-only class", () => {
+    // The DB CHECK on `provider_cost_rates.traffic_class` is the UNION of every channel's vocabulary
+    // — one column serves them all — so it cannot make this distinction. If this check went away, the
+    // offer would publish and then match no hold forever: the customer is charged, every send bills
+    // the wallet instead, and the stranded allocation is eventually recognised as breakage we keep.
+    const result = resolveOfferCostBasis(
+      "sms",
+      { ...UNRESTRICTED, traffic_classes: ["utility"] },
+      [rate({ trafficClass: "utility" })],
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.code).toBe("offer_eligibility_unpriceable");
+    expect(result.failure.detail).toContain("utility");
+  });
+
+  it("refuses a WhatsApp offer restricted to an SMS-only class", () => {
+    const result = resolveOfferCostBasis(
+      "whatsapp",
+      { ...UNRESTRICTED, traffic_classes: ["otp"] },
+      [rate({ providerVendor: "meta-cloud", trafficClass: "otp" })],
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.code).toBe("offer_eligibility_unpriceable");
+  });
+
+  it("still refuses a channel with no provider-cost representation", () => {
+    // Registering a channel is not cost evidence. `voice` is in neither map, so it fails here rather
+    // than publishing an offer whose margin nobody can verify.
+    const result = resolveOfferCostBasis("voice", UNRESTRICTED, [rate()]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.code).toBe("offer_channel_not_costable");
+  });
 });
