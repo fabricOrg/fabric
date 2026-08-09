@@ -54,3 +54,22 @@ export function dateFrom(value: unknown): Date | null {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
+
+/**
+ * Meta's category vocabulary, mapped to ours. UTILITY / MARKETING / AUTHENTICATION today; Meta has
+ * historically also used TRANSACTIONAL and OTP, and may add more.
+ *
+ * Anything unrecognised becomes null — never a guess. Null means "we do not know what class this
+ * traffic is", and the callers treat that as a reason to stop rather than a reason to assume the
+ * cheapest, least-restricted option. Guessing `utility` for an unmapped category would skip the
+ * promotional consent check for whatever Meta actually approved.
+ */
+export function normalizeTemplateCategory(
+  value: unknown,
+): "marketing" | "utility" | "authentication" | null {
+  const code = typeof value === "string" ? value.trim().toUpperCase() : "";
+  if (code === "UTILITY") return "utility";
+  if (code === "MARKETING") return "marketing";
+  if (code === "AUTHENTICATION") return "authentication";
+  return null;
+}
