@@ -122,7 +122,7 @@ export class ManagedMessagesService {
           costMinor: rendered.costMinor,
           managed,
         });
-      } else {
+      } else if (rendered.channel === "sms") {
         await this.sms.send({
           tenantId: input.tenantId,
           messageId: deliveryId,
@@ -135,6 +135,18 @@ export class ManagedMessagesService {
           messageClass: preview.message_class,
           managed,
         });
+      } else {
+        // EXHAUSTIVENESS GUARD, and the reason it exists. This dispatch used to be
+        // `if (email) {…} else { sms }`, so anything that was not email was SENT AS AN SMS. Today only
+        // sms and email can reach here — `acceptedPreview` produces no other arm and the authoring
+        // schemas are discriminated unions over those two literals — but the WhatsApp render path is
+        // coming, and when `AcceptedPreview` gains a third arm this `never` assignment stops
+        // compiling. That is the point: a new channel must break the BUILD here rather than quietly
+        // deliver down the wrong one, with the wrong provider and the wrong billing.
+        const unreachable: never = rendered;
+        throw new Error(
+          `unhandled managed channel: ${String((unreachable as { channel?: string }).channel)}`,
+        );
       }
     } catch (error) {
       if (error instanceof ManagedIdempotencyConflictError) {

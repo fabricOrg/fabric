@@ -8,6 +8,7 @@ import {
   smsVariantContent,
   stableKey,
   variableSchema,
+  whatsappVariantContent,
 } from "./message-definitions.js";
 
 describe("stable key grammar (SDK-003 slice-0 §1)", () => {
@@ -177,8 +178,56 @@ describe("variable-schema subset (SDK-003 slice-0 §2)", () => {
 // SDK-007 slice 1 — the channel/content building blocks Email authoring (slice 3/4) consumes. The
 // version RESPONSE DTO stays SMS-shaped in this slice; these types are exported standalone.
 describe("message channel + variant content (ADR-0005 Amendment A1)", () => {
-  it("channel is the closed sms|email catalog", () => {
-    expect(messageChannel.options).toEqual(["sms", "email"]);
+  it("channel is the closed sms|email|whatsapp catalog", () => {
+    expect(messageChannel.options).toEqual(["sms", "email", "whatsapp"]);
+  });
+
+  it("a whatsapp variant is a template binding, not a body", () => {
+    const parsed = whatsappVariantContent.parse({
+      template_name: "order_shipped",
+      template_language: "en_US",
+      template_category: "utility",
+      parameters: ["customer_name", "tracking_code"],
+    });
+    expect(parsed).toEqual({
+      template_name: "order_shipped",
+      template_language: "en_US",
+      template_category: "utility",
+      // ORDER is content: Meta body params are positional, so swapping these two entries sends the
+      // tracking code where the name belongs. Asserted as an array, never a set.
+      parameters: ["customer_name", "tracking_code"],
+      locales: {},
+    });
+  });
+
+  it("rejects a whatsapp category Meta does not have", () => {
+    expect(
+      whatsappVariantContent.safeParse({
+        template_name: "order_shipped",
+        template_language: "en_US",
+        template_category: "transactional",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("a whatsapp locale override carries a language, not text", () => {
+    const parsed = whatsappVariantContent.parse({
+      template_name: "order_shipped",
+      template_language: "en_US",
+      template_category: "utility",
+      locales: { fr: { template_language: "fr" } },
+    });
+    expect(parsed.locales).toEqual({ fr: { template_language: "fr" } });
+    // Meta stores one template per name+language, so an override that tried to carry a body would be
+    // describing content we do not own.
+    expect(
+      whatsappVariantContent.safeParse({
+        template_name: "order_shipped",
+        template_language: "en_US",
+        template_category: "utility",
+        locales: { fr: { template_language: "fr", body: "Bonjour" } },
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts an email variant with html only, filling empty locales", () => {

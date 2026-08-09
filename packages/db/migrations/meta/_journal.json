@@ -995,6 +995,13 @@
       "when": 1786320001000,
       "tag": "0141_whatsapp_templates_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1786320002000,
+      "tag": "0142_managed_whatsapp_channel",
+      "breakpoints": true
     }
   ]
 }
