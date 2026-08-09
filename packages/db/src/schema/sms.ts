@@ -144,6 +144,10 @@ export const messageDispatches = pgTable(
     availableAt: timestamp("available_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // When a worker claimed this dispatch. Written on every claim and READ to decide whether that
+    // claim has gone stale — a claim with no expiry turns a worker crash into an orphan whose wallet
+    // reserve is never settled. WhatsApp learned this the expensive way (0147).
+    leasedAt: timestamp("leased_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     lastError: text("last_error"),
     ...timestamps,
@@ -152,6 +156,9 @@ export const messageDispatches = pgTable(
     index("idx_message_dispatches_pending")
       .on(t.availableAt, t.messageId)
       .where(sql`completed_at IS NULL`),
+    index("idx_message_dispatches_stale_lease")
+      .on(t.leasedAt)
+      .where(sql`completed_at IS NULL AND status = 'sending'`),
   ],
 );
 

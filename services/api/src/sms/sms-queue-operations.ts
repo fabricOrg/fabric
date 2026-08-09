@@ -4,8 +4,8 @@ import type { PreparedSend, SendInput, SendResult } from "@app/sms-engine";
 import type { PiiVaultService } from "../privacy/pii-vault.service.js";
 import type { QueueService } from "../queue/queue.service.js";
 import {
+  claimStoredDispatch,
   completeStoredDispatch,
-  loadStoredDispatch,
   pendingDispatches,
 } from "./sms-dispatch-store.js";
 import { SMS_SEND_QUEUE, type SmsSendJob } from "./sms-send.job.js";
@@ -78,6 +78,23 @@ export async function processSmsJob(input: {
   ) => Promise<SendResult>;
 }): Promise<SendResult> {
   if ("input" in input.job) {
+    // Legacy inline-payload jobs carry everything dispatch needs, so this branch never consulted the
+    // dispatch row — which made it a second door to the same double-send the claim below closes.
+    // Nothing produces these any more (both producers send the durable shape); they can only exist as
+    // in-flight Redis leftovers across a deploy. Claiming first costs one statement and shuts the door
+    // for as long as they can still appear.
+    const claim = await claimStoredDispatch({
+      db: input.db,
+      vault: input.vault,
+      tenantId: input.job.input.tenantId,
+      messageId: input.job.prepared.messageId,
+    });
+    if (claim.kind === "skip") {
+      return {
+        messageId: input.job.prepared.messageId,
+        status: claim.status,
+      };
+    }
     const result =
       !input.job.deliveryMode && input.job.sandbox === true
         ? await input.legacyDispatch(input.job.input, input.job.prepared)
@@ -94,7 +111,7 @@ export async function processSmsJob(input: {
     return result;
   }
 
-  const stored = await loadStoredDispatch({
+  const stored = await claimStoredDispatch({
     db: input.db,
     vault: input.vault,
     tenantId: input.job.tenantId,
