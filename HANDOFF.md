@@ -1,6 +1,6 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-09. Point-in-time. **Verify against code and git before treating any of it as
+_Snapshot: 2026-08-10. Point-in-time. **Verify against code and git before treating any of it as
 fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 [CLAUDE.md](./CLAUDE.md) (how we build) and `docs/`. Superseded entries live in
 [docs/HANDOFF-ARCHIVE.md](./docs/HANDOFF-ARCHIVE.md)._
@@ -16,8 +16,8 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `7888330` | WhatsApp stack #259–#265, then #267–#271 |
-| `origin/testing` | `af3f89e` | DEPLOYED 2026-08-09 (#266). **`dev` is now 5 commits AHEAD — not promoted.** |
+| `origin/dev` | `3d7d879` | WhatsApp stack #259–#265, then #267–#273 |
+| `origin/testing` | `75582a3` | DEPLOYED 2026-08-10 (#274). **Level with `dev` — nothing unpromoted.** |
 
 **The WhatsApp channel is DEPLOYED to testing.** All six jobs green including
 `Migrate · testing db`, which applied 14 migrations (`0136`–`0147`) and then ran `db:assert` on the
@@ -39,20 +39,16 @@ Two process facts that cost real time and will again:
   path compare dev's blob to the blob at the commit the branch actually built on — equal means dev
   added nothing the branch lacks, so taking the branch's side is provably correct. Only the two
   files where dev had genuinely diverged needed reading.
-- **`Deploy` reports success while skipping all its jobs** — it is the gated AWS/ECS path. The real
-  one is `Deploy testing (Vercel + Render)`. Its green tick is not evidence anything shipped.
+- **`Deploy` reports success while skipping all eight of its jobs** — it is the gated AWS/ECS path.
+  The real one is `Deploy testing (Vercel + Render)`. Its green tick is not evidence anything
+  shipped; read the job list. Confirmed again on #274.
+- **A promotion PR title must be Conventional Commits** — `promote: …` is rejected by the PR-policy
+  check, `chore(ops): promote …` passes — and the merge must be a **real merge, not a squash**.
 
-Nothing uncommitted. The testing deploy ran all six jobs green — gate, **`Migrate · testing db`
-(0133 applied)**, Render api, and the three Vercel apps — and the pipeline verifies the artefact
-itself, not just its own exit code: the api job polls `/health/readyz` on the live Render URL and
-each frontend job checks `/healthz`.
+The `Deploy testing` pipeline verifies the artefact rather than its own exit code: the api job polls
+`/health/readyz` on the live Render URL and each frontend job checks `/healthz`.
 
-**Two traps in reading that deploy.** The separate `Deploy` workflow reported **success while
-skipping all eight of its jobs** — it is the AWS/ECS path and is gated off, so its green tick is not
-evidence anything shipped. And a promotion PR title must be **Conventional Commits**: `promote: …`
-is rejected by the PR-policy check (`chore(ops): promote …` passes).
-
-**What the deploy did NOT prove.** The queue and rate limiter now run RESP3 (ioredis 6) against
+**What the deploys did NOT prove.** The queue and rate limiter now run RESP3 (ioredis 6) against
 testing's Redis, and nothing has exercised that — `readyz` does not touch them and no CI job ever
 starts a Redis. A silent fall-through to the inline path looks identical to success from outside.
 Settle it the way §9 says: a send whose `provider_ref` is a real vendor id, not `fake-…`, plus the
@@ -153,10 +149,11 @@ not configured. Money and credits are unaffected; only status. Route is
 
 ---
 
-### Landed after the deploy — five PRs, not yet promoted (#267–#271)
+### Promoted 2026-08-10 (#274) — the evidence-table revokes and the SMS dispatch claim
 
-`testing` carries the WhatsApp channel as deployed; these five are on `dev` and **have not been
-promoted**, so a promotion is the next deploy-shaped action. Two add migrations (`0148`, `0149`).
+`testing` now carries everything `dev` does. All six jobs green, including `Migrate · testing db`,
+which applied `0148`–`0149` and ran `db:assert` on the real database (*security layer applied ✓*,
+ledger + general-ledger invariants OK). Two of the seven PRs added migrations.
 
 **#271 — `app_runtime` could DELETE the billing evidence for a charge.** `0001` grants full DML on ALL
 TABLES plus `ALTER DEFAULT PRIVILEGES`, so DELETE is present until a migration takes it away, and a
@@ -235,26 +232,24 @@ Capture it into a variable and never echo it — it carries the password. Roles 
 `app_runtime`, `app_provisioner`, `app_migrator`, `neondb_owner`. Read-only queries only unless a human
 has said otherwise.
 
-What that measurement established:
+What that measurement established, before and after the promotion:
 
-- **The `app_runtime` DELETE hole is real: 7/7 evidence tables** (`messages`, `email_messages`, both
-  dispatch tables, both managed-delivery tables, `outbox_events`) report `delete=true` in testing. This
-  is the fact `0149` / PR #271 fixes, and it is UNPROMOTED — testing is at 148 applied migrations,
-  local at 150. `TRUNCATE` is false throughout, because it is not in the default-privileges grant.
-- **Exposure is prospective, not retrospective.** `messages`, `email_messages`, `whatsapp_messages` and
-  `ledger_transactions` all hold **0 rows** in testing, so nothing has been destroyed.
-- **`app_provisioner` retains DELETE** on both managed-delivery tables there, so `0149` will not break
-  retention pruning when promoted.
+- **The `app_runtime` DELETE hole was real — 7/7 evidence tables reported `delete=true`** (`messages`,
+  `email_messages`, both dispatch tables, both managed-delivery tables, `outbox_events`) — and is now
+  **CLOSED, measured after #274 rather than inferred from the green deploy**: all seven read
+  `DELETE=false, TRUNCATE=false` with `INSERT`/`UPDATE` still `true`, and `app_provisioner` still holds
+  DELETE on all seven so retention pruning survives. Testing is at **150** applied migrations, level
+  with local. `leased_at` and `idx_message_dispatches_stale_lease` (`0148`) both present.
+- **Exposure was prospective, not retrospective.** `messages`, `email_messages`, `whatsapp_messages` and
+  `ledger_transactions` all held **0 rows** in testing, so nothing was destroyed while the hole was open.
 - **The WhatsApp promotion fully landed**: all six tables present, including `0145`'s inbound pair
   (`whatsapp_inbound_messages`, `whatsapp_service_windows`, `whatsapp_unattributed_inbound`).
+- **The `Deploy` workflow again reported success while skipping every job** — the gated AWS/ECS path.
+  The real one is `Deploy testing (Vercel + Render)`. Read the job list, never the run's conclusion.
 
 ### Next up, in a fresh session
 
-1. **Promote `dev` → `testing`.** Five merged PRs are unpromoted, including two migrations. Same shape
-   as #266: a PR titled `chore(ops): promote …` (Conventional Commits — `promote: …` is rejected), a
-   real MERGE not a squash, and watch **`Deploy testing (Vercel + Render)`** — the plain `Deploy`
-   workflow reports success while skipping all its jobs because it is the gated AWS path.
-2. **#23 — and the drift gate it silently disabled.** Diagnosed properly on 2026-08-10; the earlier
+1. **#23 — and the drift gate it silently disabled.** Diagnosed properly on 2026-08-10; the earlier
    description in this file was wrong in both halves.
 
    - The journal has **NO duplicate idx** (150 entries, contiguous). The union scripts used during the
@@ -269,7 +264,7 @@ What that measurement established:
      `drizzle-kit` exits **0** on this error, so an exit-code check would not save it either. Every "no
      drift" result since the collision appeared is unproven.
    - Only then repair the chain, and re-run generate to confirm it actually emits nothing.
-3. **#14 — `WORKOS_ADMIN_CLIENT_ID` / `WORKOS_ADMIN_API_KEY` in Vercel**, then remove the last dashboard
+2. **#14 — `WORKOS_ADMIN_CLIENT_ID` / `WORKOS_ADMIN_API_KEY` in Vercel**, then remove the last dashboard
    redirect.
 
 ### Waiting on you, not on code
