@@ -175,6 +175,12 @@ Every false "done" in this repo has had the same shape: a *report* was trusted i
 *thing*. A command's own output, a green status, a schema file — none of them are the state. Check
 what changed.
 
+- **The Neon CLI is available — measure testing instead of inferring it.** `neondb` is owned by
+  `app_migrator` like production, and `ALTER DEFAULT PRIVILEGES` is grantor-scoped, so an
+  `app_owner`-owned LOCAL database hides grant holes that testing shows plainly. A local
+  `has_table_privilege` reading "no DELETE" is not evidence there is no hole. Pass `--org-id` (the org
+  prompt is interactive and will hang), capture the connection string into a variable and never echo it,
+  and stay read-only unless a human said otherwise. See HANDOFF for the exact ids.
 - **Never pipe a command whose exit code matters.** `cmd | tail` returns **tail's** status, so a
   failed push and a no-op promotion both reported success. Redirect to a file and capture `$?`.
 - **Confirm a push/merge/deploy against the ref**, not the command's output:
@@ -227,6 +233,13 @@ Bulk work is routed to external agent CLIs to conserve Claude quota — see
 - **Green gates are not a review.** Gates catch mechanical defects; read `git diff` for
   the semantics — does it fit the architecture, does it hold tenancy isolation, did it
   invent an abstraction nobody asked for.
+- **EVERY change gets an independent review before it is reported as done — UI included.**
+  Not just money and security seams. A dashboard form field looks like taste and behaves
+  like policy: `template_category` never reaches Meta, it selects our message class, and a
+  free-text version of it let a caller skip both promotional gates and bill the wrong
+  traffic class. For a UI diff make one reviewer lens **"trace every user-supplied value to
+  where it is consumed"** — that is not a lens a UI reviewer picks by default. Self-review
+  does not count: it inherits the framing that produced the bug.
 - **Delegates inherit §7 redlines, and they cannot ask for a human go.** No
   `terraform apply`, no deploy-gate flips, no live external writes, no production DB
   access, no live SMS or payments. State this in the prompt; never hand a delegate a task

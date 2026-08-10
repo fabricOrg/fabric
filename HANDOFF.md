@@ -16,20 +16,31 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `1e77b3c` | #252, #253, #255, #256, #258, then the WhatsApp stack #259–#265 |
-| `origin/testing` | `2a20286` | DEPLOYED 2026-08-08 (#257); promoted again with the channel |
+| `origin/dev` | `7888330` | WhatsApp stack #259–#265, then #267–#271 |
+| `origin/testing` | `af3f89e` | DEPLOYED 2026-08-09 (#266). **`dev` is now 5 commits AHEAD — not promoted.** |
 
-**The WhatsApp stack is MERGED into `dev`** — #259, #260, #261, #263, #264, #262, #265 in that
-order. Two things that cost real time and will again:
+**The WhatsApp channel is DEPLOYED to testing.** All six jobs green including
+`Migrate · testing db`, which applied 14 migrations (`0136`–`0147`) and then ran `db:assert` on the
+real database: *security layer applied ✓*, ledger + general-ledger invariants OK. That assertion
+covering the two new tenant tables is what proves the RLS and the grant REVOKEs landed in a place
+other than my laptop.
 
-- **The repo's CI forbids stacked PRs** (`metadata` fails with *"Work branches must target dev"*),
-  so every PR in a stack must be retargeted to `dev` one at a time as the one below it lands.
-- **Squash-merging a stack destroys the merge base.** After each squash, the next branch's shared
-  history is gone, so every file the stack touched comes back as an `add/add` conflict. The
-  resolution rule that made this safe and checkable: for each conflicted path, compare dev's blob
-  to the blob at the commit the branch actually built on — if they are equal, dev added nothing the
-  branch lacks and taking the branch's side is provably correct rather than a guess. Only the files
-  where dev had genuinely diverged (HANDOFF, `security-layer.check.ts`) needed reading.
+**What the deploy does NOT prove.** Live WhatsApp in testing needs a `meta-cloud` credential armed
+THERE; the code travels, the credential does not. So testing has the channel and no way to send
+until an operator arms it. `PLUGIN_MASTER_KEY` must exist in the testing environment or credential
+resolution silently falls back to a derived development key.
+
+Two process facts that cost real time and will again:
+
+- **CI forbids stacked PRs** (`metadata` fails with *"Work branches must target dev"*), so each PR
+  in a stack must be retargeted to `dev` as the one below it lands.
+- **Squash-merging a stack destroys the merge base**, so every file the stack touched returns as an
+  `add/add` conflict. The rule that made this checkable rather than a guess: for each conflicted
+  path compare dev's blob to the blob at the commit the branch actually built on — equal means dev
+  added nothing the branch lacks, so taking the branch's side is provably correct. Only the two
+  files where dev had genuinely diverged needed reading.
+- **`Deploy` reports success while skipping all its jobs** — it is the gated AWS/ECS path. The real
+  one is `Deploy testing (Vercel + Render)`. Its green tick is not evidence anything shipped.
 
 Nothing uncommitted. The testing deploy ran all six jobs green — gate, **`Migrate · testing db`
 (0133 applied)**, Render api, and the three Vercel apps — and the pipeline verifies the artefact
@@ -142,6 +153,41 @@ not configured. Money and credits are unaffected; only status. Route is
 
 ---
 
+### Landed after the deploy — five PRs, not yet promoted (#267–#271)
+
+`testing` carries the WhatsApp channel as deployed; these five are on `dev` and **have not been
+promoted**, so a promotion is the next deploy-shaped action. Two add migrations (`0148`, `0149`).
+
+**#271 — `app_runtime` could DELETE the billing evidence for a charge.** `0001` grants full DML on ALL
+TABLES plus `ALTER DEFAULT PRIVILEGES`, so DELETE is present until a migration takes it away, and a
+GRANT cannot narrow anything — `GRANT SELECT, INSERT, UPDATE` in `0063` reads like a restriction and is
+not one. Only the WhatsApp pair had been closed. A message row is the ledger's `reference_id` target, so
+deleting one orphans a COMMITTED wallet transaction. Now revoked on seven tables, with `§8d` asserting
+BOTH directions (the revoke landed AND the writes survived) plus that the provisioner KEEPS delete for
+retention.
+
+**#269 — the SMS double-send.** `loadStoredDispatch` was a plain SELECT, so the first database lock
+landed AFTER the carrier call: two workers on one Redis queue both sent. Now an atomic claim with a
+5-minute lease (`0148` adds `leased_at`). Deliberately no status CHECK, unlike `0147` — a new
+constraint would validate against production rows the migration cannot inspect.
+
+**#268 — WhatsApp template picker, and a bug behind it.** `template_category` never reaches Meta; it
+selects OUR message class, and `marketing` → `promotional` is gated twice (consent suppression AND a
+delivery-window rule). A free-text form let a caller skip both and bill the wrong class. Now derived in
+the UI and REJECTED server-side on mismatch.
+
+**#270 — three isolation specs ran `DELETE FROM accounts` with no WHERE.** A WhatsApp foreign key is the
+only reason the pilot tenant survived one run. Guarded in BOTH hooks, skipped under `CI`.
+
+### Two lessons worth keeping
+
+- **`verify:push` runs unit tests; CI also runs integration.** No amount of local pushing surfaces a
+  stale integration spec. Three broke this session (kill-switch prune, two db channel specs) — all in
+  directories the diff did not touch. Run the integration directories your change could REACH, not the
+  ones it edits.
+- **A stale `.next` fails typecheck after a branch switch.** Cost three gate failures. `rm -rf
+  apps/*/.next` before a push when branches differ in routes or pages.
+
 ## Open work
 
 ### WhatsApp — what is NOT built
@@ -163,14 +209,93 @@ dashboard, managed sends, inbound + the service window, and costable offers.
   the claim was invisible to the sweeper forever, with its wallet reserve neither committed nor
   refunded. `leased_at` had existed unread since the claim was added. SMS has no claim step, so
   the same sweeper query is correct there — WhatsApp inherited the query without the assumption.
-- The SMS send path still carries the double-send defect fixed in WhatsApp (task #15) —
-  untouched on purpose, it is the live money path.
+
 - The preview route gates on the `sms:read` scope for EVERY channel. Pre-existing, applies to
   email too; renaming a scope is a separate breaking change.
 - **The drizzle snapshot chain is broken from 0135 onward** (0135/0136 share an id, 0137–0144
   have no snapshots), so `drizzle-kit generate` errors and every migration since is
   hand-written. Journal entries are appended by hand. Repair this before the next schema change
   that would benefit from generation.
+
+### Verified against the deployed testing database (2026-08-10)
+
+**The Neon CLI is available and authenticated — use it. Testing is inspectable, so stop inferring what
+you can measure.** `neondb` is owned by **`app_migrator`**, which mirrors production, and that matters:
+`ALTER DEFAULT PRIVILEGES` is grantor-scoped, so an `app_owner`-owned local database HIDES grant holes
+that testing shows plainly.
+
+```bash
+# The org prompt is interactive — always pass --org-id or it hangs.
+neonctl projects list --org-id org-fragrant-meadow-35967446 --output json
+# project fabric = dry-recipe-09519949 · single branch `production` = br-lively-frog-avkxhbz6 · db neondb
+TESTING_DATABASE_URL=$(neonctl connection-string production   --project-id dry-recipe-09519949 --role-name app_migrator --database-name neondb)
+```
+
+Capture it into a variable and never echo it — it carries the password. Roles available:
+`app_runtime`, `app_provisioner`, `app_migrator`, `neondb_owner`. Read-only queries only unless a human
+has said otherwise.
+
+What that measurement established:
+
+- **The `app_runtime` DELETE hole is real: 7/7 evidence tables** (`messages`, `email_messages`, both
+  dispatch tables, both managed-delivery tables, `outbox_events`) report `delete=true` in testing. This
+  is the fact `0149` / PR #271 fixes, and it is UNPROMOTED — testing is at 148 applied migrations,
+  local at 150. `TRUNCATE` is false throughout, because it is not in the default-privileges grant.
+- **Exposure is prospective, not retrospective.** `messages`, `email_messages`, `whatsapp_messages` and
+  `ledger_transactions` all hold **0 rows** in testing, so nothing has been destroyed.
+- **`app_provisioner` retains DELETE** on both managed-delivery tables there, so `0149` will not break
+  retention pruning when promoted.
+- **The WhatsApp promotion fully landed**: all six tables present, including `0145`'s inbound pair
+  (`whatsapp_inbound_messages`, `whatsapp_service_windows`, `whatsapp_unattributed_inbound`).
+
+### Next up, in a fresh session
+
+1. **Promote `dev` → `testing`.** Five merged PRs are unpromoted, including two migrations. Same shape
+   as #266: a PR titled `chore(ops): promote …` (Conventional Commits — `promote: …` is rejected), a
+   real MERGE not a squash, and watch **`Deploy testing (Vercel + Render)`** — the plain `Deploy`
+   workflow reports success while skipping all its jobs because it is the gated AWS path.
+2. **#23 — and the drift gate it silently disabled.** Diagnosed properly on 2026-08-10; the earlier
+   description in this file was wrong in both halves.
+
+   - The journal has **NO duplicate idx** (150 entries, contiguous). The union scripts used during the
+     stack merges keyed by tag and re-derived ordering, which repaired that half as a side effect.
+   - The real failure is a **snapshot `prevId` collision**: `drizzle-kit generate` refuses with
+     *"[0135_snapshot.json, 0136_snapshot.json] are pointing to a parent snapshot … which is a
+     collision"*. Snapshots stop at `0136` while migrations run to `0149`.
+   - **Fix the gate FIRST, it is the more serious half.** `assert-drift.mjs:75` swallows a generate
+     failure — `} catch { /* a non-zero generate … is fine */ }` — and then concludes "no drift" because
+     no files changed. Generate currently errors and writes nothing, so **the gate has been reporting
+     success unconditionally**. It cannot tell "schema matches" from "generate is broken", and
+     `drizzle-kit` exits **0** on this error, so an exit-code check would not save it either. Every "no
+     drift" result since the collision appeared is unproven.
+   - Only then repair the chain, and re-run generate to confirm it actually emits nothing.
+3. **#14 — `WORKOS_ADMIN_CLIENT_ID` / `WORKOS_ADMIN_API_KEY` in Vercel**, then remove the last dashboard
+   redirect.
+
+### Waiting on you, not on code
+
+- **Rotate `WHATSAPP_ACCESS_TOKEN`** — it was printed in full in a session transcript on 2026-08-09.
+- **Arm a `meta-cloud` credential in the testing environment** if WhatsApp should send from there. The
+  code promotes; the credential does not travel with it.
+- **`PLUGIN_MASTER_KEY` is set in dev AND on Render (testing); it BROKE two credentials there.** Measured
+  against the testing database on 2026-08-10, not guessed: `sms/arkesel (live)` (sealed 2026-07-29
+  15:41) and `payment/paystack (live)` (15:44) were both sealed 12 days BEFORE the key existed, so both
+  were sealed under the derived development key and the new key cannot open them. Symptom is
+  `plugin resolution failed … failing closed`; both are still `enabled=true`.
+
+  The direction is fail-safe — live SMS and live payments in testing now refuse rather than fire, which
+  is where §7 says they should be — but the failure is opaque to anyone who tries. **DECISION PENDING:**
+  re-arm both under the new key, or disable/revoke them so the state matches the redline. Disabling is
+  the safer reading, since neither should be live in testing and re-arming re-creates that.
+
+  Separately worth knowing on its own: **`sms/arkesel (live)` has been armed AND enabled in testing
+  since 2026-07-29**, which predates this work and sits against §7's "live SMS stays OFF until a human
+  flips it per engagement".
+
+  Production still needs a key of its own and does not warn — it REFUSES TO BOOT.
+- **A service-conversation sell rate**, if free-form WhatsApp replies inside the 24-hour window should
+  work. The window makes them legal; nothing prices them, and ADR-0012 forbids serving a send we cannot
+  cost.
 
 **`verify.integration.spec.ts` is FLAKY — one CI failure, cause NOT pinned.** Failed once on #253
 (`expected 400 to be 201` at :216, the "rejects an expired code" test), passed on re-run. Ruled out:

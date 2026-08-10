@@ -393,6 +393,62 @@ export async function checkSecurityLayerApplied(
     }
   }
 
+  // 8d. (0149) The message/delivery EVIDENCE tables are INSERT/UPDATE-only for the tenant-facing role.
+  //
+  // 0001 grants app_runtime full DML on ALL TABLES and sets ALTER DEFAULT PRIVILEGES to keep doing it,
+  // so DELETE is present until a migration takes it away — and a GRANT cannot narrow anything, which is
+  // why `GRANT SELECT, INSERT, UPDATE` in 0063 read like a restriction and was not one. Only the
+  // WhatsApp pair had been closed (0135/0137); their migration recorded the rest as an open sweep.
+  //
+  // A message row is the ledger's `reference_id` target: delete it and a COMMITTED wallet transaction
+  // is orphaned — the charge survives, the reason for it does not. A dispatch row is the recovery
+  // intent, so losing it strands a reserve. An outbox event is an at-least-once promise to a webhook.
+  //
+  // Asserted in BOTH directions on purpose. A REVOKE that also took INSERT or UPDATE would break
+  // sending outright while looking, to a check that only tests for absence, exactly like success.
+  for (const table of [
+    "messages",
+    "email_messages",
+    "message_dispatches",
+    "email_dispatches",
+    "message_deliveries",
+    "message_delivery_attempts",
+    "outbox_events",
+  ]) {
+    const destructive = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['DELETE','TRUNCATE']) AS p
+      WHERE has_table_privilege('${RUNTIME_ROLE}', '${table}', p)
+    `);
+    for (const r of destructive.rows) {
+      violations.push(
+        `'${RUNTIME_ROLE}' holds ${r.priv} on ${table} — billing evidence and dispatch intent are not the tenant-facing role's to destroy`,
+      );
+    }
+    const required = await db.query(`
+      SELECT p AS priv FROM unnest(ARRAY['SELECT','INSERT','UPDATE']) AS p
+      WHERE NOT has_table_privilege('${RUNTIME_ROLE}', '${table}', p)
+    `);
+    for (const r of required.rows) {
+      violations.push(
+        `'${RUNTIME_ROLE}' LACKS ${r.priv} on ${table} — sending cannot work without it`,
+      );
+    }
+  }
+
+  // Retention prunes expired managed deliveries through the PROVISIONING connection, so that role must
+  // keep DELETE. Asserted because the revoke above is one careless edit away from taking it too, and
+  // the symptom would be silent: rows accumulating past their retention window with nothing failing.
+  for (const table of ["message_deliveries", "message_delivery_attempts"]) {
+    const prune = await db.query(
+      `SELECT has_table_privilege('app_provisioner', '${table}', 'DELETE') AS held`,
+    );
+    if (prune.rows[0]?.held !== true) {
+      violations.push(
+        `'app_provisioner' cannot DELETE from ${table} — the retention sweeper would silently stop pruning`,
+      );
+    }
+  }
+
   // 9. (ADR-0012 §6/§8) Commercial write-time invariants. Unlike the grants above these survive a
   // re-grant, but they are asserted for the same reason the GL triggers are: if one is missing, a
   // published price is editable after purchase, or a workspace can be pointed at a catalog whose

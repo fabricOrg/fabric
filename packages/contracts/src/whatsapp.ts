@@ -55,3 +55,39 @@ export const whatsappMessageListResponse = z.object({
 export type WhatsappMessageListResponse = z.infer<
   typeof whatsappMessageListResponse
 >;
+
+/**
+ * An APPROVED template from the tenant's synced Meta catalog — what a sender may actually choose.
+ *
+ * This exists because the alternative is what shipped first: free-text `template_name` and
+ * `template_language` fields. A name Meta does not have fails at the provider AFTER the wallet
+ * reserve, and nobody memorises `jaspers_market_order_confirmation_v1`.
+ *
+ * `category` is REPORTED, not chosen. Meta owns it, and it never reaches Meta on a send — it drives
+ * OUR consent gate and OUR pricing traffic class, so a caller free-choosing `utility` for a template
+ * Meta approved as `marketing` would bypass promotional consent and bill in the wrong class. The
+ * template is the only honest source.
+ *
+ * `variable_count` is derived from the body's positional placeholders. Meta rejects a message whose
+ * parameter count differs from the template's, and that rejection also lands after the reserve.
+ */
+export const whatsappTemplateSummary = z.object({
+  name: z.string(),
+  language: z.string(),
+  category: whatsappTemplateCategory.nullable(),
+  /** How many positional body parameters this template expects. */
+  variable_count: z.number().int().nonnegative(),
+  /** The body text as approved, for a preview — never editable here. */
+  body_preview: z.string().nullable(),
+});
+export type WhatsappTemplateSummary = z.infer<typeof whatsappTemplateSummary>;
+
+export const whatsappTemplateListResponse = z.object({
+  templates: z.array(whatsappTemplateSummary),
+  /** When the catalog was last reconciled with Meta — a stale list is a real state, so it is shown. */
+  synced_at: z.string().nullable(),
+  request_id: z.string(),
+});
+export type WhatsappTemplateListResponse = z.infer<
+  typeof whatsappTemplateListResponse
+>;
