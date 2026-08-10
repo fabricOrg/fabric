@@ -28,4 +28,11 @@
 CREATE UNIQUE INDEX IF NOT EXISTS "uniq_whatsapp_templates_tenant_waba_name_language"
   ON "whatsapp_templates" USING btree ("tenant_id", "waba_id", "name", "language");--> statement-breakpoint
 
-DROP INDEX IF EXISTS "uniq_whatsapp_templates_waba_name_language";
+DROP INDEX IF EXISTS "uniq_whatsapp_templates_waba_name_language";--> statement-breakpoint
+
+-- The dropped index was the only one leading with waba_id, and `tenantsForWaba` filters on waba_id
+-- alone (no tenant in scope — it is asking WHICH tenants there are). Both remaining indexes lead with
+-- tenant_id, so that query would seq-scan — on a table whose row count this migration deliberately
+-- multiplies from `templates` to `tenants x templates`. It runs hourly and on every template webhook.
+CREATE INDEX IF NOT EXISTS "idx_whatsapp_templates_waba"
+  ON "whatsapp_templates" USING btree ("waba_id");

@@ -144,12 +144,42 @@ describeDb("WhatsApp template lifecycle", () => {
   it("keeps each workspace's templates when two share one WABA", async () => {
     const scheduler = app.get(WhatsappTemplateSyncScheduler);
     await scheduler.run({ tenantIds: [tenantId] });
-    await scheduler.run({ tenantIds: [sharedWabaTenantId] });
+    // Asserted, not awaited bare: the scheduler catches per-tenant failures and only warns, so a
+    // missing ON CONFLICT target would otherwise surface as a puzzling count instead of its own error.
+    await expect(
+      scheduler.run({ tenantIds: [sharedWabaTenantId] }),
+    ).resolves.toEqual({ locked: true, synced: 2 });
     const rows = await owner`
       SELECT tenant_id, count(*)::int AS n FROM whatsapp_templates
       WHERE waba_id = ${WABA_ID} AND tenant_id IN (${tenantId}, ${sharedWabaTenantId})
-      GROUP BY tenant_id`;
+      GROUP BY tenant_id ORDER BY tenant_id`;
     expect(rows.map((row) => Number(row.n))).toEqual([2, 2]);
+  });
+
+  // A template webhook carries a status, never components. An event for a template nobody has cached
+  // used to INVENT a row per tenant — status UNKNOWN, components [], synced_at stamped from the event
+  // — which made latestSync() look fresh and flipped those tenants' other sends from fail-open to a
+  // hard 400. Both tenants above are in the WABA's tenant list by now, so this is not vacuous: before
+  // the fix it created two rows.
+  it("invents no cache row for a template nobody has synced", async () => {
+    const raw = templateStatusBody("APPROVED", 1_900_000_000, "never_synced");
+    const webhook = await app.inject({
+      method: "POST",
+      url: "/webhooks/whatsapp/meta-cloud",
+      headers: {
+        "content-type": "application/json",
+        "x-hub-signature-256": signed(raw),
+      },
+      payload: raw,
+    });
+    expect(webhook.statusCode).toBe(200);
+    // Scoped to this spec's own tenants, NOT a global count. applyWebhookEvent fans out to every
+    // tenant on the WABA, so on a developer database that holds real workspaces the `processed` total
+    // and a global row count both depend on data this spec did not create.
+    const rows = await owner`
+      SELECT count(*)::int AS n FROM whatsapp_templates
+      WHERE name = 'never_synced' AND tenant_id IN (${tenantId}, ${sharedWabaTenantId})`;
+    expect(Number(rows[0]?.n)).toBe(0);
   });
 
   it("applies a status webhook downgrade and blocks the next send with a stable code", async () => {
@@ -254,7 +284,11 @@ function signed(rawBody: string): string {
     .digest("hex")}`;
 }
 
-function templateStatusBody(status: string, timestamp: number): string {
+function templateStatusBody(
+  status: string,
+  timestamp: number,
+  name = "order_update",
+): string {
   return JSON.stringify({
     object: "whatsapp_business_account",
     entry: [
@@ -265,7 +299,7 @@ function templateStatusBody(status: string, timestamp: number): string {
             field: "message_template_status_update",
             value: {
               event: status,
-              message_template_name: "order_update",
+              message_template_name: name,
               message_template_language: "en",
               timestamp,
             },

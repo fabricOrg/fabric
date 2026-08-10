@@ -139,6 +139,8 @@ export const whatsappTemplates = pgTable(
       t.language,
     ),
     index("idx_whatsapp_templates_tenant_synced").on(t.tenantId, t.syncedAt),
+    // tenantsForWaba asks which tenants exist for a WABA, so it has no tenant to lead with (0150).
+    index("idx_whatsapp_templates_waba").on(t.wabaId),
   ],
 );
 
