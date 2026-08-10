@@ -129,7 +129,11 @@ export const whatsappTemplates = pgTable(
     ...timestamps,
   },
   (t) => [
-    uniqueIndex("uniq_whatsapp_templates_waba_name_language").on(
+    // TENANT-scoped, not WABA-scoped (0150). The WABA is shared across tenants in the aggregator
+    // model, so a waba-only key means one row per template globally — and the sync upsert would then
+    // reassign that row to whichever tenant synced last, emptying every other tenant's picker.
+    uniqueIndex("uniq_whatsapp_templates_tenant_waba_name_language").on(
+      t.tenantId,
       t.wabaId,
       t.name,
       t.language,

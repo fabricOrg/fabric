@@ -135,8 +135,9 @@ export class WhatsappTemplateService {
         ${syncedAtIso}::timestamptz, ${syncedAtIso}::timestamptz,
         ${syncedAtIso}::timestamptz
       )
-      ON CONFLICT (waba_id, name, language) DO UPDATE SET
-        tenant_id = EXCLUDED.tenant_id,
+      -- Tenant-scoped key (0150): on waba_id alone this DO UPDATE reassigned the row to the syncing
+      -- tenant, so a shared WABA handed every template to whichever tenant synced last.
+      ON CONFLICT (tenant_id, waba_id, name, language) DO UPDATE SET
         category = EXCLUDED.category,
         status = EXCLUDED.status,
         quality_rating = EXCLUDED.quality_rating,
@@ -189,7 +190,9 @@ export class WhatsappTemplateService {
         '[]'::jsonb, ${occurredAtIso}::timestamptz, ${occurredAtIso}::timestamptz,
         ${occurredAtIso}::timestamptz, ${occurredAtIso}::timestamptz
       )
-      ON CONFLICT (waba_id, name, language) DO NOTHING`);
+      -- Tenant-scoped (0150): on the old key another tenant's row swallowed this insert, so a status
+      -- change was discarded and a stale APPROVED survived in a cache read before money moves.
+      ON CONFLICT (tenant_id, waba_id, name, language) DO NOTHING`);
   }
 
   private async updateWebhookEvent(

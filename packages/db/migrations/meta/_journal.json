@@ -1051,6 +1051,13 @@
       "when": 1786320422000,
       "tag": "0149_message_evidence_no_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "7",
+      "when": 1786320482000,
+      "tag": "0150_whatsapp_templates_tenant_scoped",
+      "breakpoints": true
     }
   ]
 }

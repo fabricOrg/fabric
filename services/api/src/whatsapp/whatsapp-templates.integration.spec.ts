@@ -1,17 +1,7 @@
 import "reflect-metadata";
 import { createHmac, randomUUID } from "node:crypto";
 import { createAppDb } from "@app/db";
-import type {
-  CanonicalDlr,
-  Creds,
-  HealthState,
-  IncomingRequest,
-  NormalizedWhatsAppTemplateMessage,
-  ProviderResult,
-  RequestContext,
-  WhatsAppSenderPlugin,
-  WhatsAppTemplateRecord,
-} from "@app/integrations";
+import type { Creds } from "@app/integrations";
 import { credit } from "@app/wallet";
 import { NestFactory } from "@nestjs/core";
 import {
@@ -25,6 +15,7 @@ import { AppModule } from "../app.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
 import { effectivePricingStub } from "../testing/effective-pricing.stub.js";
+import { WhatsappLifecycleProvider } from "../testing/whatsapp-lifecycle.provider.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 import { WhatsappTemplateSyncScheduler } from "./whatsapp-template-sync.scheduler.js";
 
@@ -50,17 +41,19 @@ describeDb("WhatsApp template lifecycle", () => {
   const owner = postgres(SUPER_URL ?? "", { max: 2 });
   const db = createAppDb(APP_URL ?? "", { max: 2 });
   const tenantId = randomUUID();
+  const sharedWabaTenantId = randomUUID(); // 2nd workspace, SAME WABA (ADR-0015 §2 aggregator model)
   const appId = randomUUID();
   const liveId = randomUUID();
   const keySalt = randomUUID().replace(/-/g, "");
   const liveKey = `sk_live_${keySalt}${"7".repeat(8)}`;
-  const provider = new LifecycleProvider();
+  const provider = new WhatsappLifecycleProvider(WABA_ID);
   let app: NestFastifyApplication;
 
   beforeAll(async () => {
     await owner`
-      INSERT INTO accounts (id, name, slug)
-      VALUES (${tenantId}, 'WhatsApp Templates', ${`wa-tpl-${tenantId}`})`;
+      INSERT INTO accounts (id, name, slug) VALUES
+        (${tenantId}, 'WhatsApp Templates', ${`wa-tpl-${tenantId}`}),
+        (${sharedWabaTenantId}, 'Shared WABA', ${`wa-shared-${sharedWabaTenantId}`})`;
     await owner`
       INSERT INTO applications (id, tenant_id, name, slug)
       VALUES (${appId}, ${tenantId}, 'Primary', 'primary')`;
@@ -110,7 +103,8 @@ describeDb("WhatsApp template lifecycle", () => {
       ]);
     }
     await owner`DELETE FROM applications WHERE tenant_id = ${tenantId}`;
-    await owner`DELETE FROM accounts WHERE id = ${tenantId}`;
+    await owner`DELETE FROM whatsapp_templates WHERE tenant_id = ${sharedWabaTenantId}`;
+    await owner`DELETE FROM accounts WHERE id IN (${tenantId}, ${sharedWabaTenantId})`;
     await owner.end();
     await db.end();
   });
@@ -142,6 +136,20 @@ describeDb("WhatsApp template lifecycle", () => {
       SELECT count(*)::int AS count FROM whatsapp_templates
       WHERE tenant_id = ${tenantId}`;
     expect(Number(count[0]?.count)).toBe(2);
+  });
+
+  // Regression for 0150: keyed on waba_id alone the sync upsert reassigned tenant_id, so the second
+  // workspace to sync TOOK the first one's rows. Normal path, not a race — one tick loops every
+  // tenant on the WABA. Two owners of two rows each; the defect left one owner holding all of them.
+  it("keeps each workspace's templates when two share one WABA", async () => {
+    const scheduler = app.get(WhatsappTemplateSyncScheduler);
+    await scheduler.run({ tenantIds: [tenantId] });
+    await scheduler.run({ tenantIds: [sharedWabaTenantId] });
+    const rows = await owner`
+      SELECT tenant_id, count(*)::int AS n FROM whatsapp_templates
+      WHERE waba_id = ${WABA_ID} AND tenant_id IN (${tenantId}, ${sharedWabaTenantId})
+      GROUP BY tenant_id`;
+    expect(rows.map((row) => Number(row.n))).toEqual([2, 2]);
   });
 
   it("applies a status webhook downgrade and blocks the next send with a stable code", async () => {
@@ -239,72 +247,6 @@ describeDb("WhatsApp template lifecycle", () => {
     });
   }
 });
-
-class LifecycleProvider implements WhatsAppSenderPlugin {
-  readonly slug = "meta-cloud";
-  readonly capability = "whatsapp" as const;
-  readonly version = "0.1.0";
-  readonly billableStatuses = ["accepted"] as const;
-  readonly configSchema = {};
-
-  supports(_context: RequestContext): boolean {
-    return true;
-  }
-
-  healthCheck(): Promise<HealthState> {
-    return Promise.resolve({ status: "up" });
-  }
-
-  send(
-    message: NormalizedWhatsAppTemplateMessage,
-    _creds: Creds,
-  ): Promise<ProviderResult> {
-    return Promise.resolve({
-      status: "accepted",
-      providerRef: `wamid.${message.messageId}`,
-      raw: { fake: true },
-    });
-  }
-
-  parseDlr(_payload: unknown): CanonicalDlr {
-    return { providerRef: "unused", status: "delivered" };
-  }
-
-  verifyWebhook(request: IncomingRequest, creds: Creds): boolean {
-    const provided = request.headers["x-hub-signature-256"];
-    if (!provided) return false;
-    const hmac = createHmac("sha256", creds.app_secret ?? "");
-    if (typeof request.rawBody === "string") {
-      hmac.update(request.rawBody, "utf8");
-    } else {
-      hmac.update(request.rawBody);
-    }
-    return provided === `sha256=${hmac.digest("hex")}`;
-  }
-
-  listTemplates(_creds: Creds): Promise<readonly WhatsAppTemplateRecord[]> {
-    return Promise.resolve([
-      {
-        wabaId: WABA_ID,
-        name: "order_update",
-        language: "en",
-        category: "UTILITY",
-        status: "APPROVED",
-        qualityRating: "GREEN",
-        components: [{ type: "BODY", text: "Hello {{1}}" }],
-      },
-      {
-        wabaId: WABA_ID,
-        name: "promo",
-        language: "en",
-        category: "MARKETING",
-        status: "PAUSED",
-        qualityRating: "YELLOW",
-        components: [],
-      },
-    ]);
-  }
-}
 
 function signed(rawBody: string): string {
   return `sha256=${createHmac("sha256", WEBHOOK_SECRET)

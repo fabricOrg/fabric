@@ -2,11 +2,14 @@ import {
   accounts,
   apiKeys,
   createAppDb,
+  memberships,
   smsTemplates,
   staffUsers,
   type TenantId,
+  users,
 } from "@app/db";
 import { credit } from "@app/wallet";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { apiKeyScopeValues } from "../../packages/contracts/src/dev-portal.js";
@@ -26,6 +29,15 @@ const staffEmails = (
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter((email) => email.length > 0);
+// The human who OWNS the local workspace, which is a different question from who operates the
+// platform. Defaults to the first staff email so one person can use both surfaces locally: the
+// dashboard forwards a staff user holding NO membership to the admin console
+// (apps/dashboard/app/auth/callback/route.ts), so seeding staff WITHOUT this row makes customer
+// sign-in impossible — it bounces to the console every time. Staff who also hold a membership fall
+// through and use the dashboard normally, which is what this restores.
+const ownerEmail = (process.env.SEED_OWNER_EMAIL ?? staffEmails[0] ?? "")
+  .trim()
+  .toLowerCase();
 
 /** Wallet money to seed, in minor units. Zero by default — see the credit call below for why. */
 const seedWalletMinor = BigInt(process.env.SEED_WALLET_MINOR ?? "0");
@@ -116,6 +128,62 @@ async function main(): Promise<void> {
           set: { role: "admin", status: "active" },
         });
     }
+    // A user is provisioned by EMAIL before first sign-in and `external_subject_id` is stamped then
+    // (identity.ts:79). So this row is deliberately left unbound: user-session.service.ts looks up the
+    // subject, falls back to email, and binds — but ONLY when the row it finds is still unbound.
+    // Never set external_subject_id here; a wrong guess makes the real WorkOS subject unbindable.
+    if (ownerEmail) {
+      const [seededUser] = await owner
+        .insert(users)
+        .values({ email: ownerEmail, name: "Fabric Local Owner" })
+        .onConflictDoUpdate({
+          target: users.email,
+          set: { status: "active" },
+        })
+        .returning({ id: users.id });
+      if (seededUser) {
+        await owner
+          .insert(memberships)
+          .values({
+            tenantId: tenantId as TenantId,
+            userId: seededUser.id,
+            role: "owner",
+            status: "active",
+          })
+          .onConflictDoUpdate({
+            target: [memberships.tenantId, memberships.userId],
+            set: { role: "owner", status: "active" },
+          });
+      }
+    }
+    // Give the local workspace the WABA's approved template catalog, which the hourly sync cannot do
+    // for it: WhatsappTemplateSyncScheduler.tenantsForWaba only finds tenants that ALREADY hold a
+    // template row or have already sent a non-sandbox message, so a workspace with neither never gets
+    // a first sync and its compose picker stays empty forever. Copying is faithful rather than a
+    // fixture — the WABA is shared across tenants in the aggregator model, so this is the same row the
+    // sync would write once the tenant qualified. Needs 0150's tenant-scoped unique key to be legal.
+    const copied = await owner.execute(sql`
+      INSERT INTO whatsapp_templates (
+        tenant_id, waba_id, name, language, category, status, quality_rating, components,
+        synced_at, status_updated_at, quality_updated_at, category_updated_at
+      )
+      SELECT DISTINCT ON (waba_id, name, language)
+        ${tenantId}, waba_id, name, language, category, status, quality_rating, components,
+        synced_at, status_updated_at, quality_updated_at, category_updated_at
+      FROM whatsapp_templates
+      WHERE status = 'APPROVED' AND tenant_id <> ${tenantId}
+      ORDER BY waba_id, name, language, synced_at DESC
+      ON CONFLICT (tenant_id, waba_id, name, language) DO NOTHING
+      RETURNING name`);
+    // Counted separately from the RETURNING above, which reports only the rows this run INSERTED. A
+    // re-run copies nothing because they are already there, and reporting that as "none available"
+    // would describe a healthy seed as a broken one.
+    const [templateTotal] = (await owner.execute(sql`
+      SELECT count(*)::int AS count
+      FROM whatsapp_templates
+      WHERE tenant_id = ${tenantId} AND status = 'APPROVED'`)) as Array<{
+      count: number;
+    }>;
     await appDb.withTenantDrizzle(tenantId, async (tx) => {
       for (const template of localSmsTemplates) {
         await tx
@@ -149,7 +217,18 @@ async function main(): Promise<void> {
         : "Wallet left EMPTY (set SEED_WALLET_MINOR to fund it)",
     );
     console.log(`SMS templates ready: ${localSmsTemplates.length}`);
+    const approved = Number(templateTotal?.count ?? 0);
+    console.log(
+      approved > 0
+        ? `WhatsApp templates ready: ${approved} approved (${copied.length} newly copied)`
+        : "WhatsApp templates: none — nothing has synced this WABA's catalog yet",
+    );
     console.log(`Staff seeded: ${staffEmails.join(", ")}`);
+    console.log(
+      ownerEmail
+        ? `Workspace owner seeded: ${ownerEmail} (owner of fabric-local)`
+        : "No workspace owner seeded — dashboard sign-in will bounce to the admin console",
+    );
   } finally {
     await ownerPool.end();
     await appDb.end();
