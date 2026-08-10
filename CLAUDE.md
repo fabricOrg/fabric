@@ -227,6 +227,13 @@ Bulk work is routed to external agent CLIs to conserve Claude quota — see
 - **Green gates are not a review.** Gates catch mechanical defects; read `git diff` for
   the semantics — does it fit the architecture, does it hold tenancy isolation, did it
   invent an abstraction nobody asked for.
+- **EVERY change gets an independent review before it is reported as done — UI included.**
+  Not just money and security seams. A dashboard form field looks like taste and behaves
+  like policy: `template_category` never reaches Meta, it selects our message class, and a
+  free-text version of it let a caller skip both promotional gates and bill the wrong
+  traffic class. For a UI diff make one reviewer lens **"trace every user-supplied value to
+  where it is consumed"** — that is not a lens a UI reviewer picks by default. Self-review
+  does not count: it inherits the framing that produced the bug.
 - **Delegates inherit §7 redlines, and they cannot ask for a human go.** No
   `terraform apply`, no deploy-gate flips, no live external writes, no production DB
   access, no live SMS or payments. State this in the prompt; never hand a delegate a task

@@ -223,10 +223,21 @@ dashboard, managed sends, inbound + the service window, and costable offers.
    as #266: a PR titled `chore(ops): promote …` (Conventional Commits — `promote: …` is rejected), a
    real MERGE not a squash, and watch **`Deploy testing (Vercel + Render)`** — the plain `Deploy`
    workflow reports success while skipping all its jobs because it is the gated AWS path.
-2. **#23 — the drizzle snapshot chain is broken from 0135** (0135/0136 share an idx, 0137–0149 have no
-   snapshots), so `drizzle-kit generate` errors and every migration since is hand-written with a
-   hand-appended journal entry. Drag rather than a bug, but it makes every schema change slower and the
-   journal a merge-conflict magnet — it conflicted twice this session.
+2. **#23 — and the drift gate it silently disabled.** Diagnosed properly on 2026-08-10; the earlier
+   description in this file was wrong in both halves.
+
+   - The journal has **NO duplicate idx** (150 entries, contiguous). The union scripts used during the
+     stack merges keyed by tag and re-derived ordering, which repaired that half as a side effect.
+   - The real failure is a **snapshot `prevId` collision**: `drizzle-kit generate` refuses with
+     *"[0135_snapshot.json, 0136_snapshot.json] are pointing to a parent snapshot … which is a
+     collision"*. Snapshots stop at `0136` while migrations run to `0149`.
+   - **Fix the gate FIRST, it is the more serious half.** `assert-drift.mjs:75` swallows a generate
+     failure — `} catch { /* a non-zero generate … is fine */ }` — and then concludes "no drift" because
+     no files changed. Generate currently errors and writes nothing, so **the gate has been reporting
+     success unconditionally**. It cannot tell "schema matches" from "generate is broken", and
+     `drizzle-kit` exits **0** on this error, so an exit-code check would not save it either. Every "no
+     drift" result since the collision appeared is unproven.
+   - Only then repair the chain, and re-run generate to confirm it actually emits nothing.
 3. **#14 — `WORKOS_ADMIN_CLIENT_ID` / `WORKOS_ADMIN_API_KEY` in Vercel**, then remove the last dashboard
    redirect.
 
@@ -235,9 +246,12 @@ dashboard, managed sends, inbound + the service window, and costable offers.
 - **Rotate `WHATSAPP_ACCESS_TOKEN`** — it was printed in full in a session transcript on 2026-08-09.
 - **Arm a `meta-cloud` credential in the testing environment** if WhatsApp should send from there. The
   code promotes; the credential does not travel with it.
-- **`PLUGIN_MASTER_KEY` is set in dev only.** Staging and prod have none, and production does not warn —
-  it REFUSES TO BOOT. Changing it also requires RE-SEALING every stored credential, because the old
-  ciphertext will not open under a new key.
+- **`PLUGIN_MASTER_KEY` is now set in dev AND on Render (testing).** Production still needs one and does
+  not warn — it REFUSES TO BOOT. One consequence to check rather than assume: setting the key CHANGES
+  credential derivation, so any plugin instance in testing whose `credentials_ref` was sealed under the
+  derived development key can no longer be opened. The symptom is `plugin resolution failed … failing
+  closed` in the API log, and the remedy is re-arming (`scripts/rearm-whatsapp.ts` for meta-cloud). If
+  nothing was ever armed in testing there is nothing to re-seal.
 - **A service-conversation sell rate**, if free-form WhatsApp replies inside the 24-hour window should
   work. The window makes them legal; nothing prices them, and ADR-0012 forbids serving a send we cannot
   cost.
