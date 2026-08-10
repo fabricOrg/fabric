@@ -217,16 +217,58 @@ dashboard, managed sends, inbound + the service window, and costable offers.
   hand-written. Journal entries are appended by hand. Repair this before the next schema change
   that would benefit from generation.
 
+### Verified against the deployed testing database (2026-08-10)
+
+**The Neon CLI is available and authenticated — use it. Testing is inspectable, so stop inferring what
+you can measure.** `neondb` is owned by **`app_migrator`**, which mirrors production, and that matters:
+`ALTER DEFAULT PRIVILEGES` is grantor-scoped, so an `app_owner`-owned local database HIDES grant holes
+that testing shows plainly.
+
+```bash
+# The org prompt is interactive — always pass --org-id or it hangs.
+neonctl projects list --org-id org-fragrant-meadow-35967446 --output json
+# project fabric = dry-recipe-09519949 · single branch `production` = br-lively-frog-avkxhbz6 · db neondb
+TESTING_DATABASE_URL=$(neonctl connection-string production   --project-id dry-recipe-09519949 --role-name app_migrator --database-name neondb)
+```
+
+Capture it into a variable and never echo it — it carries the password. Roles available:
+`app_runtime`, `app_provisioner`, `app_migrator`, `neondb_owner`. Read-only queries only unless a human
+has said otherwise.
+
+What that measurement established:
+
+- **The `app_runtime` DELETE hole is real: 7/7 evidence tables** (`messages`, `email_messages`, both
+  dispatch tables, both managed-delivery tables, `outbox_events`) report `delete=true` in testing. This
+  is the fact `0149` / PR #271 fixes, and it is UNPROMOTED — testing is at 148 applied migrations,
+  local at 150. `TRUNCATE` is false throughout, because it is not in the default-privileges grant.
+- **Exposure is prospective, not retrospective.** `messages`, `email_messages`, `whatsapp_messages` and
+  `ledger_transactions` all hold **0 rows** in testing, so nothing has been destroyed.
+- **`app_provisioner` retains DELETE** on both managed-delivery tables there, so `0149` will not break
+  retention pruning when promoted.
+- **The WhatsApp promotion fully landed**: all six tables present, including `0145`'s inbound pair
+  (`whatsapp_inbound_messages`, `whatsapp_service_windows`, `whatsapp_unattributed_inbound`).
+
 ### Next up, in a fresh session
 
 1. **Promote `dev` → `testing`.** Five merged PRs are unpromoted, including two migrations. Same shape
    as #266: a PR titled `chore(ops): promote …` (Conventional Commits — `promote: …` is rejected), a
    real MERGE not a squash, and watch **`Deploy testing (Vercel + Render)`** — the plain `Deploy`
    workflow reports success while skipping all its jobs because it is the gated AWS path.
-2. **#23 — the drizzle snapshot chain is broken from 0135** (0135/0136 share an idx, 0137–0149 have no
-   snapshots), so `drizzle-kit generate` errors and every migration since is hand-written with a
-   hand-appended journal entry. Drag rather than a bug, but it makes every schema change slower and the
-   journal a merge-conflict magnet — it conflicted twice this session.
+2. **#23 — and the drift gate it silently disabled.** Diagnosed properly on 2026-08-10; the earlier
+   description in this file was wrong in both halves.
+
+   - The journal has **NO duplicate idx** (150 entries, contiguous). The union scripts used during the
+     stack merges keyed by tag and re-derived ordering, which repaired that half as a side effect.
+   - The real failure is a **snapshot `prevId` collision**: `drizzle-kit generate` refuses with
+     *"[0135_snapshot.json, 0136_snapshot.json] are pointing to a parent snapshot … which is a
+     collision"*. Snapshots stop at `0136` while migrations run to `0149`.
+   - **Fix the gate FIRST, it is the more serious half.** `assert-drift.mjs:75` swallows a generate
+     failure — `} catch { /* a non-zero generate … is fine */ }` — and then concludes "no drift" because
+     no files changed. Generate currently errors and writes nothing, so **the gate has been reporting
+     success unconditionally**. It cannot tell "schema matches" from "generate is broken", and
+     `drizzle-kit` exits **0** on this error, so an exit-code check would not save it either. Every "no
+     drift" result since the collision appeared is unproven.
+   - Only then repair the chain, and re-run generate to confirm it actually emits nothing.
 3. **#14 — `WORKOS_ADMIN_CLIENT_ID` / `WORKOS_ADMIN_API_KEY` in Vercel**, then remove the last dashboard
    redirect.
 
@@ -235,9 +277,22 @@ dashboard, managed sends, inbound + the service window, and costable offers.
 - **Rotate `WHATSAPP_ACCESS_TOKEN`** — it was printed in full in a session transcript on 2026-08-09.
 - **Arm a `meta-cloud` credential in the testing environment** if WhatsApp should send from there. The
   code promotes; the credential does not travel with it.
-- **`PLUGIN_MASTER_KEY` is set in dev only.** Staging and prod have none, and production does not warn —
-  it REFUSES TO BOOT. Changing it also requires RE-SEALING every stored credential, because the old
-  ciphertext will not open under a new key.
+- **`PLUGIN_MASTER_KEY` is set in dev AND on Render (testing); it BROKE two credentials there.** Measured
+  against the testing database on 2026-08-10, not guessed: `sms/arkesel (live)` (sealed 2026-07-29
+  15:41) and `payment/paystack (live)` (15:44) were both sealed 12 days BEFORE the key existed, so both
+  were sealed under the derived development key and the new key cannot open them. Symptom is
+  `plugin resolution failed … failing closed`; both are still `enabled=true`.
+
+  The direction is fail-safe — live SMS and live payments in testing now refuse rather than fire, which
+  is where §7 says they should be — but the failure is opaque to anyone who tries. **DECISION PENDING:**
+  re-arm both under the new key, or disable/revoke them so the state matches the redline. Disabling is
+  the safer reading, since neither should be live in testing and re-arming re-creates that.
+
+  Separately worth knowing on its own: **`sms/arkesel (live)` has been armed AND enabled in testing
+  since 2026-07-29**, which predates this work and sits against §7's "live SMS stays OFF until a human
+  flips it per engagement".
+
+  Production still needs a key of its own and does not warn — it REFUSES TO BOOT.
 - **A service-conversation sell rate**, if free-form WhatsApp replies inside the 24-hour window should
   work. The window makes them legal; nothing prices them, and ADR-0012 forbids serving a send we cannot
   cost.
