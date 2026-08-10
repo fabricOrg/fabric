@@ -175,6 +175,12 @@ Every false "done" in this repo has had the same shape: a *report* was trusted i
 *thing*. A command's own output, a green status, a schema file — none of them are the state. Check
 what changed.
 
+- **The Neon CLI is available — measure testing instead of inferring it.** `neondb` is owned by
+  `app_migrator` like production, and `ALTER DEFAULT PRIVILEGES` is grantor-scoped, so an
+  `app_owner`-owned LOCAL database hides grant holes that testing shows plainly. A local
+  `has_table_privilege` reading "no DELETE" is not evidence there is no hole. Pass `--org-id` (the org
+  prompt is interactive and will hang), capture the connection string into a variable and never echo it,
+  and stay read-only unless a human said otherwise. See HANDOFF for the exact ids.
 - **Never pipe a command whose exit code matters.** `cmd | tail` returns **tail's** status, so a
   failed push and a no-op promotion both reported success. Redirect to a file and capture `$?`.
 - **Confirm a push/merge/deploy against the ref**, not the command's output:
