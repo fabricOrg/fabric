@@ -129,55 +129,12 @@ export default function SendersPage() {
         </Empty>
       ) : (
         <div className="flex flex-col gap-4">
-          {senders.some((sender) => sender.status === "rejected") ? (
-            <Card className="border-destructive/25">
-              <CardHeader>
-                <CardTitle className="text-base">
-                  Sender IDs to correct
-                </CardTitle>
-                <CardDescription>
-                  Resubmission retains the original values so you only need to
-                  correct the information identified by the carrier.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                {senders
-                  .filter((sender) => sender.status === "rejected")
-                  .map((sender) => (
-                    <div
-                      key={sender.id}
-                      className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="font-mono text-sm font-medium">
-                          {sender.senderId}
-                        </p>
-                        <p className="text-sm text-destructive">
-                          {sender.note ?? "The carrier declined this request."}
-                        </p>
-                      </div>
-                      <RegisterSenderDialog
-                        onRegister={handleRegister}
-                        initialValues={{
-                          senderId: sender.senderId,
-                          country: sender.country,
-                          type: sender.type,
-                          useCase: sender.useCase,
-                        }}
-                        triggerLabel="Correct and resubmit"
-                        title={`Resubmit ${sender.senderId}`}
-                      />
-                    </div>
-                  ))}
-              </CardContent>
-            </Card>
-          ) : null}
           <Card>
             <CardHeader>
               <CardTitle>Your sender IDs</CardTitle>
               <CardDescription>
-                Filter by status or country. Rejected requests include the
-                carrier reason.
+                Filter by status or country. A rejected request shows the
+                carrier's reason and resubmits with its original values.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -188,6 +145,19 @@ export default function SendersPage() {
                     ? "rejected"
                     : undefined
                 }
+                rowAction={(sender) => (
+                  <RegisterSenderDialog
+                    onRegister={handleRegister}
+                    initialValues={{
+                      senderId: sender.senderId,
+                      country: sender.country,
+                      type: sender.type,
+                      useCase: sender.useCase,
+                    }}
+                    triggerLabel="Correct and resubmit"
+                    title={`Resubmit ${sender.senderId}`}
+                  />
+                )}
               />
             </CardContent>
           </Card>
