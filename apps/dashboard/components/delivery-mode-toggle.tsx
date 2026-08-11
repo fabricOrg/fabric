@@ -22,11 +22,82 @@ import {
 } from "@/lib/client/dashboard-api";
 import { toastApiError } from "@/lib/error-toast";
 
+/**
+ * One entry per refusal reason. Each names ONLY its own cause, because the previous single message
+ * asserted every cause at once and was therefore wrong about at least one of them every time it
+ * appeared. No vendor is named either: the carrier is control-plane config and naming one in product
+ * copy makes the sentence false the moment routing changes.
+ */
+const BLOCK_COPY = {
+  sender: {
+    title: "Sender ID required",
+    description:
+      "Live delivery needs at least one approved sender ID. Register a sender ID and wait for carrier approval before switching from the virtual phone.",
+    action: { label: "Open Sender IDs", href: "/senders" },
+  },
+  locked: {
+    title: "Go-live required",
+    description:
+      "This workspace hasn't completed go-live. Live API keys and carrier delivery unlock once the compliance review passes. Virtual delivery stays active until then.",
+    action: { label: "Review go-live", href: "/go-live" },
+  },
+  carrier: {
+    title: "No live SMS carrier connected",
+    description:
+      "This workspace has gone live, but no live SMS carrier is connected yet, so there is nothing to route real messages through. Connecting one is a platform operation — contact support to have it enabled. Virtual delivery keeps working meanwhile, and nothing you send is lost.",
+    action: null,
+  },
+} as const satisfies Record<
+  string,
+  {
+    title: string;
+    description: string;
+    action: { label: string; href: string } | null;
+  }
+>;
+
+function BlockDialogBody({
+  copy,
+}: {
+  copy: (typeof BLOCK_COPY)[keyof typeof BLOCK_COPY];
+}) {
+  return (
+    <>
+      <AlertDialogHeader>
+        <AlertDialogMedia>
+          <AlertTriangle />
+        </AlertDialogMedia>
+        <AlertDialogTitle>{copy.title}</AlertDialogTitle>
+        <AlertDialogDescription>{copy.description}</AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>Keep virtual mode</AlertDialogCancel>
+        {/* No action for `carrier`: connecting one is a platform operation, not something this
+            customer can go and do, and a button leading nowhere useful is worse than none. */}
+        {copy.action ? (
+          <AlertDialogAction
+            onClick={() => {
+              window.location.href = copy.action.href;
+            }}
+          >
+            {copy.action.label}
+          </AlertDialogAction>
+        ) : null}
+      </AlertDialogFooter>
+    </>
+  );
+}
+
 export function DeliveryModeToggle() {
   const queryClient = useQueryClient();
-  const [liveBlock, setLiveBlock] = useState<"sender" | "workspace" | null>(
-    null,
-  );
+  // Three DISTINCT reasons live delivery can be refused, kept distinct. `delivery_mode_locked` (the
+  // workspace has not gone live) and `live_provider_not_ready` (no live SMS carrier is connected) used
+  // to collapse into one state whose copy asserted BOTH causes — so a workspace that had completed
+  // go-live was told it was not approved, directly contradicting the "This workspace is live" banner
+  // on the page the dialog links to. Different cause, different remedy, different owner.
+  const [liveBlock, setLiveBlock] = useState<
+    "sender" | "locked" | "carrier" | null
+  >(null);
 
   const settingsQuery = useQuery({
     queryKey: ["messaging-settings"],
@@ -41,11 +112,10 @@ export function DeliveryModeToggle() {
       const code = parseApiError(error).code;
       if (code === "live_delivery_not_ready") {
         setLiveBlock("sender");
-      } else if (
-        code === "delivery_mode_locked" ||
-        code === "live_provider_not_ready"
-      ) {
-        setLiveBlock("workspace");
+      } else if (code === "delivery_mode_locked") {
+        setLiveBlock("locked");
+      } else if (code === "live_provider_not_ready") {
+        setLiveBlock("carrier");
       } else {
         toastApiError(error);
       }
@@ -96,32 +166,7 @@ export function DeliveryModeToggle() {
         onOpenChange={(open) => !open && setLiveBlock(null)}
       >
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogMedia>
-              <AlertTriangle />
-            </AlertDialogMedia>
-            <AlertDialogTitle>
-              {liveBlock === "sender"
-                ? "Sender ID required"
-                : "Live delivery is not ready"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {liveBlock === "sender"
-                ? "Live delivery needs at least one approved sender ID. Register a sender ID and wait for carrier approval before switching from the virtual phone."
-                : "Carrier delivery is unavailable until the workspace is approved and the Arkesel production connection is configured. Virtual delivery remains active."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep virtual mode</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                window.location.href =
-                  liveBlock === "sender" ? "/senders" : "/go-live";
-              }}
-            >
-              {liveBlock === "sender" ? "Open Sender IDs" : "Review go-live"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {liveBlock ? <BlockDialogBody copy={BLOCK_COPY[liveBlock]} /> : null}
         </AlertDialogContent>
       </AlertDialog>
     </>
