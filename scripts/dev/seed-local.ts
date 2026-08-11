@@ -100,12 +100,26 @@ const LOCAL_HOSTS = new Set([
   "::1",
   "host.docker.internal",
 ]);
-const superHost = new URL(superUrl).hostname;
-if (!LOCAL_HOSTS.has(superHost)) {
+
+function assertLocal(url: string, label: string): void {
+  // `postgres:` is a NON-SPECIAL URL scheme, so WHATWG parsing neither lowercases the host nor strips
+  // the brackets from an IPv6 literal: `[::1]` arrives as "[::1]" and `LOCALHOST` stays uppercase.
+  // Both would fail closed, which is safe but tells a developer on IPv6 or with a capitalised host
+  // that a listed local host is "not a local database". Normalise so the allowlist means what it says.
+  const host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (LOCAL_HOSTS.has(host)) return;
   throw new Error(
-    `Refusing to seed: DATABASE_URL_SUPER points at '${superHost}', not a local database. This script writes across tenants as the superuser and is for local development only.`,
+    `Refusing to seed: ${label} points at '${host}', not a local database. This script writes across tenants as the superuser and is for local development only.`,
   );
 }
+
+// BOTH connections, not just the superuser one. The app connection writes sms_templates and, when
+// SEED_WALLET_MINOR is set, a real double-entry ledger credit — so guarding only DATABASE_URL_SUPER
+// left the docstring above claiming a protection the code did not deliver. The habit the guard exists
+// to stop (repointing one URL at a cloud database for a quick check, then re-running the seed) applies
+// to every URL in the file, and a developer .env carries all four.
+assertLocal(superUrl, "DATABASE_URL_SUPER");
+assertLocal(appUrl, "DATABASE_URL_APP");
 
 async function main(): Promise<void> {
   const ownerPool = postgres(superUrl, { max: 1 });
@@ -156,15 +170,29 @@ async function main(): Promise<void> {
       .returning({ id: applications.id });
     if (!application) throw new Error("failed to seed the default application");
 
-    // Sandbox is always usable; live mirrors the go-live gate — `locked` until the workspace leaves
-    // the sandbox plan, `active` once it has. Read from the row we just upserted rather than assumed,
-    // since the plan above is deliberately left alone on re-seed.
+    // Sandbox is always usable. Unlocking LIVE demands positive evidence of a go-live, not merely a
+    // plan that is not "sandbox" — because go-live's target value and the schema default are the SAME
+    // string: proposals.service.ts sets `afterValue: "free"` and identity.ts declares
+    // `plan ... .default("free")`. So `plan !== 'sandbox'` cannot distinguish "passed the compliance
+    // gate" from "this row was never initialised" (a restored dump, a hand-written INSERT, a fixture
+    // reusing DEV_TENANT_ID).
+    //
+    // Getting that wrong is a ONE-WAY DOOR, which is why it fails closed here. An active live
+    // environment is what lets `sk_live_*` be minted (api-keys.service.ts: live keys require
+    // `env.status === 'active'`), and delivery routing reads the environment's TYPE only —
+    // `resolveModeForEnvironment` never re-checks status. So a key minted while the env was wrongly
+    // active keeps reaching a real carrier even after a later run re-locks the environment.
     const [account] = (await owner.execute(sql`
       SELECT plan FROM accounts WHERE id = ${tenantId}`)) as Array<{
       plan: string;
     }>;
-    const liveStatus = account?.plan === "sandbox" ? "locked" : "active";
-    const environmentIds = new Map<string, string>();
+    const [approvedGoLive] = (await owner.execute(sql`
+      SELECT 1 AS ok FROM proposals
+      WHERE kind = 'go_live' AND tenant_id = ${tenantId} AND status = 'approved'
+      LIMIT 1`)) as Array<{ ok: number }>;
+    const liveStatus =
+      account?.plan !== "sandbox" && approvedGoLive ? "active" : "locked";
+    const environmentIds = new Map<"sandbox" | "live", EnvironmentId>();
     for (const type of ["sandbox", "live"] as const) {
       const [environment] = await owner
         .insert(environments)
@@ -179,20 +207,29 @@ async function main(): Promise<void> {
           set: { status: type === "live" ? liveStatus : "active" },
         })
         .returning({ id: environments.id });
-      if (environment) environmentIds.set(type, environment.id);
+      // Throw rather than continue, matching the application above: silently skipping would leave the
+      // API key unbound on a fresh database and stale-bound on a re-run, while the comment below
+      // insists the binding matters.
+      if (!environment)
+        throw new Error(`failed to seed the ${type} environment`);
+      environmentIds.set(type, environment.id);
     }
 
     // The BFF key is `env: "test"`, so it belongs to the SANDBOX environment. Binding it matters: the
     // schema note says "New keys always set both", and an unbound key cannot be scoped by environment
     // the way every real key is.
     const sandboxEnvironmentId = environmentIds.get("sandbox");
+    // The conflict target is `keyHash`, which is globally unique and carries no tenant. So changing
+    // DEV_TENANT_ID while keeping the same DASHBOARD_API_KEY now trips the application/tenant foreign
+    // key and stops the seed. That crash is deliberate and better than the previous silence, which
+    // left the key attached to the old tenant.
     await owner
       .insert(apiKeys)
       .values({
         tenantId,
         applicationId: application.id,
         ...(sandboxEnvironmentId
-          ? { environmentId: sandboxEnvironmentId as EnvironmentId }
+          ? { environmentId: sandboxEnvironmentId }
           : {}),
         name: "Local dashboard BFF",
         prefix: rawKey.slice(0, 16),
@@ -207,7 +244,7 @@ async function main(): Promise<void> {
           scopes: [...apiKeyScopeValues],
           applicationId: application.id,
           ...(sandboxEnvironmentId
-            ? { environmentId: sandboxEnvironmentId as EnvironmentId }
+            ? { environmentId: sandboxEnvironmentId }
             : {}),
         },
       });
@@ -224,6 +261,12 @@ async function main(): Promise<void> {
     // (identity.ts:79). So this row is deliberately left unbound: user-session.service.ts looks up the
     // subject, falls back to email, and binds — but ONLY when the row it finds is still unbound.
     // Never set external_subject_id here; a wrong guess makes the real WorkOS subject unbindable.
+    //
+    // Known consequence, and why the host allowlist above is what contains it: the verified-email
+    // precondition (`if (!byEmail && !request.email_verified) return null`) applies only when NO row
+    // exists, so pre-provisioning one lets an UNVERIFIED identity with that address bind and inherit
+    // this membership. That is the intended invite semantics, but a list widens it from one address to
+    // every seeded staff email — acceptable on a local database, unacceptable anywhere else.
     for (const email of ownerEmails) {
       // `set` deliberately touches only `status`. An already-bound row keeps its external_subject_id,
       // so re-seeding never orphans an identity that has already signed in.
@@ -246,7 +289,12 @@ async function main(): Promise<void> {
         })
         .onConflictDoUpdate({
           target: [memberships.tenantId, memberships.userId],
-          set: { role: "owner", status: "active" },
+          // `permissions` is cleared, not left alone. A non-null override IS the exact effective set
+          // and the role becomes a template, so a membership carrying one would keep its narrowed
+          // permissions while this script printed "Workspace owners seeded" — a claim the row does not
+          // support. Clearing it costs a deliberately-narrowed local test its override on the next
+          // re-seed, which is the lesser of the two surprises because it is visible immediately.
+          set: { role: "owner", status: "active", permissions: null },
         });
     }
     // Give the local workspace an approved template catalog, which the hourly sync cannot do for it:
