@@ -134,6 +134,39 @@ no secret in logs/prose, respect RLS + the redlines below.
   exception and it does not extend to the pre-push gate above, which still runs in full.
 - Biome formats + lints (`biome.jsonc`). Run `biome check --write` on changed files before commit.
 
+### The review gate — HARD, no exceptions
+
+**No change merges, and no change is reported as done, without an independent review. Logic and UI
+alike.** Not a guideline and not scoped to money or security seams. If a review has not run, the work
+is not finished — say so rather than merging.
+
+- **Independent means not the author.** Self-review inherits the framing that produced the bug, so it
+  does not satisfy this gate. Green gates do not either: they catch mechanical defects, never
+  semantics. When delegates are unavailable, use a subagent — an outage is not a waiver.
+- **Verify what the review claims.** A reviewer's finding is a hypothesis; confirm it against the code
+  before acting, and confirm the fix by making the test fail without it. Reviewers also miss things,
+  so a clean review is not proof either.
+- **Size the review to the blast radius, never to the diff.** A twenty-line seed script that grants a
+  membership or writes `plan` is authorization and go-live policy; a one-line copy change that
+  describes a delivery gate is what a customer will act on.
+
+**For a UI diff the reviewer gets these lenses explicitly** — none of them is picked by default:
+
+1. **Trace every user-supplied value to where it is consumed.** A form field looks like taste and
+   behaves like policy: `template_category` never reaches Meta, it selects our message class, and a
+   free-text version let a caller skip both promotional gates and bill the wrong traffic class.
+2. **Least user effort.** Fewest steps, clicks and decisions to the outcome. Derive what can be
+   derived instead of asking; default what can be defaulted. Every error and empty state either
+   offers the next action or names plainly who can act — a dead end is a defect, not a state.
+3. **Consistency.** Reuse the shared primitives (`@app/ui` states, `DataTable`, the Form kit, `Card`)
+   and the existing copy voice. One concept, one implementation. The standing debt is the warning:
+   nine separate `StatusBadge`s and ~30 ad-hoc date formats all began as one reasonable local choice.
+4. **Reusability.** A pattern appearing twice belongs in `@app/ui`, not copied a third time.
+5. **One state per view.** A view early-returns exactly ONE of loading / error / empty
+   (`states.tsx`). Two competing empty states on a page means the layout, not just the copy, is wrong
+   — and an empty branch that renders a different information architecture is a different page, so the
+   first success visibly reorganises it.
+
 ## 6. Deploy (see docs/DEPLOYMENT-AND-DEVOPS.md)
 
 - OIDC → ECR → ECS Fargate, behind API Gateway HTTP API + VPC Link. Image tag is content-addressed
@@ -233,13 +266,9 @@ Bulk work is routed to external agent CLIs to conserve Claude quota — see
 - **Green gates are not a review.** Gates catch mechanical defects; read `git diff` for
   the semantics — does it fit the architecture, does it hold tenancy isolation, did it
   invent an abstraction nobody asked for.
-- **EVERY change gets an independent review before it is reported as done — UI included.**
-  Not just money and security seams. A dashboard form field looks like taste and behaves
-  like policy: `template_category` never reaches Meta, it selects our message class, and a
-  free-text version of it let a caller skip both promotional gates and bill the wrong
-  traffic class. For a UI diff make one reviewer lens **"trace every user-supplied value to
-  where it is consumed"** — that is not a lens a UI reviewer picks by default. Self-review
-  does not count: it inherits the framing that produced the bug.
+- **The review gate in §5 is a hard gate and applies to delegated work too** — a delegate's
+  output is reviewed by someone that is not the delegate, and "the delegate ran the gates"
+  is not a review. Read §5 for the lenses, including the UI ones.
 - **Delegates inherit §7 redlines, and they cannot ask for a human go.** No
   `terraform apply`, no deploy-gate flips, no live external writes, no production DB
   access, no live SMS or payments. State this in the prompt; never hand a delegate a task
