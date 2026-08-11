@@ -13,6 +13,13 @@
 - [ ] `pnpm verify`
 - [ ] `pnpm verify:full` or not applicable
 
+## Independent review (REQUIRED — CLAUDE.md §5)
+
+<!-- Who reviewed this, and what did they find? Self-review does not satisfy this gate, and neither
+     does a green pipeline. If findings were raised, say what you verified and what you changed. -->
+
+- [ ] Reviewed by someone other than the author, and the findings were verified against the code.
+
 ## Review Checklist
 
 - [ ] The pull-request title follows Conventional Commits.
@@ -20,3 +27,11 @@
 - [ ] No secrets, raw PII, or credentials are committed or logged.
 - [ ] Tenant isolation, authorization, and money invariants were considered.
 - [ ] Documentation and environment examples reflect the change.
+
+### If this touches UI
+
+- [ ] Every user-supplied value was traced to where it is consumed (a field can be policy, not taste).
+- [ ] Least effort: nothing is asked that could be derived or defaulted, and no state is a dead end.
+- [ ] Consistent: shared `@app/ui` primitives and existing copy voice, not a new local variant.
+- [ ] Reusable: a pattern now appearing twice was extracted rather than copied.
+- [ ] One state per view — exactly one of loading / error / empty, and empty keeps the same layout.
