@@ -22,8 +22,8 @@ export function BillingOverview({
   walletBalance,
   creditSummary,
 }: {
-  /** Formatted wallet balance, e.g. "GHS 1,000.00". */
-  walletBalance: string;
+  /** Formatted wallet balance, e.g. "GHS 1,000.00", or null when the wallet holds nothing yet. */
+  walletBalance: string | null;
   /** Short summary of prepaid credits, or null when there are none. */
   creditSummary: string | null;
 }) {
@@ -45,7 +45,7 @@ export function BillingOverview({
           icon={Wallet}
           title="Wallet (pay as you go)"
           description="Top up money and each send is charged at your rate plan's price. No commitment, and it covers anything your packages don't."
-          figure={walletBalance}
+          figure={walletBalance ?? "No funds yet"}
           caption="Used when no package credit applies."
           action="Manage wallet"
         />

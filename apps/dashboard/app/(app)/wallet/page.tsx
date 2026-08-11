@@ -27,7 +27,6 @@ import { Separator } from "@app/ui/components/ui/separator";
 import { EmptyState, ErrorState } from "@app/ui/components/ui/states";
 import { formatDayMonth } from "@app/ui/lib/datetime";
 import {
-  Bell,
   CheckCircle2,
   Clock,
   CreditCard,
@@ -167,10 +166,14 @@ export default async function WalletPage({
     ledger = snapshot.ledger;
   } catch (payload) {
     const err = parseApiError(payload);
+    // One state, not two. `commercialSection` is ITSELF an ErrorState when the catalog read fails, and
+    // both reads share a session — so a 500 or a lapsed token stacked two destructive alerts on one
+    // page. The token receipt still renders: it is the only answer to "did my money do anything?", and
+    // a failed wallet read is exactly when that question gets asked.
     return (
       <Shell>
         <WalletHeading />
-        {commercialSection}
+        {tokenReceipt ? <TokenPurchaseNotice receipt={tokenReceipt} /> : null}
         <ErrorState
           title="Couldn't load your wallet"
           message={err.message}
@@ -237,13 +240,10 @@ export default async function WalletPage({
     <Shell>
       <WalletHeading
         actions={
-          <>
-            <Button variant="outline" size="sm">
-              <Bell data-icon="inline-start" />
-              Alerts
-            </Button>
-            <TopUpDialog defaultCurrency={primaryCurrency} />
-          </>
+          // The "Alerts" button that used to sit here had no handler and no href. It was only ever
+          // rendered for a funded wallet; removing the empty branch would have shipped a dead control
+          // into the first-run view.
+          <TopUpDialog defaultCurrency={primaryCurrency} />
         }
       />
 
@@ -325,11 +325,10 @@ export default async function WalletPage({
         }
         overview={
           <BillingOverview
-            walletBalance={
-              primaryBalance
-                ? formatMoney(primaryBalance)
-                : `${primaryCurrency} 0.00`
-            }
+            // null, not a fabricated zero: this fallback was unreachable until the empty branch was
+            // removed, and it invents a currency — the workspace's real billing_currency (GHS|NGN|USD)
+            // is never exposed to the dashboard, so a Nigerian workspace was shown cedis.
+            walletBalance={primaryBalance ? formatMoney(primaryBalance) : null}
             creditSummary={creditSummary}
           />
         }
