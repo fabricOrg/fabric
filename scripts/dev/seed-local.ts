@@ -1,7 +1,10 @@
 import {
   accounts,
   apiKeys,
+  applications,
   createAppDb,
+  type EnvironmentId,
+  environments,
   memberships,
   smsTemplates,
   staffUsers,
@@ -29,15 +32,20 @@ const staffEmails = (
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter((email) => email.length > 0);
-// The human who OWNS the local workspace, which is a different question from who operates the
-// platform. Defaults to the first staff email so one person can use both surfaces locally: the
+// Who OWNS the local workspace, which is a different question from who operates the platform. The
 // dashboard forwards a staff user holding NO membership to the admin console
-// (apps/dashboard/app/auth/callback/route.ts), so seeding staff WITHOUT this row makes customer
+// (apps/dashboard/app/auth/callback/route.ts), so seeding staff WITHOUT a membership makes customer
 // sign-in impossible — it bounces to the console every time. Staff who also hold a membership fall
 // through and use the dashboard normally, which is what this restores.
-const ownerEmail = (process.env.SEED_OWNER_EMAIL ?? staffEmails[0] ?? "")
-  .trim()
-  .toLowerCase();
+//
+// A LIST, like SEED_STAFF_EMAILS, and defaulting to every seeded staff email: a machine shared by
+// more than one sign-in identity is the normal case here, and seeding only the first one reproduces
+// the original bug for everybody else — silently, since the redirect looks identical to a config
+// problem. Cheap to grant, and this is a local sandbox workspace.
+const ownerEmails = (process.env.SEED_OWNER_EMAIL ?? staffEmails.join(","))
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter((email) => email.length > 0);
 
 /** Wallet money to seed, in minor units. Zero by default — see the credit call below for why. */
 const seedWalletMinor = BigInt(process.env.SEED_WALLET_MINOR ?? "0");
@@ -121,14 +129,71 @@ async function main(): Promise<void> {
         target: accounts.id,
         set: {
           name: "Fabric Local",
-          plan: "sandbox",
+          // `plan` is set on INSERT only, never on conflict. Forcing "sandbox" here silently REVERSED
+          // a completed go-live — the plan is what the go-live maker-checker flow transitions, so a
+          // re-seed would quietly undo an operator's deliberate approval and flip the workspace back
+          // to forced-virtual sending. A seed may create state; it must not revoke a decision.
           ...(workosOrganizationId ? { workosOrganizationId } : {}),
         },
       });
+    // ADR-0004's Workspace -> Application -> Environment hierarchy. The seed predated it, so the local
+    // workspace had an account and API key but no application and no environments — and anything
+    // scoped by environment fails closed on that. The WhatsApp message log is the visible one: it
+    // resolves `applications JOIN environments WHERE type = ? AND status = 'active'` and throws
+    // `whatsapp_environment_not_found` when the join is empty, which reads like a broken integration
+    // rather than an unseeded workspace.
+    const [application] = await owner
+      .insert(applications)
+      .values({
+        tenantId: tenantId as TenantId,
+        name: "Default",
+        slug: "default",
+      })
+      .onConflictDoUpdate({
+        target: [applications.tenantId, applications.slug],
+        set: { name: "Default" },
+      })
+      .returning({ id: applications.id });
+    if (!application) throw new Error("failed to seed the default application");
+
+    // Sandbox is always usable; live mirrors the go-live gate — `locked` until the workspace leaves
+    // the sandbox plan, `active` once it has. Read from the row we just upserted rather than assumed,
+    // since the plan above is deliberately left alone on re-seed.
+    const [account] = (await owner.execute(sql`
+      SELECT plan FROM accounts WHERE id = ${tenantId}`)) as Array<{
+      plan: string;
+    }>;
+    const liveStatus = account?.plan === "sandbox" ? "locked" : "active";
+    const environmentIds = new Map<string, string>();
+    for (const type of ["sandbox", "live"] as const) {
+      const [environment] = await owner
+        .insert(environments)
+        .values({
+          tenantId: tenantId as TenantId,
+          applicationId: application.id,
+          type,
+          status: type === "live" ? liveStatus : "active",
+        })
+        .onConflictDoUpdate({
+          target: [environments.applicationId, environments.type],
+          set: { status: type === "live" ? liveStatus : "active" },
+        })
+        .returning({ id: environments.id });
+      if (environment) environmentIds.set(type, environment.id);
+    }
+
+    // The BFF key is `env: "test"`, so it belongs to the SANDBOX environment. Binding it matters: the
+    // schema note says "New keys always set both", and an unbound key cannot be scoped by environment
+    // the way every real key is.
+    const sandboxEnvironmentId = environmentIds.get("sandbox");
     await owner
       .insert(apiKeys)
       .values({
         tenantId,
+        applicationId: application.id,
+        ...(sandboxEnvironmentId
+          ? { environmentId: sandboxEnvironmentId as EnvironmentId }
+          : {}),
         name: "Local dashboard BFF",
         prefix: rawKey.slice(0, 16),
         keyHash: hashApiKey(rawKey),
@@ -140,6 +205,10 @@ async function main(): Promise<void> {
         set: {
           status: "active",
           scopes: [...apiKeyScopeValues],
+          applicationId: application.id,
+          ...(sandboxEnvironmentId
+            ? { environmentId: sandboxEnvironmentId as EnvironmentId }
+            : {}),
         },
       });
     for (const email of staffEmails) {
@@ -155,29 +224,30 @@ async function main(): Promise<void> {
     // (identity.ts:79). So this row is deliberately left unbound: user-session.service.ts looks up the
     // subject, falls back to email, and binds — but ONLY when the row it finds is still unbound.
     // Never set external_subject_id here; a wrong guess makes the real WorkOS subject unbindable.
-    if (ownerEmail) {
+    for (const email of ownerEmails) {
+      // `set` deliberately touches only `status`. An already-bound row keeps its external_subject_id,
+      // so re-seeding never orphans an identity that has already signed in.
       const [seededUser] = await owner
         .insert(users)
-        .values({ email: ownerEmail, name: "Fabric Local Owner" })
+        .values({ email, name: "Fabric Local Owner" })
         .onConflictDoUpdate({
           target: users.email,
           set: { status: "active" },
         })
         .returning({ id: users.id });
-      if (seededUser) {
-        await owner
-          .insert(memberships)
-          .values({
-            tenantId: tenantId as TenantId,
-            userId: seededUser.id,
-            role: "owner",
-            status: "active",
-          })
-          .onConflictDoUpdate({
-            target: [memberships.tenantId, memberships.userId],
-            set: { role: "owner", status: "active" },
-          });
-      }
+      if (!seededUser) continue;
+      await owner
+        .insert(memberships)
+        .values({
+          tenantId: tenantId as TenantId,
+          userId: seededUser.id,
+          role: "owner",
+          status: "active",
+        })
+        .onConflictDoUpdate({
+          target: [memberships.tenantId, memberships.userId],
+          set: { role: "owner", status: "active" },
+        });
     }
     // Give the local workspace an approved template catalog, which the hourly sync cannot do for it:
     // WhatsappTemplateSyncScheduler.tenantsForWaba only finds tenants that ALREADY hold a template row
@@ -273,8 +343,8 @@ async function main(): Promise<void> {
     );
     console.log(`Staff seeded: ${staffEmails.join(", ")}`);
     console.log(
-      ownerEmail
-        ? `Workspace owner seeded: ${ownerEmail} (owner of fabric-local)`
+      ownerEmails.length > 0
+        ? `Workspace owners seeded on fabric-local: ${ownerEmails.join(", ")}`
         : "No workspace owner seeded — dashboard sign-in will bounce to the admin console",
     );
   } finally {
