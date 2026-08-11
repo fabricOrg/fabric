@@ -1,5 +1,9 @@
 import type { LedgerEntry, WalletBalance } from "@app/contracts";
-import { parseApiError, toMoney } from "@app/contracts";
+import {
+  currency as currencySchema,
+  parseApiError,
+  toMoney,
+} from "@app/contracts";
 import { DEFAULT_RATES, rateSegments } from "@app/domain";
 import {
   Alert,
@@ -179,6 +183,13 @@ export default async function WalletPage({
           message={err.message}
           {...(err.requestId ? { requestId: err.requestId } : {})}
         />
+        <Button asChild variant="outline" size="sm" className="w-fit">
+          <Link href="/wallet">Check again</Link>
+        </Button>
+        {/* Kept when the CATALOG read succeeded: it is the only route to buying a package anywhere in
+            the dashboard, the two reads are independent, and gating on its health gives one error
+            state without costing the capability. */}
+        {catalogResult.status === "fulfilled" ? commercialSection : null}
       </Shell>
     );
   }
@@ -198,7 +209,24 @@ export default async function WalletPage({
           entry.type === "topup" && entry.reference === paymentReference,
       )
     : false;
-  const primaryCurrency = balances[0]?.balance.currency ?? "GHS";
+  // Derived, never assumed. This feeds TopUpDialog's defaultCurrency, which seeds the POST body that
+  // reaches Paystack — so a wrong guess CHARGES in the wrong currency on a workspace's first top-up,
+  // and credits a balance no package can be bought with (the catalog is filtered to billing_currency).
+  // The catalog is already server-filtered to accounts.billing_currency, so its offers carry the real
+  // value; token balances carry it too. "GHS" survives only as a last resort when every read is empty.
+  const catalogCurrency =
+    catalogResult.status === "fulfilled"
+      ? catalogResult.value.offers[0]?.currency
+      : undefined;
+  // tokenBalanceDto types currency as a bare string, so it is narrowed through the contract's own
+  // schema rather than cast — an unrecognised value must fall through, not become the charged currency.
+  const tokenCurrencyRaw =
+    tokenBalancesResult.status === "fulfilled"
+      ? tokenBalancesResult.value.balances[0]?.currency
+      : undefined;
+  const tokenCurrency = currencySchema.safeParse(tokenCurrencyRaw).data;
+  const primaryCurrency =
+    balances[0]?.balance.currency ?? catalogCurrency ?? tokenCurrency ?? "GHS";
   const primaryBalance = balances[0]?.balance;
   const tokenBalances =
     tokenBalancesResult.status === "fulfilled"
@@ -206,6 +234,7 @@ export default async function WalletPage({
           (balance) => BigInt(balance.available) > 0n,
         )
       : [];
+  const creditsUnknown = tokenBalancesResult.status === "rejected";
   const creditSummary =
     tokenBalances.length === 0
       ? null
@@ -330,6 +359,7 @@ export default async function WalletPage({
             // is never exposed to the dashboard, so a Nigerian workspace was shown cedis.
             walletBalance={primaryBalance ? formatMoney(primaryBalance) : null}
             creditSummary={creditSummary}
+            creditsUnknown={creditsUnknown}
           />
         }
         credits={
