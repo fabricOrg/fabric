@@ -15,6 +15,7 @@ import {
 import { cn } from "@app/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, Radio, Smartphone } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import {
   getMessagingSettings,
@@ -23,44 +24,55 @@ import {
 import { toastApiError } from "@/lib/error-toast";
 
 /**
- * One entry per refusal reason. Each names ONLY its own cause, because the previous single message
- * asserted every cause at once and was therefore wrong about at least one of them every time it
- * appeared. No vendor is named either: the carrier is control-plane config and naming one in product
- * copy makes the sentence false the moment routing changes.
+ * A heading and a next step per refusal reason. The BODY is not here on purpose — it is whatever the
+ * API said.
+ *
+ * Hardcoding a cause per error code is what produced the bug this replaces: `live_provider_not_ready`
+ * has TWO causes, a missing carrier and a transient control-plane failure whose server message is
+ * "Try again shortly", and a fixed string asserted the permanent one for both. The server already
+ * knows which fired, so the client states the consequence and the next step and quotes the reason.
+ *
+ * `note` is the part the API cannot know: what the customer should do next in THIS product.
  */
 const BLOCK_COPY = {
   sender: {
     title: "Sender ID required",
-    description:
-      "Live delivery needs at least one approved sender ID. Register a sender ID and wait for carrier approval before switching from the virtual phone.",
+    note: "Register a sender ID and wait for carrier approval before switching from the virtual phone.",
     action: { label: "Open Sender IDs", href: "/senders" },
   },
   locked: {
     title: "Go-live required",
-    description:
-      "This workspace hasn't completed go-live. Live API keys and carrier delivery unlock once the compliance review passes. Virtual delivery stays active until then.",
+    note: "Live API keys and carrier delivery unlock once the compliance review passes. Virtual delivery stays active until then.",
     action: { label: "Review go-live", href: "/go-live" },
   },
   carrier: {
-    title: "No live SMS carrier connected",
-    description:
-      "This workspace has gone live, but no live SMS carrier is connected yet, so there is nothing to route real messages through. Connecting one is a platform operation — contact support to have it enabled. Virtual delivery keeps working meanwhile, and nothing you send is lost.",
-    action: null,
+    // Connecting a carrier is a platform operation, so this is the one reason the customer cannot
+    // clear themselves. It is also the reason they hit FIRST — the API checks the carrier before the
+    // sender ID — so the dialog points at the prerequisite they DO own rather than dead-ending.
+    title: "Live delivery isn't available yet",
+    note: "Connecting a carrier is handled on our side. An approved sender ID is also required for live delivery, so you can set that up now. Virtual delivery keeps working meanwhile, and nothing you send is lost.",
+    action: { label: "Open Sender IDs", href: "/senders" },
   },
 } as const satisfies Record<
   string,
-  {
-    title: string;
-    description: string;
-    action: { label: string; href: string } | null;
-  }
+  { title: string; note: string; action: { label: string; href: string } }
 >;
 
+type BlockKind = keyof typeof BLOCK_COPY;
+
+/** Which refusal each API error code maps to. Anything absent is a toast, not a dialog. */
+const BLOCK_KIND_BY_CODE: Record<string, BlockKind | undefined> = {
+  live_delivery_not_ready: "sender",
+  delivery_mode_locked: "locked",
+  live_provider_not_ready: "carrier",
+};
+
 function BlockDialogBody({
-  copy,
+  block,
 }: {
-  copy: (typeof BLOCK_COPY)[keyof typeof BLOCK_COPY];
+  block: { kind: BlockKind; reason: string };
 }) {
+  const copy = BLOCK_COPY[block.kind];
   return (
     <>
       <AlertDialogHeader>
@@ -68,21 +80,19 @@ function BlockDialogBody({
           <AlertTriangle />
         </AlertDialogMedia>
         <AlertDialogTitle>{copy.title}</AlertDialogTitle>
-        <AlertDialogDescription>{copy.description}</AlertDialogDescription>
+        <AlertDialogDescription>
+          {/* The API's own sentence first — it is the only party that knows WHICH cause fired. */}
+          {block.reason}
+          <span className="mt-2 block">{copy.note}</span>
+        </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
         <AlertDialogCancel>Keep virtual mode</AlertDialogCancel>
-        {/* No action for `carrier`: connecting one is a platform operation, not something this
-            customer can go and do, and a button leading nowhere useful is worse than none. */}
-        {copy.action ? (
-          <AlertDialogAction
-            onClick={() => {
-              window.location.href = copy.action.href;
-            }}
-          >
-            {copy.action.label}
-          </AlertDialogAction>
-        ) : null}
+        {/* asChild + Link, not window.location: a full reload here throws away the query cache and
+            re-runs the whole RSC render for a route this app already owns. */}
+        <AlertDialogAction asChild>
+          <Link href={copy.action.href}>{copy.action.label}</Link>
+        </AlertDialogAction>
       </AlertDialogFooter>
     </>
   );
@@ -91,13 +101,16 @@ function BlockDialogBody({
 export function DeliveryModeToggle() {
   const queryClient = useQueryClient();
   // Three DISTINCT reasons live delivery can be refused, kept distinct. `delivery_mode_locked` (the
-  // workspace has not gone live) and `live_provider_not_ready` (no live SMS carrier is connected) used
-  // to collapse into one state whose copy asserted BOTH causes — so a workspace that had completed
-  // go-live was told it was not approved, directly contradicting the "This workspace is live" banner
-  // on the page the dialog links to. Different cause, different remedy, different owner.
-  const [liveBlock, setLiveBlock] = useState<
-    "sender" | "locked" | "carrier" | null
-  >(null);
+  // workspace has not gone live) and `live_provider_not_ready` (no live carrier) used to collapse into
+  // one state whose copy asserted BOTH causes — so a workspace that HAD completed go-live was told it
+  // was not approved. The reason string travels with the kind so the body can quote the server.
+  const [liveBlock, setLiveBlock] = useState<{
+    kind: BlockKind;
+    reason: string;
+  } | null>(null);
+  // Open is tracked separately so the content survives the dialog's 200ms exit animation. Nulling the
+  // block on close emptied the panel first and faded a blank box out afterwards.
+  const [blockOpen, setBlockOpen] = useState(false);
 
   const settingsQuery = useQuery({
     queryKey: ["messaging-settings"],
@@ -109,16 +122,14 @@ export function DeliveryModeToggle() {
       queryClient.setQueryData(["messaging-settings"], settings);
     },
     onError: (error) => {
-      const code = parseApiError(error).code;
-      if (code === "live_delivery_not_ready") {
-        setLiveBlock("sender");
-      } else if (code === "delivery_mode_locked") {
-        setLiveBlock("locked");
-      } else if (code === "live_provider_not_ready") {
-        setLiveBlock("carrier");
-      } else {
+      const parsed = parseApiError(error);
+      const kind = BLOCK_KIND_BY_CODE[parsed.code];
+      if (!kind) {
         toastApiError(error);
+        return;
       }
+      setLiveBlock({ kind, reason: parsed.message });
+      setBlockOpen(true);
     },
   });
   const settings = settingsQuery.data;
@@ -161,12 +172,9 @@ export function DeliveryModeToggle() {
           onClick={() => select("live")}
         />
       </div>
-      <AlertDialog
-        open={liveBlock !== null}
-        onOpenChange={(open) => !open && setLiveBlock(null)}
-      >
+      <AlertDialog open={blockOpen} onOpenChange={setBlockOpen}>
         <AlertDialogContent>
-          {liveBlock ? <BlockDialogBody copy={BLOCK_COPY[liveBlock]} /> : null}
+          {liveBlock ? <BlockDialogBody block={liveBlock} /> : null}
         </AlertDialogContent>
       </AlertDialog>
     </>

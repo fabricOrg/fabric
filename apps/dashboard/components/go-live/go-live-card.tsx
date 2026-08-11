@@ -126,7 +126,12 @@ export function GoLiveCard({
         <BadgeCheck className="size-4" />
         <AlertTitle>This workspace is live</AlertTitle>
         <AlertDescription>
-          Live API keys and real delivery are enabled.
+          {/* States what go-live actually GRANTED, not that messages will reach a handset. Real
+              delivery needs a live carrier connection and an approved sender ID as well, neither of
+              which this page knows about — so the old "real delivery are enabled" flatly contradicted
+              the delivery-mode dialog that refuses the switch a few clicks away. */}
+          Live API keys are unlocked. Real delivery also needs a connected
+          carrier and an approved sender ID.
         </AlertDescription>
       </Alert>
     );
