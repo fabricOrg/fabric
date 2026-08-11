@@ -43,6 +43,13 @@ interface DataTableProps<TData, TValue> {
   onRowClick?: (row: TData) => void;
   /** Per-row accessible label when rows are clickable (e.g. "Open <name>"). */
   rowLabel?: (row: TData) => string;
+  /**
+   * Stable row identity. Without it TanStack falls back to the array INDEX, so React reuses a row's
+   * subtree when the data reorders — an open dialog rendered inside a cell then unmounts, or keeps
+   * mounted state while its props switch to a different record. Pass it whenever rows carry an id and
+   * the list can change while a row is interactive.
+   */
+  getRowId?: (row: TData, index: number) => string;
   className?: string;
 }
 
@@ -62,6 +69,7 @@ export function DataTable<TData, TValue>({
   ariaLabel,
   onRowClick,
   rowLabel,
+  getRowId,
   className,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -72,6 +80,7 @@ export function DataTable<TData, TValue>({
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    ...(getRowId ? { getRowId } : {}),
   });
 
   return (
