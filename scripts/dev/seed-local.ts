@@ -1,7 +1,10 @@
 import {
   accounts,
   apiKeys,
+  applications,
   createAppDb,
+  type EnvironmentId,
+  environments,
   memberships,
   smsTemplates,
   staffUsers,
@@ -29,15 +32,20 @@ const staffEmails = (
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter((email) => email.length > 0);
-// The human who OWNS the local workspace, which is a different question from who operates the
-// platform. Defaults to the first staff email so one person can use both surfaces locally: the
+// Who OWNS the local workspace, which is a different question from who operates the platform. The
 // dashboard forwards a staff user holding NO membership to the admin console
-// (apps/dashboard/app/auth/callback/route.ts), so seeding staff WITHOUT this row makes customer
+// (apps/dashboard/app/auth/callback/route.ts), so seeding staff WITHOUT a membership makes customer
 // sign-in impossible — it bounces to the console every time. Staff who also hold a membership fall
 // through and use the dashboard normally, which is what this restores.
-const ownerEmail = (process.env.SEED_OWNER_EMAIL ?? staffEmails[0] ?? "")
-  .trim()
-  .toLowerCase();
+//
+// A LIST, like SEED_STAFF_EMAILS, and defaulting to every seeded staff email: a machine shared by
+// more than one sign-in identity is the normal case here, and seeding only the first one reproduces
+// the original bug for everybody else — silently, since the redirect looks identical to a config
+// problem. Cheap to grant, and this is a local sandbox workspace.
+const ownerEmails = (process.env.SEED_OWNER_EMAIL ?? staffEmails.join(","))
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter((email) => email.length > 0);
 
 /** Wallet money to seed, in minor units. Zero by default — see the credit call below for why. */
 const seedWalletMinor = BigInt(process.env.SEED_WALLET_MINOR ?? "0");
@@ -92,12 +100,26 @@ const LOCAL_HOSTS = new Set([
   "::1",
   "host.docker.internal",
 ]);
-const superHost = new URL(superUrl).hostname;
-if (!LOCAL_HOSTS.has(superHost)) {
+
+function assertLocal(url: string, label: string): void {
+  // `postgres:` is a NON-SPECIAL URL scheme, so WHATWG parsing neither lowercases the host nor strips
+  // the brackets from an IPv6 literal: `[::1]` arrives as "[::1]" and `LOCALHOST` stays uppercase.
+  // Both would fail closed, which is safe but tells a developer on IPv6 or with a capitalised host
+  // that a listed local host is "not a local database". Normalise so the allowlist means what it says.
+  const host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (LOCAL_HOSTS.has(host)) return;
   throw new Error(
-    `Refusing to seed: DATABASE_URL_SUPER points at '${superHost}', not a local database. This script writes across tenants as the superuser and is for local development only.`,
+    `Refusing to seed: ${label} points at '${host}', not a local database. This script writes across tenants as the superuser and is for local development only.`,
   );
 }
+
+// BOTH connections, not just the superuser one. The app connection writes sms_templates and, when
+// SEED_WALLET_MINOR is set, a real double-entry ledger credit — so guarding only DATABASE_URL_SUPER
+// left the docstring above claiming a protection the code did not deliver. The habit the guard exists
+// to stop (repointing one URL at a cloud database for a quick check, then re-running the seed) applies
+// to every URL in the file, and a developer .env carries all four.
+assertLocal(superUrl, "DATABASE_URL_SUPER");
+assertLocal(appUrl, "DATABASE_URL_APP");
 
 async function main(): Promise<void> {
   const ownerPool = postgres(superUrl, { max: 1 });
@@ -121,14 +143,94 @@ async function main(): Promise<void> {
         target: accounts.id,
         set: {
           name: "Fabric Local",
-          plan: "sandbox",
+          // `plan` is set on INSERT only, never on conflict. Forcing "sandbox" here silently REVERSED
+          // a completed go-live — the plan is what the go-live maker-checker flow transitions, so a
+          // re-seed would quietly undo an operator's deliberate approval and flip the workspace back
+          // to forced-virtual sending. A seed may create state; it must not revoke a decision.
           ...(workosOrganizationId ? { workosOrganizationId } : {}),
         },
       });
+    // ADR-0004's Workspace -> Application -> Environment hierarchy. The seed predated it, so the local
+    // workspace had an account and API key but no application and no environments — and anything
+    // scoped by environment fails closed on that. The WhatsApp message log is the visible one: it
+    // resolves `applications JOIN environments WHERE type = ? AND status = 'active'` and throws
+    // `whatsapp_environment_not_found` when the join is empty, which reads like a broken integration
+    // rather than an unseeded workspace.
+    const [application] = await owner
+      .insert(applications)
+      .values({
+        tenantId: tenantId as TenantId,
+        name: "Default",
+        slug: "default",
+      })
+      .onConflictDoUpdate({
+        target: [applications.tenantId, applications.slug],
+        set: { name: "Default" },
+      })
+      .returning({ id: applications.id });
+    if (!application) throw new Error("failed to seed the default application");
+
+    // Sandbox is always usable. Unlocking LIVE demands positive evidence of a go-live, not merely a
+    // plan that is not "sandbox" — because go-live's target value and the schema default are the SAME
+    // string: proposals.service.ts sets `afterValue: "free"` and identity.ts declares
+    // `plan ... .default("free")`. So `plan !== 'sandbox'` cannot distinguish "passed the compliance
+    // gate" from "this row was never initialised" (a restored dump, a hand-written INSERT, a fixture
+    // reusing DEV_TENANT_ID).
+    //
+    // Getting that wrong is a ONE-WAY DOOR, which is why it fails closed here. An active live
+    // environment is what lets `sk_live_*` be minted (api-keys.service.ts: live keys require
+    // `env.status === 'active'`), and delivery routing reads the environment's TYPE only —
+    // `resolveModeForEnvironment` never re-checks status. So a key minted while the env was wrongly
+    // active keeps reaching a real carrier even after a later run re-locks the environment.
+    const [account] = (await owner.execute(sql`
+      SELECT plan FROM accounts WHERE id = ${tenantId}`)) as Array<{
+      plan: string;
+    }>;
+    const [approvedGoLive] = (await owner.execute(sql`
+      SELECT 1 AS ok FROM proposals
+      WHERE kind = 'go_live' AND tenant_id = ${tenantId} AND status = 'approved'
+      LIMIT 1`)) as Array<{ ok: number }>;
+    const liveStatus =
+      account?.plan !== "sandbox" && approvedGoLive ? "active" : "locked";
+    const environmentIds = new Map<"sandbox" | "live", EnvironmentId>();
+    for (const type of ["sandbox", "live"] as const) {
+      const [environment] = await owner
+        .insert(environments)
+        .values({
+          tenantId: tenantId as TenantId,
+          applicationId: application.id,
+          type,
+          status: type === "live" ? liveStatus : "active",
+        })
+        .onConflictDoUpdate({
+          target: [environments.applicationId, environments.type],
+          set: { status: type === "live" ? liveStatus : "active" },
+        })
+        .returning({ id: environments.id });
+      // Throw rather than continue, matching the application above: silently skipping would leave the
+      // API key unbound on a fresh database and stale-bound on a re-run, while the comment below
+      // insists the binding matters.
+      if (!environment)
+        throw new Error(`failed to seed the ${type} environment`);
+      environmentIds.set(type, environment.id);
+    }
+
+    // The BFF key is `env: "test"`, so it belongs to the SANDBOX environment. Binding it matters: the
+    // schema note says "New keys always set both", and an unbound key cannot be scoped by environment
+    // the way every real key is.
+    const sandboxEnvironmentId = environmentIds.get("sandbox");
+    // The conflict target is `keyHash`, which is globally unique and carries no tenant. So changing
+    // DEV_TENANT_ID while keeping the same DASHBOARD_API_KEY now trips the application/tenant foreign
+    // key and stops the seed. That crash is deliberate and better than the previous silence, which
+    // left the key attached to the old tenant.
     await owner
       .insert(apiKeys)
       .values({
         tenantId,
+        applicationId: application.id,
+        ...(sandboxEnvironmentId
+          ? { environmentId: sandboxEnvironmentId }
+          : {}),
         name: "Local dashboard BFF",
         prefix: rawKey.slice(0, 16),
         keyHash: hashApiKey(rawKey),
@@ -140,6 +242,10 @@ async function main(): Promise<void> {
         set: {
           status: "active",
           scopes: [...apiKeyScopeValues],
+          applicationId: application.id,
+          ...(sandboxEnvironmentId
+            ? { environmentId: sandboxEnvironmentId }
+            : {}),
         },
       });
     for (const email of staffEmails) {
@@ -155,29 +261,41 @@ async function main(): Promise<void> {
     // (identity.ts:79). So this row is deliberately left unbound: user-session.service.ts looks up the
     // subject, falls back to email, and binds — but ONLY when the row it finds is still unbound.
     // Never set external_subject_id here; a wrong guess makes the real WorkOS subject unbindable.
-    if (ownerEmail) {
+    //
+    // Known consequence, and why the host allowlist above is what contains it: the verified-email
+    // precondition (`if (!byEmail && !request.email_verified) return null`) applies only when NO row
+    // exists, so pre-provisioning one lets an UNVERIFIED identity with that address bind and inherit
+    // this membership. That is the intended invite semantics, but a list widens it from one address to
+    // every seeded staff email — acceptable on a local database, unacceptable anywhere else.
+    for (const email of ownerEmails) {
+      // `set` deliberately touches only `status`. An already-bound row keeps its external_subject_id,
+      // so re-seeding never orphans an identity that has already signed in.
       const [seededUser] = await owner
         .insert(users)
-        .values({ email: ownerEmail, name: "Fabric Local Owner" })
+        .values({ email, name: "Fabric Local Owner" })
         .onConflictDoUpdate({
           target: users.email,
           set: { status: "active" },
         })
         .returning({ id: users.id });
-      if (seededUser) {
-        await owner
-          .insert(memberships)
-          .values({
-            tenantId: tenantId as TenantId,
-            userId: seededUser.id,
-            role: "owner",
-            status: "active",
-          })
-          .onConflictDoUpdate({
-            target: [memberships.tenantId, memberships.userId],
-            set: { role: "owner", status: "active" },
-          });
-      }
+      if (!seededUser) continue;
+      await owner
+        .insert(memberships)
+        .values({
+          tenantId: tenantId as TenantId,
+          userId: seededUser.id,
+          role: "owner",
+          status: "active",
+        })
+        .onConflictDoUpdate({
+          target: [memberships.tenantId, memberships.userId],
+          // `permissions` is cleared, not left alone. A non-null override IS the exact effective set
+          // and the role becomes a template, so a membership carrying one would keep its narrowed
+          // permissions while this script printed "Workspace owners seeded" — a claim the row does not
+          // support. Clearing it costs a deliberately-narrowed local test its override on the next
+          // re-seed, which is the lesser of the two surprises because it is visible immediately.
+          set: { role: "owner", status: "active", permissions: null },
+        });
     }
     // Give the local workspace an approved template catalog, which the hourly sync cannot do for it:
     // WhatsappTemplateSyncScheduler.tenantsForWaba only finds tenants that ALREADY hold a template row
@@ -273,8 +391,8 @@ async function main(): Promise<void> {
     );
     console.log(`Staff seeded: ${staffEmails.join(", ")}`);
     console.log(
-      ownerEmail
-        ? `Workspace owner seeded: ${ownerEmail} (owner of fabric-local)`
+      ownerEmails.length > 0
+        ? `Workspace owners seeded on fabric-local: ${ownerEmails.join(", ")}`
         : "No workspace owner seeded — dashboard sign-in will bounce to the admin console",
     );
   } finally {
