@@ -146,7 +146,9 @@ export function SenderIdTable({
             ...baseColumns,
             {
               id: "actions",
-              header: "",
+              // sr-only, matching opt-out-table: an empty header leaves the column unnamed for
+              // screen readers navigating by column.
+              header: () => <span className="sr-only">Actions</span>,
               cell: ({ row }) =>
                 row.original.status === "rejected" ? (
                   <div className="flex justify-end">
@@ -211,6 +213,9 @@ export function SenderIdTable({
         data={filtered}
         ariaLabel="Sender IDs"
         empty="No sender IDs match this filter."
+        // Rows carry a real id, and registering PREPENDS an optimistic row — without this the row
+        // action's open dialog would be re-keyed onto a different sender mid-submit.
+        getRowId={(s) => s.id}
       />
     </div>
   );

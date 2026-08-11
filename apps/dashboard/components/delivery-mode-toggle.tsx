@@ -46,11 +46,11 @@ const BLOCK_COPY = {
     action: { label: "Review go-live", href: "/go-live" },
   },
   carrier: {
-    // Connecting a carrier is a platform operation, so this is the one reason the customer cannot
-    // clear themselves. It is also the reason they hit FIRST — the API checks the carrier before the
-    // sender ID — so the dialog points at the prerequisite they DO own rather than dead-ending.
+    // This code covers BOTH a missing carrier and a transient control-plane failure, so the note must
+    // hold for either — asserting the permanent one would contradict the server's "try again shortly".
+    // The sender ID is a real prerequisite either way, and it is the part the customer owns.
     title: "Live delivery isn't available yet",
-    note: "Connecting a carrier is handled on our side. An approved sender ID is also required for live delivery, so you can set that up now. Virtual delivery keeps working meanwhile, and nothing you send is lost.",
+    note: "An approved sender ID is also required before live delivery works. Virtual delivery keeps working meanwhile, and nothing you send is lost.",
     action: { label: "Open Sender IDs", href: "/senders" },
   },
 } as const satisfies Record<
