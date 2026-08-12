@@ -32,15 +32,15 @@ wake-up is the mechanism, not an obstacle — which is why `--max-time` is 180s.
 
 ## Required repository configuration
 
-| Kind | Name | Notes |
+| Kind | Name | Where the value comes from |
 | --- | --- | --- |
-| Variable | `TESTING_API_BASE_URL` | e.g. `https://fabric-jezz.onrender.com` |
-| Secret | `EDGE_SHARED_SECRET` | `main.ts` rejects with 403 before Nest sees the request |
-| Secret | `BFF_INTERNAL_TOKEN` | the `/internal/*` guard |
+| Variable | `TESTING_API_BASE_URL` | The Render service URL, currently `https://fabric-jezz.onrender.com`. Not a secret. |
+| Secret | `BFF_INTERNAL_TOKEN` | **The Render dashboard**, `fabric-api` -> Environment. NOT the Infisical `dev` value — `render.yaml` marks it `sync: false`, so the deployed value was set in the dashboard and the dev one is local-only. Verified: the dev token gets a 401 from the deployed API. |
+| Secret | `EDGE_SHARED_SECRET` | **Not required today.** `edgeOriginAllowed` returns true when the secret is unset, and it is set neither in `render.yaml` nor Infisical. Confirmed empirically: an unauthenticated call to `/internal/admin/tenants` returns 401 from the BFF guard, not 403 from the edge guard, so the request reached Nest. The workflow sends the header anyway, which is harmless while unset — add the CI secret only if the API ever gets one, or the workflow will start 403ing. |
 
-Both secrets already exist in the API's environment; these are copies for CI. Rotating either means
-rotating here too, or the workflow starts failing with 403/401 and the cache silently stops
-refreshing.
+Rotating `BFF_INTERNAL_TOKEN` on Render means rotating it here too, or the workflow fails with 401 and
+the cache silently stops refreshing — a failure mode with no customer-visible symptom until a template
+goes stale.
 
 ## Delete it when
 
