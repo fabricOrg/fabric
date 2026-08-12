@@ -184,12 +184,27 @@ export default async function WalletPage({
           {...(err.requestId ? { requestId: err.requestId } : {})}
         />
         <Button asChild variant="outline" size="sm" className="w-fit">
-          <Link href="/wallet">Check again</Link>
+          {/* Keeps the receipt params: a bare /wallet would strip ?tokens=&reference= and drop the
+              TokenPurchaseNotice rendered directly above this. */}
+          <Link
+            href={
+              paymentParams.tokens === "1" && paymentParams.reference
+                ? `/wallet?tokens=1&reference=${encodeURIComponent(paymentParams.reference)}`
+                : "/wallet"
+            }
+          >
+            Check again
+          </Link>
         </Button>
         {/* Kept when the CATALOG read succeeded: it is the only route to buying a package anywhere in
             the dashboard, the two reads are independent, and gating on its health gives one error
             state without costing the capability. */}
-        {catalogResult.status === "fulfilled" ? commercialSection : null}
+        {/* BOTH, because commercialSection is itself an ErrorState unless both reads succeeded —
+            gating on the catalog alone still allowed a second error state through. */}
+        {catalogResult.status === "fulfilled" &&
+        tokenBalancesResult.status === "fulfilled"
+          ? commercialSection
+          : null}
       </Shell>
     );
   }
@@ -225,8 +240,12 @@ export default async function WalletPage({
       ? tokenBalancesResult.value.balances[0]?.currency
       : undefined;
   const tokenCurrency = currencySchema.safeParse(tokenCurrencyRaw).data;
+  // Catalog FIRST. It is the only source tied to accounts.billing_currency (token-catalog.service.ts
+  // filters offers by it). The wallet balance is not "primary" at all — customer-reads orders ledger
+  // accounts ALPHABETICALLY by currency, so balances[0] is whichever sorts first, and a workspace that
+  // ever acquires a stray GHS account would pin every later top-up to GHS.
   const primaryCurrency =
-    balances[0]?.balance.currency ?? catalogCurrency ?? tokenCurrency ?? "GHS";
+    catalogCurrency ?? balances[0]?.balance.currency ?? tokenCurrency ?? "GHS";
   const primaryBalance = balances[0]?.balance;
   const tokenBalances =
     tokenBalancesResult.status === "fulfilled"
