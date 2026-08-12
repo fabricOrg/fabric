@@ -26,13 +26,16 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    # REQUIRED. This repo holds no repository-level secrets — everything lives in an environment, so
-    # without this both the token and the URL arrive empty and the run fails on the first check.
-    environment: testing
+    # NO `environment:` on purpose. The `testing` environment restricts deployments to the `testing`
+    # branch, but GitHub only runs schedules from the DEFAULT branch (`dev`) — declaring it fails the
+    # job before a single step runs. Both values are org-level secrets with `all` visibility instead,
+    # which also keeps this throwaway workflow away from the AWS/Render/Vercel deploy credentials that
+    # environment holds.
     steps:
       - name: Trigger the template sync
         env:
-          API_BASE_URL: ${{ vars.TESTING_API_BASE_URL }}
+          # An org SECRET, not a variable — so it is masked in logs, which is harmless for a URL.
+          API_BASE_URL: ${{ secrets.TESTING_API_BASE_URL }}
           BFF_INTERNAL_TOKEN: ${{ secrets.BFF_INTERNAL_TOKEN }}
         run: |
           set -euo pipefail
