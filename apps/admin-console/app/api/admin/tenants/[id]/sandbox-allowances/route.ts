@@ -46,9 +46,12 @@ export async function PATCH(
     await request.json(),
   );
   if (!parsed.success) {
+    // Forward the actual issue. The fixed line named only the two limits the operator could see, so
+    // when a THIRD required limit was missing from the request it pointed away from the cause.
     return fail(
       "invalid_request",
-      "Use positive daily limits and give a reason of at least 8 characters.",
+      parsed.error.issues[0]?.message ??
+        "Use positive daily limits and give a reason of at least 8 characters.",
       422,
     );
   }

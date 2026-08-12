@@ -45,6 +45,11 @@ export function HeaderFundingStatus() {
     const email = allowances.data?.allowances.find(
       (item) => item.channel === "email",
     );
+    // All three are fetched (the contract pins the array at length 3). Showing two of them meant a
+    // workspace burning its WhatsApp quota got no warning before hitting the cap.
+    const whatsapp = allowances.data?.allowances.find(
+      (item) => item.channel === "whatsapp",
+    );
     return (
       <div
         className="hidden h-9 items-center gap-2 rounded-md border px-3 text-xs font-medium sm:flex"
@@ -63,6 +68,12 @@ export function HeaderFundingStatus() {
         </span>
         <span className="font-mono tabular-nums">
           {email?.remaining ?? "—"} emails
+        </span>
+        <span className="text-muted-foreground" aria-hidden="true">
+          ·
+        </span>
+        <span className="font-mono tabular-nums">
+          {whatsapp?.remaining ?? "—"} WhatsApp
         </span>
       </div>
     );

@@ -18,13 +18,25 @@ export function SandboxAllowancePolicyEditor({
   const router = useRouter();
   const [sms, setSms] = useState(String(initial.sms_segments_per_day));
   const [email, setEmail] = useState(String(initial.email_messages_per_day));
+  const [whatsapp, setWhatsapp] = useState(
+    String(initial.whatsapp_messages_per_day),
+  );
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  // Every field the schema requires is gated here. WhatsApp was missing from both this check and the
+  // body below, so the request was always sent and always rejected — see the note on save().
   const valid =
     /^[1-9]\d*$/.test(sms) &&
     /^[1-9]\d*$/.test(email) &&
+    /^[1-9]\d*$/.test(whatsapp) &&
     reason.trim().length >= 8;
 
+  /**
+   * The PATCH body must carry ALL THREE limits. `updateSandboxAllowancePolicySchema` requires
+   * `whatsapp_messages_per_day` with no default, so omitting it meant every save 422'd — and the
+   * route's message named the two limits the operator had entered correctly, pointing away from the
+   * field that had no input on the form at all.
+   */
   async function save() {
     if (!valid) return;
     setBusy(true);
@@ -37,6 +49,7 @@ export function SandboxAllowancePolicyEditor({
           body: JSON.stringify({
             sms_segments_per_day: Number(sms),
             email_messages_per_day: Number(email),
+            whatsapp_messages_per_day: Number(whatsapp),
             reason,
           }),
         },
@@ -81,6 +94,17 @@ export function SandboxAllowancePolicyEditor({
           inputMode="numeric"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+        />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="sandbox-whatsapp-limit">
+          WhatsApp messages per UTC day
+        </Label>
+        <Input
+          id="sandbox-whatsapp-limit"
+          inputMode="numeric"
+          value={whatsapp}
+          onChange={(event) => setWhatsapp(event.target.value)}
         />
       </div>
       <div className="grid gap-2 sm:col-span-2">
