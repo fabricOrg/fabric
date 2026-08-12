@@ -1,6 +1,6 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-10. Point-in-time. **Verify against code and git before treating any of it as
+_Snapshot: 2026-08-12. Point-in-time. **Verify against code and git before treating any of it as
 fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 [CLAUDE.md](./CLAUDE.md) (how we build) and `docs/`. Superseded entries live in
 [docs/HANDOFF-ARCHIVE.md](./docs/HANDOFF-ARCHIVE.md)._
@@ -16,8 +16,8 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `edbcc54` | WhatsApp stack #259–#265, then #267–#273, #275, #276 |
-| `origin/testing` | `75582a3` | DEPLOYED 2026-08-10 (#274). **`dev` is 2 ahead**, one carrying `0150`. |
+| `origin/dev` | `d4105f1` | through #287 |
+| `origin/testing` | `8ed153a` | DEPLOYED 2026-08-12 (#288). **Level with `dev`.** `0150` applied, 151 total. |
 
 **The WhatsApp channel is DEPLOYED to testing.** All six jobs green including
 `Migrate · testing db`, which applied 14 migrations (`0136`–`0147`) and then ran `db:assert` on the
@@ -252,6 +252,28 @@ What that measurement established, before and after the promotion:
   The real one is `Deploy testing (Vercel + Render)`. Read the job list, never the run's conclusion.
 
 ### Next up, in a fresh session
+
+**Three deferred fixes, all from reviews that found them but were not acted on in-session.**
+
+1. **A permanently-skipping auto-top-up is invisible.** `chargeableCurrency` returns null and writes
+   `logger.error`; `getAutoTopup` still reports `enabled: true`, so the wallet renders a green "On"
+   badge with a stale currency and no admin-console surface exists for `auto_topup` at all. The first
+   customer-visible symptom is failed sends. Needs a field on `AutoTopupResponse` plus a warning
+   state — a money guard whose only signal is a log line is not shipped.
+2. **The currency selects should not offer what the server refuses.** `top-up-dialog.tsx` and
+   `auto-topup-dialog.tsx` list every currency; the API now rejects a mismatch with
+   `billing_currency_mismatch`, so the UX is "pick USD, get refused". Constraining the list needs
+   `billing_currency` on a customer-facing endpoint — today it exists only in admin contracts.
+3. **#287 merged without a fourth review.** It changed substantially after its third (the cron
+   restructure that stopped the currency rule abandoning the whole tick). Deliberate call, recorded
+   here rather than lost.
+
+**Carried from the UI reviews, unfixed:** BFF role refusals emit `{ error: { message } }` with no
+`type`/`code`, so envelope parsing fails and a `member` clicking Live gets "Something went wrong"
+instead of the real reason; the senders page renders a failed load as an EMPTY state with no retry;
+the sender row action sits off-screen on mobile at seven columns.
+
+
 
 1. **Promote `dev` → `testing`.** `dev` is 2 ahead, one commit carrying `0150`. Same shape as #274:
    `chore(ops): promote …`, a REAL merge not a squash, and watch `Deploy testing (Vercel + Render)`.
