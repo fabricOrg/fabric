@@ -28,13 +28,28 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 /** All books with their full rate tables, newest first. */
 type PriceBookRateChannel = PriceBookRateDto["channel"];
 
-/** The unit each channel's price is quoted in. Total by construction: a new channel breaks the build. */
+/** The unit each channel's price is QUOTED in, for the DTO. Total by construction: a new channel
+ *  breaks the build. */
 const UNIT_BASIS: Record<PriceBookRateChannel, "segment" | "send" | "message"> =
   {
     sms: "segment",
     email: "send",
     whatsapp: "message",
   };
+
+/**
+ * The unit each channel is STORED as in `pricing_sell_rules`. Deliberately separate from UNIT_BASIS:
+ * email quotes "per send" to a reader but the table's basis check demands 'recipient', so the two
+ * vocabularies agree on sms and whatsapp and disagree on email. Collapsing them breaks email books.
+ */
+const SELL_RULE_BASIS: Record<
+  PriceBookRateChannel,
+  "segment" | "recipient" | "message"
+> = {
+  sms: "segment",
+  email: "recipient",
+  whatsapp: "message",
+};
 
 export async function listPriceBooks(db: Db): Promise<PriceBookDto[]> {
   const books = await db.select().from(priceBooks).orderBy(priceBooks.name);
@@ -169,7 +184,11 @@ export async function upsertPriceBook(
         versionId: published.id,
         channel: rate.channel,
         currency: rate.currency,
-        unitBasis: rate.channel === "sms" ? "segment" : "recipient",
+        // Keyed off the same map the read path uses. As a two-way ternary this wrote "recipient"
+        // for WhatsApp, which pricing_sell_rules_basis_chk rejects outright — the insert failed, the
+        // transaction rolled back, and the whole create surfaced as an opaque 500. ADR-0014 §3
+        // prices WhatsApp per template message.
+        unitBasis: SELL_RULE_BASIS[rate.channel],
         unitPriceMinor: BigInt(rate.unit_price_minor) as MinorUnits,
       })),
     );
