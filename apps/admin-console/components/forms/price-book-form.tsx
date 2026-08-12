@@ -254,7 +254,8 @@ export function PriceBookForm({ book }: { book: PriceBookDto | null }) {
           <span className="text-sm font-medium">Rates</span>
           <span className="text-xs text-muted-foreground">
             Prices are minor units (pesewas/kobo/cents). SMS is per segment,
-            email flat per send. Each change is audited.
+            email flat per send, WhatsApp per template message. Each change is
+            audited.
           </span>
         </div>
         {rows.map((row, index) => (

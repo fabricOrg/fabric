@@ -25,6 +25,16 @@ const CHANNEL_LABEL: Record<PriceBookRateDto["channel"], string> = {
 };
 
 /**
+ * Row order, derived from the label map so it cannot drift from it. The rows used to be a separate
+ * `["sms", "email"]` literal, which is how a SAVED WhatsApp rate rendered as no row at all — the
+ * "a new channel breaks the build" claim above was true of the labels and silently false of the rows.
+ * The assertion is Object.keys' known widening, sound because the literal above IS that Record.
+ */
+const CHANNEL_ORDER = Object.keys(CHANNEL_LABEL) as Array<
+  keyof typeof CHANNEL_LABEL
+>;
+
+/**
  * A book's rates as the matrix they actually are: channel down, currency across.
  *
  * The previous rendering was one identical outline badge per rate, so two channels across three
@@ -43,7 +53,7 @@ export function PriceBookRates({ rates }: { rates: PriceBookDto["rates"] }) {
   // Currencies across, in a stable order so two books read the same way side by side.
   const currencies = [...new Set(rates.map((rate) => rate.currency))].sort();
   // Channels down, but only those the book actually prices — an email-less book shows no email row.
-  const channels = (["sms", "email"] as const).filter((channel) =>
+  const channels = CHANNEL_ORDER.filter((channel) =>
     rates.some((rate) => rate.channel === channel),
   );
   const priced = new Map(
