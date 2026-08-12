@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
+import { AuditModule } from "../audit/audit.module.js";
 import { ConsentModule } from "../consent/consent.module.js";
 import { IdempotencyModule } from "../idempotency/idempotency.module.js";
 import { ProvisioningDbModule } from "../identity/provisioning-db.module.js";
@@ -11,6 +12,7 @@ import { QueueModule } from "../queue/queue.module.js";
 import { SandboxAllowanceModule } from "../sandbox-allowance/sandbox-allowance.module.js";
 import { WhatsappController } from "./whatsapp.controller.js";
 import { WhatsappService } from "./whatsapp.service.js";
+import { WhatsappAdminController } from "./whatsapp-admin.controller.js";
 import { WhatsappInboundService } from "./whatsapp-inbound.service.js";
 import { WhatsappInboxController } from "./whatsapp-inbox.controller.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
@@ -23,6 +25,7 @@ import { WhatsappWebhookService } from "./whatsapp-webhook.service.js";
 @Module({
   imports: [
     ApiKeysModule,
+    AuditModule,
     ConsentModule,
     IdempotencyModule,
     ProvisioningDbModule,
@@ -34,6 +37,7 @@ import { WhatsappWebhookService } from "./whatsapp-webhook.service.js";
     SandboxAllowanceModule,
   ],
   controllers: [
+    WhatsappAdminController,
     WhatsappController,
     WhatsappInboxController,
     WhatsappWebhookController,

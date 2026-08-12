@@ -1,0 +1,63 @@
+# TEMPORARY — DELETE WHEN THE API MOVES OFF FREE-TIER HOSTING. See docs/TEMPORARY-CI-CRON.md.
+#
+# The API already has an hourly @Cron for this. It does not fire, because Render's free tier sleeps
+# the service after ~15 minutes idle and a sleeping process runs no cron. This workflow exists purely
+# to poke it from outside: the request itself wakes the instance, which is the mechanism, not a
+# workaround for one.
+#
+# It does NOT replace the scheduler. It cannot drive the queue worker, which needs a process alive
+# when a job arrives — only always-on hosting fixes that.
+name: WhatsApp template sync (temporary)
+
+on:
+  schedule:
+    # Hourly. GitHub may delay scheduled runs under load, and disables schedules after 60 days of
+    # repository inactivity — both acceptable for a cache refresh, neither acceptable for anything
+    # that must run on time.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+# One at a time: the endpoint fans a Meta API call out per tenant, and overlapping runs would double
+# that for no benefit. The API throttles re-runs itself, but not queueing them here is cheaper.
+concurrency:
+  group: whatsapp-template-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the template sync
+        env:
+          API_BASE_URL: ${{ vars.TESTING_API_BASE_URL }}
+          EDGE_SHARED_SECRET: ${{ secrets.EDGE_SHARED_SECRET }}
+          BFF_INTERNAL_TOKEN: ${{ secrets.BFF_INTERNAL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${API_BASE_URL:-}" ]; then
+            echo "TESTING_API_BASE_URL is not set — nothing to call."
+            exit 1
+          fi
+
+          # --max-time is generous on purpose: a sleeping free-tier instance takes 30-60s to wake,
+          # and that first slow request is the whole point of this workflow.
+          body=$(mktemp)
+          code=$(curl -sS -o "$body" -w "%{http_code}" \
+            --retry 3 --retry-connrefused --retry-delay 20 --max-time 180 \
+            -X POST "${API_BASE_URL%/}/internal/admin/whatsapp/template-sync" \
+            -H "x-fabric-edge-secret: ${EDGE_SHARED_SECRET}" \
+            -H "x-bff-token: ${BFF_INTERNAL_TOKEN}" \
+            -H "x-actor-email: github-actions@fabric.local" \
+            -H "content-type: application/json")
+
+          echo "HTTP ${code}"
+          # The response carries no secrets — {locked, synced} or a structured error code.
+          cat "$body"; echo
+
+          case "$code" in
+            200|201) exit 0 ;;
+            # The API refuses a re-run inside its own throttle window. Expected on a manual dispatch
+            # shortly after a scheduled run, and not a failure worth alerting on.
+            400) grep -q "whatsapp_template_sync_throttled" "$body" && exit 0 || exit 1 ;;
+            *) exit 1 ;;
+          esac
