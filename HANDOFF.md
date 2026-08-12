@@ -37,12 +37,15 @@ Two independent blockers. **#290 fixes the first**; the second needs a human.
 - The sync could only discover tenants that ALREADY held a template row or had ALREADY sent a
   non-sandbox message. Testing has neither, so nothing bootstrapped. Fixed in #290: an active live
   environment is now enough.
-- `meta-cloud live` in testing is `enabled=false` with **no credentials** (`creds=false`); only the
-  sandbox instance is armed. `resolve("live")` therefore cannot reach Meta at all. Arming it is a §7
-  decision — a live external credential, after which real Meta sends become reachable from testing.
+- ~~`meta-cloud live` is not armed in testing~~ — **DONE 2026-08-12** by the project owner:
+  `meta-cloud live` is `enabled=true`, `default=true`, `creds=true`. Real Meta sends are now reachable
+  from testing, so treat that environment as live for WhatsApp.
 
-So after #290 promotes, testing STILL shows no templates until that credential is armed. That is
-correct behaviour, not a broken deploy.
+**So the remaining step is only to merge #290 and promote.** Measured in testing on 2026-08-12:
+4 workspaces, but exactly **ONE active live environment** (`fabric-local`) — the other three are
+`plan=sandbox` with `live | locked`, i.e. they have not gone live. #290's predicate is "active live
+environment", so the first sync will populate templates for that one workspace and correctly leave the
+sandbox three empty. Then wait for the hourly tick, or restart the api to bring one forward.
 
 ### What #288 shipped, and what was verified rather than assumed
 
@@ -50,9 +53,13 @@ Nine commits. Verified in the testing database, not from the deploy log:
 `uniq_whatsapp_templates_tenant_waba_name_language` present, the waba-only index gone,
 `idx_whatsapp_templates_waba` added, **151** migrations applied.
 
-Audited testing before promoting, for the currency defect #287 fixes: **0** non-GHS accounts, **0**
-mismatched `payments`, **0** mismatched `auto_topup`, **0** mismatched customer ledger accounts. No
-backfill was needed. Re-run those four counts before assuming the same of any other environment.
+Audited testing before promoting, for the currency defect #287 fixes — **and that first audit was
+VACUOUS**: it ran as `app_migrator`, which has no permissive RLS policy and no tenant context, so every
+tenant table answered 0 because it was filtered, not because it was empty. Re-run as `app_provisioner`
+the answer is genuinely **0** non-GHS accounts, **0** mismatched `payments`, **0** mismatched
+`auto_topup`, **0** mismatched customer ledger accounts — so no backfill was needed and the conclusion
+survives, by luck rather than by the check. Read §"Reading the testing database" below before trusting
+any count from that environment.
 
 
 **The WhatsApp channel is DEPLOYED to testing.** All six jobs green including
@@ -261,11 +268,30 @@ you can measure.** `neondb` is owned by **`app_migrator`**, which mirrors produc
 `ALTER DEFAULT PRIVILEGES` is grantor-scoped, so an `app_owner`-owned local database HIDES grant holes
 that testing shows plainly.
 
+### Reading the testing database — WHICH ROLE decides what you see
+
+**Read tenant tables as `app_provisioner`. `app_migrator` silently returns ZERO ROWS from every one of
+them** — it holds no permissive RLS policy and carries no `app.tenant_id`, so FORCE RLS filters the
+result to nothing and a count of 0 is indistinguishable from an empty table. This produced a false
+"testing has no workspaces" reading and a vacuous currency audit on 2026-08-12; testing actually holds
+4 accounts, 7 users, 9 memberships, 4 applications and 8 environments.
+
+Platform tables (`staff_users`, `plugin_instances`) have no RLS and read correctly as either role,
+which is exactly what makes the mistake convincing: some counts look right while the tenant ones are
+silently empty.
+
+Use `app_migrator` only for schema questions — `has_table_privilege`, `pg_indexes`,
+`information_schema`, `drizzle.__drizzle_migrations`.
+
 ```bash
 # The org prompt is interactive — always pass --org-id or it hangs.
-neonctl projects list --org-id org-fragrant-meadow-35967446 --output json
+neonctl projects list --org-id org-fragrant-meadow-35967446
 # project fabric = dry-recipe-09519949 · single branch `production` = br-lively-frog-avkxhbz6 · db neondb
-TESTING_DATABASE_URL=$(neonctl connection-string production   --project-id dry-recipe-09519949 --role-name app_migrator --database-name neondb)
+
+# TENANT data (accounts, users, memberships, environments, whatsapp_*, payments, ledger_*)
+TESTING_PROV_URL=$(neonctl connection-string production --project-id dry-recipe-09519949 --org-id org-fragrant-meadow-35967446 --role-name app_provisioner --database-name neondb)
+# SCHEMA and grants only
+TESTING_DATABASE_URL=$(neonctl connection-string production --project-id dry-recipe-09519949 --org-id org-fragrant-meadow-35967446 --role-name app_migrator --database-name neondb)
 ```
 
 Capture it into a variable and never echo it — it carries the password. Roles available:
@@ -502,6 +528,12 @@ credential.
 ## Traps this repo keeps re-learning
 
 Added 2026-08-12, all paid for in this session:
+
+- **A count of 0 from a tenant table may mean "RLS filtered it", not "it is empty".** Reading testing
+  as `app_migrator` returned 0 accounts, 0 users, 0 environments — all wrong; the same queries as
+  `app_provisioner` returned 4, 7 and 8. It was convincing because the platform tables in the same
+  query (`staff_users`, `plugin_instances`) answered correctly. A currency audit run that way was
+  presented as evidence in a PR body and in this file before anyone noticed.
 
 - **A spec that drives a scheduler UNFILTERED writes to every tenant in the database it points at.**
   `scheduler.run()` with no `tenantIds` loops whatever the discovery query returns and wrote the test
