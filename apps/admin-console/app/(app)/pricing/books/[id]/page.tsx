@@ -5,6 +5,7 @@ import {
   PageHeaderTitle,
 } from "@app/ui/components/ui/page-header";
 import { notFound } from "next/navigation";
+import { SetBreadcrumbTitle } from "@/components/breadcrumb-title";
 import { PriceBookForm } from "@/components/forms/price-book-form";
 import { requireAdminSession } from "@/lib/server/auth";
 import { listPriceBooks } from "@/lib/server/price-book-client";
@@ -30,6 +31,7 @@ export default async function EditPriceBookPage({
     <div className="flex w-full flex-col gap-6">
       <PageHeader>
         <PageHeaderHeading>
+          <SetBreadcrumbTitle title={book.name} />
           <PageHeaderTitle>{book.name}</PageHeaderTitle>
           <PageHeaderDescription>
             Editing this book reprices every account assigned to it. Token lots

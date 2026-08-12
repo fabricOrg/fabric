@@ -27,7 +27,7 @@ export function RouteBreadcrumbs({
   pathname,
   routes,
   current: currentOverride,
-  unlinkedSegments = [],
+  unlinkedPaths = [],
 }: {
   appLabel: string;
   pathname: string;
@@ -42,7 +42,7 @@ export function RouteBreadcrumbs({
    * only it knows its route table: linking solely to declared nav routes would un-link the dynamic
    * segments this trail exists to show (`/message-definitions/order.shipped`).
    */
-  unlinkedSegments?: readonly string[];
+  unlinkedPaths?: readonly string[];
 }) {
   const exact = routes.find((route) => route.href === pathname);
   const parent = [...routes]
@@ -66,7 +66,9 @@ export function RouteBreadcrumbs({
       ? segments.slice(parentDepth, -1).map((segment, index) => ({
           label: humanize(segment),
           href: `/${segments.slice(0, parentDepth + index + 1).join("/")}`,
-          linkable: !unlinkedSegments.includes(segment),
+          linkable: !unlinkedPaths.includes(
+            `/${segments.slice(0, parentDepth + index + 1).join("/")}`,
+          ),
         }))
       : [];
 
@@ -90,7 +92,16 @@ export function RouteBreadcrumbs({
             {crumb.linkable ? (
               <BreadcrumbLink href={crumb.href}>{crumb.label}</BreadcrumbLink>
             ) : (
-              <span className="text-muted-foreground">{crumb.label}</span>
+              // Not BreadcrumbPage: that hardcodes aria-current="page", and the leaf below already
+              // claims it — two current pages in one trail. A non-routable ancestor is a disabled
+              // link, not the current one.
+              <span
+                role="link"
+                aria-disabled="true"
+                className="text-muted-foreground"
+              >
+                {crumb.label}
+              </span>
             )}
             <BreadcrumbSeparator />
           </BreadcrumbItem>

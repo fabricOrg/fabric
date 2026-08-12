@@ -22,7 +22,7 @@ export function AppBreadcrumbs() {
       current={title ?? undefined}
       // `books` groups /pricing/books/new and /pricing/books/[id]; there is no page at
       // /pricing/books itself, and the list lives on /pricing.
-      unlinkedSegments={["books"]}
+      unlinkedPaths={["/pricing/books"]}
     />
   );
 }

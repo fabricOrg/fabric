@@ -174,7 +174,11 @@ const fallbackRates = Object.fromEntries(
       if (!isRecord(payload) || !Array.isArray(payload.rates)) return null;
       const next: Record<string, { sms?: number; email?: number }> = {};
       for (const rate of payload.rates) {
-        if (!isPublishedRate(rate)) return null;
+        // `continue`, NOT `return null`. The published book carries every channel staff priced, and
+        // this calculator only quotes SMS and email — so a WhatsApp rate is an unrecognised ROW, not a
+        // broken payload. Discarding the whole response for it silently reverted the page to the
+        // hard-coded fallback rates, with no console error and the label still reading plausibly.
+        if (!isPublishedRate(rate)) continue;
         if (rate.currency !== "GHS" && rate.currency !== "NGN") continue;
         const value = Number(rate.unit_price_minor);
         if (!Number.isSafeInteger(value) || value <= 0) continue;
