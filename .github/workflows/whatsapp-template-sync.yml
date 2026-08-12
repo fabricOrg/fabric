@@ -50,7 +50,6 @@ jobs:
           code=$(curl -sS -o "$body" -w "%{http_code}" \
             --retry 3 --retry-connrefused --retry-delay 20 --max-time 180 \
             -X POST "${API_BASE_URL%/}/internal/admin/whatsapp/template-sync" \
-            -H "x-fabric-edge-secret: ${EDGE_SHARED_SECRET}" \
             -H "x-bff-token: ${BFF_INTERNAL_TOKEN}" \
             -H "x-actor-email: github-actions@fabric.local" \
             -H "content-type: application/json")
