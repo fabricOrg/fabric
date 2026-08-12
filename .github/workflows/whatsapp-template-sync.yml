@@ -26,11 +26,13 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    # REQUIRED. This repo holds no repository-level secrets — everything lives in an environment, so
+    # without this both the token and the URL arrive empty and the run fails on the first check.
+    environment: testing
     steps:
       - name: Trigger the template sync
         env:
           API_BASE_URL: ${{ vars.TESTING_API_BASE_URL }}
-          EDGE_SHARED_SECRET: ${{ secrets.EDGE_SHARED_SECRET }}
           BFF_INTERNAL_TOKEN: ${{ secrets.BFF_INTERNAL_TOKEN }}
         run: |
           set -euo pipefail

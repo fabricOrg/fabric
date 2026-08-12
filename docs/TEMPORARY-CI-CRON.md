@@ -30,13 +30,19 @@ wake-up is the mechanism, not an obstacle — which is why `--max-time` is 180s.
 - **Timeliness.** GitHub delays scheduled runs under load, and disables schedules entirely after 60
   days of repository inactivity. Fine for refreshing a cache; not fine for anything with a deadline.
 
-## Required repository configuration
+## Required configuration — in the `testing` ENVIRONMENT, not at repository level
+
+This repo holds **zero** repository-level secrets; every one lives in a GitHub Environment
+(`testing`, `staging`, `production`, plus per-app ones). A workflow only sees them if its job declares
+`environment: testing`, which this one does. Setting them at repository level instead looks correct in
+the UI and arrives as empty strings at runtime.
+
 
 | Kind | Name | Where the value comes from |
 | --- | --- | --- |
-| Variable | `TESTING_API_BASE_URL` | The Render service URL, currently `https://fabric-jezz.onrender.com`. Not a secret. |
-| Secret | `BFF_INTERNAL_TOKEN` | **The Render dashboard**, `fabric-api` -> Environment. NOT the Infisical `dev` value — `render.yaml` marks it `sync: false`, so the deployed value was set in the dashboard and the dev one is local-only. Verified: the dev token gets a 401 from the deployed API. |
-| Secret | `EDGE_SHARED_SECRET` | **Not required today.** `edgeOriginAllowed` returns true when the secret is unset, and it is set neither in `render.yaml` nor Infisical. Confirmed empirically: an unauthenticated call to `/internal/admin/tenants` returns 401 from the BFF guard, not 403 from the edge guard, so the request reached Nest. The workflow sends the header anyway, which is harmless while unset — add the CI secret only if the API ever gets one, or the workflow will start 403ing. |
+| Variable | `TESTING_API_BASE_URL` (already set) | The Render service URL, currently `https://fabric-jezz.onrender.com`. Not a secret. |
+| Secret | `BFF_INTERNAL_TOKEN` (already set — the deploy workflow uses it too) | **The Render dashboard**, `fabric-api` -> Environment. NOT the Infisical `dev` value — `render.yaml` marks it `sync: false`, so the deployed value was set in the dashboard and the dev one is local-only. Verified: the dev token gets a 401 from the deployed API. |
+| — | `EDGE_SHARED_SECRET` | **Not needed, and not sent.** `edgeOriginAllowed` returns true when the secret is unset, and it is set neither in `render.yaml` nor Infisical. Confirmed empirically: an unauthenticated call to `/internal/admin/tenants` returns 401 from the BFF guard, not 403 from the edge guard, so the request reached Nest. If the API ever gets one, add the secret to the `testing` environment AND re-add the `x-fabric-edge-secret` header here. |
 
 Rotating `BFF_INTERNAL_TOKEN` on Render means rotating it here too, or the workflow fails with 401 and
 the cache silently stops refreshing — a failure mode with no customer-visible symptom until a template
