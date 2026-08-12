@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Currency } from "@app/contracts";
+import type { Currency, PriceBookRateDto } from "@app/contracts";
 import {
   accounts,
   auditEvents,
@@ -8,7 +8,7 @@ import {
   priceBookVersions,
   pricingSellRules,
 } from "@app/db";
-import { and, eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { AuditService } from "../audit/audit.service.js";
 import { PriceBookAdminService } from "./price-book-admin.service.js";
@@ -45,7 +45,11 @@ describeDb("price-book admin", () => {
   function req(
     // `Currency`, not `string`: the upsert request now only accepts a currency the platform can
     // settle, so the fixture has to be as narrow as the contract it feeds.
-    rates: { channel: "sms" | "email"; currency: Currency; p: string }[],
+    rates: {
+      channel: PriceBookRateDto["channel"];
+      currency: Currency;
+      p: string;
+    }[],
   ) {
     return {
       name: `Book — ${randomUUID()}`,
@@ -105,6 +109,37 @@ describeDb("price-book admin", () => {
     const books = await admin.listBooks();
     expect(books.some((b) => b.name === DEFAULT_BOOK_NAME)).toBe(true);
     expect(books.some((b) => b.id === created?.id)).toBe(true);
+  });
+
+  // A WhatsApp rate was written to pricing_sell_rules as unit_basis 'recipient' by a two-way
+  // ternary, which pricing_sell_rules_basis_chk rejects — the transaction rolled back and the admin
+  // console showed an opaque 500. Email is asserted in the same book because the storage vocabulary
+  // ('recipient') differs from the quoted one ('send'), so a fix that collapses the two maps passes
+  // for WhatsApp and breaks email.
+  it("stores the right unit basis per channel, including WhatsApp", async () => {
+    const created = await admin.upsertBook(
+      null,
+      req([
+        { channel: "whatsapp", currency: "GHS", p: "400" },
+        { channel: "email", currency: "GHS", p: "9" },
+        { channel: "sms", currency: "GHS", p: "7" },
+      ]),
+      actor,
+    );
+    expect(created).not.toBeNull();
+    if (created) bookIds.push(created.id);
+
+    const rules = await db.db.execute(sql`
+      SELECT r.channel, r.unit_basis
+      FROM pricing_sell_rules r
+      JOIN price_book_versions v ON v.id = r.version_id
+      WHERE v.price_book_id = ${created?.id}
+      ORDER BY r.channel`);
+    expect(rules).toEqual([
+      { channel: "email", unit_basis: "recipient" },
+      { channel: "sms", unit_basis: "segment" },
+      { channel: "whatsapp", unit_basis: "message" },
+    ]);
   });
 
   it("assign → resolver prices on the book; a rate edit reprices (cache cleared); both audited", async () => {

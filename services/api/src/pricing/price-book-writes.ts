@@ -14,6 +14,7 @@ import {
   pricingSellRules,
 } from "@app/db";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { UNIT_BASIS_BY_CHANNEL } from "./effective-pricing.js";
 
 /**
  * Admin write helpers for price books (ADR-0010 slice 3). Pure DB operations against the provisioning
@@ -28,13 +29,23 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 /** All books with their full rate tables, newest first. */
 type PriceBookRateChannel = PriceBookRateDto["channel"];
 
-/** The unit each channel's price is quoted in. Total by construction: a new channel breaks the build. */
-const UNIT_BASIS: Record<PriceBookRateChannel, "segment" | "send" | "message"> =
-  {
-    sms: "segment",
-    email: "send",
-    whatsapp: "message",
-  };
+/**
+ * The unit each channel's price is QUOTED in, for the DTO — a READER-facing vocabulary, which is why
+ * it is not the one written to `pricing_sell_rules`. Email quotes "per send" but the table's basis
+ * check demands 'recipient'; the two agree on sms and whatsapp and disagree on email, so the storage
+ * value comes from UNIT_BASIS_BY_CHANNEL and collapsing the two breaks every email book. Named
+ * QUOTED_ rather than UNIT_BASIS because `pricing-defaults.ts` exports that exact identifier for the
+ * STORAGE map — one name, two meanings, one directory is how the wrong one gets auto-imported.
+ * Total by construction: a new channel breaks the build.
+ */
+const QUOTED_UNIT_BASIS: Record<
+  PriceBookRateChannel,
+  "segment" | "send" | "message"
+> = {
+  sms: "segment",
+  email: "send",
+  whatsapp: "message",
+};
 
 export async function listPriceBooks(db: Db): Promise<PriceBookDto[]> {
   const books = await db.select().from(priceBooks).orderBy(priceBooks.name);
@@ -169,7 +180,11 @@ export async function upsertPriceBook(
         versionId: published.id,
         channel: rate.channel,
         currency: rate.currency,
-        unitBasis: rate.channel === "sms" ? "segment" : "recipient",
+        // Keyed off the same map the read path uses. As a two-way ternary this wrote "recipient"
+        // for WhatsApp, which pricing_sell_rules_basis_chk rejects outright — the insert failed, the
+        // transaction rolled back, and the whole create surfaced as an opaque 500. ADR-0014 §3
+        // prices WhatsApp per template message.
+        unitBasis: UNIT_BASIS_BY_CHANNEL[rate.channel],
         unitPriceMinor: BigInt(rate.unit_price_minor) as MinorUnits,
       })),
     );
@@ -210,7 +225,7 @@ export async function readPublicPricing(
         // Keyed, not a two-way ternary. Under `channel === "sms" ? "segment" : "send"` a WhatsApp rate
         // reported "send", which is not a unit anyone sells WhatsApp in and not what the sell rules
         // record (ADR-0014 §3 prices per template message).
-        unit_basis: UNIT_BASIS[channel],
+        unit_basis: QUOTED_UNIT_BASIS[channel],
       };
     }),
     effective_at: book.updatedAt.toISOString(),
