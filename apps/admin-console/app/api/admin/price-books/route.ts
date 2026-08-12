@@ -56,9 +56,13 @@ export async function POST(request: NextRequest) {
   }
   const parsed = upsertPriceBookRequestSchema.safeParse(body);
   if (!parsed.success) {
+    // Forward the ACTUAL issue. The generic line named three things the operator had already filled
+    // in, which is worse than silence: the real failure is usually the publish rule (a published
+    // currency needs both SMS and email), and the form's own enable-check does not model it.
     return fail(
       "invalid_request",
-      "Provide a name, mode, and at least one rate.",
+      parsed.error.issues[0]?.message ??
+        "Provide a name, mode, and at least one rate.",
       422,
       "validation_error",
     );

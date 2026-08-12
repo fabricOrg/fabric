@@ -49,6 +49,10 @@
       // isolation and false-flags template-used consts as unused. Exclude the file type here.
       "!**/*.astro",
       "!**/coverage",
+      // Scratch git worktrees checked out INSIDE the repo. Each carries its own biome.jsonc, and a
+      // nested root config is a hard error — `biome check .` refuses to run at all, so one stray
+      // worktree wedges every pre-push in the main checkout, with nothing wrong in the diff.
+      "!**/.codex-temp",
       "!**/node_modules",
       "!**/playwright-report",
       "!**/test-results",

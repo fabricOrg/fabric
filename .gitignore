@@ -49,3 +49,4 @@ docker-compose.override.yml.disabled
 
 # scratch output from codex asset generation (not source)
 .codex-assets/
+.codex-temp/
