@@ -14,12 +14,20 @@ type Row = Record<string, unknown>;
  *
  * An active LIVE environment is the honest predicate for "may send on this WABA": sandbox routes to
  * the fake provider and never reaches Meta, and the live environment is unlocked by go-live. It also
- * subsumes the old messages arm — a live send requires a live environment — while fixing that arm's
- * real defect, which is that `whatsapp_messages` carries no `waba_id`, so it could not be scoped and
- * would hand one WABA's events to tenants belonging to another the moment a second WABA existed.
+ * subsumes the old messages arm, since a live send requires a live environment.
  *
- * Shared because the scheduler and the webhook path both need exactly this set, and they had two
- * copies of it that were already drifting.
+ * DELIBERATELY UNSCOPED, and correct only while ONE shared WABA exists. `environments` carries no
+ * `waba_id` — no more than `whatsapp_messages` did — so this arm returns every live tenant regardless
+ * of which WABA they belong to. ADR-0016 decides per-tenant WABAs, and on the day a second one exists
+ * this hands WABA-B's template events to WABA-A's tenants and writes the wrong catalog. Whatever
+ * carries the tenant→WABA binding then must be joined here; this cannot ship past that point unchanged.
+ *
+ * Shared because the scheduler and the webhook fan-out need exactly this set and had a copy each.
+ *
+ * Widening it also flips a posture: every live tenant now gets a populated cache within the hour, so
+ * their first WhatsApp send moves from fail-open to fail-closed on an unknown template. That is the
+ * intent — an empty cache was never a safety property — but it is a behaviour change for tenants who
+ * have never used the channel.
  */
 export async function tenantsForWaba(
   provisioning: ProvisioningDb,

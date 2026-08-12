@@ -12,12 +12,14 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashApiKey } from "../api-keys/api-key.crypto.js";
 import { AppModule } from "../app.module.js";
+import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
 import { effectivePricingStub } from "../testing/effective-pricing.stub.js";
 import { WhatsappLifecycleProvider } from "../testing/whatsapp-lifecycle.provider.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 import { WhatsappTemplateSyncScheduler } from "./whatsapp-template-sync.scheduler.js";
+import { tenantsForWaba } from "./whatsapp-waba-tenants.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
@@ -173,22 +175,15 @@ describeDb("WhatsApp template lifecycle", () => {
 
   // Bootstrap: the scheduler used to find tenants only by "already holds a template row" or "already
   // sent a non-sandbox message", so a workspace that had done neither could never get a FIRST sync and
-  // its picker stayed empty forever. That is the state a freshly promoted environment is in. An active
-  // live environment is now enough to be discovered.
+  // its picker stayed empty forever. That is the state a freshly promoted environment is in.
+  //
+  // Asserted against the QUERY, not by running the scheduler unfiltered. An unfiltered run loops every
+  // tenant the predicate returns and writes this file's fake catalog into all of them — on a developer
+  // database that means planting rows under real workspaces, which afterAll does not clean because it
+  // only knows about the tenants this spec created.
   it("discovers a workspace that has never synced or sent", async () => {
-    const scheduler = app.get(WhatsappTemplateSyncScheduler);
-    const [before] = await owner`
-      SELECT count(*)::int AS n FROM whatsapp_templates
-      WHERE tenant_id = ${bootstrapTenantId}`;
-    expect(Number(before?.n)).toBe(0);
-
-    const discovered = await scheduler.run();
-    expect(discovered.locked).toBe(true);
-
-    const [after] = await owner`
-      SELECT count(*)::int AS n FROM whatsapp_templates
-      WHERE tenant_id = ${bootstrapTenantId}`;
-    expect(Number(after?.n)).toBe(2);
+    const tenants = await tenantsForWaba(app.get(PROVISIONING_DB), WABA_ID);
+    expect(tenants).toContain(bootstrapTenantId);
   });
 
   // A template webhook carries a status, never components. An event for a template nobody has cached
