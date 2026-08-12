@@ -19,7 +19,13 @@ import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PluginResolverService } from "../plugins/plugin-resolver.service.js";
 import { runtimeRoleEnabled } from "../runtime/runtime-role.js";
+import { readAutoTopup } from "./auto-topup-config.js";
 import { reconcilePendingAutoTopUp } from "./auto-topup-reconcile.js";
+import { recordProviderResult } from "./auto-topup-result.js";
+import {
+  assertBillingCurrency,
+  chargeableCurrency,
+} from "./billing-currency.js";
 import { resolvePaymentContext } from "./payment-provider-resolution.js";
 
 /**
@@ -60,28 +66,7 @@ export class AutoTopupService {
   }
 
   async getAutoTopup(tenantId: string): Promise<AutoTopupResponse> {
-    const scoped = tenantId as TenantId;
-    const [row] = await this.provisioning.db
-      .select()
-      .from(autoTopup)
-      .where(eq(autoTopup.tenantId, scoped))
-      .limit(1);
-    const [card] = await this.provisioning.db
-      .select({ id: paymentAuthorizations.id })
-      .from(paymentAuthorizations)
-      .where(eq(paymentAuthorizations.tenantId, scoped))
-      .limit(1);
-    return {
-      has_card: Boolean(card),
-      config: row
-        ? {
-            enabled: row.enabled,
-            threshold_minor: row.thresholdMinor.toString(),
-            top_up_minor: row.topUpMinor.toString(),
-            currency: row.currency as "GHS" | "NGN" | "USD",
-          }
-        : null,
-    };
+    return readAutoTopup(this.provisioning, tenantId as TenantId);
   }
 
   async updateAutoTopup(
@@ -89,6 +74,9 @@ export class AutoTopupService {
     request: UpdateAutoTopupRequest,
   ): Promise<AutoTopupResponse> {
     const scoped = tenantId as TenantId;
+    // Both checks are ENABLE-only. A disable must never be refused for the value being disabled: the
+    // dashboard sends the STORED currency when turning off, so guarding that too would make an
+    // already-mismatched config impossible to stop while the cron kept charging it.
     if (request.enabled) {
       const [card] = await this.provisioning.db
         .select({ id: paymentAuthorizations.id })
@@ -101,6 +89,7 @@ export class AutoTopupService {
           "Pay once by card to enable auto top-up (no reusable card on file).",
         );
       }
+      await assertBillingCurrency(this.provisioning, scoped, request.currency);
     }
     const values = {
       tenantId: scoped,
@@ -142,6 +131,15 @@ export class AutoTopupService {
       if (!cfg?.enabled) return;
       if (await this.killSwitch.isPaused("platform.payments", tenantId)) return;
 
+      // The currency rule gates the INSERT and the charge — never the tick. Reconciliation has to run
+      // regardless: a pending intent may already have been submitted and paid, and abandoning the tick
+      // debits the customer while the wallet is never credited, which is worse than the mismatch.
+      const billingCurrency = await this.chargeable(
+        scoped,
+        cfg.currency,
+        "config",
+      );
+
       const balance = await this.customerBalance(scoped, cfg.currency);
       if (balance > cfg.thresholdMinor) return;
 
@@ -158,24 +156,28 @@ export class AutoTopupService {
       let amountMinor = cfg.topUpMinor;
       let currency = cfg.currency;
       let email = auth.email;
-      const inserted = await this.provisioning.db
-        .insert(payments)
-        .values({
-          tenantId: scoped,
-          reference,
-          kind: "auto_topup",
-          provider: "paystack",
-          providerMode: mode,
-          pluginInstanceId: instanceId,
-          credentialVersion,
-          amountMinor: cfg.topUpMinor,
-          currency: cfg.currency,
-          email: auth.email,
-          status: "pending",
-        })
-        // Both the partial per-tenant guard and global provider reference are replay boundaries.
-        .onConflictDoNothing()
-        .returning({ id: payments.id });
+      // No new intent while the config disagrees with billing — but fall through to the branch below,
+      // so an intent already in flight still gets reconciled.
+      const inserted = !billingCurrency
+        ? []
+        : await this.provisioning.db
+            .insert(payments)
+            .values({
+              tenantId: scoped,
+              reference,
+              kind: "auto_topup",
+              provider: "paystack",
+              providerMode: mode,
+              pluginInstanceId: instanceId,
+              credentialVersion,
+              amountMinor: cfg.topUpMinor,
+              currency: cfg.currency,
+              email: auth.email,
+              status: "pending",
+            })
+            // Both the partial per-tenant guard and global provider reference are replay boundaries.
+            .onConflictDoNothing()
+            .returning({ id: payments.id });
       if (inserted.length === 0) {
         const outcome = await reconcilePendingAutoTopUp(
           {
@@ -191,6 +193,22 @@ export class AutoTopupService {
         if (outcome.action === "stop") return;
         reference = outcome.payment.reference;
         amountMinor = outcome.payment.amountMinor;
+        // `recharge` means the intent was never submitted, so no money has moved and closing it is
+        // safe. Close it rather than just returning: it holds the one-pending-per-tenant index, so
+        // leaving it would wedge auto top-up for this workspace forever. The next tick opens a fresh
+        // intent once the config is corrected.
+        if (
+          !(await this.chargeable(scoped, outcome.payment.currency, "intent"))
+        ) {
+          await recordProviderResult(
+            this.provisioning,
+            outcome.payment.reference,
+            {
+              status: "failed",
+            },
+          );
+          return;
+        }
         currency = outcome.payment.currency;
         email = outcome.payment.email;
       }
@@ -204,7 +222,7 @@ export class AutoTopupService {
         },
         creds,
       );
-      await this.recordProviderResult(reference, result);
+      await recordProviderResult(this.provisioning, reference, result);
     } catch (error) {
       this.logger.error(
         `Auto top-up check failed for ${tenantId}: ${error instanceof Error ? error.message : "unknown"}`,
@@ -246,26 +264,15 @@ export class AutoTopupService {
     }
   }
 
-  private async recordProviderResult(
-    reference: string,
-    result: { status: "success" | "failed" | "pending"; providerRef?: string },
-  ): Promise<void> {
-    // The webhook remains the source of truth for credit. A provider reference marks successful
-    // submission; failed is terminal and releases the per-tenant uniqueness guard.
-    const update: {
-      updatedAt: Date;
-      status?: "failed";
-      providerRef?: string;
-    } = { updatedAt: new Date() };
-    if (result.status === "failed") {
-      update.status = "failed";
-    } else {
-      update.providerRef = result.providerRef ?? reference;
-    }
-    await this.provisioning.db
-      .update(payments)
-      .set(update)
-      .where(eq(payments.reference, reference));
+  /** Stored currencies are not trusted — see chargeableCurrency for why this skips, not throws. */
+  private chargeable(scoped: TenantId, stored: string, label: string) {
+    return chargeableCurrency(
+      this.provisioning,
+      scoped,
+      stored,
+      label,
+      this.logger,
+    );
   }
 
   private async customerBalance(

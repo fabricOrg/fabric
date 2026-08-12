@@ -80,6 +80,27 @@ describeDb("wallet top-up (Paystack)", () => {
     await Promise.all([provisioning.end(), appDb.end(), owner.end()]);
   });
 
+  // A top-up in the wrong currency settles into a ledger account nothing can spend, and there is no
+  // refund path — so it must fail BEFORE the charge. No fetch is mocked here, so removing the guard
+  // fails this on a real network call rather than letting it pass vacuously.
+  it("refuses a top-up in a currency the workspace is not billed in", async () => {
+    await expect(
+      service.initiate(tenantId, {
+        amount_minor: "5000",
+        currency: "USD",
+        email: "payer@example.com",
+      }),
+    ).rejects.toMatchObject({
+      response: { error: { code: "billing_currency_mismatch" } },
+    });
+
+    const rows = await provisioning.db
+      .select()
+      .from(payments)
+      .where(eq(payments.tenantId, tenantId));
+    expect(rows).toHaveLength(0);
+  });
+
   it("initiate creates a pending intent and returns the checkout URL", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(
@@ -298,5 +319,31 @@ describeDb("wallet top-up (Paystack)", () => {
     await autoTopupService.maybeAutoTopUp(tenantId);
     expect(fetchSpy).not.toHaveBeenCalled();
     vi.restoreAllMocks();
+  });
+
+  // Disable is deliberately NOT currency-guarded: the dashboard sends the STORED currency when
+  // turning off, so guarding it would make a mismatched config unstoppable while the cron charged
+  // it. Pinned because hoisting the guard out of the enable block would restore that trap. Last in
+  // the file because it leaves auto top-up disabled.
+  it("lets a mismatched auto top-up be turned OFF, but not turned on", async () => {
+    await expect(
+      autoTopupService.updateAutoTopup(tenantId, {
+        enabled: false,
+        threshold_minor: "1000",
+        top_up_minor: "5000",
+        currency: "USD",
+      }),
+    ).resolves.toMatchObject({ config: { enabled: false } });
+
+    await expect(
+      autoTopupService.updateAutoTopup(tenantId, {
+        enabled: true,
+        threshold_minor: "1000",
+        top_up_minor: "5000",
+        currency: "USD",
+      }),
+    ).rejects.toMatchObject({
+      response: { error: { code: "billing_currency_mismatch" } },
+    });
   });
 });
