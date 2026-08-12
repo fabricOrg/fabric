@@ -21,6 +21,7 @@ import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PluginResolverService } from "../plugins/plugin-resolver.service.js";
 import { TokenPurchaseService } from "../tokens/token-purchase.service.js";
+import { assertBillingCurrency } from "./billing-currency.js";
 import {
   resolvePaymentContext,
   webhookModeMismatch,
@@ -69,6 +70,7 @@ export class PaymentsService {
     if (await this.killSwitch.isPaused("platform.payments", tenantId)) {
       throw invalidRequest("payments_paused", "Top-ups are paused right now.");
     }
+    await assertBillingCurrency(this.provisioning, tenantId, request.currency);
     const { provider, creds, mode, instanceId, credentialVersion } =
       await this.resolved(tenantId);
     // Paystack references allow only alphanumerics + - . = (no colon); a uuid with a topup- prefix
@@ -127,6 +129,7 @@ export class PaymentsService {
     if (await this.killSwitch.isPaused("platform.payments", tenantId)) {
       throw invalidRequest("payments_paused", "Collections are paused.");
     }
+    await assertBillingCurrency(this.provisioning, tenantId, p.currency);
     const { provider, creds, mode, instanceId, credentialVersion } =
       await this.resolved(tenantId);
     const reference = `flow-${randomUUID()}`;

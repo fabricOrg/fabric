@@ -20,6 +20,7 @@ import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PluginResolverService } from "../plugins/plugin-resolver.service.js";
 import { runtimeRoleEnabled } from "../runtime/runtime-role.js";
 import { reconcilePendingAutoTopUp } from "./auto-topup-reconcile.js";
+import { assertBillingCurrency } from "./billing-currency.js";
 import { resolvePaymentContext } from "./payment-provider-resolution.js";
 
 /**
@@ -102,6 +103,10 @@ export class AutoTopupService {
         );
       }
     }
+    // Same rule as a manual top-up, and it matters more here: a wrong currency is charged to the
+    // saved card on EVERY trigger, while the threshold watches a balance in that currency which the
+    // send path never spends — so it sits at zero and re-triggers indefinitely.
+    await assertBillingCurrency(this.provisioning, scoped, request.currency);
     const values = {
       tenantId: scoped,
       enabled: request.enabled,
