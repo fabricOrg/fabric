@@ -20,7 +20,11 @@ import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PluginResolverService } from "../plugins/plugin-resolver.service.js";
 import { runtimeRoleEnabled } from "../runtime/runtime-role.js";
 import { reconcilePendingAutoTopUp } from "./auto-topup-reconcile.js";
-import { assertBillingCurrency } from "./billing-currency.js";
+import { recordProviderResult } from "./auto-topup-result.js";
+import {
+  assertBillingCurrency,
+  chargeableCurrency,
+} from "./billing-currency.js";
 import { resolvePaymentContext } from "./payment-provider-resolution.js";
 
 /**
@@ -90,6 +94,9 @@ export class AutoTopupService {
     request: UpdateAutoTopupRequest,
   ): Promise<AutoTopupResponse> {
     const scoped = tenantId as TenantId;
+    // Both checks are ENABLE-only. A disable must never be refused for the value being disabled: the
+    // dashboard sends the STORED currency when turning off, so guarding that too would make an
+    // already-mismatched config impossible to stop while the cron kept charging it.
     if (request.enabled) {
       const [card] = await this.provisioning.db
         .select({ id: paymentAuthorizations.id })
@@ -102,11 +109,8 @@ export class AutoTopupService {
           "Pay once by card to enable auto top-up (no reusable card on file).",
         );
       }
+      await assertBillingCurrency(this.provisioning, scoped, request.currency);
     }
-    // Same rule as a manual top-up, and it matters more here: a wrong currency is charged to the
-    // saved card on EVERY trigger, while the threshold watches a balance in that currency which the
-    // send path never spends — so it sits at zero and re-triggers indefinitely.
-    await assertBillingCurrency(this.provisioning, scoped, request.currency);
     const values = {
       tenantId: scoped,
       enabled: request.enabled,
@@ -146,6 +150,8 @@ export class AutoTopupService {
         .limit(1);
       if (!cfg?.enabled) return;
       if (await this.killSwitch.isPaused("platform.payments", tenantId)) return;
+
+      if (!(await this.chargeable(scoped, cfg.currency, "config"))) return;
 
       const balance = await this.customerBalance(scoped, cfg.currency);
       if (balance > cfg.thresholdMinor) return;
@@ -196,6 +202,13 @@ export class AutoTopupService {
         if (outcome.action === "stop") return;
         reference = outcome.payment.reference;
         amountMinor = outcome.payment.amountMinor;
+        // A reconciled intent is a stored row too, so it gets the same check.
+        const ok = await this.chargeable(
+          scoped,
+          outcome.payment.currency,
+          "intent",
+        );
+        if (!ok) return;
         currency = outcome.payment.currency;
         email = outcome.payment.email;
       }
@@ -209,7 +222,7 @@ export class AutoTopupService {
         },
         creds,
       );
-      await this.recordProviderResult(reference, result);
+      await recordProviderResult(this.provisioning, reference, result);
     } catch (error) {
       this.logger.error(
         `Auto top-up check failed for ${tenantId}: ${error instanceof Error ? error.message : "unknown"}`,
@@ -251,26 +264,15 @@ export class AutoTopupService {
     }
   }
 
-  private async recordProviderResult(
-    reference: string,
-    result: { status: "success" | "failed" | "pending"; providerRef?: string },
-  ): Promise<void> {
-    // The webhook remains the source of truth for credit. A provider reference marks successful
-    // submission; failed is terminal and releases the per-tenant uniqueness guard.
-    const update: {
-      updatedAt: Date;
-      status?: "failed";
-      providerRef?: string;
-    } = { updatedAt: new Date() };
-    if (result.status === "failed") {
-      update.status = "failed";
-    } else {
-      update.providerRef = result.providerRef ?? reference;
-    }
-    await this.provisioning.db
-      .update(payments)
-      .set(update)
-      .where(eq(payments.reference, reference));
+  /** Stored currencies are not trusted — see chargeableCurrency for why this skips, not throws. */
+  private chargeable(scoped: TenantId, stored: string, label: string) {
+    return chargeableCurrency(
+      this.provisioning,
+      scoped,
+      stored,
+      label,
+      this.logger,
+    );
   }
 
   private async customerBalance(
