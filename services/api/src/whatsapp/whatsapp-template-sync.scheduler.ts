@@ -8,8 +8,7 @@ import { runtimeRoleEnabled } from "../runtime/runtime-role.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 import { WhatsappTemplateService } from "./whatsapp-template.service.js";
 import { parseWabaId } from "./whatsapp-template-cache.js";
-
-type Row = Record<string, unknown>;
+import { tenantsForWaba } from "./whatsapp-waba-tenants.js";
 
 @Injectable()
 export class WhatsappTemplateSyncScheduler {
@@ -55,7 +54,8 @@ export class WhatsappTemplateSyncScheduler {
 
       const resolved = await this.runtime.resolve("live");
       const wabaId = parseWabaId(resolved.creds);
-      const tenants = input.tenantIds ?? (await this.tenantsForWaba(wabaId));
+      const tenants =
+        input.tenantIds ?? (await tenantsForWaba(this.provisioning, wabaId));
       let synced = 0;
       for (const tenantId of tenants) {
         try {
@@ -71,17 +71,5 @@ export class WhatsappTemplateSyncScheduler {
       }
       return { locked: true, synced };
     });
-  }
-
-  private async tenantsForWaba(wabaId: string): Promise<string[]> {
-    const rows = (await this.provisioning.db.execute(sql`
-      SELECT DISTINCT tenant_id
-      FROM whatsapp_templates
-      WHERE waba_id = ${wabaId}
-      UNION
-      SELECT DISTINCT tenant_id
-      FROM whatsapp_messages
-      WHERE provider_slug <> 'sandbox-whatsapp'`)) as Row[];
-    return rows.map((row) => String(row.tenant_id));
   }
 }

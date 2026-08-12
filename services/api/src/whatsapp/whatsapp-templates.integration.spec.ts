@@ -12,12 +12,14 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashApiKey } from "../api-keys/api-key.crypto.js";
 import { AppModule } from "../app.module.js";
+import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
 import { effectivePricingStub } from "../testing/effective-pricing.stub.js";
 import { WhatsappLifecycleProvider } from "../testing/whatsapp-lifecycle.provider.js";
 import { WhatsappRuntimeService } from "./whatsapp-runtime.service.js";
 import { WhatsappTemplateSyncScheduler } from "./whatsapp-template-sync.scheduler.js";
+import { tenantsForWaba } from "./whatsapp-waba-tenants.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
@@ -42,6 +44,8 @@ describeDb("WhatsApp template lifecycle", () => {
   const db = createAppDb(APP_URL ?? "", { max: 2 });
   const tenantId = randomUUID();
   const sharedWabaTenantId = randomUUID(); // 2nd workspace, SAME WABA (ADR-0015 §2 aggregator model)
+  const bootstrapTenantId = randomUUID(); // has a live environment and nothing else
+  const bootstrapAppId = randomUUID();
   const appId = randomUUID();
   const liveId = randomUUID();
   const keySalt = randomUUID().replace(/-/g, "");
@@ -54,6 +58,17 @@ describeDb("WhatsApp template lifecycle", () => {
       INSERT INTO accounts (id, name, slug) VALUES
         (${tenantId}, 'WhatsApp Templates', ${`wa-tpl-${tenantId}`}),
         (${sharedWabaTenantId}, 'Shared WABA', ${`wa-shared-${sharedWabaTenantId}`})`;
+    // A workspace with an active LIVE environment and nothing else: no templates, no messages. This
+    // is the state a freshly promoted environment is in.
+    await owner`
+      INSERT INTO accounts (id, name, slug)
+      VALUES (${bootstrapTenantId}, 'Bootstrap', ${`wa-boot-${bootstrapTenantId}`})`;
+    await owner`
+      INSERT INTO applications (id, tenant_id, name, slug)
+      VALUES (${bootstrapAppId}, ${bootstrapTenantId}, 'Primary', 'primary')`;
+    await owner`
+      INSERT INTO environments (id, tenant_id, application_id, type, status)
+      VALUES (${randomUUID()}, ${bootstrapTenantId}, ${bootstrapAppId}, 'live', 'active')`;
     await owner`
       INSERT INTO applications (id, tenant_id, name, slug)
       VALUES (${appId}, ${tenantId}, 'Primary', 'primary')`;
@@ -103,8 +118,10 @@ describeDb("WhatsApp template lifecycle", () => {
       ]);
     }
     await owner`DELETE FROM applications WHERE tenant_id = ${tenantId}`;
-    await owner`DELETE FROM whatsapp_templates WHERE tenant_id = ${sharedWabaTenantId}`;
-    await owner`DELETE FROM accounts WHERE id IN (${tenantId}, ${sharedWabaTenantId})`;
+    await owner`DELETE FROM whatsapp_templates WHERE tenant_id IN (${sharedWabaTenantId}, ${bootstrapTenantId})`;
+    await owner`DELETE FROM environments WHERE tenant_id = ${bootstrapTenantId}`;
+    await owner`DELETE FROM applications WHERE tenant_id = ${bootstrapTenantId}`;
+    await owner`DELETE FROM accounts WHERE id IN (${tenantId}, ${sharedWabaTenantId}, ${bootstrapTenantId})`;
     await owner.end();
     await db.end();
   });
@@ -154,6 +171,19 @@ describeDb("WhatsApp template lifecycle", () => {
       WHERE waba_id = ${WABA_ID} AND tenant_id IN (${tenantId}, ${sharedWabaTenantId})
       GROUP BY tenant_id ORDER BY tenant_id`;
     expect(rows.map((row) => Number(row.n))).toEqual([2, 2]);
+  });
+
+  // Bootstrap: the scheduler used to find tenants only by "already holds a template row" or "already
+  // sent a non-sandbox message", so a workspace that had done neither could never get a FIRST sync and
+  // its picker stayed empty forever. That is the state a freshly promoted environment is in.
+  //
+  // Asserted against the QUERY, not by running the scheduler unfiltered. An unfiltered run loops every
+  // tenant the predicate returns and writes this file's fake catalog into all of them — on a developer
+  // database that means planting rows under real workspaces, which afterAll does not clean because it
+  // only knows about the tenants this spec created.
+  it("discovers a workspace that has never synced or sent", async () => {
+    const tenants = await tenantsForWaba(app.get(PROVISIONING_DB), WABA_ID);
+    expect(tenants).toContain(bootstrapTenantId);
   });
 
   // A template webhook carries a status, never components. An event for a template nobody has cached
