@@ -41,22 +41,35 @@ export class WhatsappTemplateSyncScheduler {
     }
   }
 
-  /** Production caller for template cache refresh; the cron tick drives this exact body. */
+  /**
+   * Production caller for template cache refresh; the cron tick drives this exact body.
+   *
+   * Reports `tenants` and `failed` alongside `synced`, because the three ways this returns zero are
+   * indistinguishable otherwise: nobody was discovered, the vendor returned an empty catalog, or every
+   * tenant threw and was swallowed by the per-tenant catch below. On a host whose logs are not readily
+   * reachable, "synced: 0" with no other signal is a job reporting success for a silent failure.
+   */
   async run(input: { tenantIds?: readonly string[] } = {}): Promise<{
     locked: boolean;
     synced: number;
+    tenants: number;
+    failed: number;
+    firstError?: string;
   }> {
     return this.provisioning.db.transaction(async (tx) => {
       const lock = (await tx.execute(
         sql`SELECT pg_try_advisory_xact_lock(${WhatsappTemplateSyncScheduler.LOCK_KEY}) AS locked`,
       )) as Array<{ locked: boolean }>;
-      if (lock[0]?.locked !== true) return { locked: false, synced: 0 };
+      if (lock[0]?.locked !== true)
+        return { locked: false, synced: 0, tenants: 0, failed: 0 };
 
       const resolved = await this.runtime.resolve("live");
       const wabaId = parseWabaId(resolved.creds);
       const tenants =
         input.tenantIds ?? (await tenantsForWaba(this.provisioning, wabaId));
       let synced = 0;
+      let failed = 0;
+      let firstError: string | undefined;
       for (const tenantId of tenants) {
         try {
           synced += await this.templates.syncTenant({
@@ -64,12 +77,21 @@ export class WhatsappTemplateSyncScheduler {
             runtime: resolved,
           });
         } catch (error) {
+          failed += 1;
+          const message = error instanceof Error ? error.message : "unknown";
+          firstError ??= message;
           this.logger.warn(
-            `whatsapp template sync deferred for ${tenantId}: ${error instanceof Error ? error.message : "unknown"}`,
+            `whatsapp template sync deferred for ${tenantId}: ${message}`,
           );
         }
       }
-      return { locked: true, synced };
+      return {
+        locked: true,
+        synced,
+        tenants: tenants.length,
+        failed,
+        ...(firstError ? { firstError } : {}),
+      };
     });
   }
 }
