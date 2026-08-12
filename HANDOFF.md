@@ -1,6 +1,6 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-10. Point-in-time. **Verify against code and git before treating any of it as
+_Snapshot: 2026-08-12. Point-in-time. **Verify against code and git before treating any of it as
 fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 [CLAUDE.md](./CLAUDE.md) (how we build) and `docs/`. Superseded entries live in
 [docs/HANDOFF-ARCHIVE.md](./docs/HANDOFF-ARCHIVE.md)._
@@ -16,8 +16,44 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `edbcc54` | WhatsApp stack #259–#265, then #267–#273, #275, #276 |
-| `origin/testing` | `75582a3` | DEPLOYED 2026-08-10 (#274). **`dev` is 2 ahead**, one carrying `0150`. |
+| `origin/dev` | `d4105f1` | through #287 |
+| `origin/testing` | `8ed153a` | DEPLOYED 2026-08-12 (#288). **Level with `dev`.** `0150` applied, 151 total. |
+
+### Start here — two PRs are open and reviewed, waiting to be merged
+
+1. **#290 — the WhatsApp template bootstrap fix.** Reviewed twice; both rounds found something and
+   both are fixed. Green. Merge it, then **promote `dev` → `testing`** (real merge, title
+   `chore(ops): promote …`, watch `Deploy testing (Vercel + Render)` — the plain `Deploy` greens while
+   skipping every job). It was left unmerged only because it had a critical finding on each pass and
+   the session was ending; nothing is known to be wrong with it now.
+2. **#289 — this file.** Merge whenever.
+
+Dependabot PRs #279–#282 and the old #200/#203/#214 are untouched and unrelated.
+
+### Why testing shows no WhatsApp templates (expected, not a regression)
+
+Two independent blockers. **#290 fixes the first**; the second needs a human.
+
+- The sync could only discover tenants that ALREADY held a template row or had ALREADY sent a
+  non-sandbox message. Testing has neither, so nothing bootstrapped. Fixed in #290: an active live
+  environment is now enough.
+- `meta-cloud live` in testing is `enabled=false` with **no credentials** (`creds=false`); only the
+  sandbox instance is armed. `resolve("live")` therefore cannot reach Meta at all. Arming it is a §7
+  decision — a live external credential, after which real Meta sends become reachable from testing.
+
+So after #290 promotes, testing STILL shows no templates until that credential is armed. That is
+correct behaviour, not a broken deploy.
+
+### What #288 shipped, and what was verified rather than assumed
+
+Nine commits. Verified in the testing database, not from the deploy log:
+`uniq_whatsapp_templates_tenant_waba_name_language` present, the waba-only index gone,
+`idx_whatsapp_templates_waba` added, **151** migrations applied.
+
+Audited testing before promoting, for the currency defect #287 fixes: **0** non-GHS accounts, **0**
+mismatched `payments`, **0** mismatched `auto_topup`, **0** mismatched customer ledger accounts. No
+backfill was needed. Re-run those four counts before assuming the same of any other environment.
+
 
 **The WhatsApp channel is DEPLOYED to testing.** All six jobs green including
 `Migrate · testing db`, which applied 14 migrations (`0136`–`0147`) and then ran `db:assert` on the
@@ -253,6 +289,42 @@ What that measurement established, before and after the promotion:
 
 ### Next up, in a fresh session
 
+**Three deferred fixes, all from reviews that found them but were not acted on in-session.**
+
+1. **A permanently-skipping auto-top-up is invisible.** `chargeableCurrency` returns null and writes
+   `logger.error`; `getAutoTopup` still reports `enabled: true`, so the wallet renders a green "On"
+   badge with a stale currency and no admin-console surface exists for `auto_topup` at all. The first
+   customer-visible symptom is failed sends. Needs a field on `AutoTopupResponse` plus a warning
+   state — a money guard whose only signal is a log line is not shipped.
+2. **The currency selects should not offer what the server refuses.** `top-up-dialog.tsx` and
+   `auto-topup-dialog.tsx` list every currency; the API now rejects a mismatch with
+   `billing_currency_mismatch`, so the UX is "pick USD, get refused". Constraining the list needs
+   `billing_currency` on a customer-facing endpoint — today it exists only in admin contracts.
+3. **#287 merged without a fourth review.** It changed substantially after its third (the cron
+   restructure that stopped the currency rule abandoning the whole tick). Deliberate call, recorded
+   here rather than lost.
+
+**Carried from the #290 review, unfixed and worth doing before customer onboarding:**
+
+- **`tenantsForWaba`'s live-environment arm is deliberately UNSCOPED by WABA**, because `environments`
+  carries no `waba_id` — no more than `whatsapp_messages` did. Correct only while ONE shared WABA
+  exists. The day ADR-0016's per-tenant WABAs land, this hands WABA-B's template events to WABA-A's
+  tenants and writes the wrong catalog. It is commented as such in `whatsapp-waba-tenants.ts`; it
+  cannot ship past that point unchanged.
+- **The scheduler fetches the same shared Meta catalog once PER TENANT**, inside one transaction
+  holding an advisory lock, and the tenant set now scales with total live customers rather than
+  WhatsApp adoption. Fetch once, then upsert per tenant, and move the HTTP work outside the
+  transaction.
+- **The template-webhook fan-out is O(all live tenants), serially, inside a request Meta retries on
+  timeout.** Replace the loop with one set-based `UPDATE … WHERE tenant_id = ANY(...)`.
+
+**Carried from the UI reviews, unfixed:** BFF role refusals emit `{ error: { message } }` with no
+`type`/`code`, so envelope parsing fails and a `member` clicking Live gets "Something went wrong"
+instead of the real reason; the senders page renders a failed load as an EMPTY state with no retry;
+the sender row action sits off-screen on mobile at seven columns.
+
+
+
 1. **Promote `dev` → `testing`.** `dev` is 2 ahead, one commit carrying `0150`. Same shape as #274:
    `chore(ops): promote …`, a REAL merge not a squash, and watch `Deploy testing (Vercel + Render)`.
 2. **ADR-0016 Phase 1 — become a Tech Provider**, which is the prerequisite for the Solution Partner
@@ -428,6 +500,30 @@ credential.
 ---
 
 ## Traps this repo keeps re-learning
+
+Added 2026-08-12, all paid for in this session:
+
+- **A spec that drives a scheduler UNFILTERED writes to every tenant in the database it points at.**
+  `scheduler.run()` with no `tenantIds` loops whatever the discovery query returns and wrote the test
+  double's fake catalog (`waba_id 987654321`) into `fabric-live-pilot` — the workspace holding the real
+  WABA — where `afterAll` never cleaned it. It was reachable in the product: the compose picker does
+  not filter by `waba_id`, so it would have offered a template that does not exist in that workspace's
+  real WABA, reserving wallet money for a send Meta rejects. Assert the query, not the orchestrator.
+- **Each fix in a chain can introduce the next defect.** Five review rounds on the wallet/payments
+  files, and in four of them the defect under review had been created by the previous fix. A green
+  pipeline says nothing about this; only an independent read does.
+- **Size of diff is not blast radius.** A twenty-line "dev seed" granted owner memberships and rewrote
+  go-live plan state; a one-line copy change described a money gate. Both were merged unreviewed
+  before the gate in §5 existed.
+- **Guard the side effect, not the pass through it.** A currency check placed at the top of the
+  auto-top-up tick also skipped the dropped-webhook reconciler, so a card already debited would never
+  have been credited — strictly worse than the mismatch being guarded.
+- **Do not switch branches while a review subagent is running.** It reads the working tree; the review
+  then describes code that is not on the branch under review.
+- **`verify:push` gates the working tree, so a stale `.next` fails a two-markdown-file diff.**
+  `rm -rf apps/*/.next` after branch-hopping.
+
+
 
 Durable ones live in [CLAUDE.md](./CLAUDE.md) §9. These are recent and not yet promoted:
 
