@@ -13,6 +13,7 @@ import {
   optionalWabaId,
   templateStatusCode,
 } from "./whatsapp-template-cache.js";
+import { tenantsForWaba } from "./whatsapp-waba-tenants.js";
 
 type Row = Record<string, unknown>;
 
@@ -40,7 +41,7 @@ export class WhatsappTemplateService {
   async applyWebhookEvent(
     event: WhatsappTemplateWebhookEvent,
   ): Promise<number> {
-    const tenants = await this.tenantsForWaba(event.wabaId);
+    const tenants = await tenantsForWaba(this.provisioning, event.wabaId);
     let applied = 0;
     for (const tenantId of tenants) {
       applied += await this.upsertWebhookEvent(tenantId, event);
@@ -257,18 +258,6 @@ export class WhatsappTemplateService {
         WHERE waba_id = ${wabaId}`,
     )) as Row[];
     return dateFrom(rows[0]?.synced_at);
-  }
-
-  private async tenantsForWaba(wabaId: string): Promise<string[]> {
-    const rows = (await this.provisioning.db.execute(sql`
-      SELECT DISTINCT tenant_id
-      FROM whatsapp_templates
-      WHERE waba_id = ${wabaId}
-      UNION
-      SELECT DISTINCT tenant_id
-      FROM whatsapp_messages
-      WHERE provider_slug <> 'sandbox-whatsapp'`)) as Row[];
-    return rows.map((row) => String(row.tenant_id));
   }
 }
 
