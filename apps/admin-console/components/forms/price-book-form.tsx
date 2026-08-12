@@ -135,7 +135,16 @@ export function PriceBookForm({ book }: { book: PriceBookDto | null }) {
         const payload = (await response
           .json()
           .catch(() => null)) as ErrorPayload | null;
-        throw new Error(payload?.error?.message ?? "Couldn't save the book.");
+        // The status is carried into the message when the body is not our envelope. A generic
+        // "couldn't save" leaves the operator with nothing to act on and nothing to report, and the
+        // most likely cause here produces exactly that: the API sleeps on free-tier hosting, so a
+        // cold start can outlast the gateway timeout and return HTML rather than JSON.
+        throw new Error(
+          payload?.error?.message ??
+            (response.status === 504 || response.status === 502
+              ? `The pricing service did not respond in time (HTTP ${response.status}). It may be waking up — try again in a moment.`
+              : `Couldn't save the book (HTTP ${response.status}).`),
+        );
       }
       toast.success(`Price book ${book ? "updated" : "created"}`);
       // Back to the list, which re-renders from the server with the saved values.

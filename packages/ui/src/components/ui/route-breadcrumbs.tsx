@@ -27,6 +27,7 @@ export function RouteBreadcrumbs({
   pathname,
   routes,
   current: currentOverride,
+  unlinkedSegments = [],
 }: {
   appLabel: string;
   pathname: string;
@@ -34,6 +35,14 @@ export function RouteBreadcrumbs({
   /** Explicit leaf label — for dynamic routes (e.g. /tenants/[slug]) where the URL segment isn't a
    *  human-readable name. Falls back to an exact route match, then a humanized last segment. */
   current?: string;
+  /**
+   * Path segments that GROUP routes without being one themselves — e.g. `/pricing/books/new` where
+   * `books` is a folder with no page. They still appear in the trail, as plain text rather than a
+   * link, because a linked crumb that 404s is worse than no link at all. Declared by the app because
+   * only it knows its route table: linking solely to declared nav routes would un-link the dynamic
+   * segments this trail exists to show (`/message-definitions/order.shipped`).
+   */
+  unlinkedSegments?: readonly string[];
 }) {
   const exact = routes.find((route) => route.href === pathname);
   const parent = [...routes]
@@ -57,6 +66,7 @@ export function RouteBreadcrumbs({
       ? segments.slice(parentDepth, -1).map((segment, index) => ({
           label: humanize(segment),
           href: `/${segments.slice(0, parentDepth + index + 1).join("/")}`,
+          linkable: !unlinkedSegments.includes(segment),
         }))
       : [];
 
@@ -77,7 +87,11 @@ export function RouteBreadcrumbs({
         ) : null}
         {middle.map((crumb) => (
           <BreadcrumbItem key={crumb.href}>
-            <BreadcrumbLink href={crumb.href}>{crumb.label}</BreadcrumbLink>
+            {crumb.linkable ? (
+              <BreadcrumbLink href={crumb.href}>{crumb.label}</BreadcrumbLink>
+            ) : (
+              <span className="text-muted-foreground">{crumb.label}</span>
+            )}
             <BreadcrumbSeparator />
           </BreadcrumbItem>
         ))}

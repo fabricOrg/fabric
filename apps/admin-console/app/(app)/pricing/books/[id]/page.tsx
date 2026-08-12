@@ -1,4 +1,9 @@
-import Link from "next/link";
+import {
+  PageHeader,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+} from "@app/ui/components/ui/page-header";
 import { notFound } from "next/navigation";
 import { PriceBookForm } from "@/components/forms/price-book-form";
 import { requireAdminSession } from "@/lib/server/auth";
@@ -23,21 +28,15 @@ export default async function EditPriceBookPage({
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <Link
-          href="/pricing"
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
-          ← Pricing
-        </Link>
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          {book.name}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Editing this book reprices every account assigned to it. Token lots
-          already bought keep the price locked in at purchase.
-        </p>
-      </div>
+      <PageHeader>
+        <PageHeaderHeading>
+          <PageHeaderTitle>{book.name}</PageHeaderTitle>
+          <PageHeaderDescription>
+            Editing this book reprices every account assigned to it. Token lots
+            already bought keep the price locked in at purchase.
+          </PageHeaderDescription>
+        </PageHeaderHeading>
+      </PageHeader>
 
       <PriceBookForm book={book} />
     </div>
