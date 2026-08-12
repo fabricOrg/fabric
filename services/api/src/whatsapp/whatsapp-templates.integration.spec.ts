@@ -131,11 +131,19 @@ describeDb("WhatsApp template lifecycle", () => {
     expect(seed.statusCode).toBe(201);
 
     const scheduler = app.get(WhatsappTemplateSyncScheduler);
-    await expect(scheduler.run({ tenantIds: [tenantId] })).resolves.toEqual({
+    // tenants/failed asserted too: they are what distinguish "nobody was discovered" from "everyone
+    // threw" when synced comes back 0.
+    await expect(
+      scheduler.run({ tenantIds: [tenantId] }),
+    ).resolves.toMatchObject({
       locked: true,
       synced: 2,
+      tenants: 1,
+      failed: 0,
     });
-    await expect(scheduler.run({ tenantIds: [tenantId] })).resolves.toEqual({
+    await expect(
+      scheduler.run({ tenantIds: [tenantId] }),
+    ).resolves.toMatchObject({
       locked: true,
       synced: 2,
     });
@@ -165,7 +173,7 @@ describeDb("WhatsApp template lifecycle", () => {
     // missing ON CONFLICT target would otherwise surface as a puzzling count instead of its own error.
     await expect(
       scheduler.run({ tenantIds: [sharedWabaTenantId] }),
-    ).resolves.toEqual({ locked: true, synced: 2 });
+    ).resolves.toMatchObject({ locked: true, synced: 2 });
     const rows = await owner`
       SELECT tenant_id, count(*)::int AS n FROM whatsapp_templates
       WHERE waba_id = ${WABA_ID} AND tenant_id IN (${tenantId}, ${sharedWabaTenantId})

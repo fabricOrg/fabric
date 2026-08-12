@@ -26,11 +26,16 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    # NO `environment:` on purpose. The `testing` environment restricts deployments to the `testing`
+    # branch, but GitHub only runs schedules from the DEFAULT branch (`dev`) — declaring it fails the
+    # job before a single step runs. Both values are org-level secrets with `all` visibility instead,
+    # which also keeps this throwaway workflow away from the AWS/Render/Vercel deploy credentials that
+    # environment holds.
     steps:
       - name: Trigger the template sync
         env:
-          API_BASE_URL: ${{ vars.TESTING_API_BASE_URL }}
-          EDGE_SHARED_SECRET: ${{ secrets.EDGE_SHARED_SECRET }}
+          # An org SECRET, not a variable — so it is masked in logs, which is harmless for a URL.
+          API_BASE_URL: ${{ secrets.TESTING_API_BASE_URL }}
           BFF_INTERNAL_TOKEN: ${{ secrets.BFF_INTERNAL_TOKEN }}
         run: |
           set -euo pipefail
@@ -45,10 +50,10 @@ jobs:
           code=$(curl -sS -o "$body" -w "%{http_code}" \
             --retry 3 --retry-connrefused --retry-delay 20 --max-time 180 \
             -X POST "${API_BASE_URL%/}/internal/admin/whatsapp/template-sync" \
-            -H "x-fabric-edge-secret: ${EDGE_SHARED_SECRET}" \
             -H "x-bff-token: ${BFF_INTERNAL_TOKEN}" \
             -H "x-actor-email: github-actions@fabric.local" \
-            -H "content-type: application/json")
+            -H "content-type: application/json" \
+            -d '{}')
 
           echo "HTTP ${code}"
           # The response carries no secrets — {locked, synced} or a structured error code.
