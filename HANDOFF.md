@@ -1,6 +1,6 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-09. Point-in-time. **Verify against code and git before treating any of it as
+_Snapshot: 2026-08-10. Point-in-time. **Verify against code and git before treating any of it as
 fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 [CLAUDE.md](./CLAUDE.md) (how we build) and `docs/`. Superseded entries live in
 [docs/HANDOFF-ARCHIVE.md](./docs/HANDOFF-ARCHIVE.md)._
@@ -16,8 +16,8 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `7888330` | WhatsApp stack #259–#265, then #267–#271 |
-| `origin/testing` | `af3f89e` | DEPLOYED 2026-08-09 (#266). **`dev` is now 5 commits AHEAD — not promoted.** |
+| `origin/dev` | `edbcc54` | WhatsApp stack #259–#265, then #267–#273, #275, #276 |
+| `origin/testing` | `75582a3` | DEPLOYED 2026-08-10 (#274). **`dev` is 2 ahead**, one carrying `0150`. |
 
 **The WhatsApp channel is DEPLOYED to testing.** All six jobs green including
 `Migrate · testing db`, which applied 14 migrations (`0136`–`0147`) and then ran `db:assert` on the
@@ -39,20 +39,16 @@ Two process facts that cost real time and will again:
   path compare dev's blob to the blob at the commit the branch actually built on — equal means dev
   added nothing the branch lacks, so taking the branch's side is provably correct. Only the two
   files where dev had genuinely diverged needed reading.
-- **`Deploy` reports success while skipping all its jobs** — it is the gated AWS/ECS path. The real
-  one is `Deploy testing (Vercel + Render)`. Its green tick is not evidence anything shipped.
+- **`Deploy` reports success while skipping all eight of its jobs** — it is the gated AWS/ECS path.
+  The real one is `Deploy testing (Vercel + Render)`. Its green tick is not evidence anything
+  shipped; read the job list. Confirmed again on #274.
+- **A promotion PR title must be Conventional Commits** — `promote: …` is rejected by the PR-policy
+  check, `chore(ops): promote …` passes — and the merge must be a **real merge, not a squash**.
 
-Nothing uncommitted. The testing deploy ran all six jobs green — gate, **`Migrate · testing db`
-(0133 applied)**, Render api, and the three Vercel apps — and the pipeline verifies the artefact
-itself, not just its own exit code: the api job polls `/health/readyz` on the live Render URL and
-each frontend job checks `/healthz`.
+The `Deploy testing` pipeline verifies the artefact rather than its own exit code: the api job polls
+`/health/readyz` on the live Render URL and each frontend job checks `/healthz`.
 
-**Two traps in reading that deploy.** The separate `Deploy` workflow reported **success while
-skipping all eight of its jobs** — it is the AWS/ECS path and is gated off, so its green tick is not
-evidence anything shipped. And a promotion PR title must be **Conventional Commits**: `promote: …`
-is rejected by the PR-policy check (`chore(ops): promote …` passes).
-
-**What the deploy did NOT prove.** The queue and rate limiter now run RESP3 (ioredis 6) against
+**What the deploys did NOT prove.** The queue and rate limiter now run RESP3 (ioredis 6) against
 testing's Redis, and nothing has exercised that — `readyz` does not touch them and no CI job ever
 starts a Redis. A silent fall-through to the inline path looks identical to success from outside.
 Settle it the way §9 says: a send whose `provider_ref` is a real vendor id, not `fake-…`, plus the
@@ -153,10 +149,11 @@ not configured. Money and credits are unaffected; only status. Route is
 
 ---
 
-### Landed after the deploy — five PRs, not yet promoted (#267–#271)
+### Promoted 2026-08-10 (#274) — the evidence-table revokes and the SMS dispatch claim
 
-`testing` carries the WhatsApp channel as deployed; these five are on `dev` and **have not been
-promoted**, so a promotion is the next deploy-shaped action. Two add migrations (`0148`, `0149`).
+`testing` now carries everything `dev` does. All six jobs green, including `Migrate · testing db`,
+which applied `0148`–`0149` and ran `db:assert` on the real database (*security layer applied ✓*,
+ledger + general-ledger invariants OK). Two of the seven PRs added migrations.
 
 **#271 — `app_runtime` could DELETE the billing evidence for a charge.** `0001` grants full DML on ALL
 TABLES plus `ALTER DEFAULT PRIVILEGES`, so DELETE is present until a migration takes it away, and a
@@ -199,11 +196,15 @@ dashboard, managed sends, inbound + the service window, and costable offers.
   does not make them PRICED. A free-form reply is a *service conversation* in Meta's billing.
   Phase 4 gave that sell rate somewhere to live; nobody has set one, and serving a send we
   cannot cost is what ADR-0012's costability rule forbids. This is the last WhatsApp gap.
-- **Inbound attribution cross-attributes on a shared WABA, by design** (ADR-0015 §2): two
-  tenants messaging the same consumer inside one window, and the second one wins. Both are
-  legitimate senders, so no rule available to us separates them — the fix is per-tenant numbers,
-  a commercial/onboarding change. A test asserts the current behaviour, so read the ADR before
-  treating a mis-delivered reply as a bug.
+- **Inbound attribution cross-attributes on a shared WABA** (ADR-0015 §2): two tenants messaging
+  the same consumer inside one window, and the second one wins. A test asserts the current
+  behaviour, so read the ADR before treating a mis-delivered reply as a bug. **ADR-0016 now
+  decides the fix** — per-tenant WABAs via Embedded Signup — so this is scheduled, not accepted.
+- **Customers cannot create templates, and the UI tells them to do the impossible.** The adapter
+  has `listTemplates` (GET) and no create call
+  (`packages/integrations/src/meta-cloud/provider.ts:145`); the empty state says "create one in
+  Meta Business Manager", which is OUR Business Manager and they have no access to it. Fix the
+  copy now; ADR-0016 fixes the cause.
 - ~~`whatsapp_dispatches` leaves `status='sending'`~~ — fixed (0147). Worth knowing WHY it
   mattered: the mislabelling was cosmetic, but it hid that a dispatch whose worker died holding
   the claim was invisible to the sweeper forever, with its wallet reserve neither committed nor
@@ -235,26 +236,29 @@ Capture it into a variable and never echo it — it carries the password. Roles 
 `app_runtime`, `app_provisioner`, `app_migrator`, `neondb_owner`. Read-only queries only unless a human
 has said otherwise.
 
-What that measurement established:
+What that measurement established, before and after the promotion:
 
-- **The `app_runtime` DELETE hole is real: 7/7 evidence tables** (`messages`, `email_messages`, both
-  dispatch tables, both managed-delivery tables, `outbox_events`) report `delete=true` in testing. This
-  is the fact `0149` / PR #271 fixes, and it is UNPROMOTED — testing is at 148 applied migrations,
-  local at 150. `TRUNCATE` is false throughout, because it is not in the default-privileges grant.
-- **Exposure is prospective, not retrospective.** `messages`, `email_messages`, `whatsapp_messages` and
-  `ledger_transactions` all hold **0 rows** in testing, so nothing has been destroyed.
-- **`app_provisioner` retains DELETE** on both managed-delivery tables there, so `0149` will not break
-  retention pruning when promoted.
+- **The `app_runtime` DELETE hole was real — 7/7 evidence tables reported `delete=true`** (`messages`,
+  `email_messages`, both dispatch tables, both managed-delivery tables, `outbox_events`) — and is now
+  **CLOSED, measured after #274 rather than inferred from the green deploy**: all seven read
+  `DELETE=false, TRUNCATE=false` with `INSERT`/`UPDATE` still `true`, and `app_provisioner` still holds
+  DELETE on all seven so retention pruning survives. Testing is at **150** applied migrations, level
+  with local. `leased_at` and `idx_message_dispatches_stale_lease` (`0148`) both present.
+- **Exposure was prospective, not retrospective.** `messages`, `email_messages`, `whatsapp_messages` and
+  `ledger_transactions` all held **0 rows** in testing, so nothing was destroyed while the hole was open.
 - **The WhatsApp promotion fully landed**: all six tables present, including `0145`'s inbound pair
   (`whatsapp_inbound_messages`, `whatsapp_service_windows`, `whatsapp_unattributed_inbound`).
+- **The `Deploy` workflow again reported success while skipping every job** — the gated AWS/ECS path.
+  The real one is `Deploy testing (Vercel + Render)`. Read the job list, never the run's conclusion.
 
 ### Next up, in a fresh session
 
-1. **Promote `dev` → `testing`.** Five merged PRs are unpromoted, including two migrations. Same shape
-   as #266: a PR titled `chore(ops): promote …` (Conventional Commits — `promote: …` is rejected), a
-   real MERGE not a squash, and watch **`Deploy testing (Vercel + Render)`** — the plain `Deploy`
-   workflow reports success while skipping all its jobs because it is the gated AWS path.
-2. **#23 — and the drift gate it silently disabled.** Diagnosed properly on 2026-08-10; the earlier
+1. **Promote `dev` → `testing`.** `dev` is 2 ahead, one commit carrying `0150`. Same shape as #274:
+   `chore(ops): promote …`, a REAL merge not a squash, and watch `Deploy testing (Vercel + Render)`.
+2. **ADR-0016 Phase 1 — become a Tech Provider**, which is the prerequisite for the Solution Partner
+   tier and for Embedded Signup either way. The checklist and the measured state of Meta app
+   `1022581630670557` live in the ADR. None of it is code; all of it is account admin.
+3. **#23 — and the drift gate it silently disabled.** Diagnosed properly on 2026-08-10; the earlier
    description in this file was wrong in both halves.
 
    - The journal has **NO duplicate idx** (150 entries, contiguous). The union scripts used during the
@@ -269,12 +273,19 @@ What that measurement established:
      `drizzle-kit` exits **0** on this error, so an exit-code check would not save it either. Every "no
      drift" result since the collision appeared is unproven.
    - Only then repair the chain, and re-run generate to confirm it actually emits nothing.
-3. **#14 — `WORKOS_ADMIN_CLIENT_ID` / `WORKOS_ADMIN_API_KEY` in Vercel**, then remove the last dashboard
+4. **#14 — `WORKOS_ADMIN_CLIENT_ID` / `WORKOS_ADMIN_API_KEY` in Vercel**, then remove the last dashboard
    redirect.
 
 ### Waiting on you, not on code
 
-- **Rotate `WHATSAPP_ACCESS_TOKEN`** — it was printed in full in a session transcript on 2026-08-09.
+- **Open the Meta partner-manager conversation (ADR-0016).** Whether Solution Partner applications are
+  open to us, in our region, and on what commitment. Meta publishes nothing beyond "a lengthy process";
+  it is the long pole and the only input that decides Solution Partner vs the multi-partner fallback.
+  Start it in PARALLEL with Phase 1, not after.
+- ~~Rotate `WHATSAPP_ACCESS_TOKEN`~~ — done 2026-08-10. **Re-arm is still outstanding**: the token is
+  sealed INSIDE the `meta-cloud` credential (`rearm-whatsapp.ts:58`), so rotating it in Infisical does
+  not update the sealed blob and the runtime still resolves the OLD token. Run
+  `infisical run --env=dev -- pnpm --filter @app/api exec tsx scripts/rearm-whatsapp.ts`.
 - **Arm a `meta-cloud` credential in the testing environment** if WhatsApp should send from there. The
   code promotes; the credential does not travel with it.
 - **`PLUGIN_MASTER_KEY` is set in dev AND on Render (testing); it BROKE two credentials there.** Measured
@@ -366,7 +377,12 @@ infisical run --env=dev -- pnpm --filter @app/api exec tsx scripts/live-whatsapp
   sealed with a derived development key, and **re-sealing is required after it changes** — the old
   ciphertext will not open. Still ABSENT in staging and prod, where production does not warn, it
   REFUSES TO BOOT.
-- `plugin_instances` has no tenant column and two specs delete the whole table. Their guard now
+- `plugin_instances` **does** have a nullable `tenant_id` (`schema/integrations.ts:41-51`, added for
+  ADR-0011 §2 so a customer can bring their own account without a migration) — an earlier revision of
+  this file said it had none, and that claim is retired. What is true is that the RESOLVER ignores it:
+  `plugin-resolver.service.ts:222` filters `isNull(tenantId)` on purpose, so per-tenant credentials are
+  expressible but not yet resolved. That is the seam ADR-0016 builds on. Two specs still delete the
+  whole table. Their guard now
   covers teardown as well as setup, but the rule stands: never point `DATABASE_URL_SUPER` at a
   database holding armed credentials while running the full integration suite.
 
@@ -383,6 +399,25 @@ them with the compose port mappings (6379, 6380). Check `docker port <container>
 
 `drizzle.config.ts` reads `process.env` with no dotenv loading, so `pnpm db:migrate` needs the env in
 process. Each worktree needs its own gitignored `.env`.
+
+**`pnpm db:migrate` FAILS locally, and the schema is fine anyway.** The drizzle-kit CLI decides what to
+apply by file HASH, and 8 migration files no longer match what was applied (7 edited after the fact,
+plus `0075_thick_raider` which was never applied at all), so it tries to re-run them and dies with no
+message. The PROGRAMMATIC migrator — the one `cloud-migrate.ts` uses on every deploy — is
+timestamp-based and runs clean. Verify schema state by asking Postgres (`has_table_privilege`,
+`information_schema`), never by the migration count. Related to #23 but a distinct failure.
+
+**Local sign-in works only for an email the seed gave a MEMBERSHIP.** The dashboard forwards a staff
+user holding no membership to the admin console (`app/auth/callback/route.ts:39`), which reads exactly
+like a broken config. `SEED_OWNER_EMAIL` is a comma-separated list defaulting to every seeded staff
+email; add any other identity you sign in with. The seed also refuses to run against a non-local
+`DATABASE_URL_SUPER` — it writes across tenants as the superuser.
+
+**`fabric-local` went LIVE on 2026-08-10** via the go-live maker-checker flow (audit: `tenant.go_live`).
+`plan = sandbox` is the ONLY forced-virtual state (`virtual-phone.service.ts:51-68`); everything else
+defaults to live. With `whatsapp | meta-cloud | live` armed and default, a WhatsApp send from this
+workspace targets REAL Meta — only the stale pre-rotation token currently prevents delivery, which is
+luck, not a control. SMS is safe: no live SMS instance is armed.
 
 **The local DB has pre-existing data damage**: `token_counters` holds balances while `token_lots`,
 `token_holds` and `ledger_entries` are all empty, so `db:assert` fails on reconciliation (the

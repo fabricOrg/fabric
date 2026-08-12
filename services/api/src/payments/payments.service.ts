@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type {
+  Currency,
   InitiateTopUpRequest,
   InitiateTopUpResponse,
   PaymentMethodResponse,
@@ -21,6 +22,7 @@ import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { KillSwitchService } from "../kill-switches/kill-switches.service.js";
 import { PluginResolverService } from "../plugins/plugin-resolver.service.js";
 import { TokenPurchaseService } from "../tokens/token-purchase.service.js";
+import { assertBillingCurrency } from "./billing-currency.js";
 import {
   resolvePaymentContext,
   webhookModeMismatch,
@@ -62,6 +64,22 @@ export class PaymentsService {
     );
   }
 
+  /**
+   * Exposed for callers that PERSIST a currency before any charge happens. A flow writes its record
+   * at start and only charges at confirm, so rejecting at confirm strands the record `pending`
+   * forever — and does it after the customer has already entered an OTP.
+   */
+  async assertChargeCurrency(
+    tenantId: string,
+    currency: Currency,
+  ): Promise<void> {
+    await assertBillingCurrency(
+      this.provisioning,
+      tenantId as TenantId,
+      currency,
+    );
+  }
+
   async initiate(
     tenantId: string,
     request: InitiateTopUpRequest,
@@ -69,6 +87,11 @@ export class PaymentsService {
     if (await this.killSwitch.isPaused("platform.payments", tenantId)) {
       throw invalidRequest("payments_paused", "Top-ups are paused right now.");
     }
+    await assertBillingCurrency(
+      this.provisioning,
+      tenantId as TenantId,
+      request.currency,
+    );
     const { provider, creds, mode, instanceId, credentialVersion } =
       await this.resolved(tenantId);
     // Paystack references allow only alphanumerics + - . = (no colon); a uuid with a topup- prefix
@@ -127,6 +150,11 @@ export class PaymentsService {
     if (await this.killSwitch.isPaused("platform.payments", tenantId)) {
       throw invalidRequest("payments_paused", "Collections are paused.");
     }
+    await assertBillingCurrency(
+      this.provisioning,
+      tenantId as TenantId,
+      p.currency as Currency,
+    );
     const { provider, creds, mode, instanceId, credentialVersion } =
       await this.resolved(tenantId);
     const reference = `flow-${randomUUID()}`;

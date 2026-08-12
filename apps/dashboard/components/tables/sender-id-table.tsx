@@ -18,7 +18,7 @@ import {
 import { formatDate } from "@app/ui/lib/datetime";
 import type { ColumnDef } from "@tanstack/react-table";
 import { BadgeCheck, CircleX, Clock, type LucideIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import type {
   SenderCountry,
   SenderId,
@@ -55,7 +55,7 @@ function formatSubmitted(iso: string): string {
   return formatDate(iso);
 }
 
-const columns: ColumnDef<SenderId>[] = [
+const baseColumns: ColumnDef<SenderId>[] = [
   {
     accessorKey: "senderId",
     header: ({ column }) => (
@@ -127,14 +127,39 @@ const columns: ColumnDef<SenderId>[] = [
 export function SenderIdTable({
   senders,
   initialStatus,
+  rowAction,
 }: {
   senders: readonly SenderId[];
   initialStatus?: SenderStatus;
+  /** Rendered against a rejected row, so the fix sits beside the reason instead of in a second card. */
+  rowAction?: (sender: SenderId) => ReactNode;
 }) {
   const [status, setStatus] = useState<SenderStatus | "all">(
     initialStatus ?? "all",
   );
   const [country, setCountry] = useState<SenderCountry | "all">("all");
+
+  const columns = useMemo<ColumnDef<SenderId>[]>(
+    () =>
+      rowAction
+        ? [
+            ...baseColumns,
+            {
+              id: "actions",
+              // sr-only, matching opt-out-table: an empty header leaves the column unnamed for
+              // screen readers navigating by column.
+              header: () => <span className="sr-only">Actions</span>,
+              cell: ({ row }) =>
+                row.original.status === "rejected" ? (
+                  <div className="flex justify-end">
+                    {rowAction(row.original)}
+                  </div>
+                ) : null,
+            },
+          ]
+        : baseColumns,
+    [rowAction],
+  );
 
   const filtered = useMemo(
     () =>
@@ -188,13 +213,10 @@ export function SenderIdTable({
         data={filtered}
         ariaLabel="Sender IDs"
         empty="No sender IDs match this filter."
+        // Rows carry a real id, and registering PREPENDS an optimistic row — without this the row
+        // action's open dialog would be re-keyed onto a different sender mid-submit.
+        getRowId={(s) => s.id}
       />
-
-      {filtered.some((s) => s.status === "rejected") && (
-        <p className="text-xs text-muted-foreground">
-          Correct the stated issue, then submit a new registration request.
-        </p>
-      )}
     </div>
   );
 }

@@ -1,5 +1,9 @@
 import type { LedgerEntry, WalletBalance } from "@app/contracts";
-import { parseApiError, toMoney } from "@app/contracts";
+import {
+  currency as currencySchema,
+  parseApiError,
+  toMoney,
+} from "@app/contracts";
 import { DEFAULT_RATES, rateSegments } from "@app/domain";
 import {
   Alert,
@@ -27,7 +31,6 @@ import { Separator } from "@app/ui/components/ui/separator";
 import { EmptyState, ErrorState } from "@app/ui/components/ui/states";
 import { formatDayMonth } from "@app/ui/lib/datetime";
 import {
-  Bell,
   CheckCircle2,
   Clock,
   CreditCard,
@@ -167,35 +170,51 @@ export default async function WalletPage({
     ledger = snapshot.ledger;
   } catch (payload) {
     const err = parseApiError(payload);
+    // One state, not two. `commercialSection` is ITSELF an ErrorState when the catalog read fails, and
+    // both reads share a session — so a 500 or a lapsed token stacked two destructive alerts on one
+    // page. The token receipt still renders: it is the only answer to "did my money do anything?", and
+    // a failed wallet read is exactly when that question gets asked.
     return (
       <Shell>
         <WalletHeading />
-        {commercialSection}
+        {tokenReceipt ? <TokenPurchaseNotice receipt={tokenReceipt} /> : null}
         <ErrorState
           title="Couldn't load your wallet"
           message={err.message}
           {...(err.requestId ? { requestId: err.requestId } : {})}
         />
+        <Button asChild variant="outline" size="sm" className="w-fit">
+          {/* Keeps the receipt params: a bare /wallet would strip ?tokens=&reference= and drop the
+              TokenPurchaseNotice rendered directly above this. */}
+          <Link
+            href={
+              paymentParams.tokens === "1" && paymentParams.reference
+                ? `/wallet?tokens=1&reference=${encodeURIComponent(paymentParams.reference)}`
+                : "/wallet"
+            }
+          >
+            Check again
+          </Link>
+        </Button>
+        {/* Kept when the CATALOG read succeeded: it is the only route to buying a package anywhere in
+            the dashboard, the two reads are independent, and gating on its health gives one error
+            state without costing the capability. */}
+        {/* BOTH, because commercialSection is itself an ErrorState unless both reads succeeded —
+            gating on the catalog alone still allowed a second error state through. */}
+        {catalogResult.status === "fulfilled" &&
+        tokenBalancesResult.status === "fulfilled"
+          ? commercialSection
+          : null}
       </Shell>
     );
   }
 
-  if (balances.length === 0) {
-    return (
-      <Shell>
-        <WalletHeading />
-        {tokenReceipt ? <TokenPurchaseNotice receipt={tokenReceipt} /> : null}
-        {commercialSection}
-        <EmptyState
-          icon={<Wallet />}
-          title="No funds yet"
-          description="Top up your wallet to start sending. You're charged per delivered segment — no monthly fees."
-          action={<TopUpDialog />}
-        />
-      </Shell>
-    );
-  }
-
+  // No early return for the zero-balance case, deliberately. It used to render its own reduced shell —
+  // no tabs, the package catalog hoisted to the top level beside a second page-level empty — so a
+  // funded wallet and an empty one were two different information architectures, and the first top-up
+  // visibly reorganised the page. Empty is a state of THIS layout: same header, same tabs, and each
+  // tab owns its own empty (the catalog's lives in Credits, where the thing it describes lives).
+  const hasFunds = balances.length > 0;
   const low = balances.filter(isLow);
   const paymentReference =
     paymentParams.reference ?? paymentParams.trxref ?? null;
@@ -205,7 +224,28 @@ export default async function WalletPage({
           entry.type === "topup" && entry.reference === paymentReference,
       )
     : false;
-  const primaryCurrency = balances[0]?.balance.currency ?? "GHS";
+  // Derived, never assumed. This feeds TopUpDialog's defaultCurrency, which seeds the POST body that
+  // reaches Paystack — so a wrong guess CHARGES in the wrong currency on a workspace's first top-up,
+  // and credits a balance no package can be bought with (the catalog is filtered to billing_currency).
+  // The catalog is already server-filtered to accounts.billing_currency, so its offers carry the real
+  // value; token balances carry it too. "GHS" survives only as a last resort when every read is empty.
+  const catalogCurrency =
+    catalogResult.status === "fulfilled"
+      ? catalogResult.value.offers[0]?.currency
+      : undefined;
+  // tokenBalanceDto types currency as a bare string, so it is narrowed through the contract's own
+  // schema rather than cast — an unrecognised value must fall through, not become the charged currency.
+  const tokenCurrencyRaw =
+    tokenBalancesResult.status === "fulfilled"
+      ? tokenBalancesResult.value.balances[0]?.currency
+      : undefined;
+  const tokenCurrency = currencySchema.safeParse(tokenCurrencyRaw).data;
+  // Catalog FIRST. It is the only source tied to accounts.billing_currency (token-catalog.service.ts
+  // filters offers by it). The wallet balance is not "primary" at all — customer-reads orders ledger
+  // accounts ALPHABETICALLY by currency, so balances[0] is whichever sorts first, and a workspace that
+  // ever acquires a stray GHS account would pin every later top-up to GHS.
+  const primaryCurrency =
+    catalogCurrency ?? balances[0]?.balance.currency ?? tokenCurrency ?? "GHS";
   const primaryBalance = balances[0]?.balance;
   const tokenBalances =
     tokenBalancesResult.status === "fulfilled"
@@ -213,6 +253,7 @@ export default async function WalletPage({
           (balance) => BigInt(balance.available) > 0n,
         )
       : [];
+  const creditsUnknown = tokenBalancesResult.status === "rejected";
   const creditSummary =
     tokenBalances.length === 0
       ? null
@@ -247,13 +288,10 @@ export default async function WalletPage({
     <Shell>
       <WalletHeading
         actions={
-          <>
-            <Button variant="outline" size="sm">
-              <Bell data-icon="inline-start" />
-              Alerts
-            </Button>
-            <TopUpDialog defaultCurrency={primaryCurrency} />
-          </>
+          // The "Alerts" button that used to sit here had no handler and no href. It was only ever
+          // rendered for a funded wallet; removing the empty branch would have shipped a dead control
+          // into the first-run view.
+          <TopUpDialog defaultCurrency={primaryCurrency} />
         }
       />
 
@@ -335,12 +373,12 @@ export default async function WalletPage({
         }
         overview={
           <BillingOverview
-            walletBalance={
-              primaryBalance
-                ? formatMoney(primaryBalance)
-                : `${primaryCurrency} 0.00`
-            }
+            // null, not a fabricated zero: this fallback was unreachable until the empty branch was
+            // removed, and it invents a currency — the workspace's real billing_currency (GHS|NGN|USD)
+            // is never exposed to the dashboard, so a Nigerian workspace was shown cedis.
+            walletBalance={primaryBalance ? formatMoney(primaryBalance) : null}
             creditSummary={creditSummary}
+            creditsUnknown={creditsUnknown}
           />
         }
         credits={
@@ -357,151 +395,170 @@ export default async function WalletPage({
           </>
         }
         wallet={
-          <>
-            <div className="grid gap-4 md:grid-cols-3">
-              {balances.map((b) => {
-                const runway = messageRunway(b);
-                const isPrimary = b.balance.currency === primaryCurrency;
-                return (
-                  <Card key={b.balance.currency} className="flex flex-col">
-                    <CardHeader>
-                      <CardDescription>
-                        {b.balance.currency} balance
-                      </CardDescription>
-                      <CardTitle className="font-display text-3xl tabular-nums">
-                        {formatMoney(b.balance)}
-                      </CardTitle>
-                      {isLow(b) && (
-                        <CardAction>
-                          <Badge
-                            variant="outline"
-                            className="gap-1 border-transparent bg-warning/15 text-warning"
-                          >
-                            <TriangleAlert />
-                            Low
-                          </Badge>
-                        </CardAction>
-                      )}
-                    </CardHeader>
-                    <CardContent className="mt-auto flex flex-col gap-3 text-sm">
-                      {runway && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-mono text-lg font-semibold tabular-nums">
-                            ≈ {runway.count.toLocaleString("en")} SMS
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            left at {formatMoney(runway.rate)} / segment
-                          </span>
-                        </div>
-                      )}
-                      {isPrimary && (
-                        <>
-                          <Separator />
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">
-                              Spent this month
+          !hasFunds ? (
+            // The ONE empty this page shows for an unfunded wallet, and it is the actionable one. The
+            // balance cards, trend and ledger are all projections of rows that do not exist yet, so
+            // rendering them as zeros would be four empties dressed as content.
+            <EmptyState
+              icon={<Wallet />}
+              title="No funds yet"
+              description="Top up your wallet to start sending. You're charged per delivered segment — no monthly fees."
+              action={<TopUpDialog defaultCurrency={primaryCurrency} />}
+            />
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-3">
+                {balances.map((b) => {
+                  const runway = messageRunway(b);
+                  const isPrimary = b.balance.currency === primaryCurrency;
+                  return (
+                    <Card key={b.balance.currency} className="flex flex-col">
+                      <CardHeader>
+                        <CardDescription>
+                          {b.balance.currency} balance
+                        </CardDescription>
+                        <CardTitle className="font-display text-3xl tabular-nums">
+                          {formatMoney(b.balance)}
+                        </CardTitle>
+                        {isLow(b) && (
+                          <CardAction>
+                            <Badge
+                              variant="outline"
+                              className="gap-1 border-transparent bg-warning/15 text-warning"
+                            >
+                              <TriangleAlert />
+                              Low
+                            </Badge>
+                          </CardAction>
+                        )}
+                      </CardHeader>
+                      <CardContent className="mt-auto flex flex-col gap-3 text-sm">
+                        {runway && (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-mono text-lg font-semibold tabular-nums">
+                              ≈ {runway.count.toLocaleString("en")} SMS
                             </span>
-                            <span className="font-mono tabular-nums">
-                              {formatMoney(monthSpend)}
+                            <span className="text-xs text-muted-foreground">
+                              left at {formatMoney(runway.rate)} / segment
                             </span>
                           </div>
+                        )}
+                        {isPrimary && (
+                          <>
+                            <Separator />
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">
+                                Spent this month
+                              </span>
+                              <span className="font-mono tabular-nums">
+                                {formatMoney(monthSpend)}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+                <BalanceTrend
+                  points={balancePoints}
+                  currency={primaryCurrency}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Auto top-up</CardTitle>
+                    <CardDescription>
+                      Never run out mid-campaign.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex items-center justify-between gap-2">
+                    <div className="flex flex-col gap-1.5">
+                      {autoTopup.config?.enabled ? (
+                        <>
+                          <Badge
+                            variant="outline"
+                            className="w-fit gap-1 border-transparent bg-success/12 text-success"
+                          >
+                            <Repeat />
+                            On
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            At{" "}
+                            {formatMoney({
+                              currency: autoTopup.config.currency,
+                              minor: autoTopup.config.threshold_minor,
+                            })}
+                            , add{" "}
+                            {formatMoney({
+                              currency: autoTopup.config.currency,
+                              minor: autoTopup.config.top_up_minor,
+                            })}
+                            .
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Badge
+                            variant="outline"
+                            className="w-fit gap-1 border-transparent bg-muted text-muted-foreground"
+                          >
+                            <Repeat />
+                            Off
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {autoTopup.has_card
+                              ? "Charge your saved card automatically."
+                              : "Pay once by card to enable."}
+                          </span>
                         </>
                       )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-              <BalanceTrend points={balancePoints} currency={primaryCurrency} />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Auto top-up</CardTitle>
-                  <CardDescription>Never run out mid-campaign.</CardDescription>
-                </CardHeader>
-                <CardContent className="flex items-center justify-between gap-2">
-                  <div className="flex flex-col gap-1.5">
-                    {autoTopup.config?.enabled ? (
-                      <>
-                        <Badge
-                          variant="outline"
-                          className="w-fit gap-1 border-transparent bg-success/12 text-success"
-                        >
-                          <Repeat />
-                          On
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          At{" "}
-                          {formatMoney({
-                            currency: autoTopup.config.currency,
-                            minor: autoTopup.config.threshold_minor,
-                          })}
-                          , add{" "}
-                          {formatMoney({
-                            currency: autoTopup.config.currency,
-                            minor: autoTopup.config.top_up_minor,
-                          })}
-                          .
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Badge
-                          variant="outline"
-                          className="w-fit gap-1 border-transparent bg-muted text-muted-foreground"
-                        >
-                          <Repeat />
-                          Off
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {autoTopup.has_card
-                            ? "Charge your saved card automatically."
-                            : "Pay once by card to enable."}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  <AutoTopupDialog
-                    config={autoTopup.config}
-                    hasCard={autoTopup.has_card}
-                    defaultCurrency={primaryCurrency}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Payment method</CardTitle>
-                  <CardDescription>How top-ups are charged.</CardDescription>
-                </CardHeader>
-                <CardContent className="flex items-start gap-2">
-                  <CreditCard className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  {savedMethod ? (
-                    <div className="flex flex-col gap-0.5 text-sm">
-                      <span className="font-medium capitalize">
-                        {savedMethod.brand ?? "Card"} ••••{" "}
-                        {savedMethod.last4 ?? "····"}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {savedMethod.exp ? `Expires ${savedMethod.exp} · ` : ""}
-                        Saved via Paystack · reused for auto top-up
-                      </span>
                     </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Secured by Paystack — you&apos;re redirected to a hosted
-                      checkout (card or mobile money) for each top-up. No card
-                      is stored on Fabric. Pay once by card to enable auto
-                      top-up.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                    <AutoTopupDialog
+                      config={autoTopup.config}
+                      hasCard={autoTopup.has_card}
+                      defaultCurrency={primaryCurrency}
+                    />
+                  </CardContent>
+                </Card>
 
-            <WalletLedgerCard ledger={ledger} />
-          </>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Payment method</CardTitle>
+                    <CardDescription>How top-ups are charged.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex items-start gap-2">
+                    <CreditCard className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    {savedMethod ? (
+                      <div className="flex flex-col gap-0.5 text-sm">
+                        <span className="font-medium capitalize">
+                          {savedMethod.brand ?? "Card"} ••••{" "}
+                          {savedMethod.last4 ?? "····"}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {savedMethod.exp
+                            ? `Expires ${savedMethod.exp} · `
+                            : ""}
+                          Saved via Paystack · reused for auto top-up
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Secured by Paystack — you&apos;re redirected to a hosted
+                        checkout (card or mobile money) for each top-up. No card
+                        is stored on Fabric. Pay once by card to enable auto
+                        top-up.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <WalletLedgerCard ledger={ledger} />
+            </>
+          )
         }
       />
     </Shell>

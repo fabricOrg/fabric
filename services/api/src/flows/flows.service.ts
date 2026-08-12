@@ -85,6 +85,10 @@ export class FlowsService {
     request: StartFlowRequest,
   ): Promise<StartFlowResponse> {
     const scoped = tenantId as TenantId;
+    // Before the record is written, not at confirm: the currency is client-supplied and confirm is
+    // the only transition out of `pending`, so rejecting there leaves an unfinishable record behind
+    // and does it after the customer has already entered their OTP.
+    await this.payments.assertChargeCurrency(tenantId, request.currency);
     const correlationId = `corr_${randomUUID().slice(0, 12)}`;
     const verificationId = `ver_${randomUUID().slice(0, 10)}`;
     await this.appDb.withTenant(

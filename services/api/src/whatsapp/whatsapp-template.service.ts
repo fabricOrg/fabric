@@ -135,8 +135,9 @@ export class WhatsappTemplateService {
         ${syncedAtIso}::timestamptz, ${syncedAtIso}::timestamptz,
         ${syncedAtIso}::timestamptz
       )
-      ON CONFLICT (waba_id, name, language) DO UPDATE SET
-        tenant_id = EXCLUDED.tenant_id,
+      -- Tenant-scoped key (0150): on waba_id alone this DO UPDATE reassigned the row to the syncing
+      -- tenant, so a shared WABA handed every template to whichever tenant synced last.
+      ON CONFLICT (tenant_id, waba_id, name, language) DO UPDATE SET
         category = EXCLUDED.category,
         status = EXCLUDED.status,
         quality_rating = EXCLUDED.quality_rating,
@@ -161,35 +162,28 @@ export class WhatsappTemplateService {
         AND language = ${event.language}
       LIMIT 1`);
     const row = (existing as Row[])[0];
-    if (!row) {
-      await this.insertWebhookEvent(tenantId, event);
-      return 1;
-    }
+    // A webhook is authoritative about a template's STATUS, never about its CONTENT — the payload
+    // carries no components. So an event for a template this tenant has never synced cannot be turned
+    // into a cache row without inventing one, and this used to do exactly that: status "UNKNOWN",
+    // components '[]', and synced_at stamped from the event as though a catalog read had happened.
+    //
+    // It was masked until 0150, because the old WABA-global unique key meant one tenant already owned
+    // the row and every other tenant's insert hit ON CONFLICT DO NOTHING. Tenant-scoping the key made
+    // those inserts land, which would have been actively harmful in two ways: a fabricated synced_at
+    // makes latestSync() look fresh, flipping assertSendable from fail-open to a hard 400 for every
+    // OTHER template that tenant sends; and a status=APPROVED event would publish a component-less
+    // row straight into the compose picker, where choosing it reserves money for a send Meta then
+    // rejects.
+    //
+    // Skipping loses nothing real. A tenant with no cached template already fails OPEN at
+    // assertSendable, so there was no protection to preserve, and the next sync fetches the true
+    // record from Meta. Returning 0 is also the honest answer for the caller's `processed` count.
+    if (!row) return 0;
     const gate = eventGateColumn(event.kind);
     const current = dateFrom(row[gate]);
     if (current && current > event.occurredAt) return 0;
     await this.updateWebhookEvent(tenantId, event);
     return 1;
-  }
-
-  private async insertWebhookEvent(
-    tenantId: string,
-    event: WhatsappTemplateWebhookEvent,
-  ): Promise<void> {
-    const occurredAtIso = event.occurredAt.toISOString();
-    await this.provisioning.db.execute(sql`
-      INSERT INTO whatsapp_templates (
-        tenant_id, waba_id, name, language, category, status, quality_rating, components,
-        synced_at, status_updated_at, quality_updated_at, category_updated_at
-      ) VALUES (
-        ${tenantId}, ${event.wabaId}, ${event.name}, ${event.language},
-        ${event.kind === "category" ? event.value : null},
-        ${event.kind === "status" ? event.value : "UNKNOWN"},
-        ${event.kind === "quality" ? event.value : null},
-        '[]'::jsonb, ${occurredAtIso}::timestamptz, ${occurredAtIso}::timestamptz,
-        ${occurredAtIso}::timestamptz, ${occurredAtIso}::timestamptz
-      )
-      ON CONFLICT (waba_id, name, language) DO NOTHING`);
   }
 
   private async updateWebhookEvent(

@@ -21,11 +21,14 @@ import { useSelectWalletTab, type WalletTab } from "./wallet-tabs";
 export function BillingOverview({
   walletBalance,
   creditSummary,
+  creditsUnknown = false,
 }: {
-  /** Formatted wallet balance, e.g. "GHS 1,000.00". */
-  walletBalance: string;
+  /** Formatted wallet balance, e.g. "GHS 1,000.00", or null when the wallet holds nothing yet. */
+  walletBalance: string | null;
   /** Short summary of prepaid credits, or null when there are none. */
   creditSummary: string | null;
+  /** True when the balance read FAILED — "we don't know" must not render as "you have none". */
+  creditsUnknown?: boolean;
 }) {
   return (
     <section className="flex flex-col gap-4" aria-label="How billing works">
@@ -35,7 +38,9 @@ export function BillingOverview({
           icon={Coins}
           title="Prepaid packages"
           description="Buy a fixed quantity for one fixed price — 20 emails and 30 SMS segments for GHS 50, say. Cheaper per message than paying as you go, and the price is locked at purchase."
-          figure={creditSummary ?? "No credits yet"}
+          figure={
+            creditSummary ?? (creditsUnknown ? "Unavailable" : "No credits yet")
+          }
           caption="Spent first, on any send the package covers."
           action={creditSummary ? "View credits" : "Browse packages"}
           emphasis
@@ -45,7 +50,7 @@ export function BillingOverview({
           icon={Wallet}
           title="Wallet (pay as you go)"
           description="Top up money and each send is charged at your rate plan's price. No commitment, and it covers anything your packages don't."
-          figure={walletBalance}
+          figure={walletBalance ?? "No funds yet"}
           caption="Used when no package credit applies."
           action="Manage wallet"
         />
