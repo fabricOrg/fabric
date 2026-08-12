@@ -80,10 +80,9 @@ describeDb("wallet top-up (Paystack)", () => {
     await Promise.all([provisioning.end(), appDb.end(), owner.end()]);
   });
 
-  // A top-up in a currency the workspace is not billed in reaches Paystack and settles into a ledger
-  // account nothing can spend — every quote is priced in billing_currency and the send path rejects
-  // the mismatch. There is no refund path, so this must fail BEFORE the charge: no fetch is mocked
-  // here, so if the guard were removed the test would fail on a real network call rather than pass.
+  // A top-up in the wrong currency settles into a ledger account nothing can spend, and there is no
+  // refund path — so it must fail BEFORE the charge. No fetch is mocked here, so removing the guard
+  // fails this on a real network call rather than letting it pass vacuously.
   it("refuses a top-up in a currency the workspace is not billed in", async () => {
     await expect(
       service.initiate(tenantId, {
@@ -320,5 +319,31 @@ describeDb("wallet top-up (Paystack)", () => {
     await autoTopupService.maybeAutoTopUp(tenantId);
     expect(fetchSpy).not.toHaveBeenCalled();
     vi.restoreAllMocks();
+  });
+
+  // Disable is deliberately NOT currency-guarded: the dashboard sends the STORED currency when
+  // turning off, so guarding it would make a mismatched config unstoppable while the cron charged
+  // it. Pinned because hoisting the guard out of the enable block would restore that trap. Last in
+  // the file because it leaves auto top-up disabled.
+  it("lets a mismatched auto top-up be turned OFF, but not turned on", async () => {
+    await expect(
+      autoTopupService.updateAutoTopup(tenantId, {
+        enabled: false,
+        threshold_minor: "1000",
+        top_up_minor: "5000",
+        currency: "USD",
+      }),
+    ).resolves.toMatchObject({ config: { enabled: false } });
+
+    await expect(
+      autoTopupService.updateAutoTopup(tenantId, {
+        enabled: true,
+        threshold_minor: "1000",
+        top_up_minor: "5000",
+        currency: "USD",
+      }),
+    ).rejects.toMatchObject({
+      response: { error: { code: "billing_currency_mismatch" } },
+    });
   });
 });
