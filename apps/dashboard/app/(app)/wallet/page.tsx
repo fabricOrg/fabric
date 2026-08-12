@@ -1,5 +1,9 @@
 import type { LedgerEntry, WalletBalance } from "@app/contracts";
-import { parseApiError, toMoney } from "@app/contracts";
+import {
+  currency as currencySchema,
+  parseApiError,
+  toMoney,
+} from "@app/contracts";
 import { DEFAULT_RATES, rateSegments } from "@app/domain";
 import {
   Alert,
@@ -27,7 +31,6 @@ import { Separator } from "@app/ui/components/ui/separator";
 import { EmptyState, ErrorState } from "@app/ui/components/ui/states";
 import { formatDayMonth } from "@app/ui/lib/datetime";
 import {
-  Bell,
   CheckCircle2,
   Clock,
   CreditCard,
@@ -167,15 +170,41 @@ export default async function WalletPage({
     ledger = snapshot.ledger;
   } catch (payload) {
     const err = parseApiError(payload);
+    // One state, not two. `commercialSection` is ITSELF an ErrorState when the catalog read fails, and
+    // both reads share a session — so a 500 or a lapsed token stacked two destructive alerts on one
+    // page. The token receipt still renders: it is the only answer to "did my money do anything?", and
+    // a failed wallet read is exactly when that question gets asked.
     return (
       <Shell>
         <WalletHeading />
-        {commercialSection}
+        {tokenReceipt ? <TokenPurchaseNotice receipt={tokenReceipt} /> : null}
         <ErrorState
           title="Couldn't load your wallet"
           message={err.message}
           {...(err.requestId ? { requestId: err.requestId } : {})}
         />
+        <Button asChild variant="outline" size="sm" className="w-fit">
+          {/* Keeps the receipt params: a bare /wallet would strip ?tokens=&reference= and drop the
+              TokenPurchaseNotice rendered directly above this. */}
+          <Link
+            href={
+              paymentParams.tokens === "1" && paymentParams.reference
+                ? `/wallet?tokens=1&reference=${encodeURIComponent(paymentParams.reference)}`
+                : "/wallet"
+            }
+          >
+            Check again
+          </Link>
+        </Button>
+        {/* Kept when the CATALOG read succeeded: it is the only route to buying a package anywhere in
+            the dashboard, the two reads are independent, and gating on its health gives one error
+            state without costing the capability. */}
+        {/* BOTH, because commercialSection is itself an ErrorState unless both reads succeeded —
+            gating on the catalog alone still allowed a second error state through. */}
+        {catalogResult.status === "fulfilled" &&
+        tokenBalancesResult.status === "fulfilled"
+          ? commercialSection
+          : null}
       </Shell>
     );
   }
@@ -195,7 +224,28 @@ export default async function WalletPage({
           entry.type === "topup" && entry.reference === paymentReference,
       )
     : false;
-  const primaryCurrency = balances[0]?.balance.currency ?? "GHS";
+  // Derived, never assumed. This feeds TopUpDialog's defaultCurrency, which seeds the POST body that
+  // reaches Paystack — so a wrong guess CHARGES in the wrong currency on a workspace's first top-up,
+  // and credits a balance no package can be bought with (the catalog is filtered to billing_currency).
+  // The catalog is already server-filtered to accounts.billing_currency, so its offers carry the real
+  // value; token balances carry it too. "GHS" survives only as a last resort when every read is empty.
+  const catalogCurrency =
+    catalogResult.status === "fulfilled"
+      ? catalogResult.value.offers[0]?.currency
+      : undefined;
+  // tokenBalanceDto types currency as a bare string, so it is narrowed through the contract's own
+  // schema rather than cast — an unrecognised value must fall through, not become the charged currency.
+  const tokenCurrencyRaw =
+    tokenBalancesResult.status === "fulfilled"
+      ? tokenBalancesResult.value.balances[0]?.currency
+      : undefined;
+  const tokenCurrency = currencySchema.safeParse(tokenCurrencyRaw).data;
+  // Catalog FIRST. It is the only source tied to accounts.billing_currency (token-catalog.service.ts
+  // filters offers by it). The wallet balance is not "primary" at all — customer-reads orders ledger
+  // accounts ALPHABETICALLY by currency, so balances[0] is whichever sorts first, and a workspace that
+  // ever acquires a stray GHS account would pin every later top-up to GHS.
+  const primaryCurrency =
+    catalogCurrency ?? balances[0]?.balance.currency ?? tokenCurrency ?? "GHS";
   const primaryBalance = balances[0]?.balance;
   const tokenBalances =
     tokenBalancesResult.status === "fulfilled"
@@ -203,6 +253,7 @@ export default async function WalletPage({
           (balance) => BigInt(balance.available) > 0n,
         )
       : [];
+  const creditsUnknown = tokenBalancesResult.status === "rejected";
   const creditSummary =
     tokenBalances.length === 0
       ? null
@@ -237,13 +288,10 @@ export default async function WalletPage({
     <Shell>
       <WalletHeading
         actions={
-          <>
-            <Button variant="outline" size="sm">
-              <Bell data-icon="inline-start" />
-              Alerts
-            </Button>
-            <TopUpDialog defaultCurrency={primaryCurrency} />
-          </>
+          // The "Alerts" button that used to sit here had no handler and no href. It was only ever
+          // rendered for a funded wallet; removing the empty branch would have shipped a dead control
+          // into the first-run view.
+          <TopUpDialog defaultCurrency={primaryCurrency} />
         }
       />
 
@@ -325,12 +373,12 @@ export default async function WalletPage({
         }
         overview={
           <BillingOverview
-            walletBalance={
-              primaryBalance
-                ? formatMoney(primaryBalance)
-                : `${primaryCurrency} 0.00`
-            }
+            // null, not a fabricated zero: this fallback was unreachable until the empty branch was
+            // removed, and it invents a currency — the workspace's real billing_currency (GHS|NGN|USD)
+            // is never exposed to the dashboard, so a Nigerian workspace was shown cedis.
+            walletBalance={primaryBalance ? formatMoney(primaryBalance) : null}
             creditSummary={creditSummary}
+            creditsUnknown={creditsUnknown}
           />
         }
         credits={
