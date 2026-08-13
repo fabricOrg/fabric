@@ -1,4 +1,5 @@
 import type { PriceBookDto, PriceBookRateDto } from "@app/contracts";
+import { visibleChannels } from "@/lib/price-book-channels";
 
 /** Format minor units as a readable amount (e.g. GHS 3 pesewas → "0.03"). */
 function formatMinor(minor: string): string {
@@ -30,8 +31,11 @@ const CHANNEL_LABEL: Record<PriceBookRateDto["channel"], string> = {
  * The previous rendering was one identical outline badge per rate, so two channels across three
  * currencies became six interchangeable pills wrapping onto two lines — the reader had to parse
  * each one to recover a structure the data already has. A grid also makes a GAP visible: a missing
- * (channel, currency) pair shows as an em dash rather than simply not being there, which matters
- * because publishing a currency requires both channels.
+ * (channel, currency) pair shows as an em dash rather than simply not being there.
+ *
+ * Only an SMS or email gap actually blocks anything — the publish rule requires those two per
+ * published currency and exempts WhatsApp — so a WhatsApp em dash is priced-elsewhere, not a
+ * problem, and its tooltip says so rather than implying an omission.
  */
 export function PriceBookRates({ rates }: { rates: PriceBookDto["rates"] }) {
   if (rates.length === 0) {
@@ -43,9 +47,7 @@ export function PriceBookRates({ rates }: { rates: PriceBookDto["rates"] }) {
   // Currencies across, in a stable order so two books read the same way side by side.
   const currencies = [...new Set(rates.map((rate) => rate.currency))].sort();
   // Channels down, but only those the book actually prices — an email-less book shows no email row.
-  const channels = (["sms", "email"] as const).filter((channel) =>
-    rates.some((rate) => rate.channel === channel),
-  );
+  const channels = visibleChannels(rates);
   const priced = new Map(
     rates.map((rate) => [`${rate.channel}:${rate.currency}`, rate]),
   );
@@ -91,11 +93,15 @@ export function PriceBookRates({ rates }: { rates: PriceBookDto["rates"] }) {
                     {rate ? (
                       formatMinor(rate.unit_price_minor)
                     ) : (
-                      // Not priced. Shown rather than omitted: publishing a currency needs both
-                      // channels, so a hole here is the thing an operator must notice.
+                      // Not priced. Shown rather than omitted, because for SMS and email a hole here
+                      // is what blocks publishing that currency.
                       <span
                         className="text-muted-foreground"
-                        title={`No ${CHANNEL_LABEL[channel]} rate for ${currency}`}
+                        title={
+                          channel === "whatsapp"
+                            ? `${CHANNEL_LABEL[channel]} is not priced in ${currency}`
+                            : `No ${CHANNEL_LABEL[channel]} rate for ${currency} — publishing ${currency} requires one`
+                        }
                       >
                         —
                       </span>
