@@ -107,7 +107,7 @@ describe("dashboard WhatsApp BFF", () => {
   it("passes cursor pagination to the internal API client", async () => {
     const response = await GET(
       new Request(
-        "http://localhost/api/dashboard/whatsapp?limit=20&cursor=next-page",
+        "http://localhost/api/dashboard/whatsapp?limit=20&cursor=next-page&status=failed",
       ),
     );
 
@@ -115,6 +115,7 @@ describe("dashboard WhatsApp BFF", () => {
     expect(listWhatsappMessages).toHaveBeenCalledWith("tenant-1", "sandbox", {
       limit: "20",
       cursor: "next-page",
+      status: "failed",
     });
   });
 

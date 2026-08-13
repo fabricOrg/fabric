@@ -172,17 +172,24 @@ export default async function MessageDeliveriesPage({
           title="Create an application first"
           description="Managed deliveries belong to an application's sandbox environment."
         />
-      ) : deliveries.length === 0 ? (
+      ) : deliveries.length === 0 && !params.cursor ? (
         <TableEmptyState
           title="No managed deliveries yet"
           description="Send a released definition by stable key with fabric.messages.send and it will appear here."
         />
       ) : (
         <div className="flex flex-col gap-3 rounded-xl border bg-card">
-          <DeliveriesTable
-            deliveries={deliveries}
-            applicationSlug={selectedApplication?.slug ?? ""}
-          />
+          {deliveries.length === 0 ? (
+            <TableEmptyState
+              title="No deliveries on this page"
+              description="Return to the previous page to continue browsing."
+            />
+          ) : (
+            <DeliveriesTable
+              deliveries={deliveries}
+              applicationSlug={selectedApplication?.slug ?? ""}
+            />
+          )}
           <DeliveryPagination
             applicationSlug={selectedApplication?.slug ?? ""}
             cursor={params.cursor}
@@ -218,7 +225,9 @@ function DeliveryPagination({
   return (
     <div className="flex items-center justify-between border-t px-4 py-3">
       <span className="text-muted-foreground text-sm tabular-nums">
-        Rows {pageIndex * PAGE_SIZE + 1}-{pageIndex * PAGE_SIZE + rowCount}
+        {rowCount === 0
+          ? "No rows on this page"
+          : `Rows ${pageIndex * PAGE_SIZE + 1}-${pageIndex * PAGE_SIZE + rowCount}`}
       </span>
       <div className="flex items-center gap-1">
         <Button

@@ -1,4 +1,8 @@
-import type { EmailContentResponse, EmailInboxResponse } from "@app/contracts";
+import type {
+  EmailContentResponse,
+  EmailInboxResponse,
+  MessageStatusGroup,
+} from "@app/contracts";
 import type { AppDb } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
@@ -29,6 +33,7 @@ export class EmailInboxService {
     tenantId: string,
     environmentType: "sandbox" | "live",
     page: PageInput,
+    status?: MessageStatusGroup,
   ): Promise<EmailInboxResponse> {
     const rows = (await this.db.withTenant(
       tenantId,
@@ -39,6 +44,7 @@ export class EmailInboxService {
         FROM email_messages m
         JOIN environments e ON e.id = m.environment_id
         WHERE e.type = ${environmentType}
+        ${statusClause(tx, status)}
         ${
           page.before
             ? tx`AND (m.created_at, m.id) < (${page.before.createdAt}::text::timestamptz, ${page.before.id})`
@@ -104,4 +110,18 @@ export class EmailInboxService {
       erased: false,
     };
   }
+}
+
+function statusClause(
+  tx: Parameters<Parameters<AppDb["withTenant"]>[1]>[0],
+  status: MessageStatusGroup | undefined,
+) {
+  if (status === "active") {
+    return tx`AND m.status IN ('queued', 'sending', 'accepted', 'sent')`;
+  }
+  if (status === "delivered") return tx`AND m.status = 'delivered'`;
+  if (status === "failed") {
+    return tx`AND m.status IN ('undelivered', 'failed', 'expired')`;
+  }
+  return tx``;
 }

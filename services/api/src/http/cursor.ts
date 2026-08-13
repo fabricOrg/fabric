@@ -63,6 +63,9 @@ export interface PageInput {
 export function parsePageQuery(query: Record<string, unknown>): PageInput {
   const parsed = pageQuery.safeParse(query);
   if (!parsed.success) {
+    if (parsed.error.issues.some((issue) => issue.path[0] === "cursor")) {
+      throw invalidCursor();
+    }
     throw invalidRequest(
       "invalid_page",
       "`limit` must be an integer between 1 and 100.",
@@ -73,4 +76,15 @@ export function parsePageQuery(query: Record<string, unknown>): PageInput {
     limit: parsed.data.limit ?? 50,
     ...(parsed.data.cursor ? { before: decodeCursor(parsed.data.cursor) } : {}),
   };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** UUID-backed lists reject a structurally valid cursor before it reaches a typed SQL comparison. */
+export function parseUuidPageQuery(query: Record<string, unknown>): PageInput {
+  const page = parsePageQuery(query);
+  if (page.before && !UUID.test(page.before.id)) {
+    throw invalidCursor();
+  }
+  return page;
 }

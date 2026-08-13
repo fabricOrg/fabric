@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { decodeCursor, encodeCursor, parsePageQuery } from "./cursor.js";
+import {
+  decodeCursor,
+  encodeCursor,
+  parsePageQuery,
+  parseUuidPageQuery,
+} from "./cursor.js";
 
 const TS = "2026-07-24T10:00:00.600789Z";
 
@@ -60,5 +65,18 @@ describe("parsePageQuery", () => {
         response: { error: { code: "invalid_page" } },
       });
     }
+  });
+
+  it("rejects an oversized cursor before decoding it", () => {
+    expect(
+      thrownBy(() => parsePageQuery({ cursor: "x".repeat(513) })),
+    ).toMatchObject({ response: { error: { code: "invalid_cursor" } } });
+  });
+
+  it("rejects a valid cursor envelope with a non-UUID row id", () => {
+    const token = encodeCursor({ createdAt: TS, id: "not-a-uuid" });
+    expect(thrownBy(() => parseUuidPageQuery({ cursor: token }))).toMatchObject(
+      { response: { error: { code: "invalid_cursor" } } },
+    );
   });
 });

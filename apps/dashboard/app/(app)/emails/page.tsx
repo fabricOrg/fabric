@@ -5,6 +5,8 @@ import {
   type EmailInboxResponse,
   type EmailMessage,
   emailInboxResponse,
+  type MessageStatusGroup,
+  messageStatusGroupOf,
 } from "@app/contracts";
 import {
   Alert,
@@ -46,6 +48,7 @@ import {
 } from "@app/ui/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@app/ui/components/ui/tabs";
 import { WorkflowHeader } from "@app/ui/components/ui/workflow-header";
+import { useCursorPagination } from "@app/ui/hooks/use-cursor-pagination";
 import { formatDateTimeFull } from "@app/ui/lib/datetime";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { Mail, RefreshCw, TriangleAlert } from "lucide-react";
@@ -53,9 +56,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { CopyButton } from "@/components/copy-button";
 import { StatusBadge } from "@/components/status-badge";
-import { useCursorPagination } from "@/lib/use-cursor-pagination";
 
-type EmailFilter = "all" | "queued" | "delivered" | "failed";
+type EmailFilter = "all" | MessageStatusGroup;
 const PAGE_SIZE = 20;
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -65,19 +67,31 @@ async function fetchJson<T>(url: string): Promise<T> {
   return data as T;
 }
 
+async function fetchEmails(
+  cursor: string | null,
+  filter: EmailFilter,
+): Promise<EmailInboxResponse> {
+  const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
+  if (cursor) query.set("cursor", cursor);
+  if (filter !== "all") query.set("status", filter);
+  return emailInboxResponse.parse(
+    await fetchJson<unknown>(`/api/dashboard/emails?${query.toString()}`),
+  );
+}
+
 export default function EmailsPage() {
   const [selected, setSelected] = useState<EmailMessage | null>(null);
   const [emailFilter, setEmailFilter] = useState<EmailFilter>("all");
   const pagination = useCursorPagination();
+  const activity = useQuery({
+    queryKey: ["emails", "all", null],
+    queryFn: () => fetchEmails(null, "all"),
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+  });
   const emails = useQuery({
-    queryKey: ["emails", pagination.cursor],
-    queryFn: async () => {
-      const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
-      if (pagination.cursor) query.set("cursor", pagination.cursor);
-      return emailInboxResponse.parse(
-        await fetchJson<unknown>(`/api/dashboard/emails?${query.toString()}`),
-      );
-    },
+    queryKey: ["emails", emailFilter, pagination.cursor],
+    queryFn: () => fetchEmails(pagination.cursor, emailFilter),
     refetchInterval: pagination.pageIndex === 0 ? 15_000 : false,
     refetchIntervalInBackground: false,
   });
@@ -89,7 +103,7 @@ export default function EmailsPage() {
         description="Review delivered content and provider outcomes."
         actions={
           <>
-            <EmailActivitySummary state={emails} />
+            <EmailActivitySummary state={activity} />
             <Button
               type="button"
               variant="outline"
@@ -123,7 +137,9 @@ export default function EmailsPage() {
         </Alert>
       ) : emails.isPending ? (
         <TableLoadingState />
-      ) : emails.data.messages.length === 0 && pagination.pageIndex === 0 ? (
+      ) : emails.data.messages.length === 0 &&
+        pagination.pageIndex === 0 &&
+        emailFilter === "all" ? (
         <Card>
           <CardHeader>
             <CardTitle>Sent emails</CardTitle>
@@ -146,16 +162,22 @@ export default function EmailsPage() {
             <CardTitle className="text-base">Sent emails</CardTitle>
             <EmailStatusTabs
               value={emailFilter}
-              onValueChange={setEmailFilter}
+              onValueChange={(filter) => {
+                pagination.reset();
+                setEmailFilter(filter);
+              }}
             />
           </CardHeader>
           <CardContent>
             <EmailTable
               key={emailFilter}
-              messages={filterEmailMessages(emails.data.messages, emailFilter)}
+              messages={emails.data.messages}
               filter={emailFilter}
               onSelect={setSelected}
-              onClearFilter={() => setEmailFilter("all")}
+              onClearFilter={() => {
+                pagination.reset();
+                setEmailFilter("all");
+              }}
               pageIndex={pagination.pageIndex}
               pageRowCount={emails.data.messages.length}
               nextCursor={emails.data.next_cursor}
@@ -191,7 +213,7 @@ function EmailStatusTabs({
     >
       <TabsList>
         <TabsTrigger value="all">All</TabsTrigger>
-        <TabsTrigger value="queued">Queued</TabsTrigger>
+        <TabsTrigger value="active">In progress</TabsTrigger>
         <TabsTrigger value="delivered">Delivered</TabsTrigger>
         <TabsTrigger value="failed">Failed</TabsTrigger>
       </TabsList>
@@ -347,7 +369,7 @@ function EmailActivitySummary({
     >
       <CompactSummaryRows>
         <CompactSummaryRow label="Total" value={stats.total} />
-        <CompactSummaryRow label="Queued" value={stats.queued} />
+        <CompactSummaryRow label="In progress" value={stats.active} />
         <CompactSummaryRow label="Delivered" value={stats.delivered} />
         <CompactSummaryRow label="Failed" value={stats.failed} />
       </CompactSummaryRows>
@@ -359,31 +381,18 @@ function emailStats(messages: readonly EmailMessage[]) {
   return messages.reduce(
     (stats, message) => {
       stats.total += 1;
-      if (message.status === "delivered") {
+      const group = messageStatusGroupOf(message.status);
+      if (group === "delivered") {
         stats.delivered += 1;
-      } else if (message.status === "failed") {
+      } else if (group === "failed") {
         stats.failed += 1;
       } else {
-        stats.queued += 1;
+        stats.active += 1;
       }
       return stats;
     },
-    { delivered: 0, failed: 0, queued: 0, total: 0 },
+    { active: 0, delivered: 0, failed: 0, total: 0 },
   );
-}
-
-function filterEmailMessages(
-  messages: readonly EmailMessage[],
-  filter: EmailFilter,
-) {
-  if (filter === "all") return messages;
-  if (filter === "queued") {
-    return messages.filter(
-      (message) =>
-        message.status !== "delivered" && message.status !== "failed",
-    );
-  }
-  return messages.filter((message) => message.status === filter);
 }
 
 function EmailContentDialog({

@@ -24,7 +24,7 @@ import {
   requireScope,
 } from "../api-keys/api-key.guard.js";
 import { invalidRequest, newRequestId } from "../http/api-error.js";
-import { parsePageQuery } from "../http/cursor.js";
+import { parseUuidPageQuery } from "../http/cursor.js";
 import { ManagedMessagesService } from "./managed-messages.service.js";
 
 interface AuthedRequest {
@@ -84,7 +84,7 @@ export class ManagedMessagesController {
       typeof query.environment_id === "string"
         ? query.environment_id
         : undefined;
-    const page = parsePageQuery(query);
+    const page = parseUuidPageQuery(query);
     // Two read authorities: an application-environment sk_* key lists its own environment
     // (messages:read); the dashboard's minted tenant token (applicationId === null, ADR-0003)
     // is a management read — it names the environment explicitly and carries sms:read, since

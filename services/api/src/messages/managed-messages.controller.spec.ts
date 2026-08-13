@@ -65,4 +65,18 @@ describe("ManagedMessagesController pagination", () => {
     });
     expect(messages.list).not.toHaveBeenCalled();
   });
+
+  it("rejects a cursor whose row id cannot be queried as a UUID", async () => {
+    const { controller, messages } = controllerWith();
+    const cursor = encodeCursor({
+      createdAt: "2026-08-13T12:00:00.123456Z",
+      id: "not-a-uuid",
+    });
+
+    await expect(controller.list(request(), { cursor })).rejects.toMatchObject({
+      status: 400,
+      response: { error: { code: "invalid_cursor", param: "cursor" } },
+    });
+    expect(messages.list).not.toHaveBeenCalled();
+  });
 });

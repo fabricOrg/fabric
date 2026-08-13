@@ -126,7 +126,7 @@ export type MessageDeliverySummary = z.infer<typeof messageDeliverySummary>;
 
 export const listMessageDeliveriesResponse = z.object({
   deliveries: z.array(messageDeliverySummary),
-  next_cursor: nextCursor,
+  next_cursor: nextCursor.default(null),
   request_id: z.string(),
 });
 export type ListMessageDeliveriesResponse = z.infer<

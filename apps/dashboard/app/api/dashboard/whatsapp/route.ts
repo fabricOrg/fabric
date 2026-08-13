@@ -36,6 +36,9 @@ export async function GET(request?: Request) {
         ...(searchParams.get("cursor")
           ? { cursor: searchParams.get("cursor") ?? undefined }
           : {}),
+        ...(searchParams.get("status")
+          ? { status: searchParams.get("status") ?? undefined }
+          : {}),
       }),
     );
   } catch (error) {

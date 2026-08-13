@@ -8,7 +8,8 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { invalidRequest } from "../http/api-error.js";
-import { parsePageQuery } from "../http/cursor.js";
+import { parseUuidPageQuery } from "../http/cursor.js";
+import { parseMessageStatusGroup } from "../http/message-status-filter.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { EmailInboxService } from "./email-inbox.service.js";
 
@@ -35,7 +36,8 @@ export class EmailInboxController {
     return this.email.listForEnvironmentType(
       tenantId,
       environmentType(query.env),
-      parsePageQuery(query),
+      parseUuidPageQuery(query),
+      parseMessageStatusGroup(query.status),
     );
   }
 
