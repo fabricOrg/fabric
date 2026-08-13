@@ -1,4 +1,5 @@
 import type { PricingSnapshot } from "@app/db";
+import { marginSatisfied } from "./margin-rule.js";
 
 export type BillableChannel = "sms" | "email" | "whatsapp";
 export type TrafficClass =
@@ -91,13 +92,19 @@ export function buildEffectiveQuote(
     (providerCostNumerator + config.providerCostDenominator - 1n) /
     config.providerCostDenominator;
 
-  // Compare the rational cost before rounding. Rounding provider cost upward is useful for reports,
+  // Shared with the CONFIGURATION-time guard, so a price that saves is a price that can be sold on.
+  // Compares the rational cost before rounding: rounding provider cost upward is useful for reports,
   // but must not create a false margin rejection for a valid fractional per-unit provider rate.
-  const allowedCostBps = BigInt(10_000 - config.minimumMarginBps);
-  const marginSatisfied =
-    providerCostNumerator * 10_000n <=
-    totalPriceMinor * config.providerCostDenominator * allowedCostBps;
-  if (!marginSatisfied) throw new PricingMarginViolationError();
+  if (
+    !marginSatisfied({
+      totalPriceMinor,
+      providerCostNumerator,
+      providerCostDenominator: config.providerCostDenominator,
+      minimumMarginBps: config.minimumMarginBps,
+    })
+  ) {
+    throw new PricingMarginViolationError();
+  }
 
   const expectedMarginMinor = totalPriceMinor - estimatedProviderCostMinor;
   const snapshot: PricingSnapshot = {

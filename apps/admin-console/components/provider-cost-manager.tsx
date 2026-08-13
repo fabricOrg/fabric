@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProviderCostRateDto } from "@app/contracts";
+import { PROVIDER_VENDORS_BY_CHANNEL } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import { Input } from "@app/ui/components/ui/input";
 import {
@@ -53,7 +54,9 @@ export function ProviderCostManager({
   canManage: boolean;
 }) {
   const router = useRouter();
-  const [vendor, setVendor] = useState("arkesel-sms");
+  const [vendor, setVendor] = useState<string>(
+    PROVIDER_VENDORS_BY_CHANNEL.sms[0],
+  );
   const [channel, setChannel] = useState<CostChannel>("sms");
   const [country, setCountry] = useState(WILDCARD);
   const [trafficClass, setTrafficClass] = useState(WILDCARD);
@@ -119,17 +122,26 @@ export function ProviderCostManager({
       </div>
       {canManage ? (
         <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-4">
-          <Input
-            aria-label="Provider slug"
-            value={vendor}
-            onChange={(event) => setVendor(event.target.value)}
-            placeholder="Provider slug"
-          />
+          <Select value={vendor} onValueChange={setVendor}>
+            <SelectTrigger aria-label="Provider">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PROVIDER_VENDORS_BY_CHANNEL[channel].map((slug) => (
+                <SelectItem key={slug} value={slug}>
+                  {slug}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select
             value={channel}
             onValueChange={(value) => {
               const next = value as CostChannel;
               setChannel(next);
+              // Repoint the vendor with the channel. A cost is looked up by (vendor, channel), so
+              // arkesel-sms on a WhatsApp rate would match no send at all.
+              setVendor(PROVIDER_VENDORS_BY_CHANNEL[next][0]);
               // The traffic-class vocabularies do not overlap: SMS rates are recorded against
               // promotional/transactional/otp, WhatsApp's against Meta's template categories. Carrying
               // the old selection across would post a class this channel never quotes with, and the
