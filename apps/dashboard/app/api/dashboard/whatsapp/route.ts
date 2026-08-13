@@ -12,7 +12,7 @@ import {
 } from "@/lib/server/whatsapp-client";
 
 /** WhatsApp log for the session's current environment (plan -> sandbox|live). Gated on read scope. */
-export async function GET() {
+export async function GET(request?: Request) {
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session) return authError("invalid_session", "Sign in again.", 401);
@@ -24,8 +24,23 @@ export async function GET() {
     );
   }
   const env = session.plan === "sandbox" ? "sandbox" : "live";
+  const searchParams = request
+    ? new URL(request.url).searchParams
+    : new URLSearchParams();
   try {
-    return NextResponse.json(await listWhatsappMessages(session.orgId, env));
+    return NextResponse.json(
+      await listWhatsappMessages(session.orgId, env, {
+        ...(searchParams.get("limit")
+          ? { limit: searchParams.get("limit") ?? undefined }
+          : {}),
+        ...(searchParams.get("cursor")
+          ? { cursor: searchParams.get("cursor") ?? undefined }
+          : {}),
+        ...(searchParams.get("status")
+          ? { status: searchParams.get("status") ?? undefined }
+          : {}),
+      }),
+    );
   } catch (error) {
     return bffError(error);
   }

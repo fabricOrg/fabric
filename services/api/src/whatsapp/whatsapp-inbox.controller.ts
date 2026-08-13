@@ -24,7 +24,8 @@ import {
   newRequestId,
   notFound,
 } from "../http/api-error.js";
-import { parsePageQuery } from "../http/cursor.js";
+import { parseUuidPageQuery } from "../http/cursor.js";
+import { parseMessageStatusGroup } from "../http/message-status-filter.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { WhatsappService } from "./whatsapp.service.js";
@@ -64,7 +65,8 @@ export class WhatsappInboxController {
       ...(await this.whatsapp.list(
         normalizedTenantId,
         environment.environmentId,
-        parsePageQuery(query),
+        parseUuidPageQuery(query),
+        parseMessageStatusGroup(query.status),
       )),
       request_id: newRequestId(),
     };

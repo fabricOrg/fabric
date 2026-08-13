@@ -97,7 +97,26 @@ describe("dashboard WhatsApp BFF", () => {
     const response = await GET();
 
     expect(response.status).toBe(200);
-    expect(listWhatsappMessages).toHaveBeenCalledWith("tenant-1", "sandbox");
+    expect(listWhatsappMessages).toHaveBeenCalledWith(
+      "tenant-1",
+      "sandbox",
+      {},
+    );
+  });
+
+  it("passes cursor pagination to the internal API client", async () => {
+    const response = await GET(
+      new Request(
+        "http://localhost/api/dashboard/whatsapp?limit=20&cursor=next-page&status=failed",
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(listWhatsappMessages).toHaveBeenCalledWith("tenant-1", "sandbox", {
+      limit: "20",
+      cursor: "next-page",
+      status: "failed",
+    });
   });
 
   it("forwards the idempotency key and parsed payload on send", async () => {

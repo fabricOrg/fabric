@@ -6,7 +6,7 @@ import { z } from "zod";
 /** Query params accepted by paginated GET lists. Limit defaults server-side to 50. */
 export const pageQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
-  cursor: z.string().min(1).optional(),
+  cursor: z.string().min(1).max(512).optional(),
 });
 export type PageQuery = z.infer<typeof pageQuery>;
 

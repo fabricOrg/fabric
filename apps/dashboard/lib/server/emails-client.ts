@@ -35,9 +35,14 @@ async function request(tenantId: string, path: string): Promise<unknown> {
 export async function listEmails(
   tenantId: string,
   env: "sandbox" | "live",
+  page: { limit?: string; cursor?: string; status?: string } = {},
 ): Promise<EmailInboxResponse> {
+  const query = new URLSearchParams({ env });
+  if (page.limit) query.set("limit", page.limit);
+  if (page.cursor) query.set("cursor", page.cursor);
+  if (page.status) query.set("status", page.status);
   return emailInboxResponse.parse(
-    await request(tenantId, `/emails?env=${env}`),
+    await request(tenantId, `/emails?${query.toString()}`),
   );
 }
 

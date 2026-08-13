@@ -287,6 +287,60 @@ export function TablePagination({
   );
 }
 
+export function CursorPagination({
+  pageIndex,
+  rowCount,
+  pageSize,
+  onPrevious,
+  onNext,
+  canPrevious,
+  canNext,
+}: {
+  pageIndex: number;
+  rowCount: number;
+  pageSize: number;
+  onPrevious: () => void;
+  onNext: () => void;
+  canPrevious: boolean;
+  canNext: boolean;
+}) {
+  const first = pageIndex * pageSize + 1;
+  const last = pageIndex * pageSize + rowCount;
+
+  return (
+    <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-muted-foreground text-sm tabular-nums">
+        {rowCount === 0 ? "No rows on this page" : `Rows ${first}-${last}`}
+      </p>
+      <div className="flex items-center gap-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          onClick={onPrevious}
+          disabled={!canPrevious}
+          aria-label="Previous page"
+        >
+          <ChevronLeft />
+        </Button>
+        <span className="min-w-20 px-2 text-center text-sm tabular-nums">
+          Page {pageIndex + 1}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          onClick={onNext}
+          disabled={!canNext}
+          aria-label="Next page"
+        >
+          <ChevronRight />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function DataTableColumnHeader<TData, TValue>({
   column,
   title,

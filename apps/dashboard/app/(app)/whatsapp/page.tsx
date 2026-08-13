@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  type MessageStatusGroup,
+  messageStatusGroupOf,
   parseApiError,
   type WhatsappMessageListResponse,
   whatsappMessageListResponse,
@@ -22,22 +24,31 @@ import {
   CompactSummaryRow,
   CompactSummaryRows,
 } from "@app/ui/components/ui/compact-summary";
+import { CursorPagination } from "@app/ui/components/ui/data-table";
 import {
   TableEmptyState,
   TableLoadingState,
 } from "@app/ui/components/ui/states";
 import { Tabs, TabsList, TabsTrigger } from "@app/ui/components/ui/tabs";
 import { WorkflowHeader } from "@app/ui/components/ui/workflow-header";
+import { useCursorPagination } from "@app/ui/hooks/use-cursor-pagination";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageCircle, RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { WhatsappSendForm } from "@/components/forms/whatsapp-send-form";
 import { WhatsappMessagesTable } from "@/components/tables/whatsapp-messages-table";
 
-type MessageFilter = "all" | "queued" | "delivered" | "failed";
+type MessageFilter = "all" | MessageStatusGroup;
+const PAGE_SIZE = 20;
 
-async function fetchWhatsappMessages(): Promise<WhatsappMessageListResponse> {
-  const response = await fetch("/api/dashboard/whatsapp");
+async function fetchWhatsappMessages(
+  cursor: string | null,
+  filter: MessageFilter,
+): Promise<WhatsappMessageListResponse> {
+  const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
+  if (cursor) query.set("cursor", cursor);
+  if (filter !== "all") query.set("status", filter);
+  const response = await fetch(`/api/dashboard/whatsapp?${query.toString()}`);
   const payload: unknown = await response.json();
   if (!response.ok) throw payload;
   return whatsappMessageListResponse.parse(payload);
@@ -46,10 +57,17 @@ async function fetchWhatsappMessages(): Promise<WhatsappMessageListResponse> {
 export default function WhatsappPage() {
   const queryClient = useQueryClient();
   const [messageFilter, setMessageFilter] = useState<MessageFilter>("all");
-  const messages = useQuery({
-    queryKey: ["whatsapp-messages"],
-    queryFn: fetchWhatsappMessages,
+  const pagination = useCursorPagination();
+  const activity = useQuery({
+    queryKey: ["whatsapp-messages", "all", null],
+    queryFn: () => fetchWhatsappMessages(null, "all"),
     refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+  });
+  const messages = useQuery({
+    queryKey: ["whatsapp-messages", messageFilter, pagination.cursor],
+    queryFn: () => fetchWhatsappMessages(pagination.cursor, messageFilter),
+    refetchInterval: pagination.pageIndex === 0 ? 15_000 : false,
     refetchIntervalInBackground: false,
   });
 
@@ -84,12 +102,11 @@ export default function WhatsappPage() {
       return <TableLoadingState />;
     }
 
-    const visibleMessages = filterMessages(
-      messages.data.messages,
-      messageFilter,
-    );
-
-    if (messages.data.messages.length === 0) {
+    if (
+      messages.data.messages.length === 0 &&
+      pagination.pageIndex === 0 &&
+      messageFilter === "all"
+    ) {
       return (
         <TableEmptyState
           title="No WhatsApp messages yet"
@@ -106,27 +123,55 @@ export default function WhatsappPage() {
       );
     }
 
-    if (visibleMessages.length === 0) {
-      return (
-        <TableEmptyState
-          title={`No ${messageFilter} messages`}
-          description="Try another status filter."
-          filtered
-          action={
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setMessageFilter("all")}
-            >
-              Show all
-            </Button>
-          }
+    const pager =
+      pagination.canPrevious || messages.data.next_cursor ? (
+        <CursorPagination
+          pageIndex={pagination.pageIndex}
+          rowCount={messages.data.messages.length}
+          pageSize={PAGE_SIZE}
+          onPrevious={pagination.previous}
+          onNext={() => {
+            if (messages.data.next_cursor) {
+              pagination.next(messages.data.next_cursor);
+            }
+          }}
+          canPrevious={pagination.canPrevious}
+          canNext={messages.data.next_cursor !== null}
         />
+      ) : null;
+
+    if (messages.data.messages.length === 0) {
+      return (
+        <div className="flex flex-col gap-3">
+          <TableEmptyState
+            title={`No ${messageFilter} messages on this page`}
+            description="Try another page or status."
+            filtered
+            action={
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  pagination.reset();
+                  setMessageFilter("all");
+                }}
+              >
+                Show all
+              </Button>
+            }
+          />
+          {pager}
+        </div>
       );
     }
 
-    return <WhatsappMessagesTable messages={visibleMessages} />;
+    return (
+      <div className="flex flex-col gap-3">
+        <WhatsappMessagesTable messages={messages.data.messages} />
+        {pager}
+      </div>
+    );
   }
 
   return (
@@ -136,7 +181,7 @@ export default function WhatsappPage() {
         description="Send approved templates and monitor delivery outcomes."
         actions={
           <>
-            <WhatsappActivitySummary state={messages} />
+            <WhatsappActivitySummary state={activity} />
             <Button
               type="button"
               variant="outline"
@@ -173,7 +218,10 @@ export default function WhatsappPage() {
           <CardTitle>Message log</CardTitle>
           <MessageStatusTabs
             value={messageFilter}
-            onValueChange={setMessageFilter}
+            onValueChange={(filter) => {
+              pagination.reset();
+              setMessageFilter(filter);
+            }}
           />
         </CardHeader>
         <CardContent>{messageList()}</CardContent>
@@ -196,7 +244,7 @@ function MessageStatusTabs({
     >
       <TabsList>
         <TabsTrigger value="all">All</TabsTrigger>
-        <TabsTrigger value="queued">Queued</TabsTrigger>
+        <TabsTrigger value="active">In progress</TabsTrigger>
         <TabsTrigger value="delivered">Delivered</TabsTrigger>
         <TabsTrigger value="failed">Failed</TabsTrigger>
       </TabsList>
@@ -250,7 +298,7 @@ function WhatsappActivitySummary({
     >
       <CompactSummaryRows>
         <CompactSummaryRow label="Total" value={stats.total} />
-        <CompactSummaryRow label="Queued" value={stats.queued} />
+        <CompactSummaryRow label="In progress" value={stats.active} />
         <CompactSummaryRow label="Delivered" value={stats.delivered} />
         <CompactSummaryRow label="Failed" value={stats.failed} />
       </CompactSummaryRows>
@@ -262,29 +310,16 @@ function whatsappStats(messages: WhatsappMessageListResponse["messages"]) {
   return messages.reduce(
     (stats, message) => {
       stats.total += 1;
-      if (message.status === "delivered") {
+      const group = messageStatusGroupOf(message.status);
+      if (group === "delivered") {
         stats.delivered += 1;
-      } else if (message.status === "failed") {
+      } else if (group === "failed") {
         stats.failed += 1;
       } else {
-        stats.queued += 1;
+        stats.active += 1;
       }
       return stats;
     },
-    { delivered: 0, failed: 0, queued: 0, total: 0 },
+    { active: 0, delivered: 0, failed: 0, total: 0 },
   );
-}
-
-function filterMessages(
-  messages: WhatsappMessageListResponse["messages"],
-  filter: MessageFilter,
-) {
-  if (filter === "all") return messages;
-  if (filter === "queued") {
-    return messages.filter(
-      (message) =>
-        message.status !== "delivered" && message.status !== "failed",
-    );
-  }
-  return messages.filter((message) => message.status === filter);
 }

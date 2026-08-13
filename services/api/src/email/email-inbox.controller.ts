@@ -8,6 +8,8 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { invalidRequest } from "../http/api-error.js";
+import { parseUuidPageQuery } from "../http/cursor.js";
+import { parseMessageStatusGroup } from "../http/message-status-filter.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { EmailInboxService } from "./email-inbox.service.js";
 
@@ -28,15 +30,15 @@ export class EmailInboxController {
   @Get(":tenantId/emails")
   async inbox(
     @Param("tenantId") tenantId: string,
-    @Query("env") env?: string,
+    @Query() query: Record<string, unknown>,
   ): Promise<EmailInboxResponse> {
     assertUuid(tenantId);
-    return {
-      messages: await this.email.listForEnvironmentType(
-        tenantId,
-        environmentType(env),
-      ),
-    };
+    return this.email.listForEnvironmentType(
+      tenantId,
+      environmentType(query.env),
+      parseUuidPageQuery(query),
+      parseMessageStatusGroup(query.status),
+    );
   }
 
   @Get(":tenantId/emails/:id/content")

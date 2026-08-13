@@ -18,9 +18,13 @@ import { dashboardApi } from "./api-client";
  */
 export async function listMessageDeliveries(
   environmentId: string,
+  page: { limit?: number; cursor?: string } = {},
 ): Promise<ListMessageDeliveriesResponse> {
+  const query = new URLSearchParams({ environment_id: environmentId });
+  if (page.limit) query.set("limit", String(page.limit));
+  if (page.cursor) query.set("cursor", page.cursor);
   const payload = await dashboardApi<unknown>(
-    `/v1/message-deliveries?environment_id=${encodeURIComponent(environmentId)}`,
+    `/v1/message-deliveries?${query.toString()}`,
     "sms:read",
   );
   return listMessageDeliveriesResponse.parse(payload);
