@@ -23,7 +23,7 @@ function PageHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="page-header"
       className={cn(
-        "flex flex-wrap items-start justify-between gap-3",
+        "flex flex-wrap items-start justify-between gap-3 border-b pb-5",
         className,
       )}
       {...props}
@@ -53,7 +53,7 @@ function PageHeaderTitle({ className, ...props }: React.ComponentProps<"h1">) {
     <h1
       data-slot="page-header-title"
       className={cn(
-        "font-display text-2xl font-semibold tracking-tight",
+        "font-display text-2xl font-semibold leading-tight tracking-tight",
         className,
       )}
       {...props}
@@ -68,7 +68,7 @@ function PageHeaderDescription({
   return (
     <p
       data-slot="page-header-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("max-w-3xl text-sm text-muted-foreground", className)}
       {...props}
     />
   );

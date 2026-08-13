@@ -5,12 +5,14 @@ import { Badge } from "@app/ui/components/ui/badge";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@app/ui/components/ui/card";
-import { Power } from "lucide-react";
+import { cn } from "@app/ui/lib/utils";
+import { PlusCircle, Power } from "lucide-react";
 
 function StateBadge({ enabled }: { enabled: boolean }) {
   return (
@@ -51,7 +53,12 @@ export function KillSwitchCard({
   onAddOverride: (platform: KillSwitchDto) => void;
 }) {
   return (
-    <Card>
+    <Card
+      className={cn(
+        "border-l-2",
+        platform.enabled ? "border-l-success" : "border-l-destructive",
+      )}
+    >
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Power
@@ -63,16 +70,8 @@ export function KillSwitchCard({
           </Badge>
         </CardTitle>
         <CardDescription>{platform.description}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <StateBadge enabled={platform.enabled} />
-            <span className="text-xs text-muted-foreground">
-              Every workspace
-            </span>
-          </div>
-          {canManage ? (
+        {canManage ? (
+          <CardAction>
             <Button
               size="sm"
               variant={platform.enabled ? "destructive" : "default"}
@@ -80,7 +79,17 @@ export function KillSwitchCard({
             >
               {platform.enabled ? "Pause" : "Resume"}
             </Button>
-          ) : null}
+          </CardAction>
+        ) : null}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <StateBadge enabled={platform.enabled} />
+            <span className="text-xs text-muted-foreground">
+              Every workspace
+            </span>
+          </div>
         </div>
 
         {overrides.length > 0 ? (
@@ -129,7 +138,8 @@ export function KillSwitchCard({
               className="self-start px-0 text-xs"
               onClick={() => onAddOverride(platform)}
             >
-              Pause a single workspace
+              <PlusCircle data-icon="inline-start" />
+              Workspace override
             </Button>
           ) : (
             <p className="text-xs text-muted-foreground">

@@ -8,17 +8,18 @@ import {
   stableKey,
 } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
-import { Card, CardContent } from "@app/ui/components/ui/card";
 import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "@app/ui/components/ui/field";
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@app/ui/components/ui/card";
+import { Field, FieldError, FieldLabel } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -276,6 +277,9 @@ export function DefinitionForm({
           edge, so it reads as page furniture rather than one object you are filling in — and it lines
           up with nothing else in the product, where every other group of content sits on a Card. */}
       <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="text-base">Definition</CardTitle>
+        </CardHeader>
         <CardContent className="flex min-w-0 flex-col gap-4">
           {/* No lede here: each page's own header already states what this form does, and in the edit
           flow this copy contradicted it by promising "the draft". The one fact worth repeating next
@@ -304,13 +308,12 @@ export function DefinitionForm({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sms">SMS</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
+                  <SelectGroup>
+                    <SelectItem value="sms">SMS</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
-              <FieldDescription>
-                A definition's channel is fixed once created.
-              </FieldDescription>
             </Field>
           ) : null}
           <Field>
@@ -322,9 +325,6 @@ export function DefinitionForm({
               disabled={editing}
               placeholder="order.shipped"
             />
-            <FieldDescription>
-              Lowercase, dotted, and immutable once created.
-            </FieldDescription>
           </Field>
 
           {channel === "email" ? (
@@ -351,9 +351,6 @@ export function DefinitionForm({
                   onChange={(event) => setLocale(event.target.value)}
                   placeholder="en"
                 />
-                <FieldDescription>
-                  Used when no locale is requested.
-                </FieldDescription>
               </Field>
               <EmailLocalizedVariantsEditor
                 variants={emailLocalizedVariants}
@@ -439,6 +436,9 @@ export function DefinitionForm({
 
       <div className="flex flex-col gap-4 lg:sticky lg:top-6">
         <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Preview</CardTitle>
+          </CardHeader>
           <CardContent>
             {channel === "email" ? (
               <EmailPreviewPanel

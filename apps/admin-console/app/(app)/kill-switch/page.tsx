@@ -1,4 +1,11 @@
 import type { KillSwitchDto } from "@app/contracts";
+import { PageContainer } from "@app/ui/components/ui/app-shell";
+import {
+  PageHeader,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+} from "@app/ui/components/ui/page-header";
 import {
   KillSwitchList,
   type WorkspaceOption,
@@ -10,16 +17,6 @@ import {
 } from "@/lib/server/kill-switch-client";
 import { listTenants } from "@/lib/server/tenants-client";
 
-/**
- * The workspace picker needs names for ids, and the tenant list is keyset-paginated. Walk a bounded
- * number of pages so a runaway cursor can never turn this page into an unbounded crawl. Failure is
- * NOT fatal — the platform breakers still work, and the card says per-workspace pausing is
- * unavailable rather than offering a control that leads nowhere.
- *
- * The list is ordered newest-first, so if the budget is exhausted it is the OLDEST accounts that
- * fall off — likely the largest senders. `truncated` is surfaced rather than swallowed: on an
- * incident surface, a workspace missing from the picker otherwise reads as "no such workspace".
- */
 const MAX_WORKSPACE_PAGES = 5;
 
 async function loadWorkspaces(): Promise<{
@@ -29,6 +26,7 @@ async function loadWorkspaces(): Promise<{
   const options: WorkspaceOption[] = [];
   let cursor: string | undefined;
   let truncated = false;
+  // The picker is supporting context for a risky operation, so keep it bounded and non-fatal.
   for (let page = 0; page < MAX_WORKSPACE_PAGES; page += 1) {
     const { tenants, next_cursor } = await listTenants(
       cursor ? { cursor } : {},
@@ -48,8 +46,6 @@ export default async function KillSwitchPage() {
   const session = await requireAdminSession();
   const canManage = session.permissions.includes("staff:write");
 
-  // Both loads in parallel — the picker is not downstream of the switch list. Skipped entirely for
-  // a read-only operator, who is never offered the control it feeds.
   const [switchResult, workspaceResult] = await Promise.all([
     listKillSwitches().then(
       (r) => ({ ok: true as const, switches: r.switches }),
@@ -70,16 +66,16 @@ export default async function KillSwitchPage() {
   const workspaces = workspaceResult.options;
 
   return (
-    <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Kill-switch
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Operational switches over live traffic — platform-wide, or scoped to a
-          single workspace. Every change needs a reason and is audited.
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader>
+        <PageHeaderHeading>
+          <PageHeaderTitle>Kill-switch</PageHeaderTitle>
+          <PageHeaderDescription>
+            Operational switches over live traffic - platform-wide, or scoped to
+            a single workspace. Every change needs a reason and is audited.
+          </PageHeaderDescription>
+        </PageHeaderHeading>
+      </PageHeader>
 
       {workspaceResult.truncated ? (
         <p className="text-sm text-muted-foreground">
@@ -99,6 +95,6 @@ export default async function KillSwitchPage() {
           canManage={canManage}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

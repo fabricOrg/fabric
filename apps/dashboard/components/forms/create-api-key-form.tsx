@@ -29,58 +29,42 @@ import { useState } from "react";
 import { z } from "zod";
 import { toastApiError } from "@/lib/error-toast";
 
-const SCOPE_DETAILS: Record<
-  ApiKeyScope,
-  { readonly label: string; readonly description: string }
-> = {
+const SCOPE_DETAILS: Record<ApiKeyScope, { readonly label: string }> = {
   "sms:send": {
     label: "Send and manage SMS",
-    description: "Send messages and manage templates, senders, and consent.",
   },
   "sms:read": {
     label: "Read SMS activity",
-    description: "Read messages, templates, senders, and consent records.",
   },
   "email:send": {
     label: "Send email",
-    description: "Send transactional email through this environment.",
   },
   "email:read": {
     label: "Read email activity",
-    description: "Read email messages, delivery records, and content previews.",
   },
   "whatsapp:send": {
     label: "Send WhatsApp",
-    description: "Send approved WhatsApp templates through this environment.",
   },
   "wallet:read": {
     label: "Wallet and payments",
-    description: "Read wallet data and initiate payment transaction flows.",
   },
   "request_logs:read": {
     label: "Read request logs",
-    description: "Inspect this application's API request history.",
   },
   "api_keys:read": {
     label: "Read webhooks",
-    description: "List webhook endpoints for this application.",
   },
   "api_keys:write": {
     label: "Manage webhooks",
-    description: "Create and remove webhook endpoints.",
   },
   "definitions:read": {
     label: "Read definition contracts",
-    description:
-      "Generate typed keys, payloads, channels, and locales for this environment.",
   },
   "messages:send": {
     label: "Send managed messages",
-    description: "Send released definitions by stable key in this environment.",
   },
   "messages:read": {
     label: "Read managed deliveries",
-    description: "Retrieve managed delivery status, attempts, and cost.",
   },
 };
 
@@ -272,21 +256,12 @@ export function CreateApiKeyForm({
                         size="sm"
                         variant={on ? "default" : "outline"}
                         aria-pressed={on}
-                        className="h-auto min-h-16 justify-start whitespace-normal px-3 py-2 text-left"
+                        className="h-auto min-h-12 justify-start whitespace-normal px-3 py-2 text-left"
                         onClick={() => toggleScope(s)}
                       >
                         {on ? <Check data-icon="inline-start" /> : null}
                         <span className="flex flex-col items-start gap-0.5">
                           <span>{detail.label}</span>
-                          <span
-                            className={
-                              on
-                                ? "text-xs text-primary-foreground/80"
-                                : "text-xs text-muted-foreground"
-                            }
-                          >
-                            {detail.description}
-                          </span>
                           <span
                             className={
                               on

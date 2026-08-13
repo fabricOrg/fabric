@@ -1,4 +1,5 @@
 import type { ProposalDto, TenantSummaryDto } from "@app/contracts";
+import { PageContainer } from "@app/ui/components/ui/app-shell";
 import {
   Empty,
   EmptyDescription,
@@ -6,6 +7,13 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@app/ui/components/ui/empty";
+import {
+  PageHeader,
+  PageHeaderActions,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+} from "@app/ui/components/ui/page-header";
 import { TriangleAlert } from "lucide-react";
 import { NewProposalDialog, ProposalBoard } from "@/components/proposal-board";
 import { requireAdminSession } from "@/lib/server/auth";
@@ -39,20 +47,23 @@ export default async function MakerCheckerPage() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-display text-2xl font-semibold tracking-tight">
-            Maker-checker
-          </h1>
-          <p className="text-sm text-muted-foreground">
+    <PageContainer>
+      <PageHeader>
+        <PageHeaderHeading>
+          <PageHeaderTitle>Maker-checker</PageHeaderTitle>
+          <PageHeaderDescription>
             Sensitive changes need a second operator to approve.
-          </p>
-        </div>
+          </PageHeaderDescription>
+        </PageHeaderHeading>
         {canManage ? (
-          <NewProposalDialog tenants={tenants} tenantsFailed={tenantsFailed} />
+          <PageHeaderActions>
+            <NewProposalDialog
+              tenants={tenants}
+              tenantsFailed={tenantsFailed}
+            />
+          </PageHeaderActions>
         ) : null}
-      </div>
+      </PageHeader>
 
       {loadError ? (
         <Empty>
@@ -74,6 +85,6 @@ export default async function MakerCheckerPage() {
           canManage={canManage}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

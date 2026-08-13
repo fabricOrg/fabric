@@ -5,17 +5,12 @@ import { Button } from "@app/ui/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@app/ui/components/ui/dialog";
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@app/ui/components/ui/field";
+import { Field, FieldLabel } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import { useForm } from "@tanstack/react-form";
 import { Plus } from "lucide-react";
@@ -108,10 +103,6 @@ export function CreateApplicationDialog({
         >
           <DialogHeader>
             <DialogTitle>Create an application</DialogTitle>
-            <DialogDescription>
-              An application groups your keys, webhooks, and logs. It starts
-              with a sandbox environment; the live one unlocks when you go live.
-            </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-2">
             <form.Field name="name">
@@ -147,10 +138,6 @@ export function CreateApplicationDialog({
                     onBlur={field.handleBlur}
                     placeholder="checkout-notifications"
                   />
-                  <FieldDescription>
-                    Unique within your workspace. Lowercase letters, numbers,
-                    and hyphens.
-                  </FieldDescription>
                 </Field>
               )}
             </form.Field>

@@ -4,15 +4,22 @@ import type {
   CommercialRouteVocabulary,
   PriceBookDto,
 } from "@app/contracts";
+import { PageContainer } from "@app/ui/components/ui/app-shell";
+import {
+  PageHeader,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+} from "@app/ui/components/ui/page-header";
+import { ErrorState } from "@app/ui/components/ui/states";
 import { CommercialOffersManager } from "@/components/commercial-offers-manager";
 import { requireAdminSession } from "@/lib/server/auth";
 import { listCommercialOffers } from "@/lib/server/commercial-offers-client";
 import { listPriceBooks } from "@/lib/server/price-book-client";
 
 /**
- * Prepaid packages (ADR-0012) — kept on its own page rather than mixed into Pricing, because a
- * pay-as-you-go rate and a fixed-total bundle are different things: one prices a unit, the other is a
- * product with an immutable promise and an approval trail.
+ * Prepaid packages (ADR-0012) stay apart from unit Pricing: a pay-as-you-go rate prices one send,
+ * while a package is a purchasable promise with immutable terms and an approval trail.
  */
 export default async function CommercialOffersPage() {
   const session = await requireAdminSession();
@@ -37,28 +44,27 @@ export default async function CommercialOffersPage() {
     catalogs = books.filter((book) => book.mode === "token");
   } catch {
     // Any throw here means the catalog could not be loaded. Testing for specific error classes would
-    // leave a non-Error throw rendering the success-shaped "No prepaid packages yet." empty state.
+    // leave a non-Error throw rendering the success-shaped empty state.
     loadError = true;
   }
 
   return (
-    <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Prepaid packages
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Fixed quantities for a fixed total price. A published version can
-          never be edited — clone it to change terms. Publishing needs a second
-          staff admin, active-channel evidence, and a margin above the catalog
-          floor.
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader>
+        <PageHeaderHeading>
+          <PageHeaderTitle>Prepaid packages</PageHeaderTitle>
+          <PageHeaderDescription>
+            Fixed-credit bundles with immutable published versions and staff
+            approval.
+          </PageHeaderDescription>
+        </PageHeaderHeading>
+      </PageHeader>
 
       {loadError ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          Couldn&apos;t load prepaid packages right now. Try again shortly.
-        </p>
+        <ErrorState
+          title="Couldn't load prepaid packages"
+          message="The package catalog is temporarily unavailable. Try again shortly."
+        />
       ) : (
         <CommercialOffersManager
           offers={offers}
@@ -70,6 +76,6 @@ export default async function CommercialOffersPage() {
           actorStaffId={session.userId}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

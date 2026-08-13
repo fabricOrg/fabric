@@ -176,22 +176,13 @@ export function OfferVersionHistory({
             {ownAuthor && version.status === "draft" && canManage ? (
               <p className="w-full rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
                 {blockedByDuties ? (
-                  <>
-                    <span className="font-medium text-foreground">
-                      Publish is waiting on a second admin.
-                    </span>{" "}
-                    Separation of duties: whoever authored a version cannot
-                    approve it, so ask another staff admin to review and publish
-                    v{version.version}.
-                  </>
+                  <span className="font-medium text-foreground">
+                    Publish is waiting on a second admin.
+                  </span>
                 ) : (
-                  <>
-                    <span className="font-medium text-foreground">
-                      You are approving your own version.
-                    </span>{" "}
-                    This deployment allows solo approval, so your reason is
-                    recorded against v{version.version} as the approval itself.
-                  </>
+                  <span className="font-medium text-foreground">
+                    You are approving your own version.
+                  </span>
                 )}
               </p>
             ) : null}

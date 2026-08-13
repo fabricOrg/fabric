@@ -83,6 +83,7 @@ export default async function StaffSignInPage({
 
   return (
     <AuthShell
+      product="Admin"
       heading="Staff sign-in"
       subheading="Sign in to the Fabric control plane."
     >

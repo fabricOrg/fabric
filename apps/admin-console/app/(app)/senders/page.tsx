@@ -1,4 +1,5 @@
 import type { AdminSenderDto } from "@app/contracts";
+import { PageContainer } from "@app/ui/components/ui/app-shell";
 import {
   Empty,
   EmptyDescription,
@@ -6,6 +7,12 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@app/ui/components/ui/empty";
+import {
+  PageHeader,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+} from "@app/ui/components/ui/page-header";
 import { TriangleAlert } from "lucide-react";
 import { SendersReviewBoard } from "@/components/senders-review-board";
 import { requireAdminSession } from "@/lib/server/auth";
@@ -24,17 +31,17 @@ export default async function SendersPage() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Sender IDs
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Carrier/NCA review of customer sender-id registrations. Activation is
-          the delivery gate for live traffic (MTN GH blocks unregistered senders
-          since 2026-07-08).
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader>
+        <PageHeaderHeading>
+          <PageHeaderTitle>Sender IDs</PageHeaderTitle>
+          <PageHeaderDescription>
+            Carrier/NCA review of customer sender-id registrations. Activation
+            is the delivery gate for live traffic (MTN GH blocks unregistered
+            senders since 2026-07-08).
+          </PageHeaderDescription>
+        </PageHeaderHeading>
+      </PageHeader>
 
       {loadError ? (
         <Empty>
@@ -52,6 +59,6 @@ export default async function SendersPage() {
       ) : (
         <SendersReviewBoard senders={senders} canManage={canManage} />
       )}
-    </div>
+    </PageContainer>
   );
 }

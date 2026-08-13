@@ -27,7 +27,7 @@ export function AppShell({
       {sidebar}
       <SidebarInset>
         {banner}
-        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur md:px-4">
+        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/85 px-3 shadow-[0_1px_0_color-mix(in_srgb,var(--border)_60%,transparent)] backdrop-blur md:px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator
             orientation="vertical"
@@ -38,11 +38,17 @@ export function AppShell({
             {headerActions}
           </div>
         </header>
-        <main className="min-w-0 flex-1 px-4 py-5 md:px-6 md:py-7">
-          {breadcrumbs ? (
-            <div className="mx-auto mb-4 w-full max-w-6xl">{breadcrumbs}</div>
-          ) : null}
-          <div className="mx-auto w-full max-w-6xl">{children}</div>
+        <main className="relative min-w-0 flex-1 overflow-hidden bg-[linear-gradient(to_right,color-mix(in_srgb,var(--border)_42%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_srgb,var(--border)_42%,transparent)_1px,transparent_1px)] bg-[size:48px_48px] px-4 py-5 md:px-6 md:py-7">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,var(--background)_0%,color-mix(in_srgb,var(--background)_86%,transparent)_22%,var(--background)_88%)]"
+          />
+          <div className="relative">
+            {breadcrumbs ? (
+              <div className="mx-auto mb-4 w-full max-w-6xl">{breadcrumbs}</div>
+            ) : null}
+            <div className="mx-auto w-full max-w-6xl">{children}</div>
+          </div>
         </main>
       </SidebarInset>
     </SidebarProvider>
