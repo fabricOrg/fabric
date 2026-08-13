@@ -16,36 +16,67 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `d4105f1` | through #287 |
-| `origin/testing` | `8ed153a` | DEPLOYED 2026-08-12 (#288). **Level with `dev`.** `0150` applied, 151 total. |
+| `origin/dev` | `e0af752` | through #297 |
+| `origin/testing` | `a80e7a4` | DEPLOYED 2026-08-12. **Level with `dev`.** 151 migrations, none added since. |
 
-### Start here — two PRs are open and reviewed, waiting to be merged
+### Start here — three PRs open, all reviewed
 
-1. **#290 — the WhatsApp template bootstrap fix.** Reviewed twice; both rounds found something and
-   both are fixed. Green. Merge it, then **promote `dev` → `testing`** (real merge, title
-   `chore(ops): promote …`, watch `Deploy testing (Vercel + Render)` — the plain `Deploy` greens while
-   skipping every job). It was left unmerged only because it had a critical finding on each pass and
-   the session was ending; nothing is known to be wrong with it now.
-2. **#289 — this file.** Merge whenever.
+| PR | what | note |
+| --- | --- | --- |
+| **#300** | sandbox allowance editor saveable again | **Merge first.** Every sandbox allowance change on the platform was failing — the editor sent 2 of the 3 limits the schema requires, so the save always 422'd with a message naming the two fields the operator got right. Broken staff control, not a cosmetic issue. |
+| **#299** | the WhatsApp price-book row | A saved WhatsApp rate rendered no row at all. Carries a `fe-auth` vitest timeout fix — `scryptSync` is CPU-bound by design and blew vitest's 5s default under a saturated `verify:push`. |
+| **#298** | this file | Merge last, it references the other two. |
+
+Promotion is a **real merge** (`git merge --no-ff dev` — testing carries merge commits, and this
+repo's git config is `ff = only`, so a plain `git merge dev` aborts with "Not possible to
+fast-forward"). Watch `Deploy testing (Vercel + Render)`; the plain `Deploy` greens while skipping
+every job.
 
 Dependabot PRs #279–#282 and the old #200/#203/#214 are untouched and unrelated.
 
-### Why testing shows no WhatsApp templates (expected, not a regression)
+### WhatsApp pricing now works end to end (2026-08-12)
 
-Two independent blockers. **#290 fixes the first**; the second needs a human.
+`#297` fixed a 500 that made any price book containing a WhatsApp rate unsaveable —
+`pricing_sell_rules.unit_basis` was written by a two-way ternary over a three-member union, so
+WhatsApp stored `'recipient'` and violated `pricing_sell_rules_basis_chk`.
 
-- The sync could only discover tenants that ALREADY held a template row or had ALREADY sent a
-  non-sandbox message. Testing has neither, so nothing bootstrapped. Fixed in #290: an active live
-  environment is now enough.
-- ~~`meta-cloud live` is not armed in testing~~ — **DONE 2026-08-12** by the project owner:
-  `meta-cloud live` is `enabled=true`, `default=true`, `creds=true`. Real Meta sends are now reachable
-  from testing, so treat that environment as live for WhatsApp.
+**Verified in the testing DB, not by a 200:** book `WhatsApp Testing` (subscription, not default, not
+published) holds `sms/segment/40`, `email/recipient/50`, `whatsapp/message/300` GHS. WhatsApp sells at
+GHS 3.00 against the `testing whatsapp prcing` provider cost of GHS 2.00 — 33% margin, clear of the
+2000bps floor.
 
-**So the remaining step is only to merge #290 and promote.** Measured in testing on 2026-08-12:
-4 workspaces, but exactly **ONE active live environment** (`fabric-local`) — the other three are
-`plan=sandbox` with `live | locked`, i.e. they have not gone live. #290's predicate is "active live
-environment", so the first sync will populate templates for that one workspace and correctly leave the
-sandbox three empty. Then wait for the hourly tick, or restart the api to bring one forward.
+**Three variants of ONE defect shape were found in a row: a total `Record` sitting beside a partial
+literal over the same channel union.** The sell-rule writer (#297), the public calculator's
+`isPublishedRate` (#297), and the pricing card's row list (#299). A FOURTH, worse instance was then
+found in the sandbox allowance editor (#300) — same shape, but it broke a control instead of hiding a
+row. Each had a comment nearby claiming
+totality that was true of the map and silently false of the literal. If you touch anything keyed by
+channel, grep for the other half.
+
+Still open, same family: `packages/sdk` types messages as `"sms" | "email"` only, and
+`packages/cli/src/manifest.ts:60` has a two-channel zod enum.
+
+### WhatsApp templates now sync in testing — RESOLVED
+
+Measured 2026-08-12 23:00 UTC: **5 templates, 1 tenant, syncing hourly.** One tenant is correct, not a
+shortfall — testing has 4 workspaces but exactly ONE active live environment (`fabric-local`); the
+other three are `plan=sandbox` with `live | locked` and are meant to stay empty.
+
+Three things had to be true at once, and each failed independently:
+
+1. The sync could only discover tenants that already held a template row or had already sent a
+   non-sandbox message — chicken-and-egg. An active live environment is now enough (#290).
+2. `meta-cloud live` had to be armed in testing. Done by the project owner; `enabled=true`,
+   `default=true`, `creds=true`. **Treat testing as live for WhatsApp.**
+3. The hourly `@Cron` never fires, because Render's free tier sleeps the service and a sleeping
+   process runs no cron. A GitHub Actions workflow now poking `POST
+   /internal/admin/whatsapp/template-sync` hourly is what actually drives it — the request wakes the
+   instance, which is the mechanism, not a workaround. **Temporary; see
+   [docs/TEMPORARY-CI-CRON.md](./docs/TEMPORARY-CI-CRON.md) for the delete conditions.** It does NOT
+   fix the queue worker, which needs a process alive when a job arrives.
+
+If templates go stale, check that org secret `BFF_INTERNAL_TOKEN` still matches the value Render
+holds — a rotation on one side fails the workflow with 401 and has no customer-visible symptom.
 
 ### What #288 shipped, and what was verified rather than assumed
 
@@ -68,9 +99,8 @@ real database: *security layer applied ✓*, ledger + general-ledger invariants 
 covering the two new tenant tables is what proves the RLS and the grant REVOKEs landed in a place
 other than my laptop.
 
-**What the deploy does NOT prove.** Live WhatsApp in testing needs a `meta-cloud` credential armed
-THERE; the code travels, the credential does not. So testing has the channel and no way to send
-until an operator arms it. `PLUGIN_MASTER_KEY` must exist in the testing environment or credential
+**What the deploy does NOT prove.** ~~Live WhatsApp in testing needs a `meta-cloud` credential armed
+THERE~~ — armed 2026-08-12, see above. `PLUGIN_MASTER_KEY` must exist in the testing environment or credential
 resolution silently falls back to a derived development key.
 
 Two process facts that cost real time and will again:
@@ -526,6 +556,25 @@ credential.
 ---
 
 ## Traps this repo keeps re-learning
+
+- **A total `Record` beside a partial literal over the same union is this codebase's most repeated
+  bug.** Three instances in one afternoon: the sell-rule writer, the public calculator's channel
+  guard, and the pricing card's row list — each with a comment nearby claiming totality that held for
+  the map and not for the literal. Adding a channel means grepping for BOTH halves.
+
+- **A backgrounded `git push` reports exit 0 while the push failed.** The wrapper's status is not the
+  gate's. `verify:push` failed on a Biome config error and the notification still said "completed
+  (exit code 0)"; the only reliable check is `git ls-remote --heads origin <branch>` against
+  `git rev-parse HEAD`. Same rule as the "never pipe a command whose exit code matters" rule.
+
+- **A git worktree checked out INSIDE the repo wedges `biome check .` for everyone.** Its own
+  `biome.jsonc` is a "nested root configuration", which is a hard error — Biome lints nothing and
+  every pre-push in the main checkout fails with nothing wrong in the diff. `.codex-temp/` is now
+  excluded; a worktree anywhere else under the repo root will do it again. Check
+  `git worktree list` before believing a lint failure that names no file of yours.
+
+- **`git merge dev` on `testing` aborts** with "Not possible to fast-forward" — this repo's config is
+  `ff = only` and testing carries merge commits. Promotion needs `git merge --no-ff dev`.
 
 Added 2026-08-12, all paid for in this session:
 
