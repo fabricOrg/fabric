@@ -1,5 +1,6 @@
 import { updateSandboxAllowancePolicySchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
+import { sandboxAllowanceIssueMessage } from "@/lib/sandbox-allowance-message";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
@@ -46,12 +47,11 @@ export async function PATCH(
     await request.json(),
   );
   if (!parsed.success) {
-    // Forward the actual issue. The fixed line named only the two limits the operator could see, so
-    // when a THIRD required limit was missing from the request it pointed away from the cause.
+    // Names the field that failed. The line this replaced described the limits generically, so a
+    // missing THIRD limit produced advice about the two the operator had already got right.
     return fail(
       "invalid_request",
-      parsed.error.issues[0]?.message ??
-        "Use positive daily limits and give a reason of at least 8 characters.",
+      sandboxAllowanceIssueMessage(parsed.error),
       422,
     );
   }

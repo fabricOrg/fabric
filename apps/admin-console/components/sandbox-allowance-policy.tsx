@@ -1,6 +1,9 @@
 "use client";
 
-import type { SandboxAllowancePolicy } from "@app/contracts";
+import type {
+  SandboxAllowancePolicy,
+  UpdateSandboxAllowancePolicy,
+} from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import { Input } from "@app/ui/components/ui/input";
 import { Label } from "@app/ui/components/ui/label";
@@ -23,19 +26,18 @@ export function SandboxAllowancePolicyEditor({
   );
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  // Every field the schema requires is gated here. WhatsApp was missing from both this check and the
-  // body below, so the request was always sent and always rejected — see the note on save().
+  // Every field the schema requires is gated here, INCLUDING the schema's upper bound — without it
+  // the button enabled for a value the server then rejected, which is an error the operator never
+  // needed to see.
+  const limit = (value: string) =>
+    /^[1-9]\d*$/.test(value) && Number(value) <= 1_000_000_000;
   const valid =
-    /^[1-9]\d*$/.test(sms) &&
-    /^[1-9]\d*$/.test(email) &&
-    /^[1-9]\d*$/.test(whatsapp) &&
-    reason.trim().length >= 8;
+    limit(sms) && limit(email) && limit(whatsapp) && reason.trim().length >= 8;
 
   /**
-   * The PATCH body must carry ALL THREE limits. `updateSandboxAllowancePolicySchema` requires
-   * `whatsapp_messages_per_day` with no default, so omitting it meant every save 422'd — and the
-   * route's message named the two limits the operator had entered correctly, pointing away from the
-   * field that had no input on the form at all.
+   * The body is typed against the contract on purpose. It used to be a bare literal, so when the
+   * schema gained `whatsapp_messages_per_day` this component kept compiling and every save 422'd at
+   * runtime instead. `satisfies` makes the next added field a build error here.
    */
   async function save() {
     if (!valid) return;
@@ -51,7 +53,7 @@ export function SandboxAllowancePolicyEditor({
             email_messages_per_day: Number(email),
             whatsapp_messages_per_day: Number(whatsapp),
             reason,
-          }),
+          } satisfies UpdateSandboxAllowancePolicy),
         },
       );
       const payload = (await response.json()) as {
@@ -77,7 +79,7 @@ export function SandboxAllowancePolicyEditor({
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-3">
       <div className="grid gap-2">
         <Label htmlFor="sandbox-sms-limit">SMS segments per UTC day</Label>
         <Input
@@ -107,7 +109,7 @@ export function SandboxAllowancePolicyEditor({
           onChange={(event) => setWhatsapp(event.target.value)}
         />
       </div>
-      <div className="grid gap-2 sm:col-span-2">
+      <div className="grid gap-2 sm:col-span-3">
         <Label htmlFor="sandbox-limit-reason">Reason for change</Label>
         <Input
           id="sandbox-limit-reason"
@@ -116,7 +118,7 @@ export function SandboxAllowancePolicyEditor({
           placeholder="At least 8 characters"
         />
       </div>
-      <div className="sm:col-span-2">
+      <div className="sm:col-span-3">
         <Button size="sm" loading={busy} disabled={!valid} onClick={save}>
           Save sandbox allowances
         </Button>
