@@ -139,9 +139,9 @@ export default async function TenantDetailPage({
         <CardHeader>
           <CardTitle>Sandbox allowances</CardTitle>
           <CardDescription>
-            Workspace-wide daily capacity. SMS counts segments and email counts
-            messages. Changes apply when the next UTC bucket is created; a
-            bucket already used today keeps its original limit.
+            Workspace-wide daily capacity. SMS counts segments; email and
+            WhatsApp count messages. Changes apply when the next UTC bucket is
+            created; a bucket already used today keeps its original limit.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -156,8 +156,10 @@ export default async function TenantDetailPage({
             />
           ) : (
             <p className="text-sm">
-              {sandboxPolicy.sms_segments_per_day} SMS segments and{" "}
-              {sandboxPolicy.email_messages_per_day} email messages per UTC day.
+              {sandboxPolicy.sms_segments_per_day} SMS segments,{" "}
+              {sandboxPolicy.email_messages_per_day} email messages and{" "}
+              {sandboxPolicy.whatsapp_messages_per_day} WhatsApp messages per
+              UTC day.
             </p>
           )}
         </CardContent>

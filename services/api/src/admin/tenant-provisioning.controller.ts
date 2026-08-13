@@ -87,7 +87,7 @@ export class TenantProvisioningController {
     if (!parsed.success) {
       throw invalidRequest(
         "invalid_sandbox_allowance_policy",
-        "Provide positive daily SMS and email limits plus a reason of at least 8 characters.",
+        "Provide a positive daily limit for every channel plus a reason of at least 8 characters.",
       );
     }
     return this.provisioning.updateSandboxAllowancePolicy(id, parsed.data, {

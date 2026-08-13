@@ -34,7 +34,7 @@ export function HeaderFundingStatus() {
   if (virtual) {
     if (allowances.isError) {
       return (
-        <div className="hidden h-9 items-center rounded-md border px-3 text-xs text-destructive sm:flex">
+        <div className="hidden h-9 items-center rounded-md border px-3 text-xs text-destructive md:flex">
           Allowance unavailable
         </div>
       );
@@ -45,9 +45,17 @@ export function HeaderFundingStatus() {
     const email = allowances.data?.allowances.find(
       (item) => item.channel === "email",
     );
+    // All three are fetched (the contract pins the array at length 3). Showing two of them meant a
+    // workspace burning its WhatsApp quota got no warning before hitting the cap.
+    const whatsapp = allowances.data?.allowances.find(
+      (item) => item.channel === "whatsapp",
+    );
     return (
       <div
-        className="hidden h-9 items-center gap-2 rounded-md border px-3 text-xs font-medium sm:flex"
+        // md, not sm. Three labelled counts do not fit beside the other header actions at 640px —
+        // the actions row is `shrink-0` and does not wrap, so it pushes rather than compresses. The
+        // sibling DeliveryModeToggle drops its labels below md for the same reason.
+        className="hidden h-9 items-center gap-2 rounded-md border px-3 text-xs font-medium md:flex"
         title={
           allowances.data
             ? `Resets ${formatDateTimeFull(allowances.data.reset_at)}`
@@ -63,6 +71,12 @@ export function HeaderFundingStatus() {
         </span>
         <span className="font-mono tabular-nums">
           {email?.remaining ?? "—"} emails
+        </span>
+        <span className="text-muted-foreground" aria-hidden="true">
+          ·
+        </span>
+        <span className="font-mono tabular-nums">
+          {whatsapp?.remaining ?? "—"} WhatsApp messages
         </span>
       </div>
     );
@@ -87,7 +101,7 @@ export function HeaderFundingStatus() {
 
   return (
     <div
-      className="hidden h-9 w-40 animate-pulse rounded-md bg-muted sm:block"
+      className="hidden h-9 w-40 animate-pulse rounded-md bg-muted md:block"
       role="status"
       aria-label="Loading funding status"
     />
