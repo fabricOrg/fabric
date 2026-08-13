@@ -35,13 +35,11 @@ export function DeliveryModeAlert({
   return (
     <Alert className={virtual ? undefined : "border-warning/50"}>
       <Icon aria-hidden />
-      <AlertTitle>
-        {virtual ? "Virtual phone" : "Controlled live delivery"}
-      </AlertTitle>
+      <AlertTitle>{virtual ? "Virtual phone" : "Live delivery"}</AlertTitle>
       <AlertDescription>
         {virtual
           ? "No carrier message is sent. Delivery appears in your virtual phone."
-          : "This sends through a real carrier and charges your wallet. Only owner-approved test recipients are currently allowed."}
+          : "This sends through a real carrier and charges your wallet. Any valid recipient is allowed."}
         {settings.reason ? ` ${settings.reason}` : ""}
       </AlertDescription>
     </Alert>
