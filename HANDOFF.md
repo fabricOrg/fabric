@@ -1,6 +1,6 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-12. Point-in-time. **Verify against code and git before treating any of it as
+_Snapshot: 2026-08-13. Point-in-time. **Verify against code and git before treating any of it as
 fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 [CLAUDE.md](./CLAUDE.md) (how we build) and `docs/`. Superseded entries live in
 [docs/HANDOFF-ARCHIVE.md](./docs/HANDOFF-ARCHIVE.md)._
@@ -16,25 +16,60 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `e0af752` | through #297 |
-| `origin/testing` | `a80e7a4` | DEPLOYED 2026-08-12. **Level with `dev`.** 151 migrations, none added since. |
+| `origin/dev` | `5b5eeaf` | through #302 |
+| `origin/testing` | `ede8692` | promoted 2026-08-13. **Level with `dev`.** 151 migrations, none added all day. |
 
-### Start here — three PRs open, all reviewed
+### Start here — nothing is open; verify the deploy, then pick from Open work
 
-| PR | what | note |
-| --- | --- | --- |
-| **#300** | sandbox allowance editor saveable again | **Merge first.** Every sandbox allowance change on the platform was failing — the editor sent 2 of the 3 limits the schema requires, so the save always 422'd with a message naming the two fields the operator got right. Broken staff control, not a cosmetic issue. |
-| **#299** | the WhatsApp price-book row | A saved WhatsApp rate rendered no row at all. Carries a `fe-auth` vitest timeout fix — `scryptSync` is CPU-bound by design and blew vitest's 5s default under a saturated `verify:push`. |
-| **#298** | this file | Merge last, it references the other two. |
+Everything merged: #297 → #302. No PR of ours is waiting. Dependabot #279–#282 and the old
+#200/#203/#214 are untouched and unrelated.
 
-Promotion is a **real merge** (`git merge --no-ff dev` — testing carries merge commits, and this
-repo's git config is `ff = only`, so a plain `git merge dev` aborts with "Not possible to
-fast-forward"). Watch `Deploy testing (Vercel + Render)`; the plain `Deploy` greens while skipping
-every job.
+**First thing to check:** `ede8692` was the last promotion and its deploy was still running when the
+session ended. Confirm all six jobs of `Deploy testing (Vercel + Render)` — the plain `Deploy` greens
+while skipping every job, so it is not evidence. Then confirm a WhatsApp send still works (below):
+that promotion changed the seeded default price AND both pricing write paths.
 
-Dependabot PRs #279–#282 and the old #200/#203/#214 are untouched and unrelated.
+Promotion is a **real merge** (`git merge --no-ff origin/dev` — testing carries merge commits and
+this repo's git config is `ff = only`, so a plain `git merge dev` aborts with "Not possible to
+fast-forward").
 
-### WhatsApp pricing now works end to end (2026-08-12)
+### WhatsApp SENDS, live, from testing (2026-08-13)
+
+Proven the way §9 demands — by `provider_ref`, never by status:
+
+| field | value |
+| --- | --- |
+| provider_ref | `wamid.HBgMMjMzNTQ1MjI3MTg5…` — a real Meta id, not `fake-…` |
+| provider_slug | `meta-cloud` · backing `wallet` · GHS 3.00 · template `hello_world` |
+
+That also means the queue worker ran, which had never been exercised in testing before.
+
+**Two independent misconfigurations had to be fixed, and the first one is the trap.**
+
+1. **The cost was keyed to a label, not the adapter slug.** A cost is matched by
+   `provider_vendor = <adapter slug>` EXACTLY (`meta-cloud`, `arkesel-sms`, `aws-ses-email`). It had
+   been saved as `testing whatsapp prcing`, which displayed as an ACTIVE cost on the pricing screen
+   and matched no send. Error: *"no safe effective price is configured"*.
+2. **The default book sold below cost** — GHS 0.12 against GHS 2.00. Error: *"margin floor is not
+   satisfied"*. Real, but only reachable once the vendor matched.
+
+**Those two errors look alike and mean opposite things.** "No safe effective price" is a LOOKUP MISS
+(no sell rule or no cost row matched). "Margin floor not satisfied" is the price actually being wrong.
+Diagnosing the second when it is the first costs a whole cycle — it did here.
+
+Testing data now: cost `meta-cloud` GHS 2.00, Main Pricing WhatsApp GHS 3.00 (33% margin).
+
+**#301 makes both unconfigurable**: `provider_vendor` is a select over billable adapter slugs
+(contract-enforced per channel); publishing a book rejects a rate under the floor against the worst
+active cost, in-transaction; publishing a cost rejects one that breaks live prices, naming each book.
+The margin arithmetic is now ONE function in `@app/domain` that config-time, send-time and the
+commercial-offer gate all call — there were three copies.
+
+**A constant only applies at FIRST seed.** `DEFAULT_WHATSAPP_BASE_RATES.GHS` went 12n → 300n, but
+`ensureDefaultBook` writes it only when no default book exists. Testing was fixed by hand; any
+environment restored from an older database still holds 0.12 and will fail every WhatsApp send.
+
+### WhatsApp pricing plumbing (2026-08-12)
 
 `#297` fixed a 500 that made any price book containing a WhatsApp rate unsaveable —
 `pricing_sell_rules.unit_basis` was written by a two-way ternary over a three-member union, so
@@ -257,6 +292,32 @@ only reason the pilot tenant survived one run. Guarded in BOTH hooks, skipped un
   ones it edits.
 - **A stale `.next` fails typecheck after a branch switch.** Cost three gate failures. `rm -rf
   apps/*/.next` before a push when branches differ in routes or pages.
+
+## Loose ends left on 2026-08-13
+
+Nothing here blocks anything; all are known and deliberate.
+
+- **A stale provider-cost row is still active and still inert.** `testing whatsapp prcing` in
+  `provider_cost_rates` can never match a send (wrong vendor key) but shows as an active cost. Left
+  in place rather than deleted without asking. Close it out or delete it.
+- **NGN and USD WhatsApp have no cost row**, so sends in those currencies fail closed at quote time.
+  GHS is the only sendable WhatsApp currency. `DEFAULT_WHATSAPP_BASE_RATES` marks both UNVERIFIED —
+  nothing has ever checked those numbers against a real rate card.
+- **#302 ("improve dashboard workflow consistency") also carries the pricing changes** —
+  `margin-rule.ts`, `rating.ts`, `commercial-offer-margin.ts`. It was branched off the guard work
+  rather than clean `dev`. Merged fine and #301 landed first, so nothing is lost or duplicated, but
+  a price change (12n → 300n) shipped under a UI heading.
+- **Same defect family, still open:** `packages/contracts/src/overview.ts` `overviewChannel` omits
+  `email` entirely, so the overview spend breakdown structurally cannot report email spend;
+  `packages/sdk` types messages as `"sms" | "email"` and throws `ApiShapeError` on a WhatsApp
+  delivery the API can legitimately emit; `packages/cli/src/manifest.ts:60` has a two-channel enum.
+- **BFF mutation bodies are untyped.** The sandbox-allowance bug existed because the PATCH body was a
+  bare literal with no link to its contract; `satisfies UpdateSandboxAllowancePolicy` turned it into
+  a build error. The same one-line change across the other BFF mutation routes would close the class.
+- **`.codex-temp/ui-consistency`** — a git worktree checked out INSIDE the repo, holding uncommitted
+  auth work. It cost two outages today: a nested `biome.jsonc` wedged `biome check .` for the whole
+  repo, and its Next dev server sat on 7.8 GB until the box had 2.6 GB free and `verify:push` began
+  failing with heap OOM. Finish it or delete it.
 
 ## Open work
 
