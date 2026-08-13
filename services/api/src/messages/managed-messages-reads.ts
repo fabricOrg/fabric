@@ -20,8 +20,11 @@ import {
 } from "@app/db";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { notFound } from "../http/api-error.js";
-
-const LIST_LIMIT = 50;
+import {
+  CURSOR_TS_FORMAT,
+  encodeCursor,
+  type PageInput,
+} from "../http/cursor.js";
 
 interface MessageReader {
   get(
@@ -52,6 +55,7 @@ const summaryColumns = {
   createdAt: messageDeliveries.createdAt,
   updatedAt: messageDeliveries.updatedAt,
   environment: environments.type,
+  cursorTs: sql<string>`to_char(${messageDeliveries.createdAt} at time zone 'UTC', ${CURSOR_TS_FORMAT})`,
 };
 
 type SummaryRow =
@@ -93,8 +97,11 @@ function toSummary(row: SummaryRow): MessageDeliverySummary {
 /** Recent deliveries for one environment, newest first. Summary rows only — no recipient (PII). */
 export async function listDeliveries(
   db: AppDb,
-  input: { tenantId: string; environmentId: string },
-): Promise<MessageDeliverySummary[]> {
+  input: { tenantId: string; environmentId: string; page: PageInput },
+): Promise<{
+  deliveries: MessageDeliverySummary[];
+  next_cursor: string | null;
+}> {
   const rows = await db.withTenantDrizzle(input.tenantId, (tx) =>
     selectSummaries(tx)
       .where(
@@ -104,12 +111,24 @@ export async function listDeliveries(
             messageDeliveries.environmentId,
             input.environmentId as EnvironmentId,
           ),
+          input.page.before
+            ? sql`(${messageDeliveries.createdAt}, ${messageDeliveries.id}) < (${input.page.before.createdAt}::text::timestamptz, ${input.page.before.id})`
+            : undefined,
         ),
       )
-      .orderBy(desc(messageDeliveries.createdAt))
-      .limit(LIST_LIMIT),
+      .orderBy(desc(messageDeliveries.createdAt), desc(messageDeliveries.id))
+      .limit(input.page.limit + 1),
   );
-  return rows.map(toSummary);
+  const hasMore = rows.length > input.page.limit;
+  const visible = hasMore ? rows.slice(0, input.page.limit) : rows;
+  const last = visible[visible.length - 1];
+  return {
+    deliveries: visible.map(toSummary),
+    next_cursor:
+      hasMore && last
+        ? encodeCursor({ createdAt: last.cursorTs, id: last.id })
+        : null,
+  };
 }
 
 /** Full delivery + attempt history; resolves the recipient through the message read (PII-gated). */

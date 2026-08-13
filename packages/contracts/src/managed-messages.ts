@@ -3,6 +3,7 @@ import { apiKeyEnv } from "./dev-portal.js";
 import { emailAddress } from "./email.js";
 import { messageChannel } from "./message-definition-content.js";
 import { stableKey } from "./message-definitions.js";
+import { nextCursor } from "./pagination.js";
 
 const e164 = z.string().regex(/^\+[1-9]\d{7,14}$/, "Must be one E.164 number.");
 
@@ -125,6 +126,7 @@ export type MessageDeliverySummary = z.infer<typeof messageDeliverySummary>;
 
 export const listMessageDeliveriesResponse = z.object({
   deliveries: z.array(messageDeliverySummary),
+  next_cursor: nextCursor,
   request_id: z.string(),
 });
 export type ListMessageDeliveriesResponse = z.infer<

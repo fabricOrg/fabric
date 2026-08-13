@@ -75,6 +75,7 @@ export function WhatsappMessagesTable({
     <DataTable
       columns={columns}
       data={[...messages]}
+      pageSize={20}
       ariaLabel="WhatsApp messages"
       empty="No WhatsApp messages match this view."
     />

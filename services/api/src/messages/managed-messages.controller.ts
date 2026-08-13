@@ -24,6 +24,7 @@ import {
   requireScope,
 } from "../api-keys/api-key.guard.js";
 import { invalidRequest, newRequestId } from "../http/api-error.js";
+import { parsePageQuery } from "../http/cursor.js";
 import { ManagedMessagesService } from "./managed-messages.service.js";
 
 interface AuthedRequest {
@@ -77,19 +78,26 @@ export class ManagedMessagesController {
   @Get()
   async list(
     @Req() request: AuthedRequest,
-    @Query("environment_id") environmentId?: string,
+    @Query() query: Record<string, unknown>,
   ): Promise<ListMessageDeliveriesResponse> {
+    const environmentId =
+      typeof query.environment_id === "string"
+        ? query.environment_id
+        : undefined;
+    const page = parsePageQuery(query);
     // Two read authorities: an application-environment sk_* key lists its own environment
     // (messages:read); the dashboard's minted tenant token (applicationId === null, ADR-0003)
     // is a management read — it names the environment explicitly and carries sms:read, since
     // membership permissions have no messages:* scope.
     if (request.tenant?.applicationId) {
       const tenant = scopedTenant(request, "messages:read");
+      const result = await this.messages.list({
+        tenantId: tenant.id,
+        environmentId: tenant.environmentId,
+        page,
+      });
       return {
-        deliveries: await this.messages.list({
-          tenantId: tenant.id,
-          environmentId: tenant.environmentId,
-        }),
+        ...result,
         request_id: newRequestId(),
       };
     }
@@ -101,11 +109,13 @@ export class ManagedMessagesController {
         "environment_id",
       );
     }
+    const result = await this.messages.list({
+      tenantId: tenant.id,
+      environmentId,
+      page,
+    });
     return {
-      deliveries: await this.messages.list({
-        tenantId: tenant.id,
-        environmentId,
-      }),
+      ...result,
       request_id: newRequestId(),
     };
   }

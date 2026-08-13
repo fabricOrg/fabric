@@ -22,6 +22,7 @@ import {
   CompactSummaryRow,
   CompactSummaryRows,
 } from "@app/ui/components/ui/compact-summary";
+import { CursorPagination } from "@app/ui/components/ui/data-table";
 import {
   TableEmptyState,
   TableLoadingState,
@@ -33,11 +34,17 @@ import { MessageCircle, RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { WhatsappSendForm } from "@/components/forms/whatsapp-send-form";
 import { WhatsappMessagesTable } from "@/components/tables/whatsapp-messages-table";
+import { useCursorPagination } from "@/lib/use-cursor-pagination";
 
 type MessageFilter = "all" | "queued" | "delivered" | "failed";
+const PAGE_SIZE = 20;
 
-async function fetchWhatsappMessages(): Promise<WhatsappMessageListResponse> {
-  const response = await fetch("/api/dashboard/whatsapp");
+async function fetchWhatsappMessages(
+  cursor: string | null,
+): Promise<WhatsappMessageListResponse> {
+  const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
+  if (cursor) query.set("cursor", cursor);
+  const response = await fetch(`/api/dashboard/whatsapp?${query.toString()}`);
   const payload: unknown = await response.json();
   if (!response.ok) throw payload;
   return whatsappMessageListResponse.parse(payload);
@@ -46,10 +53,11 @@ async function fetchWhatsappMessages(): Promise<WhatsappMessageListResponse> {
 export default function WhatsappPage() {
   const queryClient = useQueryClient();
   const [messageFilter, setMessageFilter] = useState<MessageFilter>("all");
+  const pagination = useCursorPagination();
   const messages = useQuery({
-    queryKey: ["whatsapp-messages"],
-    queryFn: fetchWhatsappMessages,
-    refetchInterval: 15_000,
+    queryKey: ["whatsapp-messages", pagination.cursor],
+    queryFn: () => fetchWhatsappMessages(pagination.cursor),
+    refetchInterval: pagination.pageIndex === 0 ? 15_000 : false,
     refetchIntervalInBackground: false,
   });
 
@@ -89,7 +97,7 @@ export default function WhatsappPage() {
       messageFilter,
     );
 
-    if (messages.data.messages.length === 0) {
+    if (messages.data.messages.length === 0 && pagination.pageIndex === 0) {
       return (
         <TableEmptyState
           title="No WhatsApp messages yet"
@@ -106,27 +114,52 @@ export default function WhatsappPage() {
       );
     }
 
+    const pager =
+      pagination.canPrevious || messages.data.next_cursor ? (
+        <CursorPagination
+          pageIndex={pagination.pageIndex}
+          rowCount={messages.data.messages.length}
+          pageSize={PAGE_SIZE}
+          onPrevious={pagination.previous}
+          onNext={() => {
+            if (messages.data.next_cursor) {
+              pagination.next(messages.data.next_cursor);
+            }
+          }}
+          canPrevious={pagination.canPrevious}
+          canNext={messages.data.next_cursor !== null}
+        />
+      ) : null;
+
     if (visibleMessages.length === 0) {
       return (
-        <TableEmptyState
-          title={`No ${messageFilter} messages`}
-          description="Try another status filter."
-          filtered
-          action={
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setMessageFilter("all")}
-            >
-              Show all
-            </Button>
-          }
-        />
+        <div className="flex flex-col gap-3">
+          <TableEmptyState
+            title={`No ${messageFilter} messages on this page`}
+            description="Try another page or status."
+            filtered
+            action={
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setMessageFilter("all")}
+              >
+                Show all
+              </Button>
+            }
+          />
+          {pager}
+        </div>
       );
     }
 
-    return <WhatsappMessagesTable messages={visibleMessages} />;
+    return (
+      <div className="flex flex-col gap-3">
+        <WhatsappMessagesTable messages={visibleMessages} />
+        {pager}
+      </div>
+    );
   }
 
   return (

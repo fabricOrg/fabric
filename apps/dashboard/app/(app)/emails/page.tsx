@@ -1,6 +1,11 @@
 "use client";
 
-import type { EmailContentResponse, EmailMessage } from "@app/contracts";
+import {
+  type EmailContentResponse,
+  type EmailInboxResponse,
+  type EmailMessage,
+  emailInboxResponse,
+} from "@app/contracts";
 import {
   Alert,
   AlertDescription,
@@ -18,7 +23,7 @@ import {
   CompactSummaryRow,
   CompactSummaryRows,
 } from "@app/ui/components/ui/compact-summary";
-import { TablePagination } from "@app/ui/components/ui/data-table";
+import { CursorPagination } from "@app/ui/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -45,11 +50,13 @@ import { formatDateTimeFull } from "@app/ui/lib/datetime";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { Mail, RefreshCw, TriangleAlert } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { CopyButton } from "@/components/copy-button";
 import { StatusBadge } from "@/components/status-badge";
+import { useCursorPagination } from "@/lib/use-cursor-pagination";
 
 type EmailFilter = "all" | "queued" | "delivered" | "failed";
+const PAGE_SIZE = 20;
 
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
@@ -61,11 +68,17 @@ async function fetchJson<T>(url: string): Promise<T> {
 export default function EmailsPage() {
   const [selected, setSelected] = useState<EmailMessage | null>(null);
   const [emailFilter, setEmailFilter] = useState<EmailFilter>("all");
+  const pagination = useCursorPagination();
   const emails = useQuery({
-    queryKey: ["emails"],
-    queryFn: () =>
-      fetchJson<{ messages: EmailMessage[] }>("/api/dashboard/emails"),
-    refetchInterval: 15_000,
+    queryKey: ["emails", pagination.cursor],
+    queryFn: async () => {
+      const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      if (pagination.cursor) query.set("cursor", pagination.cursor);
+      return emailInboxResponse.parse(
+        await fetchJson<unknown>(`/api/dashboard/emails?${query.toString()}`),
+      );
+    },
+    refetchInterval: pagination.pageIndex === 0 ? 15_000 : false,
     refetchIntervalInBackground: false,
   });
 
@@ -110,7 +123,7 @@ export default function EmailsPage() {
         </Alert>
       ) : emails.isPending ? (
         <TableLoadingState />
-      ) : emails.data.messages.length === 0 ? (
+      ) : emails.data.messages.length === 0 && pagination.pageIndex === 0 ? (
         <Card>
           <CardHeader>
             <CardTitle>Sent emails</CardTitle>
@@ -143,6 +156,12 @@ export default function EmailsPage() {
               filter={emailFilter}
               onSelect={setSelected}
               onClearFilter={() => setEmailFilter("all")}
+              pageIndex={pagination.pageIndex}
+              pageRowCount={emails.data.messages.length}
+              nextCursor={emails.data.next_cursor}
+              canPrevious={pagination.canPrevious}
+              onPrevious={pagination.previous}
+              onNext={pagination.next}
             />
           </CardContent>
         </Card>
@@ -185,37 +204,59 @@ function EmailTable({
   filter,
   onSelect,
   onClearFilter,
+  pageIndex,
+  pageRowCount,
+  nextCursor,
+  canPrevious,
+  onPrevious,
+  onNext,
 }: {
   messages: readonly EmailMessage[];
   filter: EmailFilter;
   onSelect: (message: EmailMessage) => void;
   onClearFilter: () => void;
+  pageIndex: number;
+  pageRowCount: number;
+  nextCursor: string | null;
+  canPrevious: boolean;
+  onPrevious: () => void;
+  onNext: (cursor: string) => void;
 }) {
-  const pageSize = 10;
-  const [pageIndex, setPageIndex] = useState(0);
-  const pageCount = Math.max(1, Math.ceil(messages.length / pageSize));
-  const visibleMessages = useMemo(
-    () => messages.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize),
-    [messages, pageIndex],
-  );
+  const pager =
+    canPrevious || nextCursor ? (
+      <CursorPagination
+        pageIndex={pageIndex}
+        rowCount={pageRowCount}
+        pageSize={PAGE_SIZE}
+        onPrevious={onPrevious}
+        onNext={() => {
+          if (nextCursor) onNext(nextCursor);
+        }}
+        canPrevious={canPrevious}
+        canNext={nextCursor !== null}
+      />
+    ) : null;
 
   if (messages.length === 0) {
     return (
-      <TableEmptyState
-        title={`No ${filter} emails`}
-        description="Try another status filter."
-        filtered
-        action={
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={onClearFilter}
-          >
-            Show all
-          </Button>
-        }
-      />
+      <div className="flex flex-col gap-3">
+        <TableEmptyState
+          title={`No ${filter} emails on this page`}
+          description="Try another page or status."
+          filtered
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onClearFilter}
+            >
+              Show all
+            </Button>
+          }
+        />
+        {pager}
+      </div>
     );
   }
 
@@ -232,7 +273,7 @@ function EmailTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visibleMessages.map((message) => (
+            {messages.map((message) => (
               <TableRow
                 key={message.id}
                 className="cursor-pointer"
@@ -255,22 +296,7 @@ function EmailTable({
           </TableBody>
         </Table>
       </section>
-      {messages.length > pageSize ? (
-        <TablePagination
-          pageIndex={pageIndex}
-          pageCount={pageCount}
-          rowCount={messages.length}
-          pageSize={pageSize}
-          onFirst={() => setPageIndex(0)}
-          onPrevious={() => setPageIndex((page) => Math.max(0, page - 1))}
-          onNext={() =>
-            setPageIndex((page) => Math.min(pageCount - 1, page + 1))
-          }
-          onLast={() => setPageIndex(pageCount - 1)}
-          canPrevious={pageIndex > 0}
-          canNext={pageIndex < pageCount - 1}
-        />
-      ) : null}
+      {pager}
     </div>
   );
 }
@@ -278,7 +304,7 @@ function EmailTable({
 function EmailActivitySummary({
   state,
 }: {
-  state: UseQueryResult<{ messages: EmailMessage[] }>;
+  state: UseQueryResult<EmailInboxResponse>;
 }) {
   if (state.isError) {
     return (

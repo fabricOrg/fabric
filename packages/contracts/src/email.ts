@@ -53,6 +53,7 @@ export type EmailMessageListResponse = z.infer<typeof emailMessageListResponse>;
 /** Dashboard-facing (BFF/internal) email inbox for the current workspace environment. */
 export const emailInboxResponse = z.object({
   messages: z.array(emailMessage),
+  next_cursor: nextCursor,
 });
 export type EmailInboxResponse = z.infer<typeof emailInboxResponse>;
 

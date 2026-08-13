@@ -18,6 +18,7 @@ import {
   asInsufficientFunds,
   invalidRequest,
 } from "../http/api-error.js";
+import type { PageInput } from "../http/cursor.js";
 import { SmsService } from "../sms/sms.service.js";
 import { WhatsappService } from "../whatsapp/whatsapp.service.js";
 import {
@@ -223,7 +224,11 @@ export class ManagedMessagesService {
   async list(input: {
     tenantId: string;
     environmentId: string;
-  }): Promise<MessageDeliverySummary[]> {
+    page: PageInput;
+  }): Promise<{
+    deliveries: MessageDeliverySummary[];
+    next_cursor: string | null;
+  }> {
     return listDeliveries(this.db, input);
   }
 

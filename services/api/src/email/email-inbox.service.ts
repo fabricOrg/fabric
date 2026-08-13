@@ -1,8 +1,13 @@
-import type { EmailContentResponse, EmailMessage } from "@app/contracts";
+import type { EmailContentResponse, EmailInboxResponse } from "@app/contracts";
 import type { AppDb } from "@app/db";
 import { Inject, Injectable } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
 import { notFound } from "../http/api-error.js";
+import {
+  CURSOR_TS_FORMAT,
+  encodeCursor,
+  type PageInput,
+} from "../http/cursor.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
 import { hydrateEmailRows, parseEmailContent } from "./email-content.js";
 
@@ -23,19 +28,38 @@ export class EmailInboxService {
   async listForEnvironmentType(
     tenantId: string,
     environmentType: "sandbox" | "live",
-  ): Promise<EmailMessage[]> {
+    page: PageInput,
+  ): Promise<EmailInboxResponse> {
     const rows = (await this.db.withTenant(
       tenantId,
       (tx) => tx`
         SELECT m.id, m.subject_id, m.content_pii_id, m.status::text, m.provider_slug,
-               m.error_code, m.created_at
+               m.error_code, m.created_at,
+               to_char(m.created_at at time zone 'UTC', ${CURSOR_TS_FORMAT}) AS cursor_ts
         FROM email_messages m
         JOIN environments e ON e.id = m.environment_id
         WHERE e.type = ${environmentType}
+        ${
+          page.before
+            ? tx`AND (m.created_at, m.id) < (${page.before.createdAt}::text::timestamptz, ${page.before.id})`
+            : tx``
+        }
         ORDER BY m.created_at DESC, m.id DESC
-        LIMIT 100`,
+        LIMIT ${page.limit + 1}`,
     )) as Row[];
-    return hydrateEmailRows(this.vault, tenantId, rows);
+    const hasMore = rows.length > page.limit;
+    const visible = hasMore ? rows.slice(0, page.limit) : rows;
+    const last = visible[visible.length - 1];
+    return {
+      messages: await hydrateEmailRows(this.vault, tenantId, visible),
+      next_cursor:
+        hasMore && last
+          ? encodeCursor({
+              createdAt: String(last.cursor_ts),
+              id: String(last.id),
+            })
+          : null,
+    };
   }
 
   /** Decrypted content for one email in this environment type — the sandbox viewer. */

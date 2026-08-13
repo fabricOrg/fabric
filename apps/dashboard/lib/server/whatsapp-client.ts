@@ -51,9 +51,13 @@ async function request(
 export async function listWhatsappMessages(
   tenantId: string,
   env: "sandbox" | "live",
+  page: { limit?: string; cursor?: string } = {},
 ): Promise<WhatsappMessageListResponse> {
+  const query = new URLSearchParams({ env });
+  if (page.limit) query.set("limit", page.limit);
+  if (page.cursor) query.set("cursor", page.cursor);
   return whatsappMessageListResponse.parse(
-    await request(tenantId, `/whatsapp?env=${env}`),
+    await request(tenantId, `/whatsapp?${query.toString()}`),
   );
 }
 
