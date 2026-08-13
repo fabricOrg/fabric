@@ -1,4 +1,5 @@
 import type { StaffDto } from "@app/contracts";
+import { PageContainer } from "@app/ui/components/ui/app-shell";
 import {
   Card,
   CardContent,
@@ -6,6 +7,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@app/ui/components/ui/card";
+import {
+  PageHeader,
+  PageHeaderActions,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+} from "@app/ui/components/ui/page-header";
 import { InviteStaffDialog } from "@/components/forms/invite-staff-dialog";
 import { StaffTable } from "@/components/tables/staff-table";
 import { requireAdminSession } from "@/lib/server/auth";
@@ -28,19 +36,21 @@ export default async function StaffPage() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-display text-2xl font-semibold tracking-tight">
-            Staff
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Platform operators. Access is by email allowlist — they sign in with
+    <PageContainer>
+      <PageHeader>
+        <PageHeaderHeading>
+          <PageHeaderTitle>Staff</PageHeaderTitle>
+          <PageHeaderDescription>
+            Platform operators. Access is by email allowlist - they sign in with
             a matching WorkOS identity.
-          </p>
-        </div>
-        {canManage ? <InviteStaffDialog /> : null}
-      </div>
+          </PageHeaderDescription>
+        </PageHeaderHeading>
+        {canManage ? (
+          <PageHeaderActions>
+            <InviteStaffDialog />
+          </PageHeaderActions>
+        ) : null}
+      </PageHeader>
 
       <Card>
         <CardHeader>
@@ -66,6 +76,6 @@ export default async function StaffPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

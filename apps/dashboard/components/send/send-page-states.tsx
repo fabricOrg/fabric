@@ -6,6 +6,7 @@ import {
 } from "@app/ui/components/ui/alert";
 import { Button } from "@app/ui/components/ui/button";
 import { Skeleton } from "@app/ui/components/ui/skeleton";
+import { WorkflowHeader } from "@app/ui/components/ui/workflow-header";
 import { CheckCircle2, Radio, Smartphone } from "lucide-react";
 import Link from "next/link";
 import type { sendSms } from "@/lib/client/dashboard-api";
@@ -13,15 +14,10 @@ import { formatMoney } from "@/lib/money";
 
 export function SendPageHeading() {
   return (
-    <div className="flex flex-col gap-1">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">
-        Send SMS
-      </h1>
-      <p className="max-w-2xl text-sm text-muted-foreground">
-        Send one controlled message, review its wallet impact, and verify the
-        resulting delivery record.
-      </p>
-    </div>
+    <WorkflowHeader
+      title="Send SMS"
+      description="Compose a controlled SMS and review cost before sending."
+    />
   );
 }
 
@@ -40,8 +36,8 @@ export function DeliveryModeAlert({
       </AlertTitle>
       <AlertDescription>
         {virtual
-          ? "No carrier message is sent. Delivery appears in your virtual phone."
-          : "This sends through a real carrier and charges your wallet. Only owner-approved test recipients are currently allowed."}
+          ? "No carrier send. Delivery appears in your virtual phone."
+          : "Live carrier delivery charges your wallet."}
         {settings.reason ? ` ${settings.reason}` : ""}
       </AlertDescription>
     </Alert>
@@ -66,10 +62,7 @@ export function SendLoadError({ onRetry }: { onRetry: () => void }) {
     <Alert variant="destructive" role="alert">
       <AlertTitle>Send context unavailable</AlertTitle>
       <AlertDescription className="flex flex-col items-start gap-3">
-        <span>
-          We couldn’t load your wallet, sender approvals, consent list,
-          templates, or delivery mode. Nothing has been sent.
-        </span>
+        <span>We could not load the required send context.</span>
         <Button size="sm" variant="outline" onClick={onRetry}>
           Try again
         </Button>
@@ -117,7 +110,7 @@ export function SendSuccessState({
         <h2 className="font-display text-xl font-semibold tracking-tight">
           Message accepted
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           The API charged{" "}
           <span className="font-mono tabular-nums">
             {formatMoney(result.cost)}

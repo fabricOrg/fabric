@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@app/ui/components/ui/field";
+import { Field, FieldLabel } from "@app/ui/components/ui/field";
 import { Switch } from "@app/ui/components/ui/switch";
 import { Textarea } from "@app/ui/components/ui/textarea";
 import type { AuthoringVariable } from "./definition-authoring";
@@ -26,14 +22,10 @@ export function DefinitionSchemaEditor({
   onFieldsChange: (fields: AuthoringVariable[]) => void;
 }) {
   return (
-    <section className="space-y-3">
+    <section className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-medium">Variable schema</h3>
-          <p className="text-xs text-muted-foreground">
-            Visual editing covers nested scalar fields. Advanced mode preserves
-            arrays and the complete portable schema subset.
-          </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
           <Switch
@@ -54,9 +46,6 @@ export function DefinitionSchemaEditor({
             value={schemaText}
             onChange={(event) => onSchemaTextChange(event.target.value)}
           />
-          <FieldDescription>
-            Only Fabric's bounded, closed schema subset is accepted.
-          </FieldDescription>
         </Field>
       ) : (
         <VariableSchemaBuilder fields={fields} onChange={onFieldsChange} />

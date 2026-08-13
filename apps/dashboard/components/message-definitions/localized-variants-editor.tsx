@@ -36,10 +36,6 @@ export function LocalizedVariantsEditor({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-medium">Additional locales</h3>
-          <p className="text-xs text-muted-foreground">
-            Adding a locale is compatible. Removing a released locale requires a
-            new stable key.
-          </p>
         </div>
         <Button
           type="button"

@@ -11,11 +11,7 @@ import {
 } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import { DateTimePicker } from "@app/ui/components/ui/date-time-picker";
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@app/ui/components/ui/field";
+import { Field, FieldLabel } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import {
   Select,
@@ -213,10 +209,6 @@ export function PackageTermsFields({
             value={form.creditValidityDays}
             onChange={form.setCreditValidityDays}
           />
-          <FieldDescription>
-            Customers see this before they buy, and unspent credits are
-            recognised as breakage once they lapse.
-          </FieldDescription>
         </Field>
         <Field>
           <FieldLabel>Available from</FieldLabel>
@@ -239,9 +231,6 @@ export function PackageTermsFields({
               form.setEffectiveTo(next ? toLocalInput(next.toISOString()) : "")
             }
           />
-          <FieldDescription>
-            Leave blank to sell it until the package is retired.
-          </FieldDescription>
         </Field>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 [&>*]:min-w-0">

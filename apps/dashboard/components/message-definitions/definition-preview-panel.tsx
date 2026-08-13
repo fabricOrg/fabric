@@ -117,10 +117,6 @@ export function DefinitionPreviewPanel({
     >
       <div>
         <h3 className="text-sm font-semibold">Live preview</h3>
-        <p className="text-xs text-muted-foreground">
-          Uses the same renderer, encoding, segmentation, and pricing core as
-          managed send.
-        </p>
       </div>
       {!visual ? (
         <Field>

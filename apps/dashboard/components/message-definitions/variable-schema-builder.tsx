@@ -36,10 +36,6 @@ export function VariableSchemaBuilder({
           <h3 id="variables-heading" className="text-sm font-medium">
             Variables
           </h3>
-          <p className="text-xs text-muted-foreground">
-            Tokens detected in the message are added automatically. Dotted names
-            create nested data.
-          </p>
         </div>
         <Button
           type="button"

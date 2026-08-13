@@ -1,4 +1,12 @@
 import type { PriceBookDto, ProviderCostRateDto } from "@app/contracts";
+import { PageContainer } from "@app/ui/components/ui/app-shell";
+import { Card, CardContent } from "@app/ui/components/ui/card";
+import {
+  PageHeader,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+} from "@app/ui/components/ui/page-header";
 import { PriceBookManager } from "@/components/price-book-manager";
 import { ProviderCostManager } from "@/components/provider-cost-manager";
 import { requireAdminSession } from "@/lib/server/auth";
@@ -25,17 +33,32 @@ export default async function PricingPage() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Pricing
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Rate plans priced per channel and currency. Accounts resolve to their
-          assigned book, or the mode default. One book may be published to
-          public pricing surfaces. Every edit is audited.
-        </p>
-      </div>
+    <PageContainer>
+      <PageHeader>
+        <PageHeaderHeading>
+          <PageHeaderTitle>Pricing</PageHeaderTitle>
+          <PageHeaderDescription>
+            Rate books, provider costs, and prepaid package controls.
+          </PageHeaderDescription>
+        </PageHeaderHeading>
+      </PageHeader>
+
+      <Card>
+        <CardContent className="grid gap-3 sm:grid-cols-3">
+          <PricingSignal
+            title="Price books"
+            value={loadError ? "-" : books.length}
+          />
+          <PricingSignal
+            title="Provider costs"
+            value={loadError ? "-" : providerCosts.length}
+          />
+          <PricingSignal
+            title="Can manage"
+            value={canManage ? "Yes" : "Read-only"}
+          />
+        </CardContent>
+      </Card>
 
       {loadError ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
@@ -47,6 +70,23 @@ export default async function PricingPage() {
       {!loadError ? (
         <ProviderCostManager rates={providerCosts} canManage={canManage} />
       ) : null}
+    </PageContainer>
+  );
+}
+
+function PricingSignal({
+  title,
+  value,
+}: {
+  title: string;
+  value: number | string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border bg-muted/20 p-4">
+      <span className="text-muted-foreground text-sm">{title}</span>
+      <span className="font-display text-xl font-semibold tabular-nums">
+        {value}
+      </span>
     </div>
   );
 }

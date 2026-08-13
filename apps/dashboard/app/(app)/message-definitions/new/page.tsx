@@ -1,7 +1,6 @@
 import { PageContainer } from "@app/ui/components/ui/app-shell";
 import {
   PageHeader,
-  PageHeaderDescription,
   PageHeaderHeading,
   PageHeaderTitle,
 } from "@app/ui/components/ui/page-header";
@@ -58,9 +57,6 @@ export default async function NewMessageDefinitionPage({
       <PageHeader>
         <PageHeaderHeading>
           <PageHeaderTitle>New message definition</PageHeaderTitle>
-          <PageHeaderDescription>
-            A stable key your code sends by, with versioned content behind it.
-          </PageHeaderDescription>
         </PageHeaderHeading>
       </PageHeader>
 
