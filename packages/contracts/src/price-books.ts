@@ -5,7 +5,8 @@ import { currency } from "./money.js";
 
 /**
  * Price-book DTOs (ADR-0010). A price book is a named set of per-channel, per-currency unit prices
- * that staff configure and each account is assigned. SMS is priced per segment, email flat per send.
+ * that staff configure and each account is assigned. SMS is priced per segment, email flat per send,
+ * WhatsApp per message.
  * Money is minor units as a decimal string (exact bigint on the wire — never a float), matching the
  * wallet/managed-message money shape.
  */
@@ -150,7 +151,7 @@ export type UpsertPriceBookRequest = z.infer<
  */
 export const purchaseTokensRequestSchema = z.object({
   channel: messageChannel,
-  /** How many sends to buy. SMS spends one token per SEGMENT, email one per send. */
+  /** How many sends to buy. SMS spends one token per SEGMENT; email and WhatsApp one per message. */
   quantity: z.number().int().positive().max(1_000_000),
   // Settleable currencies only — this one takes real money, so an unsupported code must be refused
   // before a payment intent exists rather than stranding a lot nothing can price.
