@@ -4,7 +4,6 @@ import { Button } from "@app/ui/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -105,10 +104,6 @@ export function RegisterSenderDialog({
         >
           <DialogHeader>
             <DialogTitle className="font-display">{title}</DialogTitle>
-            <DialogDescription>
-              Registration is reviewed by the carrier and, in Nigeria, the NCC.
-              Approval typically takes 1–5 business days.
-            </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col gap-4">
@@ -227,13 +222,7 @@ export function RegisterSenderDialog({
                       placeholder="e.g. Transactional OTPs and delivery notifications."
                       aria-invalid={invalid || undefined}
                     />
-                    {invalid ? (
-                      <FieldError field={field} />
-                    ) : (
-                      <FieldDescription>
-                        Carriers approve sender IDs against a stated use case.
-                      </FieldDescription>
-                    )}
+                    {invalid ? <FieldError field={field} /> : null}
                   </Field>
                 );
               }}

@@ -118,9 +118,6 @@ export function NewCampaignForm() {
                   onChange={(e) => field.handleChange(e.target.value)}
                   onBlur={field.handleBlur}
                 />
-                <FieldDescription>
-                  Internal label — recipients never see this.
-                </FieldDescription>
               </Field>
             )}
           </form.Field>
@@ -138,18 +135,16 @@ export function NewCampaignForm() {
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}
                   />
-                  <FieldDescription>
-                    {field.state.value.length > 0 ? (
+                  {field.state.value.length > 0 ? (
+                    <FieldDescription>
                       <span className="tabular-nums">
                         {field.state.value.length} chars · {seg.segments}{" "}
                         segment
                         {seg.segments === 1 ? "" : "s"} ·{" "}
                         {seg.encoding === "ucs2" ? "UCS-2" : "GSM-7"}
                       </span>
-                    ) : (
-                      "Longer messages and non-GSM characters use more segments."
-                    )}
-                  </FieldDescription>
+                    </FieldDescription>
+                  ) : null}
                 </Field>
               );
             }}
@@ -169,9 +164,6 @@ export function NewCampaignForm() {
                   onBlur={field.handleBlur}
                   className="font-mono tabular-nums"
                 />
-                <FieldDescription>
-                  Number of recipients in the selected list.
-                </FieldDescription>
               </Field>
             )}
           </form.Field>
@@ -185,11 +177,7 @@ export function NewCampaignForm() {
                 <TabsTrigger value="now">Send now</TabsTrigger>
                 <TabsTrigger value="later">Schedule</TabsTrigger>
               </TabsList>
-              <TabsContent value="now">
-                <FieldDescription>
-                  Sending starts as soon as you confirm.
-                </FieldDescription>
-              </TabsContent>
+              <TabsContent value="now" />
               <TabsContent value="later">
                 <DateTimePicker
                   value={scheduledAt}
@@ -206,10 +194,6 @@ export function NewCampaignForm() {
               Promotional opt-outs are always suppressed in Campaigns. A bulk
               campaign cannot override recipient consent.
             </div>
-            <FieldDescription>
-              Transactional notifications must be sent through an approved
-              transactional workflow, not this preview.
-            </FieldDescription>
           </Field>
         </CardContent>
       </Card>

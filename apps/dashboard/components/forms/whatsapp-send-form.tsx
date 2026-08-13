@@ -6,11 +6,7 @@ import {
   whatsappSendRequest,
 } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@app/ui/components/ui/field";
+import { Field, FieldLabel } from "@app/ui/components/ui/field";
 import { FieldError, fieldInvalid } from "@app/ui/components/ui/form";
 import { Input } from "@app/ui/components/ui/input";
 import { Textarea } from "@app/ui/components/ui/textarea";
@@ -147,13 +143,7 @@ export function WhatsappSendForm({ onSent }: { onSent: () => void }) {
                   onBlur={field.handleBlur}
                   aria-invalid={invalid || undefined}
                 />
-                {invalid ? (
-                  <FieldError field={field} />
-                ) : (
-                  <FieldDescription>
-                    One E.164 WhatsApp number.
-                  </FieldDescription>
-                )}
+                {invalid ? <FieldError field={field} /> : null}
               </Field>
             );
           }}
@@ -239,13 +229,17 @@ export function WhatsappSendForm({ onSent }: { onSent: () => void }) {
                     {invalid ? (
                       <FieldError field={field} />
                     ) : (
-                      <FieldDescription
-                        className={mismatch ? "text-destructive" : undefined}
+                      <p
+                        className={`text-xs ${
+                          mismatch
+                            ? "text-destructive"
+                            : "text-muted-foreground"
+                        }`}
                       >
                         {expected === null
-                          ? "One variable per line, in template placeholder order."
-                          : `${supplied} of ${expected} — one per line, in placeholder order.`}
-                      </FieldDescription>
+                          ? "One variable per line"
+                          : `${supplied} / ${expected} variables`}
+                      </p>
                     )}
                   </Field>
                 );

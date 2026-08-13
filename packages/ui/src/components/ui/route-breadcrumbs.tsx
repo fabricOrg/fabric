@@ -53,6 +53,7 @@ export function RouteBreadcrumbs({
   const segments = pathname.split("/").filter(Boolean);
   const current =
     currentOverride ?? exact?.label ?? humanize(segments.at(-1) ?? "Overview");
+  const showLeaf = !(exact && !parent && pathname !== "/");
 
   // Linked crumbs for the segments BETWEEN the nav route and the leaf, so a nested page carries its
   // own trail (…/message-definitions/order.shipped/edit shows the definition, linked). This is what
@@ -78,7 +79,7 @@ export function RouteBreadcrumbs({
         <BreadcrumbItem>
           <BreadcrumbLink href="/">{appLabel}</BreadcrumbLink>
         </BreadcrumbItem>
-        <BreadcrumbSeparator />
+        {showLeaf || parent ? <BreadcrumbSeparator /> : null}
         {parent ? (
           <>
             <BreadcrumbItem>
@@ -106,9 +107,11 @@ export function RouteBreadcrumbs({
             <BreadcrumbSeparator />
           </BreadcrumbItem>
         ))}
-        <BreadcrumbItem>
-          <BreadcrumbPage>{current}</BreadcrumbPage>
-        </BreadcrumbItem>
+        {showLeaf ? (
+          <BreadcrumbItem>
+            <BreadcrumbPage>{current}</BreadcrumbPage>
+          </BreadcrumbItem>
+        ) : null}
       </BreadcrumbList>
     </Breadcrumb>
   );

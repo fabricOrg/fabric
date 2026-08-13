@@ -22,10 +22,10 @@ export function ProductMark({
       )}
     >
       <div
-        className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground"
+        className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-primary/20 bg-primary text-sm font-bold text-primary-foreground shadow-sm before:absolute before:inset-0 before:bg-[linear-gradient(135deg,transparent_0_42%,color-mix(in_srgb,var(--primary-foreground)_26%,transparent)_42%_44%,transparent_44%_100%)]"
         aria-hidden="true"
       >
-        F
+        <span className="relative">F</span>
       </div>
       {!compact ? (
         <>

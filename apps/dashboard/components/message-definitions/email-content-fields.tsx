@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@app/ui/components/ui/field";
+import { Field, FieldLabel } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import { Textarea } from "@app/ui/components/ui/textarea";
 
@@ -43,10 +39,6 @@ export function EmailContentFields({
           onChange={(event) => onFromChange(event.target.value)}
           placeholder="orders@yourdomain.com"
         />
-        <FieldDescription>
-          Left blank, sandbox sends from a synthetic address. Verified
-          sending-domain binding arrives with the live channel.
-        </FieldDescription>
       </Field>
       <Field>
         <FieldLabel htmlFor="email-subject">Subject</FieldLabel>
@@ -57,9 +49,6 @@ export function EmailContentFields({
           onChange={(event) => onSubjectChange(event.target.value)}
           placeholder="Your order {{order.id}} shipped"
         />
-        <FieldDescription>
-          Single line. Tokens such as {"{{name}}"} are substituted at send.
-        </FieldDescription>
       </Field>
       <Field>
         <FieldLabel htmlFor="email-text">Text body</FieldLabel>
@@ -70,9 +59,6 @@ export function EmailContentFields({
           onChange={(event) => onTextChange(event.target.value)}
           placeholder="Hi {{name}}, your order shipped."
         />
-        <FieldDescription>
-          Plain-text part. Provide this, the HTML part, or both.
-        </FieldDescription>
       </Field>
       <Field>
         <FieldLabel htmlFor="email-html">HTML body</FieldLabel>
@@ -84,9 +70,6 @@ export function EmailContentFields({
           onChange={(event) => onHtmlChange(event.target.value)}
           placeholder="<p>Hi {{name}}, your order shipped.</p>"
         />
-        <FieldDescription>
-          Variable values are HTML-escaped when rendered into this part.
-        </FieldDescription>
       </Field>
     </div>
   );

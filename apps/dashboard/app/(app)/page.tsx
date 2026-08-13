@@ -3,12 +3,34 @@
 import { parseApiError } from "@app/contracts";
 import { PageContainer } from "@app/ui/components/ui/app-shell";
 import { Button } from "@app/ui/components/ui/button";
-import { Card, CardContent, CardHeader } from "@app/ui/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@app/ui/components/ui/card";
+import {
+  PageHeader,
+  PageHeaderActions,
+  PageHeaderDescription,
+  PageHeaderHeading,
+  PageHeaderTitle,
+} from "@app/ui/components/ui/page-header";
 import { Skeleton } from "@app/ui/components/ui/skeleton";
-import { EmptyState, ErrorState } from "@app/ui/components/ui/states";
+import { ErrorState } from "@app/ui/components/ui/states";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
-import { BadgeCheck, Megaphone, Send, Signal } from "lucide-react";
+import {
+  ArrowUpRight,
+  BadgeCheck,
+  KeyRound,
+  Megaphone,
+  Send,
+  Signal,
+  Wallet,
+} from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ActivationChecklist } from "@/components/overview/activation-checklist";
 import { AttentionQueue } from "@/components/overview/attention-queue";
 import { RecentActivity } from "@/components/overview/recent-activity";
@@ -20,17 +42,17 @@ import { listSenders, type SenderId } from "@/lib/client/senders-api";
 
 function Header() {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Welcome to Fabric
-        </h1>
-        <p className="text-sm text-muted-foreground">
+    <PageHeader>
+      <PageHeaderHeading>
+        <PageHeaderTitle>Welcome to Fabric</PageHeaderTitle>
+        <PageHeaderDescription>
           Traffic, delivery, and spend across your workspace at a glance.
-        </p>
-      </div>
-      <QuickActions />
-    </div>
+        </PageHeaderDescription>
+      </PageHeaderHeading>
+      <PageHeaderActions>
+        <QuickActions />
+      </PageHeaderActions>
+    </PageHeader>
   );
 }
 
@@ -57,6 +79,66 @@ function QuickActions() {
         </Link>
       </Button>
     </div>
+  );
+}
+
+function FirstRunPanel() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Signal className="size-4 text-primary" />
+          Launch your first delivery
+        </CardTitle>
+        <CardAction>
+          <Button asChild size="sm">
+            <Link href="/send">
+              Send SMS
+              <ArrowUpRight data-icon="inline-end" />
+            </Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-3">
+        <FirstRunStep
+          icon={<KeyRound />}
+          title="Prepare identity"
+          href="/senders"
+        />
+        <FirstRunStep icon={<Wallet />} title="Add balance" href="/wallet" />
+        <FirstRunStep
+          icon={<Signal />}
+          title="Inspect delivery"
+          href="/messages"
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+function FirstRunStep({
+  icon,
+  title,
+  href,
+}: {
+  icon: ReactNode;
+  title: string;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex min-w-0 flex-col gap-3 rounded-md border bg-muted/20 p-4 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+    >
+      <span className="flex size-8 items-center justify-center border bg-background text-primary [&_svg]:size-4">
+        {icon}
+      </span>
+      <span className="flex flex-col gap-1">
+        <span className="font-medium text-sm group-hover:text-accent-foreground">
+          {title}
+        </span>
+      </span>
+    </Link>
   );
 }
 
@@ -130,11 +212,7 @@ function OverviewBody({
     return (
       <>
         <ActivationChecklist summary={summary} senders={senders} />
-        <EmptyState
-          icon={<Signal />}
-          title="No activity yet"
-          description="Complete the setup steps above, then your traffic, delivery, and spend will appear here."
-        />
+        <FirstRunPanel />
       </>
     );
   }

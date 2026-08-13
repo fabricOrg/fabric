@@ -4,13 +4,9 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@app/ui/components/ui/alert";
+import { Badge } from "@app/ui/components/ui/badge";
 import { Card, CardContent } from "@app/ui/components/ui/card";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "@app/ui/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import {
   Select,
@@ -29,11 +25,6 @@ interface Props {
   readonly onToChange: (value: string) => void;
   readonly report: RecipientReport;
   readonly senderOptions: readonly string[];
-  /**
-   * The destination the sender list was filtered by, or null when no valid recipient has been
-   * entered yet. Drives the wording: "none for Ghana" is a different problem from "none at all",
-   * and claiming a destination before one exists sent people to a page showing an Active sender.
-   */
   readonly senderDestination: string | null;
   readonly senderId: string;
   readonly onSenderChange: (value: string) => void;
@@ -82,12 +73,7 @@ export function SendComposerFields(props: Props) {
             </FieldError>
           ) : props.report.suppressed.length > 0 ? (
             <FieldError>This recipient has opted out.</FieldError>
-          ) : (
-            <FieldDescription>
-              One controlled recipient. Carrier delivery may incur a real
-              charge.
-            </FieldDescription>
-          )}
+          ) : null}
         </Field>
 
         <Field>
@@ -114,8 +100,8 @@ export function SendComposerFields(props: Props) {
               </AlertTitle>
               <AlertDescription>
                 {props.senderDestination
-                  ? `A sender ID is registered per country, and none of yours is active for ${props.senderDestination}.`
-                  : "Register and activate a sender ID before using live delivery."}{" "}
+                  ? `No active sender is available for ${props.senderDestination}.`
+                  : "Register and activate a sender ID before live delivery."}{" "}
                 <Link className="underline" href="/senders">
                   Open Sender IDs
                 </Link>
@@ -140,17 +126,10 @@ export function SendComposerFields(props: Props) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="transactional">
-                Transactional — OTP, receipt, account alert
-              </SelectItem>
-              <SelectItem value="promotional">
-                Promotional — marketing or offer
-              </SelectItem>
+              <SelectItem value="transactional">Transactional</SelectItem>
+              <SelectItem value="promotional">Promotional</SelectItem>
             </SelectContent>
           </Select>
-          <FieldDescription>
-            Promotional messages enforce DND and local quiet hours.
-          </FieldDescription>
         </Field>
 
         <Field>
@@ -165,16 +144,20 @@ export function SendComposerFields(props: Props) {
           <Textarea
             id="body"
             rows={6}
-            placeholder="Type your message… use {{name}} for personalization."
+            placeholder="Type your message. Use {{name}} for personalization."
             value={props.body}
             onChange={(event) => props.onBodyChange(event.target.value)}
           />
           {props.body.length > 0 ? (
-            <FieldDescription className="tabular-nums">
-              {props.encoding === "gsm7" ? "GSM-7" : "UCS-2"} ·{" "}
-              {props.characters} chars · {props.segments} segment
-              {props.segments === 1 ? "" : "s"}
-            </FieldDescription>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline">
+                {props.encoding === "gsm7" ? "GSM-7" : "UCS-2"}
+              </Badge>
+              <Badge variant="outline">{props.characters} chars</Badge>
+              <Badge variant="outline">
+                {props.segments} segment{props.segments === 1 ? "" : "s"}
+              </Badge>
+            </div>
           ) : null}
         </Field>
         <PersonalizeFields

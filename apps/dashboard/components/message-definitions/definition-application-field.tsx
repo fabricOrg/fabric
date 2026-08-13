@@ -59,11 +59,9 @@ export function DefinitionApplicationField({
           ))}
         </SelectContent>
       </Select>
-      <FieldDescription>
-        {applications.length === 0
-          ? "Create an application first — a definition's stable key belongs to one."
-          : "The stable key belongs only to this application."}
-      </FieldDescription>
+      {applications.length === 0 ? (
+        <FieldDescription>Create an application first.</FieldDescription>
+      ) : null}
     </Field>
   );
 }

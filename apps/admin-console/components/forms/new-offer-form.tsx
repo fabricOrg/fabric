@@ -7,18 +7,13 @@ import type {
 } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@app/ui/components/ui/dialog";
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@app/ui/components/ui/field";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@app/ui/components/ui/card";
+import { Field, FieldLabel } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import {
   Select,
@@ -27,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@app/ui/components/ui/select";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
@@ -44,16 +40,19 @@ function codeFromName(name: string): string {
     .slice(0, 64);
 }
 
-/** One workflow for the package identity and its first draft terms. */
-export function NewOfferDialog({
-  open,
-  onOpenChange,
+function catalogLabel(name: string): string {
+  return name.replace(
+    /\s+[-\u2014]\s+[0-9a-f]{8}-[0-9a-f-]{27,}$/i,
+    " catalog",
+  );
+}
+
+/** One full-page workflow for package identity and its first draft terms. */
+export function NewOfferForm({
   catalogs,
   channels,
   routeVocabulary,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   catalogs: readonly PriceBookDto[];
   channels: readonly CommercialOfferChannelDto[];
   routeVocabulary: CommercialRouteVocabulary;
@@ -72,7 +71,7 @@ export function NewOfferDialog({
   const valid =
     catalogId.length > 0 &&
     CODE_PATTERN.test(code) &&
-    name.trim() &&
+    name.trim().length > 0 &&
     form.valid;
 
   async function submit() {
@@ -88,8 +87,8 @@ export function NewOfferDialog({
         },
         version: form.terms(),
       });
-      toast.success(`Package “${name.trim()}” created as a draft.`);
-      onOpenChange(false);
+      toast.success(`Package "${name.trim()}" created as a draft.`);
+      router.push("/pricing/offers");
       router.refresh();
     } catch (error) {
       toast.error(
@@ -103,16 +102,12 @@ export function NewOfferDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>New prepaid package</DialogTitle>
-          <DialogDescription>
-            Combine any supported channel credits under one price. The package
-            remains a draft until a different admin publishes it.
-          </DialogDescription>
-        </DialogHeader>
-
+    <Card>
+      <CardHeader>
+        <CardTitle>Package identity</CardTitle>
+        <CardDescription>Name, catalog, and package code.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field className="sm:col-span-2">
             <FieldLabel>Catalog</FieldLabel>
@@ -123,7 +118,7 @@ export function NewOfferDialog({
               <SelectContent>
                 {catalogs.map((catalog) => (
                   <SelectItem key={catalog.id} value={catalog.id}>
-                    {catalog.name}
+                    {catalogLabel(catalog.name)}
                     {catalog.is_default ? " (default)" : ""}
                   </SelectItem>
                 ))}
@@ -139,8 +134,9 @@ export function NewOfferDialog({
               onChange={(event) => {
                 const nextName = event.target.value;
                 setName(nextName);
-                if (!code || code === codeFromName(name))
+                if (!code || code === codeFromName(name)) {
                   setCode(codeFromName(nextName));
+                }
               }}
             />
           </Field>
@@ -151,9 +147,6 @@ export function NewOfferDialog({
               value={code}
               onChange={(event) => setCode(event.target.value.toLowerCase())}
             />
-            <FieldDescription>
-              Permanent identifier used in receipts and audit history.
-            </FieldDescription>
           </Field>
           <Field className="sm:col-span-2">
             <FieldLabel>Description</FieldLabel>
@@ -171,19 +164,15 @@ export function NewOfferDialog({
           routeVocabulary={routeVocabulary}
         />
 
-        <DialogFooter className="gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
+        <div className="flex justify-end gap-2 border-t pt-4">
+          <Button asChild type="button" variant="outline">
+            <Link href="/pricing/offers">Cancel</Link>
           </Button>
           <Button type="button" onClick={submit} disabled={!valid || busy}>
             Create package draft
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

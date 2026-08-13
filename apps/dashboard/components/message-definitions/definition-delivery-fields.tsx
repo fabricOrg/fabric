@@ -10,6 +10,7 @@ import { LocaleSelect } from "@app/ui/components/ui/locale-select";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -98,7 +99,6 @@ export function DefinitionDeliveryFields({
           onChange={onLocaleChange}
           locales={AUTHORING_LOCALES}
         />
-        <FieldDescription>Used when no locale is requested.</FieldDescription>
       </Field>
       <Field>
         <FieldLabel htmlFor="def-class">Message class</FieldLabel>
@@ -107,13 +107,12 @@ export function DefinitionDeliveryFields({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="transactional">Transactional</SelectItem>
-            <SelectItem value="promotional">Promotional</SelectItem>
+            <SelectGroup>
+              <SelectItem value="transactional">Transactional</SelectItem>
+              <SelectItem value="promotional">Promotional</SelectItem>
+            </SelectGroup>
           </SelectContent>
         </Select>
-        <FieldDescription>
-          Controls consent and quiet-hour rules.
-        </FieldDescription>
       </Field>
       <Field>
         <FieldLabel htmlFor="def-sender">Sandbox sender</FieldLabel>
@@ -149,15 +148,15 @@ export function DefinitionDeliveryFields({
             ))}
           </SelectContent>
         </Select>
-        <FieldDescription>
-          {loading
-            ? "Reading your registered sender IDs…"
-            : sendersFailed
-              ? "Couldn't load your sender IDs — refresh to try again."
-              : senderOptions.length === 0
-                ? "Register and activate a sender ID before authoring a definition."
-                : "Reviewed with this version and bound to sandbox configuration."}
-        </FieldDescription>
+        {loading || sendersFailed || senderOptions.length === 0 ? (
+          <FieldDescription>
+            {loading
+              ? "Loading sender IDs..."
+              : sendersFailed
+                ? "Couldn't load sender IDs. Refresh to try again."
+                : "Register an active sender ID first."}
+          </FieldDescription>
+        ) : null}
       </Field>
     </div>
   );

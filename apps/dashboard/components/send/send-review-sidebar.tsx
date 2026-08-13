@@ -8,7 +8,6 @@ import { Button } from "@app/ui/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -56,10 +55,6 @@ export function SendReviewSidebar(props: Props) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Preflight</CardTitle>
-            <CardDescription>
-              Advisory checks before the API applies authoritative compliance
-              and billing gates.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <PreflightChecks checks={props.checks} />
@@ -71,7 +66,7 @@ export function SendReviewSidebar(props: Props) {
           <CardTitle className="text-base">Review & send</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-1.5 text-sm">
-          <ConfirmRow label="From" value={props.senderId || "—"} />
+          <ConfirmRow label="From" value={props.senderId || "-"} />
           <ConfirmRow
             label="Delivery"
             value={
@@ -198,7 +193,7 @@ function disabledReason(input: {
   // Never "top up your wallet" here — a sandbox workspace has no wallet to top up, and the
   // allowance refills on its own.
   if (input.allowanceExceeded) {
-    return "This message needs more segments than today's sandbox allowance has left. It resets at midnight UTC.";
+    return "Not enough sandbox allowance left today.";
   }
   if (input.hasBlock) return "Resolve the blocking preflight check.";
   return "Review the message before sending.";
