@@ -19,9 +19,13 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 | `origin/dev` | `e0af752` | through #297 |
 | `origin/testing` | `a80e7a4` | DEPLOYED 2026-08-12. **Level with `dev`.** 151 migrations, none added since. |
 
-### Start here — one PR open, reviewed
+### Start here — three PRs open, all reviewed
 
-**#298 — the WhatsApp price-book row.** One commit, based on `dev`. Independent review run.
+| PR | what | note |
+| --- | --- | --- |
+| **#300** | sandbox allowance editor saveable again | **Merge first.** Every sandbox allowance change on the platform was failing — the editor sent 2 of the 3 limits the schema requires, so the save always 422'd with a message naming the two fields the operator got right. Broken staff control, not a cosmetic issue. |
+| **#299** | the WhatsApp price-book row | A saved WhatsApp rate rendered no row at all. Carries a `fe-auth` vitest timeout fix — `scryptSync` is CPU-bound by design and blew vitest's 5s default under a saturated `verify:push`. |
+| **#298** | this file | Merge last, it references the other two. |
 
 Promotion is a **real merge** (`git merge --no-ff dev` — testing carries merge commits, and this
 repo's git config is `ff = only`, so a plain `git merge dev` aborts with "Not possible to
@@ -43,7 +47,9 @@ GHS 3.00 against the `testing whatsapp prcing` provider cost of GHS 2.00 — 33%
 
 **Three variants of ONE defect shape were found in a row: a total `Record` sitting beside a partial
 literal over the same channel union.** The sell-rule writer (#297), the public calculator's
-`isPublishedRate` (#297), and the pricing card's row list (#298). Each had a comment nearby claiming
+`isPublishedRate` (#297), and the pricing card's row list (#299). A FOURTH, worse instance was then
+found in the sandbox allowance editor (#300) — same shape, but it broke a control instead of hiding a
+row. Each had a comment nearby claiming
 totality that was true of the map and silently false of the literal. If you touch anything keyed by
 channel, grep for the other half.
 
