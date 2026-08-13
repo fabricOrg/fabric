@@ -15,6 +15,7 @@ import {
 } from "@app/db";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { UNIT_BASIS_BY_CHANNEL } from "./effective-pricing.js";
+import { assertSellRatesCoverCost } from "./margin-guard.js";
 
 /**
  * Admin write helpers for price books (ADR-0010 slice 3). Pure DB operations against the provisioning
@@ -160,6 +161,18 @@ export async function upsertPriceBook(
           eq(priceBookVersions.status, "published"),
         ),
       );
+    // Inside the transaction, BEFORE the version is published: a rate card the send path could never
+    // quote on must not become the live one. Rolls the whole upsert back rather than leaving a book
+    // that saves cleanly and fails per message.
+    await assertSellRatesCoverCost(
+      tx,
+      req.rates.map((rate) => ({
+        channel: rate.channel,
+        currency: rate.currency,
+        unitPriceMinor: BigInt(rate.unit_price_minor),
+      })),
+      req.minimum_margin_bps ?? 2_000,
+    );
     const [published] = await tx
       .insert(priceBookVersions)
       .values({

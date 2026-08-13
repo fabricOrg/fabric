@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProviderCostRateDto } from "@app/contracts";
+import { PROVIDER_VENDORS_BY_CHANNEL } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import { Input } from "@app/ui/components/ui/input";
 import {
@@ -17,7 +18,7 @@ import { toast } from "sonner";
 
 const WILDCARD = "*";
 
-type CostChannel = "sms" | "email" | "whatsapp";
+type CostChannel = keyof typeof PROVIDER_VENDORS_BY_CHANNEL;
 
 /**
  * Offered per channel because provider costs are recorded per channel. WhatsApp's classes are Meta's
@@ -45,6 +46,23 @@ const TRAFFIC_CLASSES: Record<
   ],
 };
 
+/**
+ * What the SEND path would do with this row, not what its columns look like.
+ *
+ * `effective_to ? "retired" : "active"` was wrong both ways: a row whose `effective_to` is in the
+ * future is still the live cost until it lapses (the quote matches `effective_to IS NULL OR > now()`)
+ * and was labelled retired, while a row not yet started was labelled active. Mislabelling which cost
+ * is live is how this table showed an "active" WhatsApp cost that priced nothing at all.
+ */
+function costStatus(rate: ProviderCostRateDto): string {
+  const now = Date.now();
+  if (new Date(rate.effective_from).getTime() > now) return "scheduled";
+  if (rate.effective_to && new Date(rate.effective_to).getTime() <= now) {
+    return "retired";
+  }
+  return "active";
+}
+
 export function ProviderCostManager({
   rates,
   canManage,
@@ -53,7 +71,9 @@ export function ProviderCostManager({
   canManage: boolean;
 }) {
   const router = useRouter();
-  const [vendor, setVendor] = useState("arkesel-sms");
+  const [vendor, setVendor] = useState<string>(
+    PROVIDER_VENDORS_BY_CHANNEL.sms[0],
+  );
   const [channel, setChannel] = useState<CostChannel>("sms");
   const [country, setCountry] = useState(WILDCARD);
   const [trafficClass, setTrafficClass] = useState(WILDCARD);
@@ -63,7 +83,6 @@ export function ProviderCostManager({
   const [source, setSource] = useState("");
   const [busy, setBusy] = useState(false);
   const valid =
-    vendor.trim().length > 0 &&
     /^[1-9]\d*$/.test(numerator) &&
     /^[1-9]\d*$/.test(denominator) &&
     source.trim().length > 0;
@@ -119,17 +138,22 @@ export function ProviderCostManager({
       </div>
       {canManage ? (
         <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-4">
-          <Input
-            aria-label="Provider slug"
-            value={vendor}
-            onChange={(event) => setVendor(event.target.value)}
-            placeholder="Provider slug"
-          />
+          {/* Derived, not asked: each channel has exactly one billing provider today, so a required
+              control with one option is a decision the operator cannot make differently. It becomes a
+              Select the moment a channel has two. */}
+          <div className="flex items-center rounded-md border bg-muted/40 px-3 text-sm">
+            <span className="truncate font-mono" title={vendor}>
+              {vendor}
+            </span>
+          </div>
           <Select
             value={channel}
             onValueChange={(value) => {
               const next = value as CostChannel;
               setChannel(next);
+              // Repoint the vendor with the channel. A cost is looked up by (vendor, channel), so
+              // arkesel-sms on a WhatsApp rate would match no send at all.
+              setVendor(PROVIDER_VENDORS_BY_CHANNEL[next][0]);
               // The traffic-class vocabularies do not overlap: SMS rates are recorded against
               // promotional/transactional/otp, WhatsApp's against Meta's template categories. Carrying
               // the old selection across would post a class this channel never quotes with, and the
@@ -233,7 +257,7 @@ export function ProviderCostManager({
                 </td>
                 <td className="p-3">
                   {formatDateTimeFull(rate.effective_from)}
-                  {rate.effective_to ? " · retired" : " · active"}
+                  {` · ${costStatus(rate)}`}
                 </td>
                 <td className="p-3">{rate.source_reference}</td>
               </tr>
