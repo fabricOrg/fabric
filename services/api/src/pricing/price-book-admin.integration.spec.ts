@@ -97,13 +97,13 @@ describeDb("price-book admin", () => {
   it("creates a book, lists it alongside the seeded default", async () => {
     const created = await admin.upsertBook(
       null,
-      req([{ channel: "sms", currency: "GHS", p: "7" }]),
+      req([{ channel: "sms", currency: "GHS", p: "10" }]),
       actor,
     );
     expect(created).not.toBeNull();
     if (created) bookIds.push(created.id);
     expect(created?.rates).toEqual([
-      { channel: "sms", currency: "GHS", unit_price_minor: "7" },
+      { channel: "sms", currency: "GHS", unit_price_minor: "10" },
     ]);
 
     const books = await admin.listBooks();
@@ -122,7 +122,7 @@ describeDb("price-book admin", () => {
       req([
         { channel: "whatsapp", currency: "GHS", p: "400" },
         { channel: "email", currency: "GHS", p: "9" },
-        { channel: "sms", currency: "GHS", p: "7" },
+        { channel: "sms", currency: "GHS", p: "10" },
       ]),
       actor,
     );
@@ -146,7 +146,7 @@ describeDb("price-book admin", () => {
     const book = await admin.upsertBook(
       null,
       req([
-        { channel: "sms", currency: "GHS", p: "7" },
+        { channel: "sms", currency: "GHS", p: "10" },
         { channel: "email", currency: "GHS", p: "9" },
       ]),
       actor,
@@ -156,7 +156,7 @@ describeDb("price-book admin", () => {
     const accountId = await makeAccount();
 
     expect(await admin.assignAccount(accountId, book.id, actor)).toBe("ok");
-    expect((await pricing.resolveRates(accountId)).sms.GHS).toBe(7n);
+    expect((await pricing.resolveRates(accountId)).sms.GHS).toBe(10n);
 
     // Re-price the book; the resolver cache is cleared on upsert, so the next read sees it.
     await admin.upsertBook(
@@ -222,7 +222,7 @@ describeDb("price-book admin", () => {
 
   it("publishes only one sanitized public price snapshot", async () => {
     const firstRequest = req([
-      { channel: "sms", currency: "GHS", p: "7" },
+      { channel: "sms", currency: "GHS", p: "10" },
       { channel: "email", currency: "GHS", p: "9" },
     ]);
     const first = await admin.upsertBook(
@@ -279,7 +279,7 @@ describeDb("price-book admin", () => {
         {
           ...req([
             { channel: "sms", currency: "GHS", p: "5" },
-            { channel: "email", currency: "GHS", p: "7" },
+            { channel: "email", currency: "GHS", p: "10" },
           ]),
           is_public: true,
         },

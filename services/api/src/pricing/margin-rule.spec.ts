@@ -1,5 +1,5 @@
+import { marginSatisfied, minimumSellPriceMinor } from "@app/domain";
 import { describe, expect, it } from "vitest";
-import { marginSatisfied, minimumSellPriceMinor } from "./margin-rule.js";
 
 // The exact configuration that made WhatsApp unsendable in testing: the default book sold at GHS 0.12
 // against a GHS 2.00 provider cost, and nothing refused it until a customer tried to send.
@@ -50,6 +50,7 @@ describe("minimumSellPriceMinor", () => {
   it("names a floor that itself passes", () => {
     const floor = minimumSellPriceMinor(THE_OUTAGE);
     expect(floor).toBe(250n);
+    if (floor === null) throw new Error("expected a floor");
     expect(marginSatisfied({ ...THE_OUTAGE, totalPriceMinor: floor })).toBe(
       true,
     );
@@ -66,9 +67,55 @@ describe("minimumSellPriceMinor", () => {
       minimumMarginBps: 2_000,
     };
     const floor = minimumSellPriceMinor(input);
+    if (floor === null) throw new Error("expected a floor");
     expect(marginSatisfied({ ...input, totalPriceMinor: floor })).toBe(true);
     expect(marginSatisfied({ ...input, totalPriceMinor: floor - 1n })).toBe(
       false,
     );
+  });
+
+  // A 100% floor is accepted by the contract and the DB check, and no positive price can satisfy it.
+  // Returning 0 here would have the caller print "charge at least GHS 0.00" — a price the
+  // unit_price_minor > 0 check forbids, so the operator is told to do something impossible.
+  it("has no answer at a 100% margin floor, and says so with null", () => {
+    expect(
+      minimumSellPriceMinor({
+        providerCostNumerator: 200n,
+        providerCostDenominator: 1n,
+        minimumMarginBps: 10_000,
+      }),
+    ).toBeNull();
+    expect(
+      marginSatisfied({
+        totalPriceMinor: 1_000_000n,
+        providerCostNumerator: 200n,
+        providerCostDenominator: 1n,
+        minimumMarginBps: 10_000,
+      }),
+    ).toBe(false);
+  });
+
+  // The guard checks a single unit; the quote checks N. Both sides of the inequality scale linearly
+  // in units, so the substitution is exact — pinned here because it is the assumption that lets a
+  // config-time check stand in for a send-time one.
+  it("is scale-invariant in units, which is why checking one unit is enough", () => {
+    for (const units of [1n, 2n, 7n, 1_000n]) {
+      expect(
+        marginSatisfied({
+          totalPriceMinor: units * 250n,
+          providerCostNumerator: units * 200n,
+          providerCostDenominator: 1n,
+          minimumMarginBps: 2_000,
+        }),
+      ).toBe(true);
+      expect(
+        marginSatisfied({
+          totalPriceMinor: units * 249n,
+          providerCostNumerator: units * 200n,
+          providerCostDenominator: 1n,
+          minimumMarginBps: 2_000,
+        }),
+      ).toBe(false);
+    }
   });
 });

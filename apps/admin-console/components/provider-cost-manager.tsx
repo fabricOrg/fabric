@@ -18,7 +18,7 @@ import { toast } from "sonner";
 
 const WILDCARD = "*";
 
-type CostChannel = "sms" | "email" | "whatsapp";
+type CostChannel = keyof typeof PROVIDER_VENDORS_BY_CHANNEL;
 
 /**
  * Offered per channel because provider costs are recorded per channel. WhatsApp's classes are Meta's
@@ -46,6 +46,23 @@ const TRAFFIC_CLASSES: Record<
   ],
 };
 
+/**
+ * What the SEND path would do with this row, not what its columns look like.
+ *
+ * `effective_to ? "retired" : "active"` was wrong both ways: a row whose `effective_to` is in the
+ * future is still the live cost until it lapses (the quote matches `effective_to IS NULL OR > now()`)
+ * and was labelled retired, while a row not yet started was labelled active. Mislabelling which cost
+ * is live is how this table showed an "active" WhatsApp cost that priced nothing at all.
+ */
+function costStatus(rate: ProviderCostRateDto): string {
+  const now = Date.now();
+  if (new Date(rate.effective_from).getTime() > now) return "scheduled";
+  if (rate.effective_to && new Date(rate.effective_to).getTime() <= now) {
+    return "retired";
+  }
+  return "active";
+}
+
 export function ProviderCostManager({
   rates,
   canManage,
@@ -66,7 +83,6 @@ export function ProviderCostManager({
   const [source, setSource] = useState("");
   const [busy, setBusy] = useState(false);
   const valid =
-    vendor.trim().length > 0 &&
     /^[1-9]\d*$/.test(numerator) &&
     /^[1-9]\d*$/.test(denominator) &&
     source.trim().length > 0;
@@ -122,18 +138,14 @@ export function ProviderCostManager({
       </div>
       {canManage ? (
         <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-4">
-          <Select value={vendor} onValueChange={setVendor}>
-            <SelectTrigger aria-label="Provider">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PROVIDER_VENDORS_BY_CHANNEL[channel].map((slug) => (
-                <SelectItem key={slug} value={slug}>
-                  {slug}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Derived, not asked: each channel has exactly one billing provider today, so a required
+              control with one option is a decision the operator cannot make differently. It becomes a
+              Select the moment a channel has two. */}
+          <div className="flex items-center rounded-md border bg-muted/40 px-3 text-sm">
+            <span className="truncate font-mono" title={vendor}>
+              {vendor}
+            </span>
+          </div>
           <Select
             value={channel}
             onValueChange={(value) => {
@@ -245,7 +257,7 @@ export function ProviderCostManager({
                 </td>
                 <td className="p-3">
                   {formatDateTimeFull(rate.effective_from)}
-                  {rate.effective_to ? " · retired" : " · active"}
+                  {` · ${costStatus(rate)}`}
                 </td>
                 <td className="p-3">{rate.source_reference}</td>
               </tr>

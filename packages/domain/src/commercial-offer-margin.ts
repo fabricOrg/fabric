@@ -1,3 +1,4 @@
+import { marginSatisfied } from "./margin-rule.js";
 /**
  * Publish-time margin evaluation for a fixed-total commercial offer (ADR-0012 §9).
  *
@@ -71,14 +72,14 @@ function satisfiesFloor(
   input: CommercialOfferMarginInput,
   route: CommercialOfferRouteRate,
 ): boolean {
-  // Compare BEFORE rounding the cost up, exactly as the pay-as-you-go quote does: a fractional
-  // per-unit rate must not be rejected by a rounding artefact it did not cause.
-  const costNumerator = input.totalUnits * route.numeratorMinor;
-  const allowedCostBps = BigInt(10_000 - input.minimumMarginBps);
-  return (
-    costNumerator * 10_000n <=
-    input.totalPriceMinor * route.denominator * allowedCostBps
-  );
+  // The shared rule, not a local copy. This WAS a copy, byte-identical to the quote's — which is how
+  // three spellings of one decision ended up in the tree.
+  return marginSatisfied({
+    totalPriceMinor: input.totalPriceMinor,
+    providerCostNumerator: input.totalUnits * route.numeratorMinor,
+    providerCostDenominator: route.denominator,
+    minimumMarginBps: input.minimumMarginBps,
+  });
 }
 
 function evaluateRoute(

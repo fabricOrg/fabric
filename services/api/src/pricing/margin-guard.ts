@@ -1,6 +1,6 @@
+import { marginSatisfied, minimumSellPriceMinor } from "@app/domain";
 import { sql } from "drizzle-orm";
 import { invalidRequest } from "../http/api-error.js";
-import { marginSatisfied, minimumSellPriceMinor } from "./margin-rule.js";
 
 /** A sell price about to be written, in the vocabulary the caller already has. */
 export interface SellRateCandidate {
@@ -15,6 +15,8 @@ interface CostRow {
   numerator_minor: string;
   denominator: string;
   provider_vendor: string;
+  destination_country: string | null;
+  traffic_class: string | null;
 }
 
 type Executor = {
@@ -25,19 +27,42 @@ type Executor = {
  * The WORST currently-active cost per channel+currency.
  *
  * Worst, not "the one that would be picked": a cost row may be scoped by destination country and
- * traffic class, so several can apply to the same channel and the runtime chooses per send. Checking
- * the most expensive one is the only answer that holds for EVERY send the price would have to cover.
- * A cheaper scoped rate passing is not evidence the rate card is sellable.
+ * traffic class, so several can apply to the same channel and the runtime chooses per send. A book's
+ * sell rules are always wildcard, so the price has to cover the most expensive row it could ever meet
+ * — a cheaper scoped rate passing is not evidence the rate card is sellable.
+ *
+ * "Active" is spelled exactly as `EffectivePricingService.quote` spells it, INCLUDING a future
+ * `effective_to`. That row is still the live cost until it lapses, and reading `effective_to IS NULL`
+ * instead dropped it: scheduling a rate change (publish sets the outgoing row's `effective_to` to the
+ * new start) left a window where this guard saw no cost at all and waved any price through, while the
+ * runtime still priced against the old one. The guard and the quote disagreeing about "active" is the
+ * same defect this whole change exists to prevent.
  */
 async function worstActiveCosts(db: Executor): Promise<Map<string, CostRow>> {
   const rows = (await db.execute(sql`
     SELECT DISTINCT ON (channel, currency)
-      channel, currency, numerator_minor, denominator, provider_vendor
+      channel, currency, numerator_minor, denominator, provider_vendor,
+      destination_country, traffic_class
     FROM provider_cost_rates
-    WHERE effective_to IS NULL AND effective_from <= now()
+    WHERE effective_from <= now()
+      AND (effective_to IS NULL OR effective_to > now())
     ORDER BY channel, currency,
-      (numerator_minor::numeric / NULLIF(denominator, 0)::numeric) DESC NULLS LAST`)) as CostRow[];
+      (numerator_minor::numeric / denominator::numeric) DESC`)) as CostRow[];
   return new Map(rows.map((row) => [`${row.channel}:${row.currency}`, row]));
+}
+
+/** Ceil, so a per-unit cost is never displayed as LESS than it is (1150/100 is 11.5, not 11). */
+function perUnitMinor(numerator: bigint, denominator: bigint): bigint {
+  return (numerator + denominator - 1n) / denominator;
+}
+
+/** "sms · GH · promotional" — which row is blocking, when several share a channel and currency. */
+function scopeOf(cost: CostRow): string {
+  return [
+    cost.channel,
+    cost.destination_country ?? "any destination",
+    cost.traffic_class ?? "any class",
+  ].join(" · ");
 }
 
 function money(minor: bigint, currency: string): string {
@@ -89,12 +114,19 @@ export async function assertSellRatesCoverCost(
       providerCostDenominator,
       minimumMarginBps,
     });
+    const costText = money(
+      perUnitMinor(providerCostNumerator, providerCostDenominator),
+      rate.currency,
+    );
+    const advice =
+      floor === null
+        ? "A 100% margin floor cannot be satisfied by any price — lower the floor."
+        : `Charge at least ${money(floor, rate.currency)}, or lower the provider cost first.`;
     throw invalidRequest(
       "pricing_margin_violation",
       `${rate.channel} in ${rate.currency} is priced at ${money(rate.unitPriceMinor, rate.currency)}, ` +
         `below the ${minimumMarginBps / 100}% margin floor over the ${cost.provider_vendor} cost of ` +
-        `${money(providerCostNumerator / providerCostDenominator, rate.currency)}. ` +
-        `Charge at least ${money(floor, rate.currency)}, or lower the provider cost first.`,
+        `${costText} (${scopeOf(cost)}). ${advice}`,
       "rates",
     );
   }
@@ -144,7 +176,7 @@ export async function assertCostCoveredBySellRates(
   const names = broken.map((row) => `"${row.book}"`).join(", ");
   throw invalidRequest(
     "pricing_margin_violation",
-    `A ${cost.providerVendor} cost of ${money(cost.numeratorMinor / cost.denominator, cost.currency)} ` +
+    `A ${cost.providerVendor} cost of ${money(perUnitMinor(cost.numeratorMinor, cost.denominator), cost.currency)} ` +
       `per ${cost.channel} would put ${broken.length === 1 ? "this book" : "these books"} below their margin floor: ${names}. ` +
       `Raise the ${cost.channel} price in ${cost.currency} first, then publish the cost.`,
     "numerator_minor",

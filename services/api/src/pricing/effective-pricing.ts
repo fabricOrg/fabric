@@ -1,5 +1,5 @@
 import type { PricingSnapshot } from "@app/db";
-import { marginSatisfied } from "./margin-rule.js";
+import { marginSatisfied } from "@app/domain";
 
 export type BillableChannel = "sms" | "email" | "whatsapp";
 export type TrafficClass =
