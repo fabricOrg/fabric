@@ -13,8 +13,8 @@ import { currency } from "./money.js";
 
 export const priceBookMode = z.enum(["subscription", "token"]);
 export type PriceBookMode = z.infer<typeof priceBookMode>;
-const pricingChannel = z.enum(["sms", "email", "whatsapp"]);
-const pricingTrafficClass = z.enum([
+export const pricingChannel = z.enum(["sms", "email", "whatsapp"]);
+export const pricingTrafficClass = z.enum([
   "promotional",
   "transactional",
   "otp",
@@ -228,41 +228,6 @@ export const assignPriceBookRequestSchema = z.object({
 export type AssignPriceBookRequest = z.infer<
   typeof assignPriceBookRequestSchema
 >;
-
-const positiveIntegerString = z
-  .string()
-  .regex(/^\d+$/)
-  .refine((value) => BigInt(value) > 0n, "Must be greater than zero.");
-
-export const providerCostRateInputSchema = z.object({
-  provider_vendor: z.string().trim().min(1).max(120),
-  channel: pricingChannel,
-  destination_country: z
-    .string()
-    .regex(/^[A-Z]{2}$/)
-    .nullable()
-    .default(null),
-  traffic_class: pricingTrafficClass.nullable().default(null),
-  currency,
-  numerator_minor: positiveIntegerString,
-  denominator: positiveIntegerString,
-  effective_from: z.string().datetime().optional(),
-  source_reference: z.string().trim().min(1).max(500),
-});
-export type ProviderCostRateInput = z.infer<typeof providerCostRateInputSchema>;
-
-export const providerCostRateDtoSchema = providerCostRateInputSchema
-  .omit({ effective_from: true })
-  .extend({
-    id: z.string().uuid(),
-    effective_from: z.string(),
-    effective_to: z.string().nullable(),
-  });
-export type ProviderCostRateDto = z.infer<typeof providerCostRateDtoSchema>;
-
-export const listProviderCostRatesResponseSchema = z.object({
-  rates: z.array(providerCostRateDtoSchema),
-});
 
 /**
  * Deliberately narrow public pricing snapshot. It contains no price-book identity, tenant assignment,

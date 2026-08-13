@@ -69,11 +69,24 @@ export function rateEmailFlat(
 // before sending. ADR-0014 §3 therefore supersedes ADR-0012's conversation guess — we sell one priced
 // message and absorb the conversation-vs-message spread in the margin.
 
-/** Flat WhatsApp price per template message in minor units, keyed by currency. */
+/**
+ * Flat WhatsApp price per template message in minor units, keyed by currency.
+ *
+ * GHS was 12n — 0.12 GHS — against a real meta-cloud cost of 2.00 GHS. Every freshly provisioned
+ * database seeded a default book that could not be sold on, and WhatsApp failed on every send with
+ * "no safe effective price is configured". Hand-fixing the row in one environment does not help the
+ * next one: this constant is what `ensureDefaultBook` writes.
+ *
+ * 300n clears a 2.00 cost at the default 2000bps floor (the minimum that passes is 250n).
+ *
+ * NGN and USD are UNVERIFIED — no provider cost has been recorded for either, so nothing has ever
+ * checked them and a send in those currencies fails closed at quote time. They are placeholders
+ * awaiting a real rate card, not prices anyone has confirmed.
+ */
 export const DEFAULT_WHATSAPP_BASE_RATES: RateTable = {
-  GHS: 12n, // 0.12 GHS / message (pesewas)
-  NGN: 1_200n, // 12.00 NGN (kobo)
-  USD: 5n, // 0.05 USD (cents)
+  GHS: 300n, // 3.00 GHS / message (pesewas)
+  NGN: 1_200n, // 12.00 NGN (kobo) — unverified
+  USD: 5n, // 0.05 USD (cents) — unverified
 };
 
 /**

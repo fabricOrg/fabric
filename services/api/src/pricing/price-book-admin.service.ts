@@ -19,6 +19,7 @@ import { invalidRequest } from "../http/api-error.js";
 import { PROVISIONING_DB } from "../identity/provisioning-db.module.js";
 import { UNIT_BASIS_BY_CHANNEL } from "./effective-pricing.js";
 import { EffectivePricingService } from "./effective-pricing.service.js";
+import { assertCostCoveredBySellRates } from "./margin-guard.js";
 import {
   listPriceBooks,
   readPublicPricing,
@@ -194,6 +195,16 @@ export class PriceBookAdminService {
           "effective_from",
         );
       }
+      // The other direction of the same inversion: a cost published ABOVE prices that are already
+      // live silently breaks every send on those books. Refused here, naming the books, rather than
+      // discovered later as a channel outage.
+      await assertCostCoveredBySellRates(tx, {
+        channel: request.channel,
+        currency: request.currency,
+        numeratorMinor: BigInt(request.numerator_minor),
+        denominator: BigInt(request.denominator),
+        providerVendor: request.provider_vendor,
+      });
       await tx
         .update(providerCostRates)
         .set({ effectiveTo: effectiveFrom, updatedAt: new Date() })

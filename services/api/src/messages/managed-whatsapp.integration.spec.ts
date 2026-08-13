@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import { createAppDb } from "@app/db";
+import { DEFAULT_WHATSAPP_BASE_RATES } from "@app/domain";
 import { NestFactory } from "@nestjs/core";
 import {
   FastifyAdapter,
@@ -181,7 +182,8 @@ describeDb("managed WhatsApp acceptance", () => {
       template_category: "utility",
       // ORDERED, and the order is the definition's `parameters`, not the payload's key order.
       parameters: ["Ada", "2"],
-      cost_minor: "12",
+      // The compiled default, read from the constant — restating it broke CI when the price moved.
+      cost_minor: String(DEFAULT_WHATSAPP_BASE_RATES.GHS),
       currency: "GHS",
     });
   });
@@ -218,7 +220,7 @@ describeDb("managed WhatsApp acceptance", () => {
       key: "order.whatsapp",
       channel: "whatsapp",
       status: "accepted",
-      cost: { minor: "12", currency: "GHS" },
+      cost: { minor: String(DEFAULT_WHATSAPP_BASE_RATES.GHS), currency: "GHS" },
     });
     const attempts = delivery.attempts as Array<Record<string, unknown>>;
     expect(attempts).toHaveLength(1);
