@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { apiError } from "../http/api-error.js";
@@ -25,11 +26,7 @@ export class OpenApiService {
 
   async fullDocument(): Promise<Record<string, unknown>> {
     if (this.cached) return this.cached;
-    const path = resolve(
-      this.config.get<string>("OPENAPI_INTERNAL_PATH") ??
-        "docs/api/openapi.internal.json",
-    );
-    const raw = await readFile(path, "utf8").catch(() => null);
+    const raw = await this.readArtifact();
     if (raw === null) {
       // Explicit and actionable, never an empty document. A blank spec would read as "this API has
       // no endpoints", which is a far more confusing thing to hand an operator than an error.
@@ -43,5 +40,31 @@ export class OpenApiService {
     }
     this.cached = JSON.parse(raw) as Record<string, unknown>;
     return this.cached;
+  }
+
+  /**
+   * Find the artifact without assuming a working directory.
+   *
+   * A cwd-relative default looked fine and was wrong: the API is started from `services/api`, so
+   * `docs/api/…` resolved under the package rather than the repo, and the endpoint reported the
+   * artifact missing while it sat committed two directories up. Walking up from THIS module's own
+   * location is stable whether the process runs from the repo root, from `services/api`, from
+   * `dist/`, or under a process manager that sets its own cwd.
+   */
+  private async readArtifact(): Promise<string | null> {
+    const configured = this.config.get<string>("OPENAPI_INTERNAL_PATH");
+    if (configured)
+      return readFile(resolve(configured), "utf8").catch(() => null);
+
+    let dir = dirname(fileURLToPath(import.meta.url));
+    for (let depth = 0; depth < 8; depth += 1) {
+      const candidate = resolve(dir, "docs/api/openapi.internal.json");
+      const raw = await readFile(candidate, "utf8").catch(() => null);
+      if (raw !== null) return raw;
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return null;
   }
 }
