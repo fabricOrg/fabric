@@ -2,11 +2,19 @@ import {
   type CallHandler,
   type ExecutionContext,
   Injectable,
+  Logger,
   type NestInterceptor,
 } from "@nestjs/common";
 import type { Observable } from "rxjs";
 import { map } from "rxjs/operators";
+import { responseContractFor } from "../openapi/response-contracts.js";
+import { apiError } from "./api-error.js";
 import { resolveRequestId } from "./logging.config.js";
+import {
+  checkResponse,
+  resolveValidationMode,
+  type ValidationMode,
+} from "./response-validation.js";
 
 /**
  * Wraps every successful JSON response in `{ data, request_id }`.
@@ -23,6 +31,11 @@ import { resolveRequestId } from "./logging.config.js";
  */
 @Injectable()
 export class ResponseEnvelopeInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(ResponseEnvelopeInterceptor.name);
+  // Resolved once: the mode cannot change without a restart, and reading env per response would
+  // put a lookup on every request for a value that never moves.
+  private readonly mode: ValidationMode = resolveValidationMode();
+
   intercept(
     context: ExecutionContext,
     next: CallHandler<unknown>,
@@ -43,12 +56,38 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
         if (!isJsonResponse(http.getResponse())) return payload;
         // 204 and other empty bodies have nothing to wrap.
         if (payload === undefined || payload === null) return payload;
+        this.validate(context, payload);
         return {
           data: payload,
           request_id: requestIdOf(request),
         };
       }),
     );
+  }
+
+  /** See response-validation.ts for why the posture differs by environment. */
+  private validate(context: ExecutionContext, payload: unknown): void {
+    if (this.mode === "off") return;
+    const contract = responseContractFor(
+      context.getClass(),
+      context.getHandler(),
+    );
+    const route = `${context.getClass().name}.${context.getHandler().name}`;
+    const failure = checkResponse(contract, payload, route);
+    if (!failure) return;
+    if (this.mode === "warn") {
+      this.logger.error(
+        `response does not match its published contract at ${failure.route}: ${failure.issues}`,
+      );
+      return;
+    }
+    // strict: a mismatch is a defect and the reference is meant to be trustworthy.
+    throw apiError({
+      type: "api_error",
+      code: "response_contract_violation",
+      message: `The response from ${failure.route} does not match its published schema: ${failure.issues}`,
+      status: 500,
+    });
   }
 }
 

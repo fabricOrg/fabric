@@ -3081,11 +3081,6 @@
                               "denominator": {
                                 "$ref": "#/$defs/__schema0"
                               },
-                              "source_reference": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 500
-                              },
                               "id": {
                                 "type": "string",
                                 "format": "uuid",
@@ -3103,6 +3098,10 @@
                                     "type": "null"
                                   }
                                 ]
+                              },
+                              "source_reference": {
+                                "type": "string",
+                                "maxLength": 500
                               }
                             },
                             "required": [
@@ -3113,10 +3112,10 @@
                               "currency",
                               "numerator_minor",
                               "denominator",
-                              "source_reference",
                               "id",
                               "effective_from",
-                              "effective_to"
+                              "effective_to",
+                              "source_reference"
                             ],
                             "additionalProperties": false
                           }
@@ -3383,11 +3382,6 @@
                         "denominator": {
                           "$ref": "#/$defs/__schema0"
                         },
-                        "source_reference": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 500
-                        },
                         "id": {
                           "type": "string",
                           "format": "uuid",
@@ -3405,6 +3399,10 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "source_reference": {
+                          "type": "string",
+                          "maxLength": 500
                         }
                       },
                       "required": [
@@ -3415,10 +3413,10 @@
                         "currency",
                         "numerator_minor",
                         "denominator",
-                        "source_reference",
                         "id",
                         "effective_from",
-                        "effective_to"
+                        "effective_to",
+                        "source_reference"
                       ],
                       "additionalProperties": false
                     },
