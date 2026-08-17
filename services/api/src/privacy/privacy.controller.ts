@@ -10,7 +10,7 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common";
-import { invalidRequest } from "../http/api-error.js";
+import { invalidRequest, notFound } from "../http/api-error.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { PiiErasureService } from "./pii-erasure.service.js";
 
@@ -40,7 +40,17 @@ export class PrivacyController {
       throw invalidRequest("msisdn_required", "A phone number is required.");
     }
     const summary = await this.erasure.subjectSummary(tenantId, msisdn);
-    return summary ?? { found: false };
+    if (!summary) {
+      // 404, not a 200 carrying `{ found: false }`. Every other missing resource in this API
+      // answers notFound (`email_not_found`, `message_not_found`, `tenant_not_found`); this one
+      // returning a success envelope with a sentinel made the response TWO shapes, so no single
+      // contract could describe it and validation rejected the miss. Breaking, pre-prod, §11.
+      throw notFound(
+        "subject_not_found",
+        "No data subject is held for that number in this workspace.",
+      );
+    }
+    return summary;
   }
 
   /**

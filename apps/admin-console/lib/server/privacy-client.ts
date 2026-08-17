@@ -34,7 +34,7 @@ async function parse(response: Response): Promise<unknown> {
 export async function lookupSubject(
   tenantId: string,
   msisdn: string,
-): Promise<SubjectSummary | { found: false }> {
+): Promise<SubjectSummary> {
   const { baseUrl, bffToken } = config();
   const url = new URL(
     `/internal/admin/privacy/tenants/${tenantId}/subject`,
@@ -45,7 +45,7 @@ export async function lookupSubject(
     cache: "no-store",
     headers: { "x-bff-token": bffToken },
   });
-  return (await parse(response)) as SubjectSummary | { found: false };
+  return (await parse(response)) as SubjectSummary;
 }
 
 /** IRREVERSIBLE. Destroys the subject's key; no backup brings the data back. */

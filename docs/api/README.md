@@ -41,6 +41,54 @@ longer exists.
 route, so it is `public`; `BffTokenGuard` means only a server-side BFF can call it. `/v1` on its own
 means nothing — several `/v1` routes are dashboard features that a key nonetheless opens.
 
+## Testing it end to end
+
+Three layers, cheapest first. Only the third proves the document matches reality.
+
+**1. Is the committed artifact current?**
+
+```bash
+pnpm openapi:check      # fails if a route is unbound, orphaned, or the file is stale
+```
+Runs inside `pnpm validate`, so it gates every push. Needs no database and no running API.
+
+**2. Read it in a browser.**
+
+```bash
+OPERATOR_TOKEN=<a-real-secret> pnpm --filter @app/api dev
+```
+Open `http://localhost:3000/docs`. The browser prompts for HTTP Basic — any username, the operator
+token as the password. You get the FULL document, `/internal/*` included. With no `OPERATOR_TOKEN`
+set the endpoint answers 404, not 401: a disabled docs surface should be indistinguishable from one
+that was never built.
+
+**3. Call every documented endpoint against a running API.**
+
+```bash
+pnpm --filter @app/api contracts:probe
+```
+This is the one that matters. Response validation is strict outside production, so a
+`500 response_contract_violation` means the published schema disagrees with the real payload — the
+class of defect that let a dead `servers` url and a missing WhatsApp channel sit in the artifact for
+weeks. The probe exits non-zero on a contract violation ONLY; a 404 for a row this environment lacks,
+or a 401 for a credential it was not given, says nothing about the specification.
+
+It reads credentials and path-parameter values from the environment, so nothing is baked in:
+
+| variable | for |
+| --- | --- |
+| `PROBE_BASE_URL` | defaults to `http://localhost:3000` |
+| `PROBE_TENANT_TOKEN` | `/v1/*` routes — mint one via `POST /internal/identity/tenant-token` |
+| `PROBE_API_KEY` | an application-scoped `sk_*` key; email, WhatsApp and batches require one |
+| `BFF_INTERNAL_TOKEN` · `OPERATOR_TOKEN` · `WEBHOOK_INGRESS_TOKEN` | the other credential paths |
+| `PROBE_IDS` | JSON map of path-parameter values (`tenantId`, `messageId`, `emailId`, …) |
+
+A route whose parameters cannot be resolved is reported SKIPPED rather than called with an invented
+id — a 404 from a made-up value looks like a contract failure and is not one.
+
+**CLAUDE.md §12 makes all three a rule**: no endpoint may be consumed anywhere until it is bound,
+present in the artifact, and has returned a real 2xx here.
+
 ## Browsing it
 
 `GET /docs` renders the **full** document, gated by `OPERATOR_TOKEN` and failing closed: no token
