@@ -50,6 +50,26 @@ export function responseContractFor(
   controllerClass: object,
   handler: object,
 ): ZodType | null {
+  return bindingFor(controllerClass, handler)?.response ?? null;
+}
+
+/** The request-body contract for this handler, or null when the binding declares none. */
+export function requestContractFor(
+  controllerClass: object,
+  handler: object,
+): ZodType | null {
+  return bindingFor(controllerClass, handler)?.request ?? null;
+}
+
+/** The query-string contract for this handler, or null when the binding declares none. */
+export function queryContractFor(
+  controllerClass: object,
+  handler: object,
+): ZodType | null {
+  return bindingFor(controllerClass, handler)?.query ?? null;
+}
+
+function bindingFor(controllerClass: object, handler: object) {
   const controllerPath = Reflect.getMetadata(PATH_METADATA, controllerClass);
   if (controllerPath === undefined) return null;
   const verb = Reflect.getMetadata(METHOD_METADATA, handler);
@@ -60,5 +80,5 @@ export function responseContractFor(
     controllerPath,
     Reflect.getMetadata(PATH_METADATA, handler),
   );
-  return ROUTE_BINDINGS[`${method} ${path}`]?.response ?? null;
+  return ROUTE_BINDINGS[`${method} ${path}`] ?? null;
 }

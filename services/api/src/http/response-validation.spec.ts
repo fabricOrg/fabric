@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { checkResponse, resolveValidationMode } from "./response-validation.js";
+import { checkPayload, resolveValidationMode } from "./response-validation.js";
 
 /**
  * The posture matters more than the mechanism. A validator that throws in production would turn our
@@ -46,38 +46,38 @@ describe("resolveValidationMode", () => {
   });
 });
 
-describe("checkResponse", () => {
+describe("checkPayload", () => {
   const contract = z.object({ id: z.string(), count: z.number() });
 
   it("passes a payload that matches", () => {
-    expect(checkResponse(contract, { id: "a", count: 1 }, "R")).toBeNull();
+    expect(checkPayload(contract, { id: "a", count: 1 }, "R")).toBeNull();
   });
 
   it("reports a payload that does not, naming the field", () => {
-    const failure = checkResponse(contract, { id: "a", count: "1" }, "R");
+    const failure = checkPayload(contract, { id: "a", count: "1" }, "R");
     expect(failure?.route).toBe("R");
     expect(failure?.issues).toContain("count");
   });
 
   it("reports a MISSING field — the case a hand-written spec always gets wrong", () => {
-    const failure = checkResponse(contract, { id: "a" }, "R");
+    const failure = checkPayload(contract, { id: "a" }, "R");
     expect(failure?.issues).toContain("count");
   });
 
   it("does nothing when the route has no contract, rather than inventing one", () => {
-    expect(checkResponse(null, { anything: true }, "R")).toBeNull();
+    expect(checkPayload(null, { anything: true }, "R")).toBeNull();
   });
 
   it("ignores an empty body — a 204 has nothing to check", () => {
-    expect(checkResponse(contract, undefined, "R")).toBeNull();
-    expect(checkResponse(contract, null, "R")).toBeNull();
+    expect(checkPayload(contract, undefined, "R")).toBeNull();
+    expect(checkPayload(contract, null, "R")).toBeNull();
   });
 
   it("OBSERVES rather than rewrites — an extra field is not stripped from the payload", () => {
     // zod's parse output would drop `extra`. Serving that output would silently truncate a response
     // whose contract is merely out of date, turning a documentation gap into data loss.
     const payload = { id: "a", count: 1, extra: "kept" };
-    expect(checkResponse(contract, payload, "R")).toBeNull();
+    expect(checkPayload(contract, payload, "R")).toBeNull();
     expect(payload.extra).toBe("kept");
   });
 
@@ -87,7 +87,7 @@ describe("checkResponse", () => {
         Array.from({ length: 20 }, (_, i) => [`f${i}`, z.string()]),
       ),
     );
-    const failure = checkResponse(wide, {}, "R");
+    const failure = checkPayload(wide, {}, "R");
     expect(failure?.issues.split(";").length).toBeLessThanOrEqual(5);
   });
 });

@@ -36,6 +36,7 @@ export interface ValidationFailure {
 }
 
 /**
+ * Used for BOTH directions — a response on the way out, a body or query string on the way in.
  * Returns null when the payload matches (or there is nothing to check), and a described failure
  * when it does not. Deliberately does NOT throw: the caller decides what a failure means, because
  * that decision is the posture above and belongs in one place.
@@ -44,7 +45,7 @@ export interface ValidationFailure {
  * would silently strip unknown keys, so a response carrying a field the contract forgot would be
  * quietly truncated instead of reported. Validation here observes; it does not rewrite.
  */
-export function checkResponse(
+export function checkPayload(
   contract: ZodType | null,
   payload: unknown,
   route: string,

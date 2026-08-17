@@ -11,7 +11,7 @@ import { responseContractFor } from "../openapi/response-contracts.js";
 import { apiError } from "./api-error.js";
 import { resolveRequestId } from "./logging.config.js";
 import {
-  checkResponse,
+  checkPayload,
   resolveValidationMode,
   type ValidationMode,
 } from "./response-validation.js";
@@ -73,7 +73,7 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
       context.getHandler(),
     );
     const route = `${context.getClass().name}.${context.getHandler().name}`;
-    const failure = checkResponse(contract, payload, route);
+    const failure = checkPayload(contract, payload, route);
     if (!failure) return;
     if (this.mode === "warn") {
       this.logger.error(
