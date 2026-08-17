@@ -154,6 +154,41 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "status": {
+                    "$ref": "#/$defs/__schema1"
+                  }
+                },
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "enum": [
+                      "operator",
+                      "admin"
+                    ]
+                  },
+                  "__schema1": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "suspended"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -305,6 +340,37 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "developer_access": {
+                    "$ref": "#/$defs/__schema1"
+                  }
+                },
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "member"
+                    ]
+                  },
+                  "__schema1": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -743,6 +809,47 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "body": {
+                    "$ref": "#/$defs/__schema1"
+                  },
+                  "class": {
+                    "$ref": "#/$defs/__schema2"
+                  }
+                },
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "__schema1": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1600
+                  },
+                  "__schema2": {
+                    "type": "string",
+                    "enum": [
+                      "transactional",
+                      "promotional"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -1234,6 +1341,43 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "price_book_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "price_book_id",
+                  "code",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -1406,6 +1550,114 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "mode": {
+                    "$ref": "#/$defs/__schema1"
+                  },
+                  "description": {
+                    "$ref": "#/$defs/__schema2"
+                  },
+                  "is_default": {
+                    "$ref": "#/$defs/__schema3"
+                  },
+                  "is_public": {
+                    "$ref": "#/$defs/__schema4"
+                  },
+                  "minimum_margin_bps": {
+                    "$ref": "#/$defs/__schema5"
+                  },
+                  "rates": {
+                    "$ref": "#/$defs/__schema6"
+                  }
+                },
+                "required": [
+                  "name",
+                  "mode",
+                  "rates"
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "__schema1": {
+                    "type": "string",
+                    "enum": [
+                      "subscription",
+                      "token"
+                    ]
+                  },
+                  "__schema2": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "__schema3": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "__schema4": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "__schema5": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                  },
+                  "__schema6": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/__schema7"
+                    }
+                  },
+                  "__schema7": {
+                    "type": "object",
+                    "properties": {
+                      "channel": {
+                        "type": "string",
+                        "enum": [
+                          "sms",
+                          "email",
+                          "whatsapp"
+                        ]
+                      },
+                      "currency": {
+                        "type": "string",
+                        "enum": [
+                          "GHS",
+                          "NGN",
+                          "USD"
+                        ]
+                      },
+                      "unit_price_minor": {
+                        "type": "string",
+                        "pattern": "^\\d+$"
+                      }
+                    },
+                    "required": [
+                      "channel",
+                      "currency",
+                      "unit_price_minor"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -1521,6 +1773,122 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "provider_vendor": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "channel": {
+                    "$ref": "#/$defs/__schema1"
+                  },
+                  "destination_country": {
+                    "$ref": "#/$defs/__schema2"
+                  },
+                  "traffic_class": {
+                    "$ref": "#/$defs/__schema3"
+                  },
+                  "currency": {
+                    "$ref": "#/$defs/__schema4"
+                  },
+                  "numerator_minor": {
+                    "$ref": "#/$defs/__schema5"
+                  },
+                  "denominator": {
+                    "$ref": "#/$defs/__schema5"
+                  },
+                  "effective_from": {
+                    "$ref": "#/$defs/__schema6"
+                  },
+                  "source_reference": {
+                    "$ref": "#/$defs/__schema7"
+                  }
+                },
+                "required": [
+                  "provider_vendor",
+                  "channel",
+                  "currency",
+                  "numerator_minor",
+                  "denominator",
+                  "source_reference"
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "__schema1": {
+                    "type": "string",
+                    "enum": [
+                      "sms",
+                      "email",
+                      "whatsapp"
+                    ]
+                  },
+                  "__schema2": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[A-Z]{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "__schema3": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "promotional",
+                          "transactional",
+                          "otp",
+                          "marketing",
+                          "utility",
+                          "authentication"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "__schema4": {
+                    "type": "string",
+                    "enum": [
+                      "GHS",
+                      "NGN",
+                      "USD"
+                    ]
+                  },
+                  "__schema5": {
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  },
+                  "__schema6": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  },
+                  "__schema7": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -1704,6 +2072,66 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "wallet_adjustment",
+                      "plan_change",
+                      "refund",
+                      "go_live"
+                    ]
+                  },
+                  "tenant_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "tenant_label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "before_value": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "after_value": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "kind",
+                  "tenant_label",
+                  "before_value",
+                  "after_value",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -1935,6 +2363,41 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "maxLength": 320,
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "operator",
+                      "admin"
+                    ]
+                  }
+                },
+                "required": [
+                  "email",
+                  "role"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -2050,6 +2513,57 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "slug": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]{2,}$"
+                  },
+                  "plan": {
+                    "type": "string",
+                    "enum": [
+                      "free",
+                      "growth",
+                      "scale"
+                    ]
+                  },
+                  "adminEmail": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "adminName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "dataRegion": {
+                    "default": "eu-west-1",
+                    "type": "string",
+                    "minLength": 2
+                  }
+                },
+                "required": [
+                  "name",
+                  "slug",
+                  "plan",
+                  "adminEmail"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -2184,6 +2698,44 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "sms_segments_per_day": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000000
+                  },
+                  "email_messages_per_day": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000000
+                  },
+                  "whatsapp_messages_per_day": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000000
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "sms_segments_per_day",
+                  "email_messages_per_day",
+                  "whatsapp_messages_per_day",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -2298,6 +2850,37 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "enable",
+                      "disable",
+                      "make-default",
+                      "activate-live"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "action"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -2368,7 +2951,83 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "sending",
+                              "accepted",
+                              "sent",
+                              "delivered",
+                              "undelivered",
+                              "failed",
+                              "expired"
+                            ]
+                          },
+                          "to": {
+                            "type": "string"
+                          },
+                          "from": {
+                            "type": "string"
+                          },
+                          "subject": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "error_code": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status",
+                          "to",
+                          "from",
+                          "subject",
+                          "provider",
+                          "created_at",
+                          "error_code"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "messages"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -2444,7 +3103,64 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "subject": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "html": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "erased": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "to",
+                    "from",
+                    "subject",
+                    "text",
+                    "html",
+                    "erased"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -2586,6 +3302,45 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "maxLength": 320,
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "member"
+                    ]
+                  },
+                  "developer_access": {
+                    "default": false,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "email",
+                  "role"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -2720,6 +3475,21 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "string",
+                "enum": [
+                  "virtual",
+                  "live"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -2790,7 +3560,151 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "sending",
+                              "accepted",
+                              "sent",
+                              "delivered",
+                              "undelivered",
+                              "failed",
+                              "expired"
+                            ]
+                          },
+                          "to": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "template_name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "template_language": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "template_category": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "marketing",
+                                  "utility",
+                                  "authentication"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "cost": {
+                            "type": "object",
+                            "properties": {
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "GHS",
+                                  "NGN",
+                                  "USD"
+                                ]
+                              },
+                              "minor": {
+                                "type": "string",
+                                "pattern": "^-?\\d+$"
+                              }
+                            },
+                            "required": [
+                              "currency",
+                              "minor"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "error_code": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status",
+                          "to",
+                          "provider",
+                          "template_name",
+                          "template_language",
+                          "template_category",
+                          "cost",
+                          "created_at",
+                          "error_code"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "next_cursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "messages",
+                    "next_cursor",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -2854,9 +3768,189 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "string",
+                    "pattern": "^\\+[1-9]\\d{7,14}$"
+                  },
+                  "template_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "template_language": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 35
+                  },
+                  "template_category": {
+                    "type": "string",
+                    "enum": [
+                      "marketing",
+                      "utility",
+                      "authentication"
+                    ]
+                  },
+                  "variables": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 1024
+                    }
+                  },
+                  "currency": {
+                    "default": "GHS",
+                    "type": "string",
+                    "enum": [
+                      "GHS",
+                      "NGN",
+                      "USD"
+                    ]
+                  }
+                },
+                "required": [
+                  "to",
+                  "template_name",
+                  "template_language",
+                  "template_category"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "sending",
+                        "accepted",
+                        "sent",
+                        "delivered",
+                        "undelivered",
+                        "failed",
+                        "expired"
+                      ]
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "template_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "template_language": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "template_category": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "marketing",
+                            "utility",
+                            "authentication"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cost": {
+                      "type": "object",
+                      "properties": {
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "GHS",
+                            "NGN",
+                            "USD"
+                          ]
+                        },
+                        "minor": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        }
+                      },
+                      "required": [
+                        "currency",
+                        "minor"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "error_code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "to",
+                    "provider",
+                    "template_name",
+                    "template_language",
+                    "template_category",
+                    "cost",
+                    "created_at",
+                    "error_code",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -2935,7 +4029,88 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "templates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "language": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "marketing",
+                                  "utility",
+                                  "authentication"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "variable_count": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "body_preview": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "language",
+                          "category",
+                          "variable_count",
+                          "body_preview"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "synced_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "templates",
+                    "synced_at",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -3175,6 +4350,32 @@
             "operatorToken": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "slug": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$"
+                  }
+                },
+                "required": [
+                  "name",
+                  "slug"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -8237,6 +9438,41 @@
             "secretKey": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1600
+                  },
+                  "class": {
+                    "type": "string",
+                    "enum": [
+                      "transactional",
+                      "promotional"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "body",
+                  "class"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -10441,6 +11677,35 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "suspended",
+                      "closed"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "status",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -10585,6 +11850,205 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "currency": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "items": {
+                    "$ref": "#/$defs/__schema1"
+                  },
+                  "total_price_minor": {
+                    "$ref": "#/$defs/__schema4"
+                  },
+                  "credit_validity_days": {
+                    "$ref": "#/$defs/__schema7"
+                  },
+                  "minimum_pack_count": {
+                    "$ref": "#/$defs/__schema8"
+                  },
+                  "maximum_pack_count": {
+                    "$ref": "#/$defs/__schema9"
+                  },
+                  "effective_from": {
+                    "$ref": "#/$defs/__schema10"
+                  },
+                  "effective_to": {
+                    "$ref": "#/$defs/__schema11"
+                  }
+                },
+                "required": [
+                  "currency",
+                  "items",
+                  "total_price_minor",
+                  "credit_validity_days",
+                  "maximum_pack_count",
+                  "effective_from",
+                  "effective_to"
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "enum": [
+                      "GHS",
+                      "NGN",
+                      "USD"
+                    ]
+                  },
+                  "__schema1": {
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "__schema2": {
+                    "type": "object",
+                    "properties": {
+                      "channel_code": {
+                        "$ref": "#/$defs/__schema3"
+                      },
+                      "unit_code": {
+                        "$ref": "#/$defs/__schema3"
+                      },
+                      "paid_units": {
+                        "$ref": "#/$defs/__schema4"
+                      },
+                      "bonus_units": {
+                        "type": "string",
+                        "maxLength": 24,
+                        "pattern": "^\\d+$"
+                      },
+                      "eligibility": {
+                        "default": {
+                          "destination_countries": [],
+                          "traffic_classes": [],
+                          "provider_vendors": [],
+                          "service_classes": []
+                        },
+                        "type": "object",
+                        "properties": {
+                          "destination_countries": {
+                            "default": [],
+                            "maxItems": 250,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema5"
+                            }
+                          },
+                          "traffic_classes": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema6"
+                            }
+                          },
+                          "provider_vendors": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema6"
+                            }
+                          },
+                          "service_classes": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema6"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "channel_code",
+                      "unit_code",
+                      "paid_units",
+                      "bonus_units"
+                    ]
+                  },
+                  "__schema3": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                  },
+                  "__schema4": {
+                    "type": "string",
+                    "maxLength": 24,
+                    "pattern": "^\\d+$"
+                  },
+                  "__schema5": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                  },
+                  "__schema6": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "pattern": "^[a-zA-Z0-9._:-]+$"
+                  },
+                  "__schema7": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "__schema8": {
+                    "default": 1,
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "__schema9": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 1000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "__schema10": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  },
+                  "__schema11": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -10653,6 +12117,39 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "offer_catalog_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "offer_catalog_id"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -10711,6 +12208,190 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "currency": {
+                    "type": "string",
+                    "enum": [
+                      "GHS",
+                      "NGN",
+                      "USD"
+                    ]
+                  },
+                  "items": {
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  },
+                  "total_price_minor": {
+                    "$ref": "#/$defs/__schema2"
+                  },
+                  "credit_validity_days": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "minimum_pack_count": {
+                    "default": 1,
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "maximum_pack_count": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 1000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "effective_from": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  },
+                  "effective_to": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "offer_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "currency",
+                  "items",
+                  "total_price_minor",
+                  "credit_validity_days",
+                  "maximum_pack_count",
+                  "effective_from",
+                  "effective_to",
+                  "offer_id"
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "object",
+                    "properties": {
+                      "channel_code": {
+                        "$ref": "#/$defs/__schema1"
+                      },
+                      "unit_code": {
+                        "$ref": "#/$defs/__schema1"
+                      },
+                      "paid_units": {
+                        "$ref": "#/$defs/__schema2"
+                      },
+                      "bonus_units": {
+                        "type": "string",
+                        "maxLength": 24,
+                        "pattern": "^\\d+$"
+                      },
+                      "eligibility": {
+                        "default": {
+                          "destination_countries": [],
+                          "traffic_classes": [],
+                          "provider_vendors": [],
+                          "service_classes": []
+                        },
+                        "type": "object",
+                        "properties": {
+                          "destination_countries": {
+                            "default": [],
+                            "maxItems": 250,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema3"
+                            }
+                          },
+                          "traffic_classes": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema4"
+                            }
+                          },
+                          "provider_vendors": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema4"
+                            }
+                          },
+                          "service_classes": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema4"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "channel_code",
+                      "unit_code",
+                      "paid_units",
+                      "bonus_units"
+                    ]
+                  },
+                  "__schema1": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                  },
+                  "__schema2": {
+                    "type": "string",
+                    "maxLength": 24,
+                    "pattern": "^\\d+$"
+                  },
+                  "__schema3": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                  },
+                  "__schema4": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "pattern": "^[a-zA-Z0-9._:-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -10769,6 +12450,243 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "offer": {
+                    "type": "object",
+                    "properties": {
+                      "price_book_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "code": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "description": {
+                        "default": "",
+                        "type": "string",
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "price_book_id",
+                      "code",
+                      "name"
+                    ]
+                  },
+                  "version": {
+                    "type": "object",
+                    "properties": {
+                      "currency": {
+                        "$ref": "#/$defs/__schema0"
+                      },
+                      "items": {
+                        "$ref": "#/$defs/__schema1"
+                      },
+                      "total_price_minor": {
+                        "$ref": "#/$defs/__schema4"
+                      },
+                      "credit_validity_days": {
+                        "$ref": "#/$defs/__schema7"
+                      },
+                      "minimum_pack_count": {
+                        "$ref": "#/$defs/__schema8"
+                      },
+                      "maximum_pack_count": {
+                        "$ref": "#/$defs/__schema9"
+                      },
+                      "effective_from": {
+                        "$ref": "#/$defs/__schema10"
+                      },
+                      "effective_to": {
+                        "$ref": "#/$defs/__schema11"
+                      }
+                    },
+                    "required": [
+                      "currency",
+                      "items",
+                      "total_price_minor",
+                      "credit_validity_days",
+                      "maximum_pack_count",
+                      "effective_from",
+                      "effective_to"
+                    ]
+                  }
+                },
+                "required": [
+                  "offer",
+                  "version"
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "enum": [
+                      "GHS",
+                      "NGN",
+                      "USD"
+                    ]
+                  },
+                  "__schema1": {
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "__schema2": {
+                    "type": "object",
+                    "properties": {
+                      "channel_code": {
+                        "$ref": "#/$defs/__schema3"
+                      },
+                      "unit_code": {
+                        "$ref": "#/$defs/__schema3"
+                      },
+                      "paid_units": {
+                        "$ref": "#/$defs/__schema4"
+                      },
+                      "bonus_units": {
+                        "type": "string",
+                        "maxLength": 24,
+                        "pattern": "^\\d+$"
+                      },
+                      "eligibility": {
+                        "default": {
+                          "destination_countries": [],
+                          "traffic_classes": [],
+                          "provider_vendors": [],
+                          "service_classes": []
+                        },
+                        "type": "object",
+                        "properties": {
+                          "destination_countries": {
+                            "default": [],
+                            "maxItems": 250,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema5"
+                            }
+                          },
+                          "traffic_classes": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema6"
+                            }
+                          },
+                          "provider_vendors": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema6"
+                            }
+                          },
+                          "service_classes": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema6"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "channel_code",
+                      "unit_code",
+                      "paid_units",
+                      "bonus_units"
+                    ]
+                  },
+                  "__schema3": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                  },
+                  "__schema4": {
+                    "type": "string",
+                    "maxLength": 24,
+                    "pattern": "^\\d+$"
+                  },
+                  "__schema5": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                  },
+                  "__schema6": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "pattern": "^[a-zA-Z0-9._:-]+$"
+                  },
+                  "__schema7": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "__schema8": {
+                    "default": 1,
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "__schema9": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 1000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "__schema10": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  },
+                  "__schema11": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -10905,6 +12823,27 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -10973,6 +12912,27 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11032,6 +12992,39 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "tenant_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+                  },
+                  "tenant_label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "tenant_id",
+                  "tenant_label",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11090,6 +13083,33 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "tenant_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+                  },
+                  "tenant_label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "tenant_id",
+                  "tenant_label"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11159,6 +13179,43 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 500
+                  },
+                  "tenant_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11227,6 +13284,42 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "price_book_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "billing_currency": {
+                    "type": "string",
+                    "enum": [
+                      "GHS",
+                      "NGN",
+                      "USD"
+                    ]
+                  }
+                },
+                "required": [
+                  "price_book_id"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11296,6 +13389,31 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "msisdn": {
+                    "type": "string",
+                    "pattern": "^\\+[1-9]\\d{7,14}$"
+                  },
+                  "basis": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "msisdn",
+                  "basis"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11364,6 +13482,33 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "approve",
+                      "reject"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "decision"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11422,6 +13567,37 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "business_name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 200
+                  },
+                  "registration_number": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "use_case": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "business_name",
+                  "use_case"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11490,6 +13666,35 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "carrier_status": {
+                    "type": "string",
+                    "enum": [
+                      "unregistered",
+                      "submitted",
+                      "approved",
+                      "rejected"
+                    ]
+                  },
+                  "carrier_ref": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "carrier_status"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11558,6 +13763,33 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "rejected"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11676,6 +13908,66 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "external_user_id": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "email": {
+                    "type": "string",
+                    "maxLength": 320,
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "name": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "user_updated_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "email_verified": {
+                    "type": "boolean"
+                  },
+                  "session_id": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                },
+                "required": [
+                  "external_user_id",
+                  "email",
+                  "name",
+                  "user_updated_at",
+                  "email_verified",
+                  "session_id"
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11735,6 +14027,62 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "external_user_id": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "email": {
+                    "type": "string",
+                    "maxLength": 320,
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "name": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "user_updated_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "session_id": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                },
+                "required": [
+                  "external_user_id",
+                  "email",
+                  "name",
+                  "user_updated_at",
+                  "session_id"
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11794,6 +14142,26 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "tenant_id": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  }
+                },
+                "required": [
+                  "tenant_id"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11852,6 +14220,44 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "external_user_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "email": {
+                    "type": "string",
+                    "maxLength": 320,
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "email_verified": {
+                    "type": "boolean"
+                  },
+                  "workspace_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "external_user_id",
+                  "email",
+                  "email_verified",
+                  "workspace_name"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -11921,6 +14327,39 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "credential": {
+                    "type": "object",
+                    "propertyNames": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "additionalProperties": {
+                      "$ref": "#/$defs/__schema1"
+                    }
+                  }
+                },
+                "required": [
+                  "credential"
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "string"
+                  },
+                  "__schema1": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -11979,6 +14418,42 @@
             "bffInternal": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "vendor": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capability": {
+                    "type": "string",
+                    "enum": [
+                      "sms",
+                      "email",
+                      "whatsapp",
+                      "payment",
+                      "identity"
+                    ]
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "vendor",
+                  "capability"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success."
@@ -12047,6 +14522,32 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "string",
+                    "pattern": "^\\+[1-9]\\d{7,14}$"
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1600
+                  }
+                },
+                "required": [
+                  "to",
+                  "body"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -14516,6 +17017,56 @@
             "secretKey": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$"
+                  },
+                  "data": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3
+                  },
+                  "to": {
+                    "type": "string",
+                    "pattern": "^\\+[1-9]\\d{7,14}$"
+                  },
+                  "locale": {
+                    "type": "string",
+                    "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+                  },
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "sms",
+                      "email",
+                      "whatsapp"
+                    ]
+                  }
+                },
+                "required": [
+                  "key"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -15215,6 +17766,39 @@
             "secretKey": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "offer_version_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "pack_count": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  }
+                },
+                "required": [
+                  "offer_version_id",
+                  "pack_count",
+                  "email"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -15960,6 +18544,205 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "currency": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "items": {
+                    "$ref": "#/$defs/__schema1"
+                  },
+                  "total_price_minor": {
+                    "$ref": "#/$defs/__schema4"
+                  },
+                  "credit_validity_days": {
+                    "$ref": "#/$defs/__schema7"
+                  },
+                  "minimum_pack_count": {
+                    "$ref": "#/$defs/__schema8"
+                  },
+                  "maximum_pack_count": {
+                    "$ref": "#/$defs/__schema9"
+                  },
+                  "effective_from": {
+                    "$ref": "#/$defs/__schema10"
+                  },
+                  "effective_to": {
+                    "$ref": "#/$defs/__schema11"
+                  }
+                },
+                "required": [
+                  "currency",
+                  "items",
+                  "total_price_minor",
+                  "credit_validity_days",
+                  "maximum_pack_count",
+                  "effective_from",
+                  "effective_to"
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "enum": [
+                      "GHS",
+                      "NGN",
+                      "USD"
+                    ]
+                  },
+                  "__schema1": {
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/__schema2"
+                    }
+                  },
+                  "__schema2": {
+                    "type": "object",
+                    "properties": {
+                      "channel_code": {
+                        "$ref": "#/$defs/__schema3"
+                      },
+                      "unit_code": {
+                        "$ref": "#/$defs/__schema3"
+                      },
+                      "paid_units": {
+                        "$ref": "#/$defs/__schema4"
+                      },
+                      "bonus_units": {
+                        "type": "string",
+                        "maxLength": 24,
+                        "pattern": "^\\d+$"
+                      },
+                      "eligibility": {
+                        "default": {
+                          "destination_countries": [],
+                          "traffic_classes": [],
+                          "provider_vendors": [],
+                          "service_classes": []
+                        },
+                        "type": "object",
+                        "properties": {
+                          "destination_countries": {
+                            "default": [],
+                            "maxItems": 250,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema5"
+                            }
+                          },
+                          "traffic_classes": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema6"
+                            }
+                          },
+                          "provider_vendors": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema6"
+                            }
+                          },
+                          "service_classes": {
+                            "default": [],
+                            "maxItems": 50,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/__schema6"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "channel_code",
+                      "unit_code",
+                      "paid_units",
+                      "bonus_units"
+                    ]
+                  },
+                  "__schema3": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                  },
+                  "__schema4": {
+                    "type": "string",
+                    "maxLength": 24,
+                    "pattern": "^\\d+$"
+                  },
+                  "__schema5": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                  },
+                  "__schema6": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "pattern": "^[a-zA-Z0-9._:-]+$"
+                  },
+                  "__schema7": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "__schema8": {
+                    "default": 1,
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000
+                  },
+                  "__schema9": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 1000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "__schema10": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  },
+                  "__schema11": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -16029,6 +18812,114 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "mode": {
+                    "$ref": "#/$defs/__schema1"
+                  },
+                  "description": {
+                    "$ref": "#/$defs/__schema2"
+                  },
+                  "is_default": {
+                    "$ref": "#/$defs/__schema3"
+                  },
+                  "is_public": {
+                    "$ref": "#/$defs/__schema4"
+                  },
+                  "minimum_margin_bps": {
+                    "$ref": "#/$defs/__schema5"
+                  },
+                  "rates": {
+                    "$ref": "#/$defs/__schema6"
+                  }
+                },
+                "required": [
+                  "name",
+                  "mode",
+                  "rates"
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "__schema1": {
+                    "type": "string",
+                    "enum": [
+                      "subscription",
+                      "token"
+                    ]
+                  },
+                  "__schema2": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "__schema3": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "__schema4": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "__schema5": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                  },
+                  "__schema6": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/__schema7"
+                    }
+                  },
+                  "__schema7": {
+                    "type": "object",
+                    "properties": {
+                      "channel": {
+                        "type": "string",
+                        "enum": [
+                          "sms",
+                          "email",
+                          "whatsapp"
+                        ]
+                      },
+                      "currency": {
+                        "type": "string",
+                        "enum": [
+                          "GHS",
+                          "NGN",
+                          "USD"
+                        ]
+                      },
+                      "unit_price_minor": {
+                        "type": "string",
+                        "pattern": "^\\d+$"
+                      }
+                    },
+                    "required": [
+                      "channel",
+                      "currency",
+                      "unit_price_minor"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."
@@ -16105,6 +18996,46 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "permissions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "sms:send",
+                        "sms:read",
+                        "email:send",
+                        "email:read",
+                        "whatsapp:send",
+                        "whatsapp:read",
+                        "wallet:read",
+                        "applications:read",
+                        "applications:write",
+                        "api_keys:read",
+                        "api_keys:write",
+                        "request_logs:read",
+                        "messages:send",
+                        "messages:read",
+                        "definitions:write",
+                        "definitions:publish"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "permissions"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success."

@@ -1,3 +1,23 @@
+import {
+  configurePluginRequestSchema,
+  createLiveInstanceRequestSchema,
+  createWorkspaceRequestSchema,
+  deliveryMode,
+  emailContentResponse,
+  emailInboxResponse,
+  inviteMemberRequestSchema,
+  mintTenantTokenRequestSchema,
+  pluginActionRequestSchema,
+  resolveStaffSessionRequestSchema,
+  resolveUserSessionRequestSchema,
+  updateMemberPermissionsRequestSchema,
+  updateMemberRequestSchema,
+  virtualPhoneReply,
+  whatsappMessageListResponse,
+  whatsappSendRequest,
+  whatsappSendResponse,
+  whatsappTemplateListResponse,
+} from "@app/contracts";
 import type { RouteBindings } from "../route-binding.types.js";
 
 /**
@@ -5,7 +25,6 @@ import type { RouteBindings } from "../route-binding.types.js";
  * All `internal`: the dashboard's server-side route handlers call these with `BFF_INTERNAL_TOKEN`
  * and supply the tenant id from the authenticated session — never from the client.
  */
-// TODO(contract): attach request/response zod contracts to every route in this file.
 export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
   // ---- Identity ----------------------------------------------------------------------------
   "POST /internal/identity/session-v2": {
@@ -16,6 +35,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Identity"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: resolveUserSessionRequestSchema,
   },
   "POST /internal/identity/staff-session": {
     summary: "Resolve a staff session",
@@ -24,6 +44,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Identity"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: resolveStaffSessionRequestSchema,
   },
   "POST /internal/identity/tenant-token": {
     summary: "Mint a short-lived tenant token",
@@ -32,6 +53,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Identity"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: mintTenantTokenRequestSchema,
   },
   "POST /internal/identity/workspaces": {
     summary: "Create a workspace",
@@ -39,6 +61,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     successStatus: 201,
+    request: createWorkspaceRequestSchema,
   },
 
   // ---- Members -----------------------------------------------------------------------------
@@ -54,6 +77,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     successStatus: 201,
+    request: inviteMemberRequestSchema,
   },
   "PATCH /internal/tenants/:tenantId/members/:userId": {
     summary: "Change a member's role",
@@ -63,12 +87,14 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Identity"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: updateMemberRequestSchema,
   },
   "PUT /internal/tenants/:tenantId/members/:userId/permissions": {
     summary: "Set a member's permissions",
     tags: ["Identity"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: updateMemberPermissionsRequestSchema,
   },
   "DELETE /internal/tenants/:tenantId/members/:userId": {
     summary: "Remove a member",
@@ -84,6 +110,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Email"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: emailInboxResponse,
   },
   "GET /internal/tenants/:tenantId/emails/:id/content": {
     summary: "Retrieve an email's rendered content",
@@ -91,12 +118,14 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     errorStatuses: [404],
+    response: emailContentResponse,
   },
   "GET /internal/tenants/:tenantId/whatsapp": {
     summary: "List a tenant's WhatsApp conversations",
     tags: ["WhatsApp"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: whatsappMessageListResponse,
   },
   "POST /internal/tenants/:tenantId/whatsapp": {
     summary: "Send a WhatsApp message from the dashboard",
@@ -104,6 +133,8 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     errorStatuses: [402],
+    request: whatsappSendRequest,
+    response: whatsappSendResponse,
   },
   "GET /internal/tenants/:tenantId/whatsapp/templates": {
     summary: "List available WhatsApp templates",
@@ -113,6 +144,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["WhatsApp"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: whatsappTemplateListResponse,
   },
 
   // ---- Virtual phone (sandbox) -------------------------------------------------------------
@@ -127,6 +159,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Sandbox"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: deliveryMode,
   },
   "GET /internal/tenants/:tenantId/virtual-phone/messages": {
     summary: "List virtual-phone messages",
@@ -142,6 +175,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Sandbox"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: virtualPhoneReply,
   },
   "PATCH /internal/tenants/:tenantId/virtual-phone/messages/:messageId/read": {
     summary: "Mark a virtual-phone message read",
@@ -169,6 +203,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: pluginActionRequestSchema,
   },
   "POST /internal/plugins/live-instances": {
     summary: "Create a live provider instance",
@@ -176,6 +211,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     successStatus: 201,
+    request: createLiveInstanceRequestSchema,
   },
   "POST /internal/plugins/:id/credentials": {
     summary: "Install provider credentials",
@@ -185,5 +221,6 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: configurePluginRequestSchema,
   },
 };

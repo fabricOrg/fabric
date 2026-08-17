@@ -4,6 +4,7 @@ import {
   messageDetailResponse,
   messageListResponse,
   messagingInsightsResponse,
+  previewMessageRequest,
   sendEmailApiResponse,
   sendEmailRequest,
   sendSmsApiResponse,
@@ -82,6 +83,7 @@ export const PUBLIC_MESSAGING_BINDINGS: RouteBindings = {
     tags: ["SMS"],
     visibility: "public",
     security: ["secretKey"],
+    request: previewMessageRequest,
   },
   "POST /v1/sms/batches": {
     summary: "Send a batch of SMS",

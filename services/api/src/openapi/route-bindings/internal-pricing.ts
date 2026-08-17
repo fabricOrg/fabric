@@ -1,3 +1,17 @@
+import {
+  assignOfferCatalogRequestSchema,
+  assignPriceBookRequestSchema,
+  createCommercialOfferRequestSchema,
+  createCommercialOfferVersionRequestSchema,
+  createCommercialPackageRequestSchema,
+  erasureRequestSchema,
+  previewCommercialOfferMarginRequestSchema,
+  providerCostRateInputSchema,
+  publishCommercialOfferVersionRequestSchema,
+  retireCommercialOfferVersionRequestSchema,
+  updateCommercialOfferVersionRequestSchema,
+  upsertPriceBookRequestSchema,
+} from "@app/contracts";
 import type { RouteBindings } from "../route-binding.types.js";
 
 /**
@@ -8,7 +22,6 @@ import type { RouteBindings } from "../route-binding.types.js";
  * below the worst active provider cost is refused at publish time rather than discovered on the
  * first failed send.
  */
-// TODO(contract): attach request/response zod contracts to every route in this file.
 export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
   // ---- Pricing -----------------------------------------------------------------------------
   "GET /internal/admin/price-books": {
@@ -23,6 +36,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     successStatus: 201,
+    request: upsertPriceBookRequestSchema,
   },
   "PUT /internal/admin/price-books/:id": {
     summary: "Update a price book",
@@ -32,12 +46,14 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: upsertPriceBookRequestSchema,
   },
   "POST /internal/admin/price-books/assignments/:accountId": {
     summary: "Assign a price book to an account",
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: assignPriceBookRequestSchema,
   },
   "GET /internal/admin/price-books/provider-costs": {
     summary: "List provider cost rates",
@@ -53,6 +69,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: providerCostRateInputSchema,
   },
 
   // ---- Commercial offers -------------------------------------------------------------------
@@ -68,6 +85,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     successStatus: 201,
+    request: createCommercialOfferRequestSchema,
   },
   "POST /internal/admin/commercial-offers/:offerId/versions": {
     summary: "Add an offer version",
@@ -75,12 +93,14 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     successStatus: 201,
+    request: createCommercialOfferVersionRequestSchema,
   },
   "PUT /internal/admin/commercial-offers/versions/:versionId": {
     summary: "Update an offer version",
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: updateCommercialOfferVersionRequestSchema,
   },
   "POST /internal/admin/commercial-offers/versions/:versionId/clone": {
     summary: "Clone an offer version",
@@ -93,12 +113,14 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: publishCommercialOfferVersionRequestSchema,
   },
   "POST /internal/admin/commercial-offers/versions/:versionId/retire": {
     summary: "Retire an offer version",
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: retireCommercialOfferVersionRequestSchema,
   },
   "POST /internal/admin/commercial-offers/packages": {
     summary: "Create an offer package",
@@ -106,18 +128,21 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     successStatus: 201,
+    request: createCommercialPackageRequestSchema,
   },
   "POST /internal/admin/commercial-offers/margin-preview": {
     summary: "Preview offer margin",
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: previewCommercialOfferMarginRequestSchema,
   },
   "POST /internal/admin/commercial-offers/catalog-assignments/:tenantId": {
     summary: "Assign an offer catalog to a tenant",
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: assignOfferCatalogRequestSchema,
   },
 
   // ---- Privacy and WhatsApp ops ------------------------------------------------------------
@@ -135,6 +160,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     tags: ["Compliance"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: erasureRequestSchema,
   },
   "POST /internal/admin/whatsapp/template-sync": {
     summary: "Trigger a WhatsApp template sync",

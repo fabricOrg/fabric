@@ -1,15 +1,29 @@
+import {
+  createProposalRequestSchema,
+  decideProposalRequestSchema,
+  decideSenderRequestSchema,
+  goLiveRequestSchema,
+  inviteStaffRequestSchema,
+  provisionTenantRequestSchema,
+  setSenderCarrierStatusRequestSchema,
+  startImpersonationRequestSchema,
+  stopImpersonationRequestSchema,
+  toggleKillSwitchRequestSchema,
+  updateSandboxAllowancePolicySchema,
+  updateStaffRequestSchema,
+  updateTenantStatusRequestSchema,
+} from "@app/contracts";
 import type { RouteBindings } from "../route-binding.types.js";
 
 /**
  * Staff control plane, all behind `BffTokenGuard` and reached only through the admin console.
  * Every entry is `internal` — these never reach the published artifact.
  *
- * Request/response contracts are intentionally absent for now: the public surface was contracted
- * first, and attaching the admin DTOs is queued work. Each route below is DOCUMENTED (path, verb,
- * auth, intent) — only the body shapes are pending, and `TODO(contract)` marks that plainly rather
- * than leaving a reader to assume the endpoint takes nothing.
+ * Every write here now references its zod request contract. READS mostly do not carry a response
+ * contract, because these handlers return service-layer types rather than a parsed DTO — the
+ * response shape genuinely has no contract to point at. That is visible as an absent schema rather
+ * than papered over with a hand-written one, and closing it means giving those endpoints DTOs.
  */
-// TODO(contract): attach request/response zod contracts to every route in this file.
 export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
   // ---- Tenants -----------------------------------------------------------------------------
   "GET /internal/admin/tenants": {
@@ -26,12 +40,14 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     successStatus: 201,
+    request: provisionTenantRequestSchema,
   },
   "PATCH /internal/admin/tenants/:id": {
     summary: "Update tenant status",
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: updateTenantStatusRequestSchema,
   },
   "GET /internal/admin/tenants/:id/sandbox-allowances": {
     summary: "Retrieve a tenant's sandbox allowances",
@@ -44,6 +60,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: updateSandboxAllowancePolicySchema,
   },
 
   // ---- Audit, kill switches, impersonation -------------------------------------------------
@@ -69,6 +86,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: toggleKillSwitchRequestSchema,
   },
   "POST /internal/admin/impersonation/start": {
     summary: "Start an impersonation session",
@@ -76,12 +94,14 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: startImpersonationRequestSchema,
   },
   "POST /internal/admin/impersonation/stop": {
     summary: "Stop an impersonation session",
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: stopImpersonationRequestSchema,
   },
 
   // ---- Maker-checker proposals -------------------------------------------------------------
@@ -99,18 +119,21 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     successStatus: 201,
+    request: createProposalRequestSchema,
   },
   "POST /internal/admin/proposals/:id/decide": {
     summary: "Approve or reject a proposal",
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: decideProposalRequestSchema,
   },
   "POST /internal/admin/proposals/go-live": {
     summary: "Request go-live for a tenant",
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: goLiveRequestSchema,
   },
   "GET /internal/admin/proposals/go-live/status": {
     summary: "Retrieve go-live status",
@@ -135,12 +158,14 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     successStatus: 201,
+    request: inviteStaffRequestSchema,
   },
   "PATCH /internal/admin/staff/:id": {
     summary: "Update a staff user",
     tags: ["Identity"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: updateStaffRequestSchema,
   },
   "DELETE /internal/admin/staff/:id": {
     summary: "Remove a staff user",
@@ -162,11 +187,13 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     tags: ["Sender IDs"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: decideSenderRequestSchema,
   },
   "POST /internal/admin/senders/:id/carrier-status": {
     summary: "Record a carrier registration outcome",
     tags: ["Sender IDs"],
     visibility: "internal",
     security: ["bffInternal"],
+    request: setSenderCarrierStatusRequestSchema,
   },
 };

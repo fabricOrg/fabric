@@ -1,10 +1,14 @@
 import {
+  createApplicationRequestSchema,
+  createSmsTemplateRequest,
   createWebhookEndpointRequestSchema,
   initiateTopUpRequestSchema,
   listWebhookDeliveriesResponseSchema,
   listWebhookEndpointsResponseSchema,
+  purchaseCommercialOfferRequestSchema,
   replayWebhookDeliveryResponseSchema,
   updateAutoTopupRequestSchema,
+  updateSmsTemplateRequest,
   walletSnapshot,
 } from "@app/contracts";
 import type { RouteBindings } from "../route-binding.types.js";
@@ -85,6 +89,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey"],
     errorStatuses: [402, 409],
+    request: purchaseCommercialOfferRequestSchema,
   },
   "GET /v1/tokens/purchases": {
     summary: "List token purchases",
@@ -157,6 +162,9 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey", "operatorToken"],
     successStatus: 201,
+    // TODO(contract): the handler parses this body ad hoc — `(body ?? {}) as Record<string, unknown>`
+    // with manual field extraction and no zod DTO, so there is nothing to reference. Same defect
+    // family as the untyped BFF mutation bodies; the fix is a contract, not a doc entry.
   },
   "DELETE /v1/api-keys/:id": {
     summary: "Revoke an API key",
@@ -180,6 +188,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey", "operatorToken"],
     successStatus: 201,
+    request: createApplicationRequestSchema,
   },
   "GET /v1/context": {
     summary: "Retrieve the calling key's context",
@@ -223,6 +232,9 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey"],
     errorStatuses: [402],
+    // TODO(contract): the body is a discriminated union resolved at runtime on `action` —
+    // `startFlowRequest` OR `confirmFlowRequest`. A binding names one contract and must not compose
+    // shapes, so this stays unmodelled until the API exposes a single union DTO.
   },
   "GET /v1/public/pricing": {
     summary: "Retrieve published pricing",
@@ -246,6 +258,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey"],
     successStatus: 201,
+    request: createSmsTemplateRequest,
   },
   "PATCH /v1/sms/templates/:id": {
     summary: "Update an SMS template",
@@ -253,6 +266,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey"],
     errorStatuses: [404],
+    request: updateSmsTemplateRequest,
   },
   "DELETE /v1/sms/templates/:id": {
     summary: "Delete an SMS template",
