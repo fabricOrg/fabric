@@ -276,3 +276,35 @@ Bulk work is routed to external agent CLIs to conserve Claude quota — see
 - **`dev` is shared** (§5) — a delegate never rebases, resets, or force-pushes it, and
   never advances it outside a squash-merge.
 
+
+---
+
+## 11. Pre-production: breaking changes are ALLOWED
+
+**Status: DEVELOPMENT. This section is live until the project owner says we are in production.**
+
+Fabric has no external callers to protect. Treating a pre-prod codebase as if it did is how an
+inconsistency becomes permanent at launch — three different webhook acknowledgement shapes, a list
+endpoint returning a bare array while every sibling returns an envelope, a request body parsed with
+an unchecked cast. Each of those survived a review by being labelled "breaking to change".
+
+So, until told otherwise:
+
+- **Break freely.** Response shapes, request contracts, enum values, route paths, database columns.
+- **Do not build a compatibility path** — no deprecation window, no dual-shape adapter, no
+  `v2` alias — unless explicitly asked for one.
+- **Fix the inconsistency at its source** rather than documenting it as a known quirk. A doc entry
+  describing a wart is a decision to keep the wart.
+- **Say so in the commit body**: "breaking, pre-prod, allowed by §11". The change still gets a
+  message explaining what moved and why.
+
+**This does NOT waive §7.** Those redlines are about SAFETY, not compatibility: no `terraform
+apply`, no deploy-gate flips, no live SMS or payments, no production database access, no live
+external write without explicit human confirmation. "Breaking changes are allowed" means
+compatibility is not a constraint. It does not mean risk is not a constraint.
+
+**The §5 review gate still applies.** A breaking change is reviewed like any other — arguably more
+carefully, since nothing downstream will catch it.
+
+**When production is declared, delete this section** and replace it with the versioning policy
+(F8.1). Leaving it in place after go-live would authorise exactly the wrong thing.

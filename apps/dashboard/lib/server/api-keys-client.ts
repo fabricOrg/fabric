@@ -2,12 +2,11 @@ import "server-only";
 
 import {
   type ApiKey,
-  apiKey as apiKeySchema,
   type CreateApiKeyRequest,
   type CreateApiKeyResult,
   createApiKeyResult as createApiKeyResultSchema,
+  listApiKeysResponse,
 } from "@app/contracts";
-import { z } from "zod";
 import { dashboardApi } from "./api-client";
 
 /**
@@ -17,15 +16,15 @@ import { dashboardApi } from "./api-client";
  * application environment by type; live keys need the live environment unlocked through go-live.
  * Responses are parsed against the shared contract at the boundary.
  */
-const listResponseSchema = z.array(apiKeySchema);
-
 /** List keys, optionally narrowed to a single application (the app-detail page). */
 export async function listApiKeys(applicationId?: string): Promise<ApiKey[]> {
   const path = applicationId
     ? `/v1/api-keys?applicationId=${encodeURIComponent(applicationId)}`
     : "/v1/api-keys";
   const payload = await dashboardApi<unknown>(path, "api_keys:read");
-  return listResponseSchema.parse(payload);
+  // The API returns an envelope now, not a bare array (§11 breaking change) — unwrap after parsing
+  // so callers keep the ApiKey[] they expect.
+  return listApiKeysResponse.parse(payload).keys;
 }
 
 /** Create a key inside a specific application's environment (ADR-0004). `expiresInDays` omitted =

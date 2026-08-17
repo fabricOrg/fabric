@@ -8,6 +8,7 @@ import {
   type ProposalDto,
   proposalDtoSchema,
 } from "@app/contracts";
+import { unwrapEnvelope } from "./response-envelope";
 
 /** Maker-checker control plane via the api's BffToken-guarded /internal/admin/proposals. */
 export class ProposalApiError extends Error {
@@ -44,7 +45,7 @@ export async function listProposals(): Promise<ListProposalsResponse> {
   });
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new ProposalApiError(response.status, payload);
-  return listProposalsResponseSchema.parse(payload);
+  return listProposalsResponseSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function createProposal(
@@ -60,7 +61,7 @@ export async function createProposal(
   });
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new ProposalApiError(response.status, payload);
-  return proposalDtoSchema.parse(payload);
+  return proposalDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function decideProposal(
@@ -80,5 +81,5 @@ export async function decideProposal(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new ProposalApiError(response.status, payload);
-  return proposalDtoSchema.parse(payload);
+  return proposalDtoSchema.parse(unwrapEnvelope(payload));
 }

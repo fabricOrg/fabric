@@ -1,7 +1,7 @@
 import {
-  type ApiKey,
-  apiKeyScopes,
   type CreateApiKeyResult,
+  createApiKeyRequest,
+  type ListApiKeysResponse,
 } from "@app/contracts";
 import {
   Body,
@@ -15,7 +15,7 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
-import { invalidRequest, notFound } from "../http/api-error.js";
+import { invalidRequest, newRequestId, notFound } from "../http/api-error.js";
 import type { ApiKeyEnv } from "./api-key.crypto.js";
 import type { RequestTenant } from "./api-key.guard.js";
 import { ApiKeyService } from "./api-keys.service.js";
@@ -47,18 +47,40 @@ export class ApiKeysController {
     @Req() req: AuthedRequest,
     @Body() body: unknown,
   ): Promise<CreateApiKeyResult> {
-    const b = (body ?? {}) as Record<string, unknown>;
-    const tenantId = resolveTenantId(req, b.tenantId);
-    const name = typeof b.name === "string" ? b.name : "";
-    const expiresInDays = optionalExpiryDays(b.expires_in_days);
+    // Parsed against the shared contract, not cast. This route mints a credential; an unchecked
+    // `as Record<string, unknown>` at that boundary is the one place it must not happen.
+    const parsed = createApiKeyRequest.safeParse(body ?? {});
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      throw invalidRequest(
+        "invalid_api_key_request",
+        issue?.message ?? "Invalid API key request.",
+        // Numeric segments are dropped so a bad array ELEMENT reports the field a caller can act on
+        // — `scopes`, not `scopes.0`. F8.3's `param` names a request field, not a JSON pointer.
+        issue?.path
+          .filter((segment) => typeof segment !== "number")
+          .join(".") || undefined,
+      );
+    }
+    const {
+      name,
+      env,
+      scopes,
+      application_id,
+      expires_in_days,
+      tenantId: suppliedTenantId,
+    } = parsed.data;
+    const tenantId = resolveTenantId(req, suppliedTenantId);
     const created = await this.svc.create(tenantId, {
-      env: requireEnv(b.env),
-      scopes: requireScopes(b.scopes),
-      ...(name ? { name } : {}),
-      ...(b.application_id !== undefined
-        ? { applicationId: requireUuid(b.application_id, "application_id") }
+      env: env === "sandbox" ? "test" : "live",
+      scopes,
+      name,
+      ...(application_id !== undefined
+        ? { applicationId: application_id }
         : {}),
-      ...(expiresInDays !== undefined ? { expiresInDays } : {}),
+      ...(expires_in_days !== undefined
+        ? { expiresInDays: expires_in_days }
+        : {}),
     });
     // The ONLY time the full secret crosses the wire. The listed record keeps only the prefix; the
     // authoritative created_at/last_used_at come from the DB on the next list (client re-fetches).
@@ -83,14 +105,19 @@ export class ApiKeysController {
     @Req() req: AuthedRequest,
     @Query("tenantId") tenantId: unknown,
     @Query("applicationId") applicationId: unknown,
-  ): Promise<ApiKey[]> {
+  ): Promise<ListApiKeysResponse> {
     const keys = await this.svc.list(
       resolveTenantId(req, tenantId),
       typeof applicationId === "string"
         ? requireUuid(applicationId, "applicationId")
         : undefined,
     );
-    return keys.map((key) => ({ ...key, env: publicEnv(key.env) }));
+    // Envelope, not a bare array: every sibling list carries `request_id` so a support ticket can
+    // quote one. Breaking, pre-prod, §11.
+    return {
+      keys: keys.map((key) => ({ ...key, env: publicEnv(key.env) })),
+      request_id: newRequestId(),
+    };
   }
 
   @Delete(":id")
@@ -126,42 +153,6 @@ function requireUuid(value: unknown, param: string): string {
   return value;
 }
 
-/** Optional key lifetime in days: absent/null → never expires; anything else must be a positive int. */
-function optionalExpiryDays(value: unknown): number | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    throw invalidRequest(
-      "invalid_expiry",
-      "expires_in_days must be a positive integer.",
-      "expires_in_days",
-    );
-  }
-  return value;
-}
-
-function requireEnv(value: unknown): ApiKeyEnv {
-  if (value !== "sandbox" && value !== "live") {
-    throw invalidRequest(
-      "invalid_env",
-      "env must be 'sandbox' or 'live'.",
-      "env",
-    );
-  }
-  return value === "sandbox" ? "test" : "live";
-}
-
-function publicEnv(value: ApiKeyEnv): ApiKey["env"] {
+function publicEnv(value: ApiKeyEnv): "sandbox" | "live" {
   return value === "test" ? "sandbox" : "live";
-}
-
-function requireScopes(value: unknown): string[] {
-  const parsed = apiKeyScopes.safeParse(value);
-  if (!parsed.success) {
-    throw invalidRequest(
-      "invalid_scopes",
-      "Choose at least one supported API key scope.",
-      "scopes",
-    );
-  }
-  return parsed.data;
 }

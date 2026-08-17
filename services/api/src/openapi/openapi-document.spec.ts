@@ -60,7 +60,16 @@ function requiredOf(
   const schema = holder?.content?.["application/json"]?.schema;
   if (!schema)
     throw new Error(`no json schema for ${which} on ${method} ${path}`);
-  return schema.required ?? [];
+  if (which === "requestBody") return schema.required ?? [];
+  // Responses are wrapped in `{ data, request_id }` by the envelope, so the payload's own
+  // `required` lives one level down. Asserting the envelope's would only ever prove the wrap.
+  const data = (
+    schema as unknown as {
+      properties?: { data?: { required?: string[] } };
+    }
+  ).properties?.data;
+  if (!data) throw new Error(`response for ${method} ${path} is not enveloped`);
+  return data.required ?? [];
 }
 
 const OPTIONS = {
@@ -178,6 +187,39 @@ describe("schema derivation", () => {
 
     expect(req).not.toContain("mode"); // optional on the way in
     expect(res).toContain("mode"); // guaranteed on the way out
+  });
+
+  it("wraps every JSON response in the { data, request_id } envelope", () => {
+    const doc = buildOpenApiDocument(
+      [route("GET", "/v1/thing")],
+      {
+        "GET /v1/thing": { ...binding, response: z.object({ id: z.string() }) },
+      },
+      { ...OPTIONS },
+    );
+    const op = operation(doc, "/v1/thing", "get") as {
+      responses: Record<
+        string,
+        {
+          content: Record<
+            string,
+            {
+              schema: {
+                required?: string[];
+                properties?: Record<string, unknown>;
+              };
+            }
+          >;
+        }
+      >;
+    };
+    const schema = op.responses["200"]?.content["application/json"]?.schema;
+    expect(schema?.required).toEqual(["data", "request_id"]);
+    // And the payload is genuinely nested rather than merged into the envelope.
+    expect(Object.keys(schema?.properties ?? {})).toEqual([
+      "data",
+      "request_id",
+    ]);
   });
 
   it("renders bigint money as an exact string, never a JSON number", () => {

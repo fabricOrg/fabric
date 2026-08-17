@@ -1,3 +1,4 @@
+import { unwrapEnvelope } from "./envelope.js";
 import {
   ApiError,
   ConnectionError,
@@ -141,8 +142,11 @@ export class Transport {
         retryCount,
       });
       const resolvedRequestId = requestId ?? requestIdFrom(payload);
+      // Fabric wraps every JSON success in `{ data, request_id }`. Unwrapped once here so every
+      // resource module keeps receiving the payload it already expects — the envelope is a
+      // transport concern. Errors are thrown above and keep their own envelope untouched.
       return {
-        data: payload as T,
+        data: unwrapEnvelope(payload) as T,
         ...(resolvedRequestId ? { requestId: resolvedRequestId } : {}),
         retryCount,
         statusCode: response.status,

@@ -1,3 +1,4 @@
+import { enveloped } from "@app/contracts";
 import { toRequestSchema, toResponseSchema } from "./openapi-schema.js";
 import type {
   RouteBinding,
@@ -106,13 +107,21 @@ function operationFor(
   }
 
   const successType = binding.successContentType ?? "application/json";
+  const isJson = successType === "application/json";
   const responses: Record<string, unknown> = {
     [String(binding.successStatus ?? 200)]: {
       description: "Success.",
       ...(binding.response
         ? {
             content: {
-              [successType]: { schema: toResponseSchema(binding.response) },
+              [successType]: {
+                // JSON successes are wrapped by ResponseEnvelopeInterceptor at runtime, so the
+                // document wraps them too. Applying it HERE rather than in each binding is what
+                // keeps the spec and the interceptor from ever disagreeing.
+                schema: toResponseSchema(
+                  isJson ? enveloped(binding.response) : binding.response,
+                ),
+              },
             },
           }
         : binding.successContentType

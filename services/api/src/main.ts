@@ -16,6 +16,7 @@ import {
   publicCorsOrigin,
   varyWithOrigin,
 } from "./http/public-cors.js";
+import { ResponseEnvelopeInterceptor } from "./http/response-envelope.interceptor.js";
 import { assertRequiredSecrets } from "./runtime/required-secrets.js";
 
 /**
@@ -42,6 +43,9 @@ async function bootstrap(): Promise<void> {
   );
   // All Nest `Logger` calls (SmsService, MaintenanceService, …) now emit structured pino JSON.
   app.useLogger(app.get(Logger));
+  // One response shape for the whole API: `{ data, request_id }` on every JSON success. Applied
+  // globally rather than per-handler so a new controller cannot forget it (contracts/envelope.ts).
+  app.useGlobalInterceptors(new ResponseEnvelopeInterceptor());
   const edgeSharedSecret = process.env.EDGE_SHARED_SECRET;
   app
     .getHttpAdapter()

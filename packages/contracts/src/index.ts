@@ -25,6 +25,8 @@ export * from "./dev-portal.js";
 export * from "./email.js";
 // F8.3 error model — shared error envelope + browser-safe parser (produced by services, consumed
 // by the frontend). Keep this package zod-only / browser-safe; a CI guard enforces it.
+// The response envelope every JSON success carries: { data, request_id }.
+export * from "./envelope.js";
 export * from "./errors.js";
 // Lighthouse flow (Transactions explorer) — verify → charge → notify, one reconciled record.
 export * from "./flows.js";

@@ -10,6 +10,7 @@ import {
   type SetSenderCarrierStatusRequest,
   senderDtoSchema,
 } from "@app/contracts";
+import { unwrapEnvelope } from "./response-envelope";
 
 /** Sender-ID review queue via the api's BffToken-guarded /internal/admin/senders (E10). */
 export class SenderApiError extends Error {
@@ -38,7 +39,7 @@ export async function listSenderQueue(): Promise<ListAdminSendersResponse> {
   });
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new SenderApiError(response.status, payload);
-  return listAdminSendersResponseSchema.parse(payload);
+  return listAdminSendersResponseSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function decideSender(
@@ -63,7 +64,7 @@ export async function decideSender(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new SenderApiError(response.status, payload);
-  return senderDtoSchema.parse(payload);
+  return senderDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 /**
@@ -93,7 +94,7 @@ export async function setSenderCarrierStatus(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new SenderApiError(response.status, payload);
-  return adminSenderDtoSchema.parse(payload);
+  return adminSenderDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 export type { AdminSenderDto };

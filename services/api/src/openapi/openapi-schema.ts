@@ -54,7 +54,7 @@ function convert(
   schema: ZodType,
   io: "input" | "output",
 ): Record<string, unknown> {
-  return z.toJSONSchema(schema, {
+  const generated = z.toJSONSchema(schema, {
     target: TARGET,
     io,
     // Shapes are inlined per operation, with genuinely repeated sub-schemas lifted into a local
@@ -66,4 +66,9 @@ function convert(
     unrepresentable: "any",
     override: overrideUnrepresentable,
   }) as Record<string, unknown>;
+  // zod stamps a `$schema` dialect on the ROOT of whatever it converts. Inside an OpenAPI Schema
+  // Object that is noise at best — the document already declares its dialect once, at the top —
+  // and some generators choke on it. Strip it from the root only; nested `$defs` never carry one.
+  delete generated.$schema;
+  return generated;
 }
