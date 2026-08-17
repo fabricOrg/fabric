@@ -1058,6 +1058,13 @@
       "when": 1786320482000,
       "tag": "0150_whatsapp_templates_tenant_scoped",
       "breakpoints": true
+    },
+    {
+      "idx": 151,
+      "version": "7",
+      "when": 1786320542000,
+      "tag": "0151_provider_cost_source_required",
+      "breakpoints": true
     }
   ]
 }

@@ -66,26 +66,18 @@ export const providerCostRateInputSchema = providerCostRateShape.superRefine(
 export type ProviderCostRateInput = z.infer<typeof providerCostRateInputSchema>;
 
 /**
- * READ shape. Derived from the write shape, but it must describe what the TABLE CAN HOLD rather
- * than what a new write is allowed to be — and those differ here.
- *
- * `source_reference` is `NOT NULL DEFAULT ''` in the column, so the migration that introduced it
- * backfilled existing rows with an empty string, and any insert omitting it still produces one.
- * Inheriting the write-side `min(1)` made those rows UNSERVABLE: the list endpoint 500'd on real
- * data. Found by response validation, not by a test — documented-but-unenforced, it was invisible.
- *
- * Relaxed here so history reads back; `providerCostRateInputSchema` keeps `min(1)` so new costs
- * still carry provenance. The real fix is a migration that backfills a reference and drops the
- * default — a cost rate with no source is a money record with no audit trail — but that cannot
- * invent provenance for rows that never had it, so it needs a human decision.
+ * READ shape. `source_reference` is required again here, which it can be because migration 0151
+ * dropped the column's empty-string DEFAULT, added a CHECK, and marked the pre-existing rows
+ * `UNRECORDED — predates 0151`. The read and write constraints agree once more BECAUSE the database
+ * enforces the rule — briefly they had to diverge, since a read contract must describe what the
+ * table can actually hold and the table could hold empties.
  */
 export const providerCostRateDtoSchema = providerCostRateShape
-  .omit({ effective_from: true, source_reference: true })
+  .omit({ effective_from: true })
   .extend({
     id: z.string().uuid(),
     effective_from: z.string(),
     effective_to: z.string().nullable(),
-    source_reference: z.string().max(500),
   });
 export type ProviderCostRateDto = z.infer<typeof providerCostRateDtoSchema>;
 
