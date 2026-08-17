@@ -191,7 +191,60 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "staff_user_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "operator",
+                        "admin"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "suspended"
+                      ]
+                    },
+                    "bound": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "staff_user_id",
+                    "email",
+                    "name",
+                    "role",
+                    "status",
+                    "bound"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -373,7 +426,14 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -530,7 +590,121 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "virtual_number": {
+                      "type": "string"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "to": {
+                            "type": "string"
+                          },
+                          "from": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "erased": {
+                            "type": "boolean"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "sending",
+                              "accepted",
+                              "sent",
+                              "delivered",
+                              "undelivered",
+                              "failed",
+                              "expired"
+                            ]
+                          },
+                          "segments": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "read_at": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "direction": {
+                            "type": "string",
+                            "enum": [
+                              "inbound",
+                              "outbound"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "to",
+                          "from",
+                          "body",
+                          "erased",
+                          "status",
+                          "segments",
+                          "created_at",
+                          "read_at",
+                          "direction"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "next_cursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "retention_days": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "can_clear": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "virtual_number",
+                    "messages",
+                    "next_cursor",
+                    "retention_days"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -2056,7 +2230,57 @@
         },
         "responses": {
           "201": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "description": {
+                      "default": "",
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "price_book_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "name",
+                    "description",
+                    "id",
+                    "price_book_id",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -2981,7 +3205,118 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "provider_vendor": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "channel": {
+                      "type": "string",
+                      "enum": [
+                        "sms",
+                        "email",
+                        "whatsapp"
+                      ]
+                    },
+                    "destination_country": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[A-Z]{2}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "traffic_class": {
+                      "default": null,
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "promotional",
+                            "transactional",
+                            "otp",
+                            "marketing",
+                            "utility",
+                            "authentication"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "numerator_minor": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "denominator": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "source_reference": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "effective_from": {
+                      "type": "string"
+                    },
+                    "effective_to": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "provider_vendor",
+                    "channel",
+                    "destination_country",
+                    "traffic_class",
+                    "currency",
+                    "numerator_minor",
+                    "denominator",
+                    "source_reference",
+                    "id",
+                    "effective_from",
+                    "effective_to"
+                  ],
+                  "additionalProperties": false,
+                  "$defs": {
+                    "__schema0": {
+                      "type": "string",
+                      "pattern": "^\\d+$"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -3049,7 +3384,41 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "subject_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "msisdn_masked": {
+                      "type": "string"
+                    },
+                    "kinds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "erased": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "subject_id",
+                    "msisdn_masked",
+                    "kinds",
+                    "erased"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -3351,7 +3720,111 @@
         },
         "responses": {
           "201": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "wallet_adjustment",
+                        "plan_change",
+                        "refund",
+                        "go_live"
+                      ]
+                    },
+                    "tenant_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tenant_label": {
+                      "type": "string"
+                    },
+                    "before_value": {
+                      "type": "string"
+                    },
+                    "after_value": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected"
+                      ]
+                    },
+                    "maker_email": {
+                      "type": "string"
+                    },
+                    "checker_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "decided_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "decided_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "tenant_id",
+                    "tenant_label",
+                    "before_value",
+                    "after_value",
+                    "reason",
+                    "status",
+                    "maker_email",
+                    "checker_email",
+                    "decided_reason",
+                    "decided_at",
+                    "created_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -3409,7 +3882,52 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "pending",
+                        "approved",
+                        "rejected"
+                      ]
+                    },
+                    "decided_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "requested_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "decided_reason",
+                    "requested_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -3834,7 +4352,60 @@
         },
         "responses": {
           "201": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "staff_user_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "operator",
+                        "admin"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "suspended"
+                      ]
+                    },
+                    "bound": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "staff_user_id",
+                    "email",
+                    "name",
+                    "role",
+                    "status",
+                    "bound"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -4239,7 +4810,38 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "sms_segments_per_day": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000000
+                    },
+                    "email_messages_per_day": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000000
+                    },
+                    "whatsapp_messages_per_day": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000000
+                    }
+                  },
+                  "required": [
+                    "sms_segments_per_day",
+                    "email_messages_per_day",
+                    "whatsapp_messages_per_day"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -4343,7 +4945,38 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "sms_segments_per_day": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000000
+                    },
+                    "email_messages_per_day": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000000
+                    },
+                    "whatsapp_messages_per_day": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000000
+                    }
+                  },
+                  "required": [
+                    "sms_segments_per_day",
+                    "email_messages_per_day",
+                    "whatsapp_messages_per_day"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -4572,7 +5205,79 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "capability": {
+                      "type": "string",
+                      "enum": [
+                        "sms",
+                        "email",
+                        "whatsapp",
+                        "payment",
+                        "identity"
+                      ]
+                    },
+                    "vendor": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "isDefault": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "connected",
+                        "available",
+                        "error"
+                      ]
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "sandbox",
+                        "live"
+                      ]
+                    },
+                    "credential_fingerprint": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "capability",
+                    "vendor",
+                    "label",
+                    "enabled",
+                    "isDefault",
+                    "status",
+                    "mode",
+                    "credential_fingerprint"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -5083,7 +5788,14 @@
         },
         "responses": {
           "201": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -5151,7 +5863,43 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "delivery_mode": {
+                      "type": "string",
+                      "enum": [
+                        "virtual",
+                        "live"
+                      ]
+                    },
+                    "locked": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "delivery_mode",
+                    "locked",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -5232,7 +5980,43 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "delivery_mode": {
+                      "type": "string",
+                      "enum": [
+                        "virtual",
+                        "live"
+                      ]
+                    },
+                    "locked": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "delivery_mode",
+                    "locked",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -6390,7 +7174,35 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "tenant_id": {
+                      "type": "string"
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "tenant_id",
+                    "scopes",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -13960,7 +14772,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -15310,7 +16129,28 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -15376,7 +16216,28 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -15443,7 +16304,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -15508,7 +16376,35 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "processed": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "accepted",
+                    "processed",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -15605,7 +16501,95 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "tenant_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "plan": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "suspended",
+                        "closed"
+                      ]
+                    },
+                    "data_region": {
+                      "type": "string"
+                    },
+                    "workos_organization_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "price_book_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "offer_catalog_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "billing_currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "tenant_id",
+                    "name",
+                    "slug",
+                    "plan",
+                    "status",
+                    "data_region",
+                    "workos_organization_id",
+                    "price_book_id",
+                    "offer_catalog_id",
+                    "billing_currency",
+                    "created_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -15681,7 +16665,25 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -15948,7 +16950,379 @@
         },
         "responses": {
           "201": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "channel_code": {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          "unit_code": {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          "paid_units": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "bonus_units": {
+                            "$ref": "#/$defs/__schema2"
+                          },
+                          "eligibility": {
+                            "default": {
+                              "destination_countries": [],
+                              "traffic_classes": [],
+                              "provider_vendors": [],
+                              "service_classes": []
+                            },
+                            "type": "object",
+                            "properties": {
+                              "destination_countries": {
+                                "default": [],
+                                "maxItems": 250,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema3"
+                                }
+                              },
+                              "traffic_classes": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              },
+                              "provider_vendors": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              },
+                              "service_classes": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              }
+                            },
+                            "required": [
+                              "destination_countries",
+                              "traffic_classes",
+                              "provider_vendors",
+                              "service_classes"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "position": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "total_units": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "allocated_price_minor": {
+                            "anyOf": [
+                              {
+                                "$ref": "#/$defs/__schema1"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "channel_code",
+                          "unit_code",
+                          "paid_units",
+                          "bonus_units",
+                          "eligibility",
+                          "id",
+                          "position",
+                          "total_units",
+                          "allocated_price_minor"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "total_price_minor": {
+                      "$ref": "#/$defs/__schema1"
+                    },
+                    "credit_validity_days": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 3650
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "minimum_pack_count": {
+                      "default": 1,
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000
+                    },
+                    "maximum_pack_count": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "effective_from": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "effective_to": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "offer_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "published",
+                        "retired"
+                      ]
+                    },
+                    "cost_snapshot": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "best_case_cost_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "worst_case_cost_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "best_case_margin_minor": {
+                              "$ref": "#/$defs/__schema5"
+                            },
+                            "worst_case_margin_minor": {
+                              "$ref": "#/$defs/__schema5"
+                            },
+                            "worst_case_margin_bps": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "minimum_margin_bps": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 10000
+                            },
+                            "minimum_margin_source": {
+                              "type": "string",
+                              "enum": [
+                                "catalog_version",
+                                "platform_default"
+                              ]
+                            },
+                            "route_count": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "calculated_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "source_references": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "best_case_cost_minor",
+                            "worst_case_cost_minor",
+                            "best_case_margin_minor",
+                            "worst_case_margin_minor",
+                            "worst_case_margin_bps",
+                            "minimum_margin_bps",
+                            "minimum_margin_source",
+                            "route_count",
+                            "calculated_at",
+                            "source_references"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "approved_by": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "approved_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "approved_by_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "items",
+                    "total_price_minor",
+                    "credit_validity_days",
+                    "minimum_pack_count",
+                    "maximum_pack_count",
+                    "effective_from",
+                    "effective_to",
+                    "id",
+                    "offer_id",
+                    "version",
+                    "status",
+                    "cost_snapshot",
+                    "created_by",
+                    "approved_by",
+                    "approved_at",
+                    "created_by_email",
+                    "approved_by_email",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "additionalProperties": false,
+                  "$defs": {
+                    "__schema0": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                    },
+                    "__schema1": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema2": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema3": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{2}$"
+                    },
+                    "__schema4": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120,
+                      "pattern": "^[a-zA-Z0-9._:-]+$"
+                    },
+                    "__schema5": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -16291,7 +17665,268 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "total_price_minor": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "item_index": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "channel_code": {
+                            "type": "string"
+                          },
+                          "unit_code": {
+                            "type": "string"
+                          },
+                          "total_units": {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          "best_case_cost_minor": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "worst_case_cost_minor": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "allocated_price_minor": {
+                            "$ref": "#/$defs/__schema0"
+                          }
+                        },
+                        "required": [
+                          "item_index",
+                          "channel_code",
+                          "unit_code",
+                          "total_units",
+                          "best_case_cost_minor",
+                          "worst_case_cost_minor",
+                          "allocated_price_minor"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "cost_snapshot": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "best_case_cost_minor": {
+                              "$ref": "#/$defs/__schema1"
+                            },
+                            "worst_case_cost_minor": {
+                              "$ref": "#/$defs/__schema1"
+                            },
+                            "best_case_margin_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "worst_case_margin_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "worst_case_margin_bps": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "minimum_margin_bps": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 10000
+                            },
+                            "minimum_margin_source": {
+                              "type": "string",
+                              "enum": [
+                                "catalog_version",
+                                "platform_default"
+                              ]
+                            },
+                            "route_count": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "calculated_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "source_references": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "best_case_cost_minor",
+                            "worst_case_cost_minor",
+                            "best_case_margin_minor",
+                            "worst_case_margin_minor",
+                            "worst_case_margin_bps",
+                            "minimum_margin_bps",
+                            "minimum_margin_source",
+                            "route_count",
+                            "calculated_at",
+                            "source_references"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "routes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "item_index": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "channel_code": {
+                            "type": "string"
+                          },
+                          "unit_code": {
+                            "type": "string"
+                          },
+                          "provider_vendor": {
+                            "type": "string"
+                          },
+                          "destination_country": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "traffic_class": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "provider_cost_rate_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "source_reference": {
+                            "type": "string"
+                          },
+                          "total_cost_minor": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "margin_minor": {
+                            "$ref": "#/$defs/__schema2"
+                          },
+                          "margin_bps": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "meets_floor": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "item_index",
+                          "channel_code",
+                          "unit_code",
+                          "provider_vendor",
+                          "destination_country",
+                          "traffic_class",
+                          "provider_cost_rate_id",
+                          "source_reference",
+                          "total_cost_minor",
+                          "margin_minor",
+                          "margin_bps",
+                          "meets_floor"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "publishable": {
+                      "type": "boolean"
+                    },
+                    "blocked_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "blocked_detail": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "total_price_minor",
+                    "items",
+                    "cost_snapshot",
+                    "routes",
+                    "publishable",
+                    "blocked_reason",
+                    "blocked_detail"
+                  ],
+                  "additionalProperties": false,
+                  "$defs": {
+                    "__schema0": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema1": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema2": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -17081,7 +18716,379 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "channel_code": {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          "unit_code": {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          "paid_units": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "bonus_units": {
+                            "$ref": "#/$defs/__schema2"
+                          },
+                          "eligibility": {
+                            "default": {
+                              "destination_countries": [],
+                              "traffic_classes": [],
+                              "provider_vendors": [],
+                              "service_classes": []
+                            },
+                            "type": "object",
+                            "properties": {
+                              "destination_countries": {
+                                "default": [],
+                                "maxItems": 250,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema3"
+                                }
+                              },
+                              "traffic_classes": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              },
+                              "provider_vendors": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              },
+                              "service_classes": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              }
+                            },
+                            "required": [
+                              "destination_countries",
+                              "traffic_classes",
+                              "provider_vendors",
+                              "service_classes"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "position": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "total_units": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "allocated_price_minor": {
+                            "anyOf": [
+                              {
+                                "$ref": "#/$defs/__schema1"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "channel_code",
+                          "unit_code",
+                          "paid_units",
+                          "bonus_units",
+                          "eligibility",
+                          "id",
+                          "position",
+                          "total_units",
+                          "allocated_price_minor"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "total_price_minor": {
+                      "$ref": "#/$defs/__schema1"
+                    },
+                    "credit_validity_days": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 3650
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "minimum_pack_count": {
+                      "default": 1,
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000
+                    },
+                    "maximum_pack_count": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "effective_from": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "effective_to": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "offer_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "published",
+                        "retired"
+                      ]
+                    },
+                    "cost_snapshot": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "best_case_cost_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "worst_case_cost_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "best_case_margin_minor": {
+                              "$ref": "#/$defs/__schema5"
+                            },
+                            "worst_case_margin_minor": {
+                              "$ref": "#/$defs/__schema5"
+                            },
+                            "worst_case_margin_bps": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "minimum_margin_bps": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 10000
+                            },
+                            "minimum_margin_source": {
+                              "type": "string",
+                              "enum": [
+                                "catalog_version",
+                                "platform_default"
+                              ]
+                            },
+                            "route_count": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "calculated_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "source_references": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "best_case_cost_minor",
+                            "worst_case_cost_minor",
+                            "best_case_margin_minor",
+                            "worst_case_margin_minor",
+                            "worst_case_margin_bps",
+                            "minimum_margin_bps",
+                            "minimum_margin_source",
+                            "route_count",
+                            "calculated_at",
+                            "source_references"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "approved_by": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "approved_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "approved_by_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "items",
+                    "total_price_minor",
+                    "credit_validity_days",
+                    "minimum_pack_count",
+                    "maximum_pack_count",
+                    "effective_from",
+                    "effective_to",
+                    "id",
+                    "offer_id",
+                    "version",
+                    "status",
+                    "cost_snapshot",
+                    "created_by",
+                    "approved_by",
+                    "approved_at",
+                    "created_by_email",
+                    "approved_by_email",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "additionalProperties": false,
+                  "$defs": {
+                    "__schema0": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                    },
+                    "__schema1": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema2": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema3": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{2}$"
+                    },
+                    "__schema4": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120,
+                      "pattern": "^[a-zA-Z0-9._:-]+$"
+                    },
+                    "__schema5": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -17170,7 +19177,379 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "channel_code": {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          "unit_code": {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          "paid_units": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "bonus_units": {
+                            "$ref": "#/$defs/__schema2"
+                          },
+                          "eligibility": {
+                            "default": {
+                              "destination_countries": [],
+                              "traffic_classes": [],
+                              "provider_vendors": [],
+                              "service_classes": []
+                            },
+                            "type": "object",
+                            "properties": {
+                              "destination_countries": {
+                                "default": [],
+                                "maxItems": 250,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema3"
+                                }
+                              },
+                              "traffic_classes": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              },
+                              "provider_vendors": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              },
+                              "service_classes": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              }
+                            },
+                            "required": [
+                              "destination_countries",
+                              "traffic_classes",
+                              "provider_vendors",
+                              "service_classes"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "position": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "total_units": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "allocated_price_minor": {
+                            "anyOf": [
+                              {
+                                "$ref": "#/$defs/__schema1"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "channel_code",
+                          "unit_code",
+                          "paid_units",
+                          "bonus_units",
+                          "eligibility",
+                          "id",
+                          "position",
+                          "total_units",
+                          "allocated_price_minor"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "total_price_minor": {
+                      "$ref": "#/$defs/__schema1"
+                    },
+                    "credit_validity_days": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 3650
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "minimum_pack_count": {
+                      "default": 1,
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000
+                    },
+                    "maximum_pack_count": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "effective_from": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "effective_to": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "offer_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "published",
+                        "retired"
+                      ]
+                    },
+                    "cost_snapshot": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "best_case_cost_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "worst_case_cost_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "best_case_margin_minor": {
+                              "$ref": "#/$defs/__schema5"
+                            },
+                            "worst_case_margin_minor": {
+                              "$ref": "#/$defs/__schema5"
+                            },
+                            "worst_case_margin_bps": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "minimum_margin_bps": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 10000
+                            },
+                            "minimum_margin_source": {
+                              "type": "string",
+                              "enum": [
+                                "catalog_version",
+                                "platform_default"
+                              ]
+                            },
+                            "route_count": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "calculated_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "source_references": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "best_case_cost_minor",
+                            "worst_case_cost_minor",
+                            "best_case_margin_minor",
+                            "worst_case_margin_minor",
+                            "worst_case_margin_bps",
+                            "minimum_margin_bps",
+                            "minimum_margin_source",
+                            "route_count",
+                            "calculated_at",
+                            "source_references"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "approved_by": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "approved_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "approved_by_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "items",
+                    "total_price_minor",
+                    "credit_validity_days",
+                    "minimum_pack_count",
+                    "maximum_pack_count",
+                    "effective_from",
+                    "effective_to",
+                    "id",
+                    "offer_id",
+                    "version",
+                    "status",
+                    "cost_snapshot",
+                    "created_by",
+                    "approved_by",
+                    "approved_at",
+                    "created_by_email",
+                    "approved_by_email",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "additionalProperties": false,
+                  "$defs": {
+                    "__schema0": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                    },
+                    "__schema1": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema2": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema3": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{2}$"
+                    },
+                    "__schema4": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120,
+                      "pattern": "^[a-zA-Z0-9._:-]+$"
+                    },
+                    "__schema5": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -17259,7 +19638,379 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "channel_code": {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          "unit_code": {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          "paid_units": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "bonus_units": {
+                            "$ref": "#/$defs/__schema2"
+                          },
+                          "eligibility": {
+                            "default": {
+                              "destination_countries": [],
+                              "traffic_classes": [],
+                              "provider_vendors": [],
+                              "service_classes": []
+                            },
+                            "type": "object",
+                            "properties": {
+                              "destination_countries": {
+                                "default": [],
+                                "maxItems": 250,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema3"
+                                }
+                              },
+                              "traffic_classes": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              },
+                              "provider_vendors": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              },
+                              "service_classes": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              }
+                            },
+                            "required": [
+                              "destination_countries",
+                              "traffic_classes",
+                              "provider_vendors",
+                              "service_classes"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "position": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "total_units": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "allocated_price_minor": {
+                            "anyOf": [
+                              {
+                                "$ref": "#/$defs/__schema1"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "channel_code",
+                          "unit_code",
+                          "paid_units",
+                          "bonus_units",
+                          "eligibility",
+                          "id",
+                          "position",
+                          "total_units",
+                          "allocated_price_minor"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "total_price_minor": {
+                      "$ref": "#/$defs/__schema1"
+                    },
+                    "credit_validity_days": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 3650
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "minimum_pack_count": {
+                      "default": 1,
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000
+                    },
+                    "maximum_pack_count": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "effective_from": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "effective_to": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "offer_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "published",
+                        "retired"
+                      ]
+                    },
+                    "cost_snapshot": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "best_case_cost_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "worst_case_cost_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "best_case_margin_minor": {
+                              "$ref": "#/$defs/__schema5"
+                            },
+                            "worst_case_margin_minor": {
+                              "$ref": "#/$defs/__schema5"
+                            },
+                            "worst_case_margin_bps": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "minimum_margin_bps": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 10000
+                            },
+                            "minimum_margin_source": {
+                              "type": "string",
+                              "enum": [
+                                "catalog_version",
+                                "platform_default"
+                              ]
+                            },
+                            "route_count": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "calculated_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "source_references": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "best_case_cost_minor",
+                            "worst_case_cost_minor",
+                            "best_case_margin_minor",
+                            "worst_case_margin_minor",
+                            "worst_case_margin_bps",
+                            "minimum_margin_bps",
+                            "minimum_margin_source",
+                            "route_count",
+                            "calculated_at",
+                            "source_references"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "approved_by": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "approved_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "approved_by_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "items",
+                    "total_price_minor",
+                    "credit_validity_days",
+                    "minimum_pack_count",
+                    "maximum_pack_count",
+                    "effective_from",
+                    "effective_to",
+                    "id",
+                    "offer_id",
+                    "version",
+                    "status",
+                    "cost_snapshot",
+                    "created_by",
+                    "approved_by",
+                    "approved_at",
+                    "created_by_email",
+                    "approved_by_email",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "additionalProperties": false,
+                  "$defs": {
+                    "__schema0": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                    },
+                    "__schema1": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema2": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema3": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{2}$"
+                    },
+                    "__schema4": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120,
+                      "pattern": "^[a-zA-Z0-9._:-]+$"
+                    },
+                    "__schema5": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -17351,7 +20102,25 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -17436,7 +20205,25 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -17542,7 +20329,98 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "tenant_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tenant_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tenant_scopable": {
+                      "type": "boolean"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "overridden_by_platform": {
+                      "type": "boolean"
+                    },
+                    "last_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "last_actor_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "tenant_id",
+                    "tenant_name",
+                    "tenant_scopable",
+                    "label",
+                    "description",
+                    "scope",
+                    "enabled",
+                    "overridden_by_platform",
+                    "last_reason",
+                    "last_actor_email",
+                    "updated_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -17835,7 +20713,111 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "wallet_adjustment",
+                        "plan_change",
+                        "refund",
+                        "go_live"
+                      ]
+                    },
+                    "tenant_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tenant_label": {
+                      "type": "string"
+                    },
+                    "before_value": {
+                      "type": "string"
+                    },
+                    "after_value": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected"
+                      ]
+                    },
+                    "maker_email": {
+                      "type": "string"
+                    },
+                    "checker_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "decided_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "decided_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "tenant_id",
+                    "tenant_label",
+                    "before_value",
+                    "after_value",
+                    "reason",
+                    "status",
+                    "maker_email",
+                    "checker_email",
+                    "decided_reason",
+                    "decided_at",
+                    "created_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -17924,7 +20906,111 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "wallet_adjustment",
+                        "plan_change",
+                        "refund",
+                        "go_live"
+                      ]
+                    },
+                    "tenant_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tenant_label": {
+                      "type": "string"
+                    },
+                    "before_value": {
+                      "type": "string"
+                    },
+                    "after_value": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected"
+                      ]
+                    },
+                    "maker_email": {
+                      "type": "string"
+                    },
+                    "checker_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "decided_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "decided_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "tenant_id",
+                    "tenant_label",
+                    "before_value",
+                    "after_value",
+                    "reason",
+                    "status",
+                    "maker_email",
+                    "checker_email",
+                    "decided_reason",
+                    "decided_at",
+                    "created_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -18021,7 +21107,112 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "sender_id": {
+                      "type": "string"
+                    },
+                    "country": {
+                      "type": "string",
+                      "enum": [
+                        "GH",
+                        "NG"
+                      ]
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "alphanumeric",
+                        "short-code"
+                      ]
+                    },
+                    "use_case": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "active",
+                        "rejected"
+                      ]
+                    },
+                    "rejection_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "tenant_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+                    },
+                    "carrier_status": {
+                      "type": "string",
+                      "enum": [
+                        "unregistered",
+                        "submitted",
+                        "approved",
+                        "rejected"
+                      ]
+                    },
+                    "carrier_ref": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "carrier_decided_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sender_id",
+                    "country",
+                    "type",
+                    "use_case",
+                    "status",
+                    "rejection_reason",
+                    "created_at",
+                    "tenant_id",
+                    "carrier_status",
+                    "carrier_ref",
+                    "carrier_decided_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -18116,7 +21307,112 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "sender_id": {
+                      "type": "string"
+                    },
+                    "country": {
+                      "type": "string",
+                      "enum": [
+                        "GH",
+                        "NG"
+                      ]
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "alphanumeric",
+                        "short-code"
+                      ]
+                    },
+                    "use_case": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "active",
+                        "rejected"
+                      ]
+                    },
+                    "rejection_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "tenant_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+                    },
+                    "carrier_status": {
+                      "type": "string",
+                      "enum": [
+                        "unregistered",
+                        "submitted",
+                        "approved",
+                        "rejected"
+                      ]
+                    },
+                    "carrier_ref": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "carrier_decided_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sender_id",
+                    "country",
+                    "type",
+                    "use_case",
+                    "status",
+                    "rejection_reason",
+                    "created_at",
+                    "tenant_id",
+                    "carrier_status",
+                    "carrier_ref",
+                    "carrier_decided_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -18833,7 +22129,79 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "capability": {
+                      "type": "string",
+                      "enum": [
+                        "sms",
+                        "email",
+                        "whatsapp",
+                        "payment",
+                        "identity"
+                      ]
+                    },
+                    "vendor": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "isDefault": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "connected",
+                        "available",
+                        "error"
+                      ]
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "sandbox",
+                        "live"
+                      ]
+                    },
+                    "credential_fingerprint": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "capability",
+                    "vendor",
+                    "label",
+                    "enabled",
+                    "isDefault",
+                    "status",
+                    "mode",
+                    "credential_fingerprint"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -18927,7 +22295,79 @@
         },
         "responses": {
           "201": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "capability": {
+                      "type": "string",
+                      "enum": [
+                        "sms",
+                        "email",
+                        "whatsapp",
+                        "payment",
+                        "identity"
+                      ]
+                    },
+                    "vendor": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "isDefault": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "connected",
+                        "available",
+                        "error"
+                      ]
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "sandbox",
+                        "live"
+                      ]
+                    },
+                    "credential_fingerprint": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "capability",
+                    "vendor",
+                    "label",
+                    "enabled",
+                    "isDefault",
+                    "status",
+                    "mode",
+                    "credential_fingerprint"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -23366,7 +26806,28 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -23423,7 +26884,25 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "accepted"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -23480,7 +26959,25 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "accepted"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -23747,7 +27244,379 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "channel_code": {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          "unit_code": {
+                            "$ref": "#/$defs/__schema0"
+                          },
+                          "paid_units": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "bonus_units": {
+                            "$ref": "#/$defs/__schema2"
+                          },
+                          "eligibility": {
+                            "default": {
+                              "destination_countries": [],
+                              "traffic_classes": [],
+                              "provider_vendors": [],
+                              "service_classes": []
+                            },
+                            "type": "object",
+                            "properties": {
+                              "destination_countries": {
+                                "default": [],
+                                "maxItems": 250,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema3"
+                                }
+                              },
+                              "traffic_classes": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              },
+                              "provider_vendors": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              },
+                              "service_classes": {
+                                "default": [],
+                                "maxItems": 50,
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/__schema4"
+                                }
+                              }
+                            },
+                            "required": [
+                              "destination_countries",
+                              "traffic_classes",
+                              "provider_vendors",
+                              "service_classes"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "position": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "total_units": {
+                            "$ref": "#/$defs/__schema1"
+                          },
+                          "allocated_price_minor": {
+                            "anyOf": [
+                              {
+                                "$ref": "#/$defs/__schema1"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "channel_code",
+                          "unit_code",
+                          "paid_units",
+                          "bonus_units",
+                          "eligibility",
+                          "id",
+                          "position",
+                          "total_units",
+                          "allocated_price_minor"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "total_price_minor": {
+                      "$ref": "#/$defs/__schema1"
+                    },
+                    "credit_validity_days": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 3650
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "minimum_pack_count": {
+                      "default": 1,
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000000
+                    },
+                    "maximum_pack_count": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "effective_from": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    },
+                    "effective_to": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "offer_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "published",
+                        "retired"
+                      ]
+                    },
+                    "cost_snapshot": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "best_case_cost_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "worst_case_cost_minor": {
+                              "$ref": "#/$defs/__schema2"
+                            },
+                            "best_case_margin_minor": {
+                              "$ref": "#/$defs/__schema5"
+                            },
+                            "worst_case_margin_minor": {
+                              "$ref": "#/$defs/__schema5"
+                            },
+                            "worst_case_margin_bps": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "minimum_margin_bps": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 10000
+                            },
+                            "minimum_margin_source": {
+                              "type": "string",
+                              "enum": [
+                                "catalog_version",
+                                "platform_default"
+                              ]
+                            },
+                            "route_count": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "calculated_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "source_references": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "best_case_cost_minor",
+                            "worst_case_cost_minor",
+                            "best_case_margin_minor",
+                            "worst_case_margin_minor",
+                            "worst_case_margin_bps",
+                            "minimum_margin_bps",
+                            "minimum_margin_source",
+                            "route_count",
+                            "calculated_at",
+                            "source_references"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "approved_by": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "approved_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "approved_by_email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "items",
+                    "total_price_minor",
+                    "credit_validity_days",
+                    "minimum_pack_count",
+                    "maximum_pack_count",
+                    "effective_from",
+                    "effective_to",
+                    "id",
+                    "offer_id",
+                    "version",
+                    "status",
+                    "cost_snapshot",
+                    "created_by",
+                    "approved_by",
+                    "approved_at",
+                    "created_by_email",
+                    "approved_by_email",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "additionalProperties": false,
+                  "$defs": {
+                    "__schema0": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                    },
+                    "__schema1": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema2": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema3": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{2}$"
+                    },
+                    "__schema4": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120,
+                      "pattern": "^[a-zA-Z0-9._:-]+$"
+                    },
+                    "__schema5": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -24128,7 +27997,14 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",

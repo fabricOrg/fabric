@@ -35,6 +35,7 @@ export const PUBLIC_MONEY_BINDINGS: RouteBindings = {
     tags: ["Wallet"],
     visibility: "public",
     security: ["secretKey", "tenantToken"],
+    successContentType: "text/csv",
   },
   "POST /v1/wallet/topup": {
     summary: "Start a wallet top-up",

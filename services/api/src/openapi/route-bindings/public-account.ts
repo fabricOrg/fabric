@@ -1,4 +1,5 @@
 import {
+  apiContextResponse,
   applicationDtoSchema,
   createApplicationRequestSchema,
   createSmsTemplateRequest,
@@ -125,6 +126,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     tags: ["Applications"],
     visibility: "public",
     security: ["secretKey", "tenantToken"],
+    response: apiContextResponse,
   },
 
   // ---- Dashboard-shaped, but key-reachable (see the file header) ---------------------------

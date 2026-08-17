@@ -1,21 +1,29 @@
 import {
+  adminSenderDtoSchema,
   createProposalRequestSchema,
   decideProposalRequestSchema,
   decideSenderRequestSchema,
   goLiveRequestSchema,
+  goLiveStatusSchema,
   inviteStaffRequestSchema,
+  killSwitchDtoSchema,
   listAdminSendersResponseSchema,
   listAuditResponseSchema,
   listKillSwitchesResponseSchema,
   listProposalsResponseSchema,
   listStaffResponseSchema,
   listTenantsResponseSchema,
+  okAck,
   pageQuery,
+  proposalDtoSchema,
   provisionTenantRequestSchema,
   provisionTenantResponseSchema,
+  sandboxAllowancePolicySchema,
   setSenderCarrierStatusRequestSchema,
+  staffDtoSchema,
   startImpersonationRequestSchema,
   stopImpersonationRequestSchema,
+  tenantSummaryDtoSchema,
   toggleKillSwitchRequestSchema,
   updateSandboxAllowancePolicySchema,
   updateStaffRequestSchema,
@@ -61,12 +69,14 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: updateTenantStatusRequestSchema,
+    response: tenantSummaryDtoSchema,
   },
   "GET /internal/admin/tenants/:id/sandbox-allowances": {
     summary: "Retrieve a tenant's sandbox allowances",
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: sandboxAllowancePolicySchema,
   },
   "PATCH /internal/admin/tenants/:id/sandbox-allowances": {
     summary: "Update a tenant's sandbox allowances",
@@ -74,6 +84,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: updateSandboxAllowancePolicySchema,
+    response: sandboxAllowancePolicySchema,
   },
 
   // ---- Audit, kill switches, impersonation -------------------------------------------------
@@ -103,6 +114,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: toggleKillSwitchRequestSchema,
+    response: killSwitchDtoSchema,
   },
   "POST /internal/admin/impersonation/start": {
     summary: "Start an impersonation session",
@@ -111,6 +123,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: startImpersonationRequestSchema,
+    response: okAck,
   },
   "POST /internal/admin/impersonation/stop": {
     summary: "Stop an impersonation session",
@@ -118,6 +131,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: stopImpersonationRequestSchema,
+    response: okAck,
   },
 
   // ---- Maker-checker proposals -------------------------------------------------------------
@@ -137,6 +151,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     security: ["bffInternal"],
     successStatus: 201,
     request: createProposalRequestSchema,
+    response: proposalDtoSchema,
   },
   "POST /internal/admin/proposals/:id/decide": {
     summary: "Approve or reject a proposal",
@@ -144,6 +159,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: decideProposalRequestSchema,
+    response: proposalDtoSchema,
   },
   "POST /internal/admin/proposals/go-live": {
     summary: "Request go-live for a tenant",
@@ -151,12 +167,14 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: goLiveRequestSchema,
+    response: proposalDtoSchema,
   },
   "GET /internal/admin/proposals/go-live/status": {
     summary: "Retrieve go-live status",
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: goLiveStatusSchema,
   },
 
   // ---- Staff -------------------------------------------------------------------------------
@@ -178,6 +196,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     security: ["bffInternal"],
     successStatus: 201,
     request: inviteStaffRequestSchema,
+    response: staffDtoSchema,
   },
   "PATCH /internal/admin/staff/:id": {
     summary: "Update a staff user",
@@ -185,6 +204,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: updateStaffRequestSchema,
+    response: staffDtoSchema,
   },
   "DELETE /internal/admin/staff/:id": {
     summary: "Remove a staff user",
@@ -208,6 +228,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: decideSenderRequestSchema,
+    response: adminSenderDtoSchema,
   },
   "POST /internal/admin/senders/:id/carrier-status": {
     summary: "Record a carrier registration outcome",
@@ -215,5 +236,6 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: setSenderCarrierStatusRequestSchema,
+    response: adminSenderDtoSchema,
   },
 };

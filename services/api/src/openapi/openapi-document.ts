@@ -105,18 +105,21 @@ function operationFor(
     });
   }
 
+  const successType = binding.successContentType ?? "application/json";
   const responses: Record<string, unknown> = {
     [String(binding.successStatus ?? 200)]: {
       description: "Success.",
       ...(binding.response
         ? {
             content: {
-              "application/json": {
-                schema: toResponseSchema(binding.response),
-              },
+              [successType]: { schema: toResponseSchema(binding.response) },
             },
           }
-        : {}),
+        : binding.successContentType
+          ? // A declared non-JSON type with no zod contract is still worth emitting: the media type
+            // is the part a caller must get right, and claiming nothing is better than claiming JSON.
+            { content: { [successType]: { schema: { type: "string" } } } }
+          : {}),
     },
   };
   for (const [status, description] of Object.entries(ALWAYS_POSSIBLE_ERRORS)) {

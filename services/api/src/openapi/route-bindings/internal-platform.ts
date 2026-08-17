@@ -8,10 +8,14 @@ import {
   emailInboxResponse,
   inviteMemberRequestSchema,
   listMembersResponseSchema,
+  memberDtoSchema,
+  messagingSettings,
   mintTenantTokenRequestSchema,
   mintTenantTokenResponseSchema,
+  okAck,
   pageQuery,
   pluginActionRequestSchema,
+  pluginInstanceDtoSchema,
   pluginListResponseSchema,
   resolveStaffSessionRequestSchema,
   resolveStaffSessionResponseSchema,
@@ -19,6 +23,7 @@ import {
   resolveUserSessionResponseSchema,
   updateMemberPermissionsRequestSchema,
   updateMemberRequestSchema,
+  virtualPhoneInbox,
   virtualPhoneReply,
   virtualPhoneReplyResponse,
   whatsappMessageListResponse,
@@ -92,6 +97,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     security: ["bffInternal"],
     successStatus: 201,
     request: inviteMemberRequestSchema,
+    response: memberDtoSchema,
   },
   "PATCH /internal/tenants/:tenantId/members/:userId": {
     summary: "Change a member's role",
@@ -102,6 +108,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: updateMemberRequestSchema,
+    response: memberDtoSchema,
   },
   "PUT /internal/tenants/:tenantId/members/:userId/permissions": {
     summary: "Set a member's permissions",
@@ -109,6 +116,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: updateMemberPermissionsRequestSchema,
+    response: memberDtoSchema,
   },
   "DELETE /internal/tenants/:tenantId/members/:userId": {
     summary: "Remove a member",
@@ -168,6 +176,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Sandbox"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: messagingSettings,
   },
   "PATCH /internal/tenants/:tenantId/messaging-settings": {
     summary: "Update messaging settings",
@@ -175,6 +184,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: deliveryMode,
+    response: messagingSettings,
   },
   "GET /internal/tenants/:tenantId/virtual-phone/messages": {
     summary: "List virtual-phone messages",
@@ -185,6 +195,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     query: pageQuery,
+    response: virtualPhoneInbox,
   },
   "POST /internal/tenants/:tenantId/virtual-phone/inbound": {
     summary: "Simulate an inbound reply",
@@ -199,6 +210,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Sandbox"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: okAck,
   },
   "DELETE /internal/tenants/:tenantId/virtual-phone/messages": {
     summary: "Clear the virtual-phone inbox",
@@ -222,6 +234,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: pluginActionRequestSchema,
+    response: pluginInstanceDtoSchema,
   },
   "POST /internal/plugins/live-instances": {
     summary: "Create a live provider instance",
@@ -230,6 +243,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     security: ["bffInternal"],
     successStatus: 201,
     request: createLiveInstanceRequestSchema,
+    response: pluginInstanceDtoSchema,
   },
   "POST /internal/plugins/:id/credentials": {
     summary: "Install provider credentials",
@@ -240,5 +254,6 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: configurePluginRequestSchema,
+    response: pluginInstanceDtoSchema,
   },
 };

@@ -1,6 +1,9 @@
 import {
   assignOfferCatalogRequestSchema,
   assignPriceBookRequestSchema,
+  commercialOfferDtoSchema,
+  commercialOfferMarginPreviewSchema,
+  commercialOfferVersionDtoSchema,
   createCommercialOfferRequestSchema,
   createCommercialOfferVersionRequestSchema,
   createCommercialPackageRequestSchema,
@@ -11,9 +14,11 @@ import {
   listProviderCostRatesResponseSchema,
   previewCommercialOfferMarginRequestSchema,
   priceBookDtoSchema,
+  providerCostRateDtoSchema,
   providerCostRateInputSchema,
   publishCommercialOfferVersionRequestSchema,
   retireCommercialOfferVersionRequestSchema,
+  subjectSummarySchema,
   updateCommercialOfferVersionRequestSchema,
   upsertPriceBookRequestSchema,
 } from "@app/contracts";
@@ -79,6 +84,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: providerCostRateInputSchema,
+    response: providerCostRateDtoSchema,
   },
 
   // ---- Commercial offers -------------------------------------------------------------------
@@ -96,6 +102,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     security: ["bffInternal"],
     successStatus: 201,
     request: createCommercialOfferRequestSchema,
+    response: commercialOfferDtoSchema,
   },
   "POST /internal/admin/commercial-offers/:offerId/versions": {
     summary: "Add an offer version",
@@ -104,6 +111,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     security: ["bffInternal"],
     successStatus: 201,
     request: createCommercialOfferVersionRequestSchema,
+    response: commercialOfferVersionDtoSchema,
   },
   "PUT /internal/admin/commercial-offers/versions/:versionId": {
     summary: "Update an offer version",
@@ -111,12 +119,14 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: updateCommercialOfferVersionRequestSchema,
+    response: commercialOfferVersionDtoSchema,
   },
   "POST /internal/admin/commercial-offers/versions/:versionId/clone": {
     summary: "Clone an offer version",
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: commercialOfferVersionDtoSchema,
   },
   "POST /internal/admin/commercial-offers/versions/:versionId/publish": {
     summary: "Publish an offer version",
@@ -124,6 +134,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: publishCommercialOfferVersionRequestSchema,
+    response: commercialOfferVersionDtoSchema,
   },
   "POST /internal/admin/commercial-offers/versions/:versionId/retire": {
     summary: "Retire an offer version",
@@ -131,6 +142,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: retireCommercialOfferVersionRequestSchema,
+    response: commercialOfferVersionDtoSchema,
   },
   "POST /internal/admin/commercial-offers/packages": {
     summary: "Create an offer package",
@@ -147,6 +159,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: previewCommercialOfferMarginRequestSchema,
+    response: commercialOfferMarginPreviewSchema,
   },
   "POST /internal/admin/commercial-offers/catalog-assignments/:tenantId": {
     summary: "Assign an offer catalog to a tenant",
@@ -162,6 +175,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     tags: ["Compliance"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: subjectSummarySchema,
   },
   "POST /internal/admin/privacy/tenants/:tenantId/erasures": {
     summary: "Execute a subject erasure",

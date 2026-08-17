@@ -49,6 +49,8 @@ export * from "./message-preview.js";
 export * from "./message-status.js";
 // Money (exact, minor-unit strings) + SMS/wallet response DTOs — consumed by the dashboard/SDK.
 export * from "./money.js";
+// Acknowledgement shapes for actions that confirm rather than return a resource.
+export * from "./operation-acks.js";
 export * from "./opt-outs.js";
 export * from "./overview.js";
 // Cursor pagination for public list endpoints (page query + next_cursor token).

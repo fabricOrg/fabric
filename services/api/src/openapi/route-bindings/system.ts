@@ -1,3 +1,4 @@
+import { acceptedAck, batchIngestAck, ingestAck } from "@app/contracts";
 import type { RouteBindings } from "../route-binding.types.js";
 
 /**
@@ -20,12 +21,14 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Webhooks"],
     visibility: "webhook",
     security: ["webhookToken"],
+    response: ingestAck,
   },
   "POST /webhooks/dlr/:provider": {
     summary: "Ingest a delivery report (body form)",
     tags: ["Webhooks"],
     visibility: "webhook",
     security: ["webhookToken"],
+    response: ingestAck,
   },
 
   // ---- Provider callbacks (signature-verified in-handler) ----------------------------------
@@ -37,6 +40,7 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Webhooks"],
     visibility: "webhook",
     security: ["none"],
+    successContentType: "text/plain",
   },
   "POST /webhooks/whatsapp/:provider": {
     summary: "Ingest a WhatsApp event",
@@ -46,6 +50,7 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Webhooks"],
     visibility: "webhook",
     security: ["none"],
+    response: batchIngestAck,
   },
   "POST /webhooks/paystack": {
     summary: "Ingest a Paystack event",
@@ -55,6 +60,7 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Webhooks"],
     visibility: "webhook",
     security: ["none"],
+    response: acceptedAck,
   },
   "POST /webhooks/email/aws-ses": {
     summary: "Ingest an SES event via SNS",
@@ -63,6 +69,7 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Webhooks"],
     visibility: "webhook",
     security: ["none"],
+    response: ingestAck,
   },
   "POST /webhooks/workos": {
     summary: "Ingest a WorkOS event",
@@ -70,6 +77,7 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Webhooks"],
     visibility: "webhook",
     security: ["none"],
+    response: acceptedAck,
   },
 
   // ---- Health ------------------------------------------------------------------------------

@@ -63,6 +63,15 @@ export interface RouteBinding {
   /** Success status when it is not 200 (e.g. 201 on create, 202 on accept-for-async). */
   readonly successStatus?: number;
   /**
+   * Success media type when the endpoint does NOT return JSON — `text/csv` for a statement export,
+   * `text/plain` for a provider challenge echo. Defaults to `application/json`.
+   *
+   * This exists because the generator silently documented every 2xx as JSON, which made the CSV
+   * statement export look like a JSON resource. A caller generating a client from that would parse
+   * a spreadsheet as an object.
+   */
+  readonly successContentType?: string;
+  /**
    * Documented failure codes BEYOND the global set every route can return (400/401/429/500).
    * List the ones a caller must branch on — 402 insufficient funds, 409 idempotency conflict.
    */
