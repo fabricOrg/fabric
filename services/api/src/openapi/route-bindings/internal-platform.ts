@@ -10,6 +10,7 @@ import {
   listMembersResponseSchema,
   mintTenantTokenRequestSchema,
   mintTenantTokenResponseSchema,
+  pageQuery,
   pluginActionRequestSchema,
   pluginListResponseSchema,
   resolveStaffSessionRequestSchema,
@@ -82,6 +83,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     response: listMembersResponseSchema,
+    query: pageQuery,
   },
   "POST /internal/tenants/:tenantId/members": {
     summary: "Invite a member",
@@ -138,6 +140,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     response: whatsappMessageListResponse,
+    query: pageQuery,
   },
   "POST /internal/tenants/:tenantId/whatsapp": {
     summary: "Send a WhatsApp message from the dashboard",
@@ -181,6 +184,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Sandbox"],
     visibility: "internal",
     security: ["bffInternal"],
+    query: pageQuery,
   },
   "POST /internal/tenants/:tenantId/virtual-phone/inbound": {
     summary: "Simulate an inbound reply",

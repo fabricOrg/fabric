@@ -504,6 +504,28 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "style": "form",
+            "explode": true
           }
         ],
         "responses": {
@@ -562,6 +584,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           },
           {
             "operatorToken": []
@@ -643,6 +668,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -721,6 +749,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -797,6 +828,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -916,6 +950,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -1225,6 +1262,30 @@
         "security": [
           {
             "bffInternal": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "style": "form",
+            "explode": true
           }
         ],
         "responses": {
@@ -3579,6 +3640,30 @@
             "bffInternal": []
           }
         ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success.",
@@ -3803,6 +3888,30 @@
         "security": [
           {
             "bffInternal": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "style": "form",
+            "explode": true
           }
         ],
         "responses": {
@@ -4814,6 +4923,28 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "style": "form",
+            "explode": true
           }
         ],
         "responses": {
@@ -5165,6 +5296,28 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "style": "form",
+            "explode": true
           }
         ],
         "responses": {
@@ -5775,6 +5928,9 @@
             "secretKey": []
           },
           {
+            "tenantToken": []
+          },
+          {
             "operatorToken": []
           }
         ],
@@ -5833,6 +5989,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           },
           {
             "operatorToken": []
@@ -5894,6 +6053,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           },
           {
             "operatorToken": []
@@ -6048,6 +6210,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           },
           {
             "operatorToken": []
@@ -6218,6 +6383,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -6277,6 +6445,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -6650,6 +6821,33 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "style": "form",
+            "explode": true
           }
         ],
         "responses": {
@@ -6798,6 +6996,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -6975,6 +7176,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -7130,6 +7334,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -7433,6 +7640,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -7501,6 +7711,33 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "style": "form",
+            "explode": true
           }
         ],
         "responses": {
@@ -7637,6 +7874,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           },
           {
             "operatorToken": []
@@ -8280,6 +8520,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           },
           {
             "operatorToken": []
@@ -9397,6 +9640,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -9611,6 +9857,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -10060,6 +10309,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -10385,6 +10637,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -10567,6 +10822,33 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "style": "form",
+            "explode": true
           }
         ],
         "responses": {
@@ -10751,6 +11033,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -10901,6 +11186,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -11014,6 +11302,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -11144,6 +11435,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -11465,6 +11759,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -11605,7 +11902,7 @@
             "secretKey": []
           },
           {
-            "bffInternal": []
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -11744,7 +12041,7 @@
             "secretKey": []
           },
           {
-            "bffInternal": []
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -11912,6 +12209,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -12147,6 +12447,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -12336,6 +12639,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -12451,6 +12757,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -12544,6 +12853,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -12693,6 +13005,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -12751,6 +13066,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -12809,6 +13127,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -12887,6 +13208,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -13066,6 +13390,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -13233,6 +13560,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -13345,6 +13675,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -13497,6 +13830,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -13617,6 +13953,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -13675,6 +14014,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "responses": {
@@ -13838,6 +14180,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -14015,6 +14360,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -14025,6 +14373,28 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "style": "form",
+            "explode": true
           }
         ],
         "responses": {
@@ -14225,6 +14595,33 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "style": "form",
+            "explode": true
           }
         ],
         "responses": {
@@ -14426,6 +14823,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -14684,6 +15084,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [
@@ -18713,6 +19116,9 @@
             "secretKey": []
           },
           {
+            "tenantToken": []
+          },
+          {
             "operatorToken": []
           }
         ],
@@ -19354,6 +19760,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           },
           {
             "operatorToken": []
@@ -20027,6 +20436,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           },
           {
             "operatorToken": []
@@ -21122,6 +21534,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -21496,6 +21911,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -21736,6 +22154,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -21937,6 +22358,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -22136,6 +22560,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -22329,6 +22756,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -22469,6 +22899,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -22594,6 +23027,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -22720,6 +23156,9 @@
         "security": [
           {
             "secretKey": []
+          },
+          {
+            "tenantToken": []
           }
         ],
         "parameters": [

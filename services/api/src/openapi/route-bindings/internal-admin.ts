@@ -10,6 +10,7 @@ import {
   listProposalsResponseSchema,
   listStaffResponseSchema,
   listTenantsResponseSchema,
+  pageQuery,
   provisionTenantRequestSchema,
   provisionTenantResponseSchema,
   setSenderCarrierStatusRequestSchema,
@@ -41,6 +42,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     response: listTenantsResponseSchema,
+    query: pageQuery,
   },
   "POST /internal/admin/tenants": {
     summary: "Provision a tenant",
@@ -83,6 +85,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     response: listAuditResponseSchema,
+    query: pageQuery,
   },
   "GET /internal/admin/kill-switches": {
     summary: "List kill switches",
@@ -163,6 +166,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     response: listStaffResponseSchema,
+    query: pageQuery,
   },
   "POST /internal/admin/staff": {
     summary: "Invite a staff user",
