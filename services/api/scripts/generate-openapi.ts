@@ -34,10 +34,18 @@ const FULL_PATH = resolve(ROOT, "docs/api/openapi.internal.json");
  */
 const SDK_PUBLIC_PATH = resolve(ROOT, "packages/sdk/openapi.json");
 
-const SERVER_URL =
-  process.env.API_PUBLIC_BASE_URL ??
-  process.env.API_BASE_URL ??
-  "http://localhost:3000";
+/**
+ * HARD-CODED, deliberately. This was read from `API_PUBLIC_BASE_URL ?? API_BASE_URL`, which made
+ * the artifact non-hermetic: `API_BASE_URL` is a standard variable in this repo (.env.example,
+ * both app .env.examples, infra/dev), and the generator runs with `--env-file-if-exists`. Anyone
+ * with it set produced a different document, and since `openapi:check` sits inside `validate` ->
+ * `verify:push`, their push failed for a reason unrelated to their change.
+ *
+ * It is a server VARIABLE rather than a fixed host because the base url genuinely differs per
+ * environment and there is no production host yet. A generated client substitutes it; nothing
+ * pretends `localhost` is where the API lives.
+ */
+const SERVER_URL = "{baseUrl}";
 
 async function main(): Promise<void> {
   const check = process.argv.includes("--check");

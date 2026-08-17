@@ -5,6 +5,7 @@
 // test:integration.
 // ============================================================================================
 
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb, createProvisioningDb } from "@app/db";
 import { credit } from "@app/wallet";
 import { NestFactory } from "@nestjs/core";
@@ -120,9 +121,10 @@ describe("sender-id enforcement (E10-S4)", () => {
     // 1. Unregistered → structured block, no message row, no money moved.
     const blocked = await post(LIVE_KEY, "/v1/sms/send", smsPayload);
     expect(blocked.statusCode).toBe(400);
-    expect((blocked.json() as { error: { code: string } }).error.code).toBe(
-      "sender_not_registered",
-    );
+    expect(
+      (unwrapEnvelope(blocked.json()) as { error: { code: string } }).error
+        .code,
+    ).toBe("sender_not_registered");
     const [msgCount] = (await owner.unsafe(
       "SELECT count(*)::int AS n FROM messages WHERE tenant_id = $1",
       [LIVE_TENANT],
@@ -136,7 +138,10 @@ describe("sender-id enforcement (E10-S4)", () => {
       use_case: "Order notifications for our Ghana shop.",
     });
     expect(registered.statusCode).toBe(201);
-    const senderRow = registered.json() as { id: string; status: string };
+    const senderRow = unwrapEnvelope(registered.json()) as {
+      id: string;
+      status: string;
+    };
     expect(senderRow.status).toBe("pending");
     const stillBlocked = await post(LIVE_KEY, "/v1/sms/send", smsPayload);
     expect(stillBlocked.statusCode).toBe(400);
@@ -185,9 +190,9 @@ describe("sender-id enforcement (E10-S4)", () => {
       use_case: "duplicate registration attempt",
     });
     expect(dup.statusCode).toBe(400);
-    expect((dup.json() as { error: { code: string } }).error.code).toBe(
-      "sender_already_registered",
-    );
+    expect(
+      (unwrapEnvelope(dup.json()) as { error: { code: string } }).error.code,
+    ).toBe("sender_already_registered");
   });
 
   it("SANDBOX tenants skip the gate entirely (fake provider, quickstart sender works)", async () => {

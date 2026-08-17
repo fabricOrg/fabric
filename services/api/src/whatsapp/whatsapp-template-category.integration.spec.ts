@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import type {
   CanonicalDlr,
@@ -143,7 +144,7 @@ describeDb("WhatsApp template category enforcement", () => {
 
     const mismatched = await send("order_update", "wa-cat-mismatch", "utility");
     expect(mismatched.statusCode).toBe(400);
-    const body = mismatched.json() as {
+    const body = unwrapEnvelope(mismatched.json()) as {
       error: { code: string; message: string; param?: string };
     };
     expect(body.error).toMatchObject({
@@ -169,7 +170,7 @@ describeDb("WhatsApp template category enforcement", () => {
 
     const wrong = await send("order_update", "wa-cat-wrong", "utility");
     expect(wrong.statusCode).toBe(400);
-    expect(wrong.json()).toMatchObject({
+    expect(unwrapEnvelope(wrong.json())).toMatchObject({
       error: { code: "whatsapp_template_category_mismatch" },
     });
   });

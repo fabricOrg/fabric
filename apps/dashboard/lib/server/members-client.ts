@@ -8,6 +8,7 @@ import {
   type MembershipPermission,
   memberDtoSchema,
   type UpdateMemberRequest,
+  unwrapEnvelope,
 } from "@app/contracts";
 import { BffError } from "./api-client";
 
@@ -35,7 +36,7 @@ export async function listMembers(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new BffError(response.status, payload);
-  return listMembersResponseSchema.parse(payload);
+  return listMembersResponseSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function inviteMember(
@@ -59,7 +60,7 @@ export async function inviteMember(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new BffError(response.status, payload);
-  return memberDtoSchema.parse(payload);
+  return memberDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function updateMemberRole(
@@ -84,7 +85,7 @@ export async function updateMemberRole(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new BffError(response.status, payload);
-  return memberDtoSchema.parse(payload);
+  return memberDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function setMemberPermissions(
@@ -112,7 +113,7 @@ export async function setMemberPermissions(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new BffError(response.status, payload);
-  return memberDtoSchema.parse(payload);
+  return memberDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function removeMember(

@@ -61,6 +61,22 @@ export function requestContractFor(
   return bindingFor(controllerClass, handler)?.request ?? null;
 }
 
+/**
+ * The success media type this route's binding DECLARES, or null for the JSON default.
+ *
+ * Exists so the runtime honours the same declaration the document publishes. Before this,
+ * `successContentType` was read only by the generator: the binding said `text/plain` for the Meta
+ * challenge echo, the document said `text/plain`, and the interceptor wrapped it in JSON anyway —
+ * so Meta's verbatim comparison would never have matched and webhook verification could not be
+ * completed. The declaration has to bind both halves or it is decoration.
+ */
+export function successContentTypeFor(
+  controllerClass: object,
+  handler: object,
+): string | null {
+  return bindingFor(controllerClass, handler)?.successContentType ?? null;
+}
+
 /** The query-string contract for this handler, or null when the binding declares none. */
 export function queryContractFor(
   controllerClass: object,

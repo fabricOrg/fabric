@@ -59,7 +59,7 @@ async function mintTenantToken(tenantId: string): Promise<string> {
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new BffError(response.status, payload);
-  const minted = mintTenantTokenResponseSchema.parse(payload);
+  const minted = mintTenantTokenResponseSchema.parse(unwrapEnvelope(payload));
   cacheTenantToken(tenantId, {
     token: minted.token,
     expiresAt: Date.now() + minted.expires_in * 1000,

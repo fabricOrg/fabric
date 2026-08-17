@@ -3,6 +3,7 @@ import "server-only";
 import {
   type PublicPricingResponse,
   publicPricingResponseSchema,
+  unwrapEnvelope,
 } from "@app/contracts";
 
 export class PublicPricingApiError extends Error {
@@ -34,5 +35,5 @@ export async function getPublicPricing(): Promise<PublicPricingResponse> {
   if (!response.ok) {
     throw new PublicPricingApiError(response.status, payload);
   }
-  return publicPricingResponseSchema.parse(payload);
+  return publicPricingResponseSchema.parse(unwrapEnvelope(payload));
 }

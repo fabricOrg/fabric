@@ -4,6 +4,7 @@ import {
   type CreateWorkspaceResponse,
   createWorkspaceResponseSchema,
   resolveUserSessionResponseSchema,
+  unwrapEnvelope,
 } from "@app/contracts";
 import type { UserSession, UserSessionClaims } from "@app/fe-auth";
 
@@ -52,7 +53,9 @@ export async function resolveUserSessionV2(
     }
     return null;
   }
-  const parsed = resolveUserSessionResponseSchema.parse(await response.json());
+  const parsed = resolveUserSessionResponseSchema.parse(
+    unwrapEnvelope(await response.json()),
+  );
   return {
     userId: parsed.user_id,
     externalUserId: claims.externalUserId,
@@ -106,5 +109,7 @@ export async function createWorkspaceForUser(input: {
     }
     return null;
   }
-  return createWorkspaceResponseSchema.parse(await response.json());
+  return createWorkspaceResponseSchema.parse(
+    unwrapEnvelope(await response.json()),
+  );
 }

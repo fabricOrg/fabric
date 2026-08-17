@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { NestFactory } from "@nestjs/core";
 import {
   FastifyAdapter,
@@ -93,7 +94,7 @@ describeDb("public Email API", () => {
     const replay = await app.inject(request);
     expect(first.statusCode).toBe(201);
     expect(replay.statusCode).toBe(201);
-    const response = first.json() as {
+    const response = unwrapEnvelope(first.json()) as {
       id: string;
       status: string;
       request_id: string;
@@ -101,7 +102,9 @@ describeDb("public Email API", () => {
     messageId = response.id;
     expect(response.status).toBe("delivered");
     expect(response.request_id).toMatch(/^req_/);
-    expect((replay.json() as { id: string }).id).toBe(messageId);
+    expect((unwrapEnvelope(replay.json()) as { id: string }).id).toBe(
+      messageId,
+    );
 
     const rows = await owner`
       SELECT count(*)::int AS count FROM email_messages
@@ -117,7 +120,7 @@ describeDb("public Email API", () => {
       headers: primaryHeaders,
     });
     expect(detail.statusCode).toBe(200);
-    expect(detail.json()).toMatchObject({
+    expect(unwrapEnvelope(detail.json())).toMatchObject({
       message: {
         id: messageId,
         to: "recipient@example.com",
@@ -177,7 +180,7 @@ describeDb("public Email API", () => {
       },
     });
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toMatchObject({
+    expect(unwrapEnvelope(response.json())).toMatchObject({
       error: { code: "live_email_not_configured" },
     });
   });

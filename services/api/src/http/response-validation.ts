@@ -61,3 +61,27 @@ export function checkPayload(
       .join("; "),
   };
 }
+
+/**
+ * Per-route log suppression for `warn` mode.
+ *
+ * A systematically-wrong contract — exactly the `provider_cost_rates.source_reference` case — makes
+ * EVERY request to that route mismatch. Without suppression that is one ERROR line per request,
+ * forever, in production: a paging-volume log flood caused by a documentation bug. The first
+ * occurrence is the informative one; the ten-thousandth is noise that buries everything else.
+ *
+ * Deliberately in-memory and per-process: a restart re-reports, which is what you want after a
+ * deploy that may have fixed it. Not a cache of correctness — strict mode never consults this.
+ */
+const lastReported = new Map<string, number>();
+const REPORT_INTERVAL_MS = 5 * 60_000;
+
+/** True when this route has not been reported within the interval. Records the report as a side
+ *  effect, so callers should ask once per failure. */
+export function shouldReport(route: string, now: number = Date.now()): boolean {
+  const previous = lastReported.get(route);
+  if (previous !== undefined && now - previous < REPORT_INTERVAL_MS)
+    return false;
+  lastReported.set(route, now);
+  return true;
+}

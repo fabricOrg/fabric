@@ -1,6 +1,7 @@
 import {
   type ProvisionTenantResponse,
   provisionTenantResponseSchema,
+  unwrapEnvelope,
 } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
@@ -132,7 +133,7 @@ export async function POST(request: NextRequest) {
     // wrapper invented a `balance:0` + today's date the backend never returned). The Tenants
     // page re-fetches the real list on success anyway.
     const provisioned: ProvisionTenantResponse =
-      provisionTenantResponseSchema.parse(payload);
+      provisionTenantResponseSchema.parse(unwrapEnvelope(payload));
     return NextResponse.json(provisioned, { status: 201 });
   } catch {
     return fail("Provisioning service is unavailable. Try again shortly.", 502);

@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import { credit } from "@app/wallet";
 import { NestFactory } from "@nestjs/core";
@@ -122,7 +123,7 @@ describeDb("public SMS batch API", () => {
     const replay = await app.inject(request);
     expect(first.statusCode).toBe(201);
     expect(replay.statusCode).toBe(201);
-    const result = first.json() as {
+    const result = unwrapEnvelope(first.json()) as {
       id: string;
       status: string;
       accepted_count: number;
@@ -155,7 +156,9 @@ describeDb("public SMS batch API", () => {
         }),
       ]),
     );
-    expect((replay.json() as { id: string }).id).toBe(result.id);
+    expect((unwrapEnvelope(replay.json()) as { id: string }).id).toBe(
+      result.id,
+    );
     const messages = await owner`
       SELECT count(*)::int AS count FROM messages WHERE tenant_id = ${tenantId}`;
     expect(Number(messages[0]?.count)).toBe(1);
@@ -173,7 +176,7 @@ describeDb("public SMS batch API", () => {
       payload: { items: [payload.items[0]] },
     });
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({
+    expect(unwrapEnvelope(response.json())).toMatchObject({
       error: { code: "idempotency_key_reused" },
     });
   });

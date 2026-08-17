@@ -7,12 +7,16 @@ import {
 } from "@nestjs/common";
 import type { Observable } from "rxjs";
 import { map } from "rxjs/operators";
-import { responseContractFor } from "../openapi/response-contracts.js";
+import {
+  responseContractFor,
+  successContentTypeFor,
+} from "../openapi/response-contracts.js";
 import { apiError } from "./api-error.js";
 import { resolveRequestId } from "./logging.config.js";
 import {
   checkPayload,
   resolveValidationMode,
+  shouldReport,
   type ValidationMode,
 } from "./response-validation.js";
 
@@ -53,7 +57,7 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
         // filename; the Meta handshake echoes a bare challenge string it will compare verbatim.
         // Wrapping either corrupts it — a spreadsheet becomes an object, and Meta rejects the
         // subscription. Detected from the response's own content-type, set by the handler.
-        if (!isJsonResponse(http.getResponse())) return payload;
+        if (!this.isJson(context, http.getResponse())) return payload;
         // 204 and other empty bodies have nothing to wrap.
         if (payload === undefined || payload === null) return payload;
         this.validate(context, payload);
@@ -63,6 +67,26 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
         };
       }),
     );
+  }
+
+  /**
+   * Whether this response should be enveloped.
+   *
+   * THE BINDING IS AUTHORITATIVE, not the header. Fastify only stamps a content-type during
+   * `reply.send()`, which runs AFTER this interceptor — so a handler that returns a bare string
+   * without an explicit `@Header` still looks like JSON here. That is precisely how the Meta
+   * challenge echo came to be wrapped despite its binding declaring `text/plain`.
+   *
+   * The header is still consulted, for a handler that sets one at runtime (the CSV export does) and
+   * for routes with no binding at all.
+   */
+  private isJson(context: ExecutionContext, response: unknown): boolean {
+    const declared = successContentTypeFor(
+      context.getClass(),
+      context.getHandler(),
+    );
+    if (declared) return declared.includes("application/json");
+    return isJsonResponse(response);
   }
 
   /** See response-validation.ts for why the posture differs by environment. */
@@ -76,9 +100,13 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
     const failure = checkPayload(contract, payload, route);
     if (!failure) return;
     if (this.mode === "warn") {
-      this.logger.error(
-        `response does not match its published contract at ${failure.route}: ${failure.issues}`,
-      );
+      // Rate-limited per route: a systematically-wrong contract would otherwise emit one ERROR per
+      // request forever. See shouldReport.
+      if (shouldReport(failure.route)) {
+        this.logger.error(
+          `response does not match its published contract at ${failure.route}: ${failure.issues}`,
+        );
+      }
       return;
     }
     // strict: a mismatch is a defect and the reference is meant to be trustworthy.

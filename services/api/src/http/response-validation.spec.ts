@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { checkPayload, resolveValidationMode } from "./response-validation.js";
+import {
+  checkPayload,
+  resolveValidationMode,
+  shouldReport,
+} from "./response-validation.js";
 
 /**
  * The posture matters more than the mechanism. A validator that throws in production would turn our
@@ -89,5 +93,28 @@ describe("checkPayload", () => {
     );
     const failure = checkPayload(wide, {}, "R");
     expect(failure?.issues.split(";").length).toBeLessThanOrEqual(5);
+  });
+});
+
+describe("shouldReport", () => {
+  it("reports the first occurrence and suppresses repeats within the interval", () => {
+    // A systematically-wrong contract mismatches on EVERY request. Unsuppressed that is one ERROR
+    // line per request forever in production — a log flood caused by a documentation bug.
+    const t0 = 1_000_000;
+    expect(shouldReport("RouteA", t0)).toBe(true);
+    expect(shouldReport("RouteA", t0 + 1)).toBe(false);
+    expect(shouldReport("RouteA", t0 + 60_000)).toBe(false);
+  });
+
+  it("reports again once the interval has passed", () => {
+    const t0 = 2_000_000;
+    expect(shouldReport("RouteB", t0)).toBe(true);
+    expect(shouldReport("RouteB", t0 + 5 * 60_000 + 1)).toBe(true);
+  });
+
+  it("tracks routes independently — one noisy route must not mask another", () => {
+    const t0 = 3_000_000;
+    expect(shouldReport("RouteC", t0)).toBe(true);
+    expect(shouldReport("RouteD", t0)).toBe(true);
   });
 });

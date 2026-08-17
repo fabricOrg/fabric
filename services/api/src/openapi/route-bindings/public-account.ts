@@ -1,6 +1,7 @@
 import {
   apiContextResponse,
   applicationDtoSchema,
+  createApiKeyRequest,
   createApiKeyResult,
   createApplicationRequestSchema,
   createSmsTemplateRequest,
@@ -16,6 +17,7 @@ import {
   pageQuery,
   publicPricingResponseSchema,
   replayWebhookDeliveryResponseSchema,
+  runFlowRequest,
   runFlowResponse,
   sandboxAllowancesResponse,
   smsTemplate,
@@ -94,9 +96,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey", "tenantToken", "operatorToken"],
     successStatus: 201,
-    // TODO(contract): the handler parses this body ad hoc — `(body ?? {}) as Record<string, unknown>`
-    // with manual field extraction and no zod DTO, so there is nothing to reference. Same defect
-    // family as the untyped BFF mutation bodies; the fix is a contract, not a doc entry.
+    request: createApiKeyRequest,
     response: createApiKeyResult,
   },
   "DELETE /v1/api-keys/:id": {
@@ -173,9 +173,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey", "tenantToken"],
     errorStatuses: [402],
-    // TODO(contract): the body is a discriminated union resolved at runtime on `action` —
-    // `startFlowRequest` OR `confirmFlowRequest`. A binding names one contract and must not compose
-    // shapes, so this stays unmodelled until the API exposes a single union DTO.
+    request: runFlowRequest,
     response: runFlowResponse,
   },
   "GET /v1/public/pricing": {

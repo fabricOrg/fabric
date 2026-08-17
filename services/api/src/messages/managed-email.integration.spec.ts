@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import { NestFactory } from "@nestjs/core";
 import {
@@ -181,8 +182,9 @@ describeDb("SDK-007 managed email acceptance", () => {
   it("accepts and persists one managed email without direct created outbox", async () => {
     const response = await send(payload, "email-accept-001");
     expect(response.statusCode).toBe(202);
-    const delivery = (response.json() as { delivery: Record<string, unknown> })
-      .delivery;
+    const delivery = (
+      unwrapEnvelope(response.json()) as { delivery: Record<string, unknown> }
+    ).delivery;
     expect(delivery).toMatchObject({
       key: "order.email",
       channel: "email",
@@ -229,8 +231,12 @@ describeDb("SDK-007 managed email acceptance", () => {
     const second = await send(payload, "email-accept-001");
     expect(first.statusCode).toBe(202);
     expect(second.statusCode).toBe(202);
-    expect((second.json() as { delivery: { id: string } }).delivery.id).toBe(
-      (first.json() as { delivery: { id: string } }).delivery.id,
+    expect(
+      (unwrapEnvelope(second.json()) as { delivery: { id: string } }).delivery
+        .id,
+    ).toBe(
+      (unwrapEnvelope(first.json()) as { delivery: { id: string } }).delivery
+        .id,
     );
     expect(await counts()).toEqual(before);
     // The replay must not draw a SECOND unit — consume() claims once per message reference.
@@ -244,7 +250,7 @@ describeDb("SDK-007 managed email acceptance", () => {
       "email-accept-001",
     );
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({
+    expect(unwrapEnvelope(response.json())).toMatchObject({
       error: { code: "idempotency_conflict" },
     });
     expect(await counts()).toEqual(before);
@@ -263,7 +269,7 @@ describeDb("SDK-007 managed email acceptance", () => {
     const before = await counts(lowFundsTenantId);
     const response = await send(payload, "email-low-funds", lowFundsKey);
     expect(response.statusCode).toBe(429);
-    expect(response.json()).toMatchObject({
+    expect(unwrapEnvelope(response.json())).toMatchObject({
       error: { code: "sandbox_daily_limit_exceeded" },
     });
     expect(await counts(lowFundsTenantId)).toEqual(before);
@@ -276,7 +282,7 @@ describeDb("SDK-007 managed email acceptance", () => {
       "email-recipient-mismatch",
     );
     expect(response.statusCode).toBe(400);
-    const body = response.json() as {
+    const body = unwrapEnvelope(response.json()) as {
       error: { code: string; message: string; param?: string };
     };
     expect(body.error).toMatchObject({
@@ -293,8 +299,9 @@ describeDb("SDK-007 managed email acceptance", () => {
       "email-from-fallback",
     );
     expect(fallback.statusCode).toBe(202);
-    const fallbackId = (fallback.json() as { delivery: { id: string } })
-      .delivery.id;
+    const fallbackId = (
+      unwrapEnvelope(fallback.json()) as { delivery: { id: string } }
+    ).delivery.id;
     await expect(storedEmailContent(fallbackId)).resolves.toMatchObject({
       from: "no-reply@sandbox.fabric.dev",
     });
@@ -308,8 +315,9 @@ describeDb("SDK-007 managed email acceptance", () => {
       "email-from-authored",
     );
     expect(authored.statusCode).toBe(202);
-    const authoredId = (authored.json() as { delivery: { id: string } })
-      .delivery.id;
+    const authoredId = (
+      unwrapEnvelope(authored.json()) as { delivery: { id: string } }
+    ).delivery.id;
     await expect(storedEmailContent(authoredId)).resolves.toMatchObject({
       from: "orders@sandbox.fabric.dev",
     });
@@ -326,8 +334,9 @@ describeDb("SDK-007 managed email acceptance", () => {
       "sms-regression",
     );
     expect(response.statusCode).toBe(202);
-    const delivery = (response.json() as { delivery: Record<string, unknown> })
-      .delivery;
+    const delivery = (
+      unwrapEnvelope(response.json()) as { delivery: Record<string, unknown> }
+    ).delivery;
     expect(delivery).toMatchObject({
       key: "order.shipped",
       channel: "sms",

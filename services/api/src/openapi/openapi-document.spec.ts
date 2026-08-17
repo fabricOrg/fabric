@@ -247,7 +247,10 @@ describe("document shape", () => {
       { "GET /v1/thing": binding },
       { ...OPTIONS, serverUrl: "https://api.example.com" },
     );
-    expect(doc.servers).toEqual([{ url: "https://api.example.com" }]);
+    // The url is templated (`{baseUrl}`) so the artifact is hermetic; what matters is that the
+    // value comes from options and is not read from the environment at generate time.
+    const servers = doc.servers as { url: string }[];
+    expect(servers[0]?.url).toBe("https://api.example.com");
   });
 
   it("converts Nest :params into OpenAPI {params} and marks them required", () => {

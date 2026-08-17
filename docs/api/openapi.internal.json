@@ -7,7 +7,13 @@
   },
   "servers": [
     {
-      "url": "http://localhost:3000"
+      "url": "{baseUrl}",
+      "variables": {
+        "baseUrl": {
+          "default": "http://localhost:3000",
+          "description": "Base URL of the Fabric API for your environment. Supplied by the client; the API does not assume one."
+        }
+      }
     }
   ],
   "tags": [
@@ -7315,6 +7321,75 @@
             "operatorToken": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "env": {
+                    "type": "string",
+                    "enum": [
+                      "sandbox",
+                      "live"
+                    ]
+                  },
+                  "scopes": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/__schema0"
+                    }
+                  },
+                  "application_id": {
+                    "$ref": "#/$defs/__schema1"
+                  },
+                  "expires_in_days": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "tenantId": {
+                    "$ref": "#/$defs/__schema1"
+                  }
+                },
+                "required": [
+                  "name",
+                  "env",
+                  "scopes"
+                ],
+                "$defs": {
+                  "__schema0": {
+                    "type": "string",
+                    "enum": [
+                      "sms:send",
+                      "sms:read",
+                      "email:send",
+                      "email:read",
+                      "whatsapp:send",
+                      "wallet:read",
+                      "request_logs:read",
+                      "api_keys:read",
+                      "api_keys:write",
+                      "definitions:read",
+                      "messages:send",
+                      "messages:read"
+                    ]
+                  },
+                  "__schema1": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Success.",
@@ -9182,6 +9257,75 @@
             "tenantToken": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "const": "start"
+                      },
+                      "msisdn": {
+                        "type": "string",
+                        "pattern": "^\\+[1-9]\\d{7,14}$"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "enum": [
+                          "GHS",
+                          "NGN",
+                          "USD"
+                        ]
+                      },
+                      "minor": {
+                        "type": "string",
+                        "pattern": "^[1-9]\\d*$"
+                      },
+                      "channel": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "msisdn",
+                      "currency",
+                      "minor",
+                      "channel"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "const": "confirm"
+                      },
+                      "correlationId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "code": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "correlationId",
+                      "code"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success.",

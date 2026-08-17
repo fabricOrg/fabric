@@ -49,7 +49,8 @@ async function fetchManifest(options: DefinitionCommandOptions) {
       `Catalog request failed (${response.status}). Check the key's definitions:read scope and ${environment} environment.`,
     );
   }
-  const manifest = parseManifest(await response.json());
+  // The API wraps every JSON success in `{ data, request_id }`; the manifest is the payload.
+  const manifest = parseManifest(unwrapEnvelope(await response.json()));
   if (manifest.environment.type !== environment) {
     throw new Error(
       `Catalog environment mismatch: the key is ${environment}, but the API returned ${manifest.environment.type}.`,
@@ -71,4 +72,18 @@ function normalizeBaseUrl(value: string): string {
     throw new Error("FABRIC_BASE_URL must use HTTPS except on loopback.");
   }
   return url.toString();
+}
+
+/** `{ data, request_id }` -> `data`. Inlined rather than imported: this package deliberately has no
+ *  dependency on `@app/contracts` so the published CLI stays standalone. */
+function unwrapEnvelope(payload: unknown): unknown {
+  if (
+    payload !== null &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    "request_id" in payload
+  ) {
+    return (payload as { data: unknown }).data;
+  }
+  return payload;
 }

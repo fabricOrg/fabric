@@ -6,7 +6,7 @@ import type {
   RouteVisibility,
 } from "./route-binding.types.js";
 import { type DiscoveredRoute, routeKey } from "./route-table.js";
-import { SECURITY_SCHEMES } from "./security-schemes.js";
+import { INTERNAL_ONLY_SCHEMES, SECURITY_SCHEMES } from "./security-schemes.js";
 
 /**
  * Assembles the OpenAPI 3.1 document from the router's real route list and the hand-written
@@ -90,6 +90,7 @@ function assertCoverage(
 function operationFor(
   binding: RouteBinding,
   nestPath: string,
+  publicOnly: boolean,
 ): Record<string, unknown> {
   const parameters: Record<string, unknown>[] = pathParameters(nestPath);
   if (binding.query) {
@@ -145,9 +146,7 @@ function operationFor(
     ...(binding.description ? { description: binding.description } : {}),
     tags: [...binding.tags],
     ...(binding.deprecated ? { deprecated: true } : {}),
-    security: binding.security.map((scheme) =>
-      scheme === "none" ? {} : { [scheme]: [] },
-    ),
+    security: securityFor(binding, publicOnly),
     ...(parameters.length > 0 ? { parameters } : {}),
     ...(binding.request
       ? {
@@ -161,6 +160,27 @@ function operationFor(
       : {}),
     responses,
   };
+}
+
+/**
+ * The security list for an operation. In the PUBLIC artifact, staff/service schemes are removed —
+ * see INTERNAL_ONLY_SCHEMES for why accuracy to the wrong audience is the problem. Never returns an
+ * empty list for a route that declares credentials: if stripping would empty it, the original is
+ * kept, because "no security" is a far worse lie than an over-broad one.
+ */
+function securityFor(
+  binding: RouteBinding,
+  publicOnly: boolean,
+): Record<string, unknown>[] {
+  const asEntries = (schemes: readonly string[]) =>
+    schemes.map((scheme) => (scheme === "none" ? {} : { [scheme]: [] }));
+  if (!publicOnly) return asEntries(binding.security);
+  const customerFacing = binding.security.filter(
+    (scheme) => !INTERNAL_ONLY_SCHEMES.has(scheme),
+  );
+  return asEntries(
+    customerFacing.length > 0 ? customerFacing : binding.security,
+  );
 }
 
 function errorResponse(description: string): Record<string, unknown> {
@@ -179,14 +199,20 @@ export function buildOpenApiDocument(
 
   const paths: Record<string, Record<string, unknown>> = {};
   const usedTags = new Set<string>();
+  const usedSchemes = new Set<string>();
 
   for (const route of routes) {
     const binding = bindings[routeKey(route)];
     if (!binding || !options.include.includes(binding.visibility)) continue;
     const path = toOpenApiPath(route.path);
     paths[path] ??= {};
-    paths[path][route.method.toLowerCase()] = operationFor(binding, route.path);
+    const publicOnly =
+      options.include.length === 1 && options.include[0] === "public";
+    const operation = operationFor(binding, route.path, publicOnly);
+    paths[path][route.method.toLowerCase()] = operation;
     for (const tag of binding.tags) usedTags.add(tag);
+    for (const entry of operation.security as Record<string, unknown>[])
+      for (const scheme of Object.keys(entry)) usedSchemes.add(scheme);
   }
 
   return {
@@ -196,11 +222,35 @@ export function buildOpenApiDocument(
       version: options.version,
       description: options.description,
     },
-    servers: [{ url: options.serverUrl }],
+    servers: [
+      {
+        url: options.serverUrl,
+        // A templated host, not a literal: the base url differs per environment and there is no
+        // production one yet. The predecessor shipped a dead CloudFront host; a hard-coded
+        // localhost would have been worse, since it looks plausible in a published SDK.
+        variables: {
+          baseUrl: {
+            default: "http://localhost:3000",
+            description:
+              "Base URL of the Fabric API for your environment. Supplied by the client; the API does not assume one.",
+          },
+        },
+      },
+    ],
     tags: [...usedTags].sort().map((name) => ({ name })),
     paths,
     components: {
-      securitySchemes: SECURITY_SCHEMES,
+      // ONLY the schemes the included operations actually use. Emitting the whole catalogue leaked
+      // the internal auth surface into the customer artifact: `bffInternal` and `webhookToken` are
+      // referenced by no public route, yet the published file named their headers, their env vars,
+      // the existence of an admin surface, and the one credential that travels in a query string.
+      // Paths honoured `visibility` and components did not, which made "visibility is a security
+      // decision" true of half the document.
+      securitySchemes: Object.fromEntries(
+        Object.entries(SECURITY_SCHEMES).filter(([name]) =>
+          usedSchemes.has(name),
+        ),
+      ),
       schemas: { ErrorEnvelope: errorEnvelopeSchema() },
     },
   };

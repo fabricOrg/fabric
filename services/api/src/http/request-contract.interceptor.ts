@@ -14,6 +14,7 @@ import { invalidRequest } from "./api-error.js";
 import {
   checkPayload,
   resolveValidationMode,
+  shouldReport,
   type ValidationMode,
 } from "./response-validation.js";
 
@@ -91,9 +92,11 @@ export class RequestContractInterceptor implements NestInterceptor {
   ): void {
     if (!failure) return;
     if (this.mode === "warn") {
-      this.logger.error(
-        `${what} does not match its published contract at ${failure.route}: ${failure.issues}`,
-      );
+      if (shouldReport(`${what}:${failure.route}`)) {
+        this.logger.error(
+          `${what} does not match its published contract at ${failure.route}: ${failure.issues}`,
+        );
+      }
       return;
     }
     throw invalidRequest(

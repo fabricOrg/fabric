@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { createHmac, randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import type { Creds } from "@app/integrations";
 import { credit } from "@app/wallet";
@@ -103,7 +104,7 @@ describeDb("WhatsApp inbound and the customer service window", () => {
       },
     });
     expect(response.statusCode).toBe(201);
-    return (response.json() as { id: string }).id;
+    return (unwrapEnvelope(response.json()) as { id: string }).id;
   }
 
   function postInbound(from: string, wamid: string, type = "text") {
@@ -205,7 +206,10 @@ describeDb("WhatsApp inbound and the customer service window", () => {
     const wamid = `wamid.${randomUUID()}`;
     const response = await postInbound(CONSUMER, wamid);
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ accepted: true, processed: 1 });
+    expect(unwrapEnvelope(response.json())).toMatchObject({
+      accepted: true,
+      processed: 1,
+    });
 
     const rows = await inboundRows(tenantA);
     expect(rows).toHaveLength(1);
@@ -248,14 +252,14 @@ describeDb("WhatsApp inbound and the customer service window", () => {
   it("ignores a replayed wamid — no second row, window bump or event", async () => {
     const wamid = `wamid.${randomUUID()}`;
     const first = await postInbound(CONSUMER, wamid);
-    expect(first.json()).toMatchObject({ processed: 1 });
+    expect(unwrapEnvelope(first.json())).toMatchObject({ processed: 1 });
     const before = await owner`
       SELECT expires_at FROM whatsapp_service_windows WHERE tenant_id = ${tenantA}`;
 
     // Meta retries anything it believes failed. A retry must change nothing.
     const replay = await postInbound(CONSUMER, wamid);
     expect(replay.statusCode).toBe(200);
-    expect(replay.json()).toMatchObject({ processed: 0 });
+    expect(unwrapEnvelope(replay.json())).toMatchObject({ processed: 0 });
 
     const rows = await owner`
       SELECT id FROM whatsapp_inbound_messages
@@ -272,7 +276,9 @@ describeDb("WhatsApp inbound and the customer service window", () => {
     // against, so a future change to the rule fails here instead of in production.
     await sendTo(keyB, CONSUMER, "inbound-seed-b");
     const wamid = `wamid.${randomUUID()}`;
-    expect((await postInbound(CONSUMER, wamid)).json()).toMatchObject({
+    expect(
+      unwrapEnvelope((await postInbound(CONSUMER, wamid)).json()),
+    ).toMatchObject({
       processed: 1,
     });
 
@@ -291,7 +297,7 @@ describeDb("WhatsApp inbound and the customer service window", () => {
     const response = await postInbound(STRANGER, wamid);
     expect(response.statusCode).toBe(200);
     // Nothing was ingested for any tenant, and the webhook still succeeds — Meta must not retry.
-    expect(response.json()).toMatchObject({ processed: 0 });
+    expect(unwrapEnvelope(response.json())).toMatchObject({ processed: 0 });
 
     const orphan = await owner`
       SELECT provider_ref, phone_number_id, message_type
@@ -324,7 +330,9 @@ describeDb("WhatsApp inbound and the customer service window", () => {
     // An unmodelled type is still a real customer in a real conversation. Dropping it would lose the
     // message AND fail to extend the window.
     const wamid = `wamid.${randomUUID()}`;
-    expect((await postInbound(CONSUMER, wamid, "image")).json()).toMatchObject({
+    expect(
+      unwrapEnvelope((await postInbound(CONSUMER, wamid, "image")).json()),
+    ).toMatchObject({
       processed: 1,
     });
     const rows = await owner`

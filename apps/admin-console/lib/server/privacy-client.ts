@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ErasureResult, SubjectSummary } from "@app/contracts";
+import { unwrapEnvelope } from "./response-envelope";
 
 /**
  * DSR (data-subject rights) calls into the api. Server-only: the BFF token never reaches a browser,
@@ -25,7 +26,7 @@ export class PrivacyApiError extends Error {
 }
 
 async function parse(response: Response): Promise<unknown> {
-  const payload = await response.json().catch(() => null);
+  const payload = unwrapEnvelope(await response.json().catch(() => null));
   if (!response.ok) throw new PrivacyApiError(response.status, payload);
   return payload;
 }

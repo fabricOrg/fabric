@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import { FakeWhatsAppProvider } from "@app/integrations/testing/whatsapp";
 import { NestFactory } from "@nestjs/core";
@@ -94,16 +95,18 @@ describeDb("internal WhatsApp dashboard API", () => {
     };
     const first = await app.inject(request);
     const replay = await app.inject(request);
-    expect(first.statusCode, JSON.stringify(first.json())).toBe(201);
+    expect(first.statusCode, JSON.stringify(unwrapEnvelope(first.json()))).toBe(
+      201,
+    );
     expect(replay.statusCode).toBe(201);
-    const body = first.json() as {
+    const body = unwrapEnvelope(first.json()) as {
       id: string;
       to: string;
       cost: { minor: string; currency: string };
     };
     expect(body.to).not.toContain("+233545227189");
     expect(body.cost).toEqual({ minor: "0", currency: "GHS" });
-    expect((replay.json() as { id: string }).id).toBe(body.id);
+    expect((unwrapEnvelope(replay.json()) as { id: string }).id).toBe(body.id);
 
     const persisted = await owner`
       SELECT application_id, environment_id
@@ -118,7 +121,7 @@ describeDb("internal WhatsApp dashboard API", () => {
       headers: { "x-bff-token": "test-bff-token" },
     });
     expect(list.statusCode).toBe(200);
-    const listed = list.json() as {
+    const listed = unwrapEnvelope(list.json()) as {
       messages: Array<{
         id: string;
         to: string;
@@ -143,7 +146,7 @@ describeDb("internal WhatsApp dashboard API", () => {
       url: `/internal/tenants/${tenantId}/whatsapp?env=sandbox`,
     });
     expect(response.statusCode).toBe(401);
-    expect(response.json()).toMatchObject({
+    expect(unwrapEnvelope(response.json())).toMatchObject({
       error: { code: "invalid_bff_token" },
     });
   });

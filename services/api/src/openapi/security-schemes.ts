@@ -47,3 +47,22 @@ export const SECURITY_SCHEMES: Readonly<Record<string, unknown>> = {
       "configured provider; it is not a signature over the payload.",
   },
 };
+
+/**
+ * Schemes that describe STAFF or SERVICE credentials, never a customer one.
+ *
+ * They are stripped from operations in the public artifact even where the guard genuinely accepts
+ * them. `OperatorOrTenantGuard` really does take an operator token on ten `/v1` routes, so listing
+ * it is *accurate* — but accuracy to the wrong audience is the problem: the customer-facing document
+ * would tell an SDK user that `POST /v1/api-keys`, a credential-minting route, also accepts a staff
+ * token granting cross-tenant access, and name the header to send it in.
+ *
+ * The operator path is real and stays documented — in the internal artifact, for the people who
+ * have that credential. Stripping never empties an operation's security: every public route also
+ * accepts `secretKey`/`tenantToken`, and the builder asserts a scheme survives.
+ */
+export const INTERNAL_ONLY_SCHEMES: ReadonlySet<string> = new Set([
+  "bffInternal",
+  "operatorToken",
+  "webhookToken",
+]);

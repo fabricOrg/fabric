@@ -11,6 +11,7 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../app.module.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
+import { jsonBody } from "../testing/response.js";
 import {
   cleanManagedTenant,
   seedManagedTenant,
@@ -167,7 +168,7 @@ describeDb("managed WhatsApp acceptance", () => {
   it("previews the binding, not a body, with parameters in template order", async () => {
     const response = await preview(previewPayload);
     expect(response.statusCode).toBe(201);
-    const body = response.json() as Record<string, unknown>;
+    const body = jsonBody(response) as Record<string, unknown>;
     expect(body).toMatchObject({
       channel: "whatsapp",
       eligible: true,
@@ -195,8 +196,11 @@ describeDb("managed WhatsApp acceptance", () => {
     const fr = await preview({ ...previewPayload, locale: "fr" });
     expect(fr.statusCode).toBe(201);
     expect(
-      (fr.json() as { whatsapp_preview: Record<string, unknown> })
-        .whatsapp_preview,
+      (
+        jsonBody(fr) as {
+          whatsapp_preview: Record<string, unknown>;
+        }
+      ).whatsapp_preview,
     ).toMatchObject({
       template_name: "order_shipped",
       template_language: "fr",
@@ -204,7 +208,7 @@ describeDb("managed WhatsApp acceptance", () => {
 
     const de = await preview({ ...previewPayload, locale: "de" });
     expect(de.statusCode).toBe(201);
-    expect(de.json()).toMatchObject({
+    expect(jsonBody(de)).toMatchObject({
       eligible: false,
       blockers: [{ path: "locale", code: "locale_not_supported" }],
       whatsapp_preview: null,
@@ -214,8 +218,9 @@ describeDb("managed WhatsApp acceptance", () => {
   it("accepts and persists one managed WhatsApp message", async () => {
     const response = await send(payload, "wa-accept-001");
     expect(response.statusCode).toBe(202);
-    const delivery = (response.json() as { delivery: Record<string, unknown> })
-      .delivery;
+    const delivery = (
+      jsonBody(response) as { delivery: Record<string, unknown> }
+    ).delivery;
     expect(delivery).toMatchObject({
       key: "order.whatsapp",
       channel: "whatsapp",
@@ -265,7 +270,7 @@ describeDb("managed WhatsApp acceptance", () => {
       "wa-accept-content",
     );
     expect(response.statusCode).toBe(202);
-    const deliveryId = (response.json() as { delivery: { id: string } })
+    const deliveryId = (jsonBody(response) as { delivery: { id: string } })
       .delivery.id;
     await expect(storedContent(deliveryId)).resolves.toEqual({
       to: "+233200000043",
@@ -283,8 +288,8 @@ describeDb("managed WhatsApp acceptance", () => {
     const second = await send(payload, "wa-accept-001");
     expect(first.statusCode).toBe(202);
     expect(second.statusCode).toBe(202);
-    expect((second.json() as { delivery: { id: string } }).delivery.id).toBe(
-      (first.json() as { delivery: { id: string } }).delivery.id,
+    expect((jsonBody(second) as { delivery: { id: string } }).delivery.id).toBe(
+      (jsonBody(first) as { delivery: { id: string } }).delivery.id,
     );
     expect(await counts()).toEqual(before);
   });
@@ -296,7 +301,7 @@ describeDb("managed WhatsApp acceptance", () => {
       "wa-accept-001",
     );
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({
+    expect(jsonBody(response)).toMatchObject({
       error: { code: "idempotency_conflict" },
     });
     expect(await counts()).toEqual(before);
@@ -309,7 +314,7 @@ describeDb("managed WhatsApp acceptance", () => {
       "wa-recipient-mismatch",
     );
     expect(res.statusCode).toBe(400);
-    const { error } = res.json() as {
+    const { error } = jsonBody(res) as {
       error: { code: string; message: string };
     };
     expect(error).toMatchObject({ code: "recipient_channel_mismatch" });
@@ -324,7 +329,7 @@ describeDb("managed WhatsApp acceptance", () => {
       "wa-bad-parameter",
     );
     expect(response.statusCode).toBe(400);
-    const body = response.json() as {
+    const body = jsonBody(response) as {
       error: { code: string; message: string };
     };
     // Meta rejects newline/tab/5+-space parameters. Catching it here turns a post-reserve provider
@@ -340,7 +345,7 @@ describeDb("managed WhatsApp acceptance", () => {
       key: "order.whatsapp.marketing",
     });
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({
+    expect(jsonBody(response)).toMatchObject({
       channel: "whatsapp",
       message_class: "promotional",
     });

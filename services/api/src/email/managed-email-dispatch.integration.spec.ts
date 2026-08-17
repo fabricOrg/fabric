@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import { NestFactory } from "@nestjs/core";
 import {
@@ -48,7 +49,9 @@ describeDb("SDK-007 managed email dispatch money resolution", () => {
       },
     });
     expect(response.statusCode).toBe(202);
-    const body = response.json() as { delivery: { id: string } };
+    const body = unwrapEnvelope(response.json()) as {
+      delivery: { id: string };
+    };
     return body.delivery.id;
   }
 
@@ -217,7 +220,10 @@ describeDb("SDK-007 managed email dispatch money resolution", () => {
       },
     });
     expect(response.statusCode).toBe(201);
-    const body = response.json() as { id: string; status: string };
+    const body = unwrapEnvelope(response.json()) as {
+      id: string;
+      status: string;
+    };
 
     expect(body.status).toBe("delivered");
     expect(await ledgerTerminalCount(body.id, "committed")).toBe(0);

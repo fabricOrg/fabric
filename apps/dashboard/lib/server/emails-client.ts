@@ -5,6 +5,7 @@ import {
   type EmailInboxResponse,
   emailContentResponse,
   emailInboxResponse,
+  unwrapEnvelope,
 } from "@app/contracts";
 import { BffError } from "./api-client";
 
@@ -27,7 +28,7 @@ async function request(tenantId: string, path: string): Promise<unknown> {
     new URL(`/internal/tenants/${tenantId}${path}`, baseUrl),
     { cache: "no-store", headers: { "x-bff-token": bffToken } },
   );
-  const payload = (await response.json()) as unknown;
+  const payload = unwrapEnvelope((await response.json()) as unknown);
   if (!response.ok) throw new BffError(response.status, payload);
   return payload;
 }

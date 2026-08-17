@@ -40,3 +40,25 @@ export const responseEnvelope = z.object({
   request_id: z.string(),
 });
 export type ResponseEnvelope<T = unknown> = { data: T; request_id: string };
+
+/**
+ * `{ data, request_id }` -> `data`. Anything else passes through unchanged: a 204 has no body, and
+ * a non-enveloped payload means an endpoint that opts out (a file download, a provider challenge).
+ *
+ * LIVES HERE so every consumer shares one implementation. The envelope shipped with copies in the
+ * dashboard transport, the SDK transport and an admin-console helper — and sixteen call sites that
+ * had none, including sign-in, the dashboard's own tenant-token mint, and a tenant-provisioning
+ * handler that turned a SUCCESSFUL provision into a 502. One exported function is the difference
+ * between "unwrap where you remember to" and "unwrap".
+ */
+export function unwrapEnvelope(payload: unknown): unknown {
+  if (
+    payload !== null &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    "request_id" in payload
+  ) {
+    return (payload as { data: unknown }).data;
+  }
+  return payload;
+}

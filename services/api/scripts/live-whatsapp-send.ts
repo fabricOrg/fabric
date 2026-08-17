@@ -77,7 +77,14 @@ try {
 
   // A send is proven by `provider_ref`, never by `status` — FakeProvider returns `accepted` exactly as
   // a carrier does (`fake-<id>` vs a real `wamid.`). Read it back from the row.
-  const id = (JSON.parse(body || "{}") as { id?: string }).id;
+  // Unwrap the response envelope. Reading `.id` off the raw body left it undefined, so the
+  // provider_ref read-back below was silently skipped and the script reported a "successful" live
+  // send without ever proving one — against the rule it exists to enforce.
+  const parsed = JSON.parse(body || "{}") as {
+    data?: { id?: string };
+    id?: string;
+  };
+  const id = parsed.data?.id ?? parsed.id;
   if (id) {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const [row] = (await db.db.execute(sql`
