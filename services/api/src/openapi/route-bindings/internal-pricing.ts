@@ -9,9 +9,11 @@ import {
   createCommercialPackageRequestSchema,
   createCommercialPackageResponseSchema,
   erasureRequestSchema,
+  erasureResultSchema,
   listCommercialOffersResponseSchema,
   listPriceBooksResponseSchema,
   listProviderCostRatesResponseSchema,
+  okAck,
   previewCommercialOfferMarginRequestSchema,
   priceBookDtoSchema,
   providerCostRateDtoSchema,
@@ -21,6 +23,7 @@ import {
   subjectSummarySchema,
   updateCommercialOfferVersionRequestSchema,
   upsertPriceBookRequestSchema,
+  whatsappTemplateSyncResultSchema,
 } from "@app/contracts";
 import type { RouteBindings } from "../route-binding.types.js";
 
@@ -67,6 +70,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: assignPriceBookRequestSchema,
+    response: okAck,
   },
   "GET /internal/admin/price-books/provider-costs": {
     summary: "List provider cost rates",
@@ -167,6 +171,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: assignOfferCatalogRequestSchema,
+    response: okAck,
   },
 
   // ---- Privacy and WhatsApp ops ------------------------------------------------------------
@@ -186,6 +191,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: erasureRequestSchema,
+    response: erasureResultSchema,
   },
   "POST /internal/admin/whatsapp/template-sync": {
     summary: "Trigger a WhatsApp template sync",
@@ -195,5 +201,6 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     tags: ["WhatsApp"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: whatsappTemplateSyncResultSchema,
   },
 };

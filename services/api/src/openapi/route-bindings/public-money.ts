@@ -1,5 +1,8 @@
 import {
   autoTopupResponseSchema,
+  commercialOfferPurchaseListSchema,
+  commercialOfferPurchaseReceiptSchema,
+  customerCommercialOfferCatalogSchema,
   initiateTopUpRequestSchema,
   initiateTopUpResponseSchema,
   paymentMethodResponseSchema,
@@ -85,6 +88,7 @@ export const PUBLIC_MONEY_BINDINGS: RouteBindings = {
     tags: ["Tokens"],
     visibility: "public",
     security: ["secretKey", "tenantToken"],
+    response: customerCommercialOfferCatalogSchema,
   },
   "POST /v1/tokens/purchase": {
     summary: "Purchase tokens",
@@ -100,6 +104,7 @@ export const PUBLIC_MONEY_BINDINGS: RouteBindings = {
     tags: ["Tokens"],
     visibility: "public",
     security: ["secretKey", "tenantToken"],
+    response: commercialOfferPurchaseListSchema,
   },
   "GET /v1/tokens/purchases/:reference": {
     summary: "Retrieve a purchase receipt",
@@ -107,5 +112,6 @@ export const PUBLIC_MONEY_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey", "tenantToken"],
     errorStatuses: [404],
+    response: commercialOfferPurchaseReceiptSchema,
   },
 };

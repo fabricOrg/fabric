@@ -1,10 +1,12 @@
 import {
   apiContextResponse,
   applicationDtoSchema,
+  createApiKeyResult,
   createApplicationRequestSchema,
   createSmsTemplateRequest,
   createWebhookEndpointRequestSchema,
   createWebhookEndpointResponseSchema,
+  listApiKeysResponse,
   listApplicationsResponseSchema,
   listRequestLogsResponseSchema,
   listSmsTemplatesResponse,
@@ -14,7 +16,9 @@ import {
   pageQuery,
   publicPricingResponseSchema,
   replayWebhookDeliveryResponseSchema,
+  runFlowResponse,
   sandboxAllowancesResponse,
+  smsTemplate,
   transactionsResponse,
   updateSmsTemplateRequest,
 } from "@app/contracts";
@@ -80,6 +84,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     tags: ["Applications"],
     visibility: "public",
     security: ["secretKey", "tenantToken", "operatorToken"],
+    response: listApiKeysResponse,
   },
   "POST /v1/api-keys": {
     summary: "Create an API key",
@@ -92,6 +97,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     // TODO(contract): the handler parses this body ad hoc — `(body ?? {}) as Record<string, unknown>`
     // with manual field extraction and no zod DTO, so there is nothing to reference. Same defect
     // family as the untyped BFF mutation bodies; the fix is a contract, not a doc entry.
+    response: createApiKeyResult,
   },
   "DELETE /v1/api-keys/:id": {
     summary: "Revoke an API key",
@@ -170,6 +176,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     // TODO(contract): the body is a discriminated union resolved at runtime on `action` —
     // `startFlowRequest` OR `confirmFlowRequest`. A binding names one contract and must not compose
     // shapes, so this stays unmodelled until the API exposes a single union DTO.
+    response: runFlowResponse,
   },
   "GET /v1/public/pricing": {
     summary: "Retrieve published pricing",
@@ -196,6 +203,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     security: ["secretKey", "tenantToken"],
     successStatus: 201,
     request: createSmsTemplateRequest,
+    response: smsTemplate,
   },
   "PATCH /v1/sms/templates/:id": {
     summary: "Update an SMS template",
@@ -204,6 +212,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     security: ["secretKey", "tenantToken"],
     errorStatuses: [404],
     request: updateSmsTemplateRequest,
+    response: smsTemplate,
   },
   "DELETE /v1/sms/templates/:id": {
     summary: "Delete an SMS template",

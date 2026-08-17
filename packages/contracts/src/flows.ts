@@ -98,3 +98,14 @@ export const confirmFlowResponse = z.object({
   authorizationUrl: z.string().url().nullable(),
 });
 export type ConfirmFlowResponse = z.infer<typeof confirmFlowResponse>;
+
+/**
+ * `POST /v1/flows` resolves at runtime on `action`: "start" returns a started flow, "confirm" a
+ * confirmed one. Composed HERE rather than in an OpenAPI binding — a binding names one contract and
+ * must never build shapes, or it becomes the second source of truth this pipeline exists to remove.
+ */
+export const runFlowResponse = z.union([
+  startFlowResponse,
+  confirmFlowResponse,
+]);
+export type RunFlowResponse = z.infer<typeof runFlowResponse>;

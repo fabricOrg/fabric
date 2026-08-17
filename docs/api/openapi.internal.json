@@ -1091,7 +1091,66 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "body": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1600
+                        },
+                        "class": {
+                          "type": "string",
+                          "enum": [
+                            "transactional",
+                            "promotional"
+                          ]
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "body",
+                        "class",
+                        "created_at",
+                        "updated_at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -7092,7 +7151,108 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "keys": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "env": {
+                                "type": "string",
+                                "enum": [
+                                  "sandbox",
+                                  "live"
+                                ]
+                              },
+                              "prefix": {
+                                "type": "string"
+                              },
+                              "scopes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "active",
+                                  "revoked"
+                                ]
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "lastUsedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "expiresAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "env",
+                              "prefix",
+                              "scopes",
+                              "status",
+                              "createdAt",
+                              "lastUsedAt"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "keys",
+                        "request_id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -7155,7 +7315,105 @@
         ],
         "responses": {
           "201": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "env": {
+                              "type": "string",
+                              "enum": [
+                                "sandbox",
+                                "live"
+                              ]
+                            },
+                            "prefix": {
+                              "type": "string"
+                            },
+                            "scopes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "active",
+                                "revoked"
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "lastUsedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "expiresAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "env",
+                            "prefix",
+                            "scopes",
+                            "status",
+                            "createdAt",
+                            "lastUsedAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "secret": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "secret"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -8924,7 +9182,273 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "correlationId": {
+                              "type": "string"
+                            },
+                            "verificationId": {
+                              "type": "string"
+                            },
+                            "otpSentTo": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "correlationId",
+                            "verificationId",
+                            "otpSentTo"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "record": {
+                              "type": "object",
+                              "properties": {
+                                "correlationId": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "customer": {
+                                  "type": "string"
+                                },
+                                "channel": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "$ref": "#/$defs/__schema0"
+                                },
+                                "verify": {
+                                  "type": "object",
+                                  "properties": {
+                                    "status": {
+                                      "$ref": "#/$defs/__schema1"
+                                    },
+                                    "verificationId": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "at": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "status",
+                                    "verificationId",
+                                    "at"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "charge": {
+                                  "type": "object",
+                                  "properties": {
+                                    "status": {
+                                      "$ref": "#/$defs/__schema1"
+                                    },
+                                    "at": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "entries": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "account": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string"
+                                          },
+                                          "direction": {
+                                            "type": "string",
+                                            "enum": [
+                                              "debit",
+                                              "credit"
+                                            ]
+                                          },
+                                          "amount": {
+                                            "$ref": "#/$defs/__schema0"
+                                          }
+                                        },
+                                        "required": [
+                                          "account",
+                                          "label",
+                                          "direction",
+                                          "amount"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "status",
+                                    "at",
+                                    "entries"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "notify": {
+                                  "type": "object",
+                                  "properties": {
+                                    "status": {
+                                      "$ref": "#/$defs/__schema1"
+                                    },
+                                    "messageId": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "at": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "status",
+                                    "messageId",
+                                    "at"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "audit": {
+                                  "type": "object",
+                                  "properties": {
+                                    "actor": {
+                                      "type": "string"
+                                    },
+                                    "at": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "actor",
+                                    "at"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "correlationId",
+                                "createdAt",
+                                "customer",
+                                "channel",
+                                "amount",
+                                "verify",
+                                "charge",
+                                "notify",
+                                "audit"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "authorizationUrl": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "uri"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "record",
+                            "authorizationUrl"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false,
+                  "$defs": {
+                    "__schema0": {
+                      "type": "object",
+                      "properties": {
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "GHS",
+                            "NGN",
+                            "USD"
+                          ]
+                        },
+                        "minor": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        }
+                      },
+                      "required": [
+                        "currency",
+                        "minor"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "__schema1": {
+                      "type": "string",
+                      "enum": [
+                        "done",
+                        "failed",
+                        "skipped",
+                        "pending"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -14297,7 +14821,66 @@
         },
         "responses": {
           "201": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "body": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1600
+                        },
+                        "class": {
+                          "type": "string",
+                          "enum": [
+                            "transactional",
+                            "promotional"
+                          ]
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "body",
+                        "class",
+                        "created_at",
+                        "updated_at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -14522,7 +15105,240 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "catalog_name": {
+                          "type": "string"
+                        },
+                        "offers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "offer_version_id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "offer_code": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "channel_code": {
+                                      "$ref": "#/$defs/__schema0"
+                                    },
+                                    "channel_name": {
+                                      "type": "string"
+                                    },
+                                    "unit_code": {
+                                      "$ref": "#/$defs/__schema0"
+                                    },
+                                    "unit_label": {
+                                      "type": "string"
+                                    },
+                                    "paid_units": {
+                                      "$ref": "#/$defs/__schema1"
+                                    },
+                                    "bonus_units": {
+                                      "type": "string",
+                                      "maxLength": 24,
+                                      "pattern": "^\\d+$"
+                                    },
+                                    "total_units": {
+                                      "$ref": "#/$defs/__schema1"
+                                    },
+                                    "eligibility": {
+                                      "type": "object",
+                                      "properties": {
+                                        "destination_countries": {
+                                          "default": [],
+                                          "maxItems": 250,
+                                          "type": "array",
+                                          "items": {
+                                            "$ref": "#/$defs/__schema2"
+                                          }
+                                        },
+                                        "traffic_classes": {
+                                          "default": [],
+                                          "maxItems": 50,
+                                          "type": "array",
+                                          "items": {
+                                            "$ref": "#/$defs/__schema3"
+                                          }
+                                        },
+                                        "provider_vendors": {
+                                          "default": [],
+                                          "maxItems": 50,
+                                          "type": "array",
+                                          "items": {
+                                            "$ref": "#/$defs/__schema3"
+                                          }
+                                        },
+                                        "service_classes": {
+                                          "default": [],
+                                          "maxItems": 50,
+                                          "type": "array",
+                                          "items": {
+                                            "$ref": "#/$defs/__schema3"
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "destination_countries",
+                                        "traffic_classes",
+                                        "provider_vendors",
+                                        "service_classes"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "required": [
+                                    "channel_code",
+                                    "channel_name",
+                                    "unit_code",
+                                    "unit_label",
+                                    "paid_units",
+                                    "bonus_units",
+                                    "total_units",
+                                    "eligibility"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "total_price_minor": {
+                                "$ref": "#/$defs/__schema1"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "GHS",
+                                  "NGN",
+                                  "USD"
+                                ]
+                              },
+                              "credit_validity_days": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "minimum_pack_count": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "maximum_pack_count": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "effective_to": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "purchased_packs": {
+                                "default": 0,
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "offer_version_id",
+                              "offer_code",
+                              "name",
+                              "description",
+                              "items",
+                              "total_price_minor",
+                              "currency",
+                              "credit_validity_days",
+                              "minimum_pack_count",
+                              "maximum_pack_count",
+                              "effective_to",
+                              "purchased_packs"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "catalog_name",
+                        "offers"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false,
+                  "$defs": {
+                    "__schema0": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                    },
+                    "__schema1": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    },
+                    "__schema2": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{2}$"
+                    },
+                    "__schema3": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120,
+                      "pattern": "^[a-zA-Z0-9._:-]+$"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -14583,7 +15399,133 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "purchases": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "reference": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "success",
+                                  "failed"
+                                ]
+                              },
+                              "offer_version_id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "offer_name": {
+                                "type": "string"
+                              },
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "channel_code": {
+                                      "$ref": "#/$defs/__schema0"
+                                    },
+                                    "unit_code": {
+                                      "$ref": "#/$defs/__schema0"
+                                    },
+                                    "quantity": {
+                                      "$ref": "#/$defs/__schema1"
+                                    }
+                                  },
+                                  "required": [
+                                    "channel_code",
+                                    "unit_code",
+                                    "quantity"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "pack_count": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "amount_minor": {
+                                "$ref": "#/$defs/__schema1"
+                              },
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "GHS",
+                                  "NGN",
+                                  "USD"
+                                ]
+                              },
+                              "created_at": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "updated_at": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              }
+                            },
+                            "required": [
+                              "reference",
+                              "status",
+                              "offer_version_id",
+                              "offer_name",
+                              "items",
+                              "pack_count",
+                              "amount_minor",
+                              "currency",
+                              "created_at",
+                              "updated_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "purchases"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false,
+                  "$defs": {
+                    "__schema0": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                    },
+                    "__schema1": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -14654,7 +15596,121 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "reference": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "success",
+                            "failed"
+                          ]
+                        },
+                        "offer_version_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "offer_name": {
+                          "type": "string"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "channel_code": {
+                                "$ref": "#/$defs/__schema0"
+                              },
+                              "unit_code": {
+                                "$ref": "#/$defs/__schema0"
+                              },
+                              "quantity": {
+                                "$ref": "#/$defs/__schema1"
+                              }
+                            },
+                            "required": [
+                              "channel_code",
+                              "unit_code",
+                              "quantity"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "pack_count": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "amount_minor": {
+                          "$ref": "#/$defs/__schema1"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "enum": [
+                            "GHS",
+                            "NGN",
+                            "USD"
+                          ]
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "updated_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "reference",
+                        "status",
+                        "offer_version_id",
+                        "offer_name",
+                        "items",
+                        "pack_count",
+                        "amount_minor",
+                        "currency",
+                        "created_at",
+                        "updated_at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false,
+                  "$defs": {
+                    "__schema0": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                    },
+                    "__schema1": {
+                      "type": "string",
+                      "maxLength": 24,
+                      "pattern": "^\\d+$"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -18317,7 +19373,37 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "ok"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -21506,7 +22592,37 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "ok"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -21599,7 +22715,42 @@
         },
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "subject_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "erased": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "subject_id",
+                        "erased"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -22496,7 +23647,57 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "locked": {
+                          "type": "boolean"
+                        },
+                        "synced": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "tenants": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "failed": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "firstError": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "locked",
+                        "synced",
+                        "tenants",
+                        "failed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
