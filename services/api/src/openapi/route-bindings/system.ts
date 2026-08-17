@@ -1,0 +1,107 @@
+import type { RouteBindings } from "../route-binding.types.js";
+
+/**
+ * Provider webhook ingress, health, and the docs surface itself.
+ *
+ * NOTE ON THE WEBHOOK ROUTES' AUTH. Only the DLR ingress carries a guard; the rest show `none`
+ * because each verifies a PROVIDER SIGNATURE inside the handler rather than at the guard layer.
+ * That is documented per route below — an unauthenticated-looking route is exactly the thing a
+ * reader should be able to check, and "there is no guard" must not be mistaken for "there is no
+ * verification".
+ */
+export const SYSTEM_BINDINGS: RouteBindings = {
+  // ---- Delivery reports --------------------------------------------------------------------
+  "GET /webhooks/dlr/:provider": {
+    summary: "Ingest a delivery report (query form)",
+    description:
+      "For carriers that call back with a header-less GET (Arkesel sends `?sms_id=..&status=..`), " +
+      "so the ingress token is accepted as `?token=`. The owning tenant is resolved from " +
+      "`provider_ref` — possession-scoped, never from the payload.",
+    tags: ["Webhooks"],
+    visibility: "webhook",
+    security: ["webhookToken"],
+  },
+  "POST /webhooks/dlr/:provider": {
+    summary: "Ingest a delivery report (body form)",
+    tags: ["Webhooks"],
+    visibility: "webhook",
+    security: ["webhookToken"],
+  },
+
+  // ---- Provider callbacks (signature-verified in-handler) ----------------------------------
+  "GET /webhooks/whatsapp/:provider": {
+    summary: "Meta webhook verification handshake",
+    description:
+      "Meta's subscription challenge. Answers with the echoed challenge when the verify token " +
+      "matches; no guard, because Meta controls the handshake shape.",
+    tags: ["Webhooks"],
+    visibility: "webhook",
+    security: ["none"],
+  },
+  "POST /webhooks/whatsapp/:provider": {
+    summary: "Ingest a WhatsApp event",
+    description:
+      "Delivery statuses and inbound messages. Authenticated by Meta's payload SIGNATURE inside the " +
+      "handler, not by a guard.",
+    tags: ["Webhooks"],
+    visibility: "webhook",
+    security: ["none"],
+  },
+  "POST /webhooks/paystack": {
+    summary: "Ingest a Paystack event",
+    description:
+      "The source of truth for a cleared payment — a browser redirect never credits a wallet. " +
+      "Signature-verified in-handler and idempotent on the provider reference.",
+    tags: ["Webhooks"],
+    visibility: "webhook",
+    security: ["none"],
+  },
+  "POST /webhooks/email/aws-ses": {
+    summary: "Ingest an SES event via SNS",
+    description:
+      "SNS message signature is verified in-handler before the event is trusted.",
+    tags: ["Webhooks"],
+    visibility: "webhook",
+    security: ["none"],
+  },
+  "POST /webhooks/workos": {
+    summary: "Ingest a WorkOS event",
+    description: "Signature-verified in-handler.",
+    tags: ["Webhooks"],
+    visibility: "webhook",
+    security: ["none"],
+  },
+
+  // ---- Health ------------------------------------------------------------------------------
+  "GET /health": {
+    summary: "Liveness probe",
+    description:
+      "Trivial and dependency-free — it must stay green while dependencies are down.",
+    tags: ["Health"],
+    visibility: "internal",
+    security: ["none"],
+  },
+  "GET /health/readyz": {
+    summary: "Readiness probe",
+    description:
+      "Checked by the deploy pipeline against the live URL. Does NOT exercise Redis or the queue, " +
+      "so a green readyz is not evidence those work.",
+    tags: ["Health"],
+    visibility: "internal",
+    security: ["none"],
+  },
+
+  // ---- The docs surface itself -------------------------------------------------------------
+  "GET /docs": {
+    summary: "Render the internal API reference",
+    tags: ["Health"],
+    visibility: "internal",
+    security: ["operatorToken"],
+  },
+  "GET /docs/openapi.json": {
+    summary: "Retrieve the full OpenAPI document",
+    tags: ["Health"],
+    visibility: "internal",
+    security: ["operatorToken"],
+  },
+};

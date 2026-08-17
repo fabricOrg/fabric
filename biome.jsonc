@@ -62,7 +62,14 @@
       // Generated single-file stakeholder brief (hand-exported HTML, not source). Biome lints HTML,
       // and this artifact trips ~13 rules (noImportantStyles, useButtonType…) that would wedge
       // everyone's pre-push `biome check .`. It isn't anyone's lane — exclude it.
-      "!docs/platform-brief.html"
+      "!docs/platform-brief.html",
+      // GENERATED OpenAPI artifacts. Biome's JSON formatter and the generator's
+      // JSON.stringify(..., null, 2) disagree on array wrapping, so letting Biome rewrite them
+      // makes `openapi:check` fail on the very next run — a formatter fighting a generator. The
+      // generator owns these bytes; regenerate with `pnpm openapi:generate`.
+      "!docs/api/openapi.json",
+      "!docs/api/openapi.internal.json",
+      "!packages/sdk/openapi.json"
     ]
   },
   "overrides": [
