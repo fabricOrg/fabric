@@ -5,6 +5,7 @@ import {
   messageListResponse,
   messagingInsightsResponse,
   previewMessageRequest,
+  previewMessageResponse,
   sendEmailApiResponse,
   sendEmailRequest,
   sendSmsApiResponse,
@@ -12,7 +13,10 @@ import {
   sendSmsRequest,
   smsBatchResponse,
   verifyCheckRequest,
+  verifyCheckResponse,
+  verifyOverviewResponse,
   verifyStartRequest,
+  verifyStartResponse,
   whatsappMessageListResponse,
   whatsappMessageResponse,
   whatsappSendRequest,
@@ -84,6 +88,7 @@ export const PUBLIC_MESSAGING_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey"],
     request: previewMessageRequest,
+    response: previewMessageResponse,
   },
   "POST /v1/sms/batches": {
     summary: "Send a batch of SMS",
@@ -173,6 +178,7 @@ export const PUBLIC_MESSAGING_BINDINGS: RouteBindings = {
     security: ["secretKey"],
     request: verifyStartRequest,
     errorStatuses: [402, 429],
+    response: verifyStartResponse,
   },
   "POST /v1/verify/check": {
     summary: "Check a verification code",
@@ -180,11 +186,13 @@ export const PUBLIC_MESSAGING_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey"],
     request: verifyCheckRequest,
+    response: verifyCheckResponse,
   },
   "GET /v1/verify/overview": {
     summary: "Retrieve verification metrics",
     tags: ["Verify"],
     visibility: "public",
     security: ["secretKey"],
+    response: verifyOverviewResponse,
   },
 };

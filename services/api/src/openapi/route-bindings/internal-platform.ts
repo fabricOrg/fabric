@@ -2,17 +2,24 @@ import {
   configurePluginRequestSchema,
   createLiveInstanceRequestSchema,
   createWorkspaceRequestSchema,
+  createWorkspaceResponseSchema,
   deliveryMode,
   emailContentResponse,
   emailInboxResponse,
   inviteMemberRequestSchema,
+  listMembersResponseSchema,
   mintTenantTokenRequestSchema,
+  mintTenantTokenResponseSchema,
   pluginActionRequestSchema,
+  pluginListResponseSchema,
   resolveStaffSessionRequestSchema,
+  resolveStaffSessionResponseSchema,
   resolveUserSessionRequestSchema,
+  resolveUserSessionResponseSchema,
   updateMemberPermissionsRequestSchema,
   updateMemberRequestSchema,
   virtualPhoneReply,
+  virtualPhoneReplyResponse,
   whatsappMessageListResponse,
   whatsappSendRequest,
   whatsappSendResponse,
@@ -36,6 +43,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: resolveUserSessionRequestSchema,
+    response: resolveUserSessionResponseSchema,
   },
   "POST /internal/identity/staff-session": {
     summary: "Resolve a staff session",
@@ -45,6 +53,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: resolveStaffSessionRequestSchema,
+    response: resolveStaffSessionResponseSchema,
   },
   "POST /internal/identity/tenant-token": {
     summary: "Mint a short-lived tenant token",
@@ -54,6 +63,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: mintTenantTokenRequestSchema,
+    response: mintTenantTokenResponseSchema,
   },
   "POST /internal/identity/workspaces": {
     summary: "Create a workspace",
@@ -62,6 +72,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     security: ["bffInternal"],
     successStatus: 201,
     request: createWorkspaceRequestSchema,
+    response: createWorkspaceResponseSchema,
   },
 
   // ---- Members -----------------------------------------------------------------------------
@@ -70,6 +81,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Identity"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: listMembersResponseSchema,
   },
   "POST /internal/tenants/:tenantId/members": {
     summary: "Invite a member",
@@ -176,6 +188,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: virtualPhoneReply,
+    response: virtualPhoneReplyResponse,
   },
   "PATCH /internal/tenants/:tenantId/virtual-phone/messages/:messageId/read": {
     summary: "Mark a virtual-phone message read",
@@ -197,6 +210,7 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: pluginListResponseSchema,
   },
   "POST /internal/plugins": {
     summary: "Apply plugin catalog configuration",

@@ -3,12 +3,17 @@ import {
   createMessageDefinitionRequest,
   createOptOutRequestSchema,
   createSenderRequestSchema,
+  definitionCatalogManifest,
   listMessageDefinitionsResponse,
   listMessageDeliveriesResponse,
+  listOptOutsResponseSchema,
+  listSendersResponseSchema,
   messageDefinitionState,
   messageDeliveryWebhooksResponse,
+  optOutDtoSchema,
   publishMessageDefinitionRequest,
   retrieveManagedMessageResponse,
+  senderDtoSchema,
   sendManagedMessageRequest,
   sendManagedMessageResponse,
 } from "@app/contracts";
@@ -108,6 +113,7 @@ export const PUBLIC_MANAGED_BINDINGS: RouteBindings = {
     tags: ["Message definitions"],
     visibility: "public",
     security: ["secretKey"],
+    response: definitionCatalogManifest,
   },
 
   // ---- Senders and opt-outs ----------------------------------------------------------------
@@ -116,6 +122,7 @@ export const PUBLIC_MANAGED_BINDINGS: RouteBindings = {
     tags: ["Sender IDs"],
     visibility: "public",
     security: ["secretKey", "bffInternal"],
+    response: listSendersResponseSchema,
   },
   "POST /v1/senders": {
     summary: "Register a sender ID",
@@ -127,12 +134,14 @@ export const PUBLIC_MANAGED_BINDINGS: RouteBindings = {
     security: ["secretKey", "bffInternal"],
     request: createSenderRequestSchema,
     successStatus: 201,
+    response: senderDtoSchema,
   },
   "GET /v1/opt-outs": {
     summary: "List opt-outs",
     tags: ["Compliance"],
     visibility: "public",
     security: ["secretKey"],
+    response: listOptOutsResponseSchema,
   },
   "POST /v1/opt-outs": {
     summary: "Add an opt-out",
@@ -144,6 +153,7 @@ export const PUBLIC_MANAGED_BINDINGS: RouteBindings = {
     security: ["secretKey"],
     request: createOptOutRequestSchema,
     successStatus: 201,
+    response: optOutDtoSchema,
   },
   "DELETE /v1/opt-outs/:id": {
     summary: "Remove an opt-out",

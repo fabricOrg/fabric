@@ -5,6 +5,7 @@ import { INTERNAL_PRICING_BINDINGS } from "./route-bindings/internal-pricing.js"
 import { PUBLIC_ACCOUNT_BINDINGS } from "./route-bindings/public-account.js";
 import { PUBLIC_MANAGED_BINDINGS } from "./route-bindings/public-managed.js";
 import { PUBLIC_MESSAGING_BINDINGS } from "./route-bindings/public-messaging.js";
+import { PUBLIC_MONEY_BINDINGS } from "./route-bindings/public-money.js";
 import { SYSTEM_BINDINGS } from "./route-bindings/system.js";
 
 /**
@@ -31,6 +32,7 @@ const FRAGMENTS: readonly RouteBindings[] = [
   PUBLIC_MESSAGING_BINDINGS,
   PUBLIC_MANAGED_BINDINGS,
   PUBLIC_ACCOUNT_BINDINGS,
+  PUBLIC_MONEY_BINDINGS,
   INTERNAL_ADMIN_BINDINGS,
   INTERNAL_PRICING_BINDINGS,
   INTERNAL_PLATFORM_BINDINGS,

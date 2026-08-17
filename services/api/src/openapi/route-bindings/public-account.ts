@@ -1,15 +1,20 @@
 import {
+  applicationDtoSchema,
   createApplicationRequestSchema,
   createSmsTemplateRequest,
   createWebhookEndpointRequestSchema,
-  initiateTopUpRequestSchema,
+  createWebhookEndpointResponseSchema,
+  listApplicationsResponseSchema,
+  listRequestLogsResponseSchema,
+  listSmsTemplatesResponse,
   listWebhookDeliveriesResponseSchema,
   listWebhookEndpointsResponseSchema,
-  purchaseCommercialOfferRequestSchema,
+  overviewResponse,
+  publicPricingResponseSchema,
   replayWebhookDeliveryResponseSchema,
-  updateAutoTopupRequestSchema,
+  sandboxAllowancesResponse,
+  transactionsResponse,
   updateSmsTemplateRequest,
-  walletSnapshot,
 } from "@app/contracts";
 import type { RouteBindings } from "../route-binding.types.js";
 
@@ -23,88 +28,6 @@ import type { RouteBindings } from "../route-binding.types.js";
  * dashboard-only, the fix is the guard, not the documentation.
  */
 export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
-  // ---- Wallet and payments -----------------------------------------------------------------
-  "GET /v1/wallet": {
-    summary: "Retrieve the wallet",
-    description:
-      "Balances are exact minor units as strings — never parse them as JSON numbers.",
-    tags: ["Wallet"],
-    visibility: "public",
-    security: ["secretKey"],
-    response: walletSnapshot,
-  },
-  "GET /v1/wallet/statement": {
-    summary: "Retrieve the wallet statement",
-    tags: ["Wallet"],
-    visibility: "public",
-    security: ["secretKey"],
-  },
-  "POST /v1/wallet/topup": {
-    summary: "Start a wallet top-up",
-    description:
-      "Returns a hosted checkout to redirect to. The wallet is credited only after the provider " +
-      "webhook verifies the payment — the browser redirect alone never credits.",
-    tags: ["Wallet"],
-    visibility: "public",
-    security: ["secretKey"],
-    request: initiateTopUpRequestSchema,
-    errorStatuses: [409],
-  },
-  "GET /v1/wallet/auto-topup": {
-    summary: "Retrieve auto top-up settings",
-    tags: ["Wallet"],
-    visibility: "public",
-    security: ["secretKey"],
-  },
-  "PUT /v1/wallet/auto-topup": {
-    summary: "Update auto top-up settings",
-    tags: ["Wallet"],
-    visibility: "public",
-    security: ["secretKey"],
-    request: updateAutoTopupRequestSchema,
-  },
-  "GET /v1/wallet/payment-method": {
-    summary: "Retrieve the stored payment method",
-    tags: ["Wallet"],
-    visibility: "public",
-    security: ["secretKey"],
-  },
-
-  // ---- Tokens ------------------------------------------------------------------------------
-  "GET /v1/tokens": {
-    summary: "Retrieve token balances",
-    tags: ["Tokens"],
-    visibility: "public",
-    security: ["secretKey"],
-  },
-  "GET /v1/tokens/catalog": {
-    summary: "List purchasable token offers",
-    tags: ["Tokens"],
-    visibility: "public",
-    security: ["secretKey"],
-  },
-  "POST /v1/tokens/purchase": {
-    summary: "Purchase tokens",
-    tags: ["Tokens"],
-    visibility: "public",
-    security: ["secretKey"],
-    errorStatuses: [402, 409],
-    request: purchaseCommercialOfferRequestSchema,
-  },
-  "GET /v1/tokens/purchases": {
-    summary: "List token purchases",
-    tags: ["Tokens"],
-    visibility: "public",
-    security: ["secretKey"],
-  },
-  "GET /v1/tokens/purchases/:reference": {
-    summary: "Retrieve a purchase receipt",
-    tags: ["Tokens"],
-    visibility: "public",
-    security: ["secretKey"],
-    errorStatuses: [404],
-  },
-
   // ---- Webhook endpoint management ---------------------------------------------------------
   "GET /v1/webhooks": {
     summary: "List webhook endpoints",
@@ -121,6 +44,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     security: ["secretKey"],
     request: createWebhookEndpointRequestSchema,
     successStatus: 201,
+    response: createWebhookEndpointResponseSchema,
   },
   "DELETE /v1/webhooks/:id": {
     summary: "Delete a webhook endpoint",
@@ -179,6 +103,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     tags: ["Applications"],
     visibility: "public",
     security: ["secretKey", "operatorToken"],
+    response: listApplicationsResponseSchema,
   },
   "POST /v1/applications": {
     summary: "Create an application",
@@ -189,6 +114,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     security: ["secretKey", "operatorToken"],
     successStatus: 201,
     request: createApplicationRequestSchema,
+    response: applicationDtoSchema,
   },
   "GET /v1/context": {
     summary: "Retrieve the calling key's context",
@@ -205,12 +131,14 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     tags: ["Account"],
     visibility: "public",
     security: ["secretKey"],
+    response: overviewResponse,
   },
   "GET /v1/logs": {
     summary: "List API request logs",
     tags: ["Account"],
     visibility: "public",
     security: ["secretKey"],
+    response: listRequestLogsResponseSchema,
   },
   "GET /v1/sandbox-allowances": {
     summary: "Retrieve sandbox allowance usage",
@@ -219,12 +147,14 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     tags: ["Account"],
     visibility: "public",
     security: ["secretKey"],
+    response: sandboxAllowancesResponse,
   },
   "GET /v1/flows": {
     summary: "List reconciled transaction flows",
     tags: ["Account"],
     visibility: "public",
     security: ["secretKey"],
+    response: transactionsResponse,
   },
   "POST /v1/flows": {
     summary: "Run a transaction flow",
@@ -243,6 +173,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     tags: ["Pricing"],
     visibility: "public",
     security: ["none"],
+    response: publicPricingResponseSchema,
   },
 
   // ---- SMS templates -----------------------------------------------------------------------
@@ -251,6 +182,7 @@ export const PUBLIC_ACCOUNT_BINDINGS: RouteBindings = {
     tags: ["SMS"],
     visibility: "public",
     security: ["secretKey"],
+    response: listSmsTemplatesResponse,
   },
   "POST /v1/sms/templates": {
     summary: "Create an SMS template",

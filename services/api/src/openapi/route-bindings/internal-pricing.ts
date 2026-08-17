@@ -4,8 +4,13 @@ import {
   createCommercialOfferRequestSchema,
   createCommercialOfferVersionRequestSchema,
   createCommercialPackageRequestSchema,
+  createCommercialPackageResponseSchema,
   erasureRequestSchema,
+  listCommercialOffersResponseSchema,
+  listPriceBooksResponseSchema,
+  listProviderCostRatesResponseSchema,
   previewCommercialOfferMarginRequestSchema,
+  priceBookDtoSchema,
   providerCostRateInputSchema,
   publishCommercialOfferVersionRequestSchema,
   retireCommercialOfferVersionRequestSchema,
@@ -29,6 +34,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: listPriceBooksResponseSchema,
   },
   "POST /internal/admin/price-books": {
     summary: "Create a price book",
@@ -37,6 +43,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     security: ["bffInternal"],
     successStatus: 201,
     request: upsertPriceBookRequestSchema,
+    response: priceBookDtoSchema,
   },
   "PUT /internal/admin/price-books/:id": {
     summary: "Update a price book",
@@ -47,6 +54,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: upsertPriceBookRequestSchema,
+    response: priceBookDtoSchema,
   },
   "POST /internal/admin/price-books/assignments/:accountId": {
     summary: "Assign a price book to an account",
@@ -60,6 +68,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: listProviderCostRatesResponseSchema,
   },
   "POST /internal/admin/price-books/provider-costs": {
     summary: "Publish a provider cost rate",
@@ -78,6 +87,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     tags: ["Pricing"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: listCommercialOffersResponseSchema,
   },
   "POST /internal/admin/commercial-offers": {
     summary: "Create a commercial offer",
@@ -129,6 +139,7 @@ export const INTERNAL_PRICING_BINDINGS: RouteBindings = {
     security: ["bffInternal"],
     successStatus: 201,
     request: createCommercialPackageRequestSchema,
+    response: createCommercialPackageResponseSchema,
   },
   "POST /internal/admin/commercial-offers/margin-preview": {
     summary: "Preview offer margin",

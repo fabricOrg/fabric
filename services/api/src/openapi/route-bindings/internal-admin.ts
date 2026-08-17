@@ -4,7 +4,14 @@ import {
   decideSenderRequestSchema,
   goLiveRequestSchema,
   inviteStaffRequestSchema,
+  listAdminSendersResponseSchema,
+  listAuditResponseSchema,
+  listKillSwitchesResponseSchema,
+  listProposalsResponseSchema,
+  listStaffResponseSchema,
+  listTenantsResponseSchema,
   provisionTenantRequestSchema,
+  provisionTenantResponseSchema,
   setSenderCarrierStatusRequestSchema,
   startImpersonationRequestSchema,
   stopImpersonationRequestSchema,
@@ -19,10 +26,12 @@ import type { RouteBindings } from "../route-binding.types.js";
  * Staff control plane, all behind `BffTokenGuard` and reached only through the admin console.
  * Every entry is `internal` — these never reach the published artifact.
  *
- * Every write here now references its zod request contract. READS mostly do not carry a response
- * contract, because these handlers return service-layer types rather than a parsed DTO — the
- * response shape genuinely has no contract to point at. That is visible as an absent schema rather
- * than papered over with a hand-written one, and closing it means giving those endpoints DTOs.
+ * Every write here references its zod request contract, and every list endpoint its response
+ * contract. What remains untyped are the single-resource writes — decide a proposal, toggle a kill
+ * switch, invite a staff user — which return service-layer objects with no exported DTO. That was
+ * established by exhausting the exports of `@app/contracts`, not assumed: there is genuinely
+ * nothing to point at. Closing it means giving those handlers response contracts, and the absent
+ * schema is the honest marker that they lack one.
  */
 export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
   // ---- Tenants -----------------------------------------------------------------------------
@@ -31,6 +40,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: listTenantsResponseSchema,
   },
   "POST /internal/admin/tenants": {
     summary: "Provision a tenant",
@@ -41,6 +51,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     security: ["bffInternal"],
     successStatus: 201,
     request: provisionTenantRequestSchema,
+    response: provisionTenantResponseSchema,
   },
   "PATCH /internal/admin/tenants/:id": {
     summary: "Update tenant status",
@@ -71,12 +82,14 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: listAuditResponseSchema,
   },
   "GET /internal/admin/kill-switches": {
     summary: "List kill switches",
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: listKillSwitchesResponseSchema,
   },
   "POST /internal/admin/kill-switches/:key": {
     summary: "Toggle a kill switch",
@@ -110,6 +123,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     tags: ["Control plane"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: listProposalsResponseSchema,
   },
   "POST /internal/admin/proposals": {
     summary: "File a proposal",
@@ -148,6 +162,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     tags: ["Identity"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: listStaffResponseSchema,
   },
   "POST /internal/admin/staff": {
     summary: "Invite a staff user",
@@ -181,6 +196,7 @@ export const INTERNAL_ADMIN_BINDINGS: RouteBindings = {
     tags: ["Sender IDs"],
     visibility: "internal",
     security: ["bffInternal"],
+    response: listAdminSendersResponseSchema,
   },
   "POST /internal/admin/senders/:id/decide": {
     summary: "Approve or reject a sender ID",

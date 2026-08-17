@@ -60,6 +60,17 @@ rather than silently breaking v1.
 
 ## Known gaps
 
-Routes carrying `TODO(contract)` in the binding files are documented for path, verb, auth and intent
-but have no body schema attached yet — currently the `/internal/*` surface. They are listed, not
-hidden; a missing schema is visible in the document rather than implying the endpoint takes nothing.
+**60 of 72 writes carry a request contract; 75 of the 122 operations that return a body carry a
+response contract.** The gaps are deliberate and each is one of four kinds:
+
+- **no body by design** — 204 deletes, `clone`, `archive`, mark-read, template-sync;
+- **not our shape** — the five provider webhook ingress routes carry Meta's, Paystack's, Arkesel's
+  and SNS's payloads;
+- **no DTO exists** — mostly single-resource admin writes returning service-layer objects. Verified
+  by exhausting the exports of `@app/contracts`, not assumed;
+- **two recorded defects**, marked `TODO(contract)` at the binding with the reason:
+  `POST /v1/api-keys` parses its body with an unchecked cast and has no DTO at all, and
+  `POST /v1/flows` resolves a discriminated union at runtime on `action`.
+
+A missing schema is visible in the document rather than implying the endpoint takes or returns
+nothing. No shape is ever hand-written to fill a gap — that is the failure this pipeline replaced.
