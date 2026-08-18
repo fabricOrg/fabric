@@ -1,3 +1,4 @@
+import type { IncomingMessage } from "node:http";
 import {
   type CallHandler,
   type ExecutionContext,
@@ -144,7 +145,11 @@ function requestIdOf(request: {
 }): string {
   if (typeof request.id === "string" && request.id.length > 0)
     return request.id;
-  return resolveRequestId(
-    request as unknown as Parameters<typeof resolveRequestId>[0],
-  );
+  // `resolveRequestId` wants `Pick<IncomingMessage, "headers">`, whose index signature is narrower
+  // than what Fastify hands us. Widening the ARGUMENT type is the honest form; the `as unknown as`
+  // that used to sit here bypassed the check rather than satisfying it, and this file is otherwise
+  // cast-free.
+  return resolveRequestId({
+    headers: request.headers as IncomingMessage["headers"],
+  });
 }

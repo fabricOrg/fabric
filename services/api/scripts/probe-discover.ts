@@ -83,9 +83,12 @@ export async function discover(
      * needed it is reported SKIPPED — one absent fixture must not abort the whole probe, which is
      * what a raw throw here did the first time it hit a renamed table.
      */
-    const one = async (query: string): Promise<string> => {
+    const one = async (
+      query: string,
+      params: readonly string[] = [],
+    ): Promise<string> => {
       try {
-        const rows = await sql.unsafe<{ id: string }[]>(query);
+        const rows = await sql.unsafe<{ id: string }[]>(query, [...params]);
         return rows[0]?.id ?? "";
       } catch {
         return "";
@@ -96,11 +99,16 @@ export async function discover(
     );
     if (!tenantId)
       throw new Error("no tenant in this database — run pnpm dev:seed");
+    // Parameterised, not interpolated. `tenantId` comes from our own `accounts` table so this was
+    // never exploitable — but an interpolated-uuid query is a pattern that gets copied to a place
+    // where the value is user-supplied, and the binding is right there.
     const applicationId = await one(
-      `select id from applications where tenant_id = '${tenantId}' limit 1`,
+      "select id from applications where tenant_id = $1 limit 1",
+      [tenantId],
     );
     const environmentId = await one(
-      `select id from environments where tenant_id = '${tenantId}' and type = 'sandbox' limit 1`,
+      "select id from environments where tenant_id = $1 and type = 'sandbox' limit 1",
+      [tenantId],
     );
 
     const minted = await post(

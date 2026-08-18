@@ -78,8 +78,16 @@ export const createApiKeyRequest = z.object({
   /**
    * OPERATOR PATH ONLY. A tenant-authenticated caller's tenant comes from its credential and this
    * field is ignored — it exists so staff tooling can mint into a named workspace.
+   *
+   * `.describe()` and not just a JSDoc comment: the comment does not survive `z.toJSONSchema`, so
+   * the CUSTOMER artifact published a bare uuid named `tenantId` on the credential-minting route
+   * with no explanation at all. A reader concludes they can mint a key into any workspace by id.
+   * The same "accuracy to the wrong audience" argument that strips `operatorToken` from this exact
+   * operation applies to its body, and stripping the scheme while leaving this was half a fix.
    */
-  tenantId: UUID_SHAPE.optional(),
+  tenantId: UUID_SHAPE.optional().describe(
+    "Operator tooling only. Ignored for API-key and session callers, whose workspace comes from their credential.",
+  ),
 });
 export type CreateApiKeyRequest = z.infer<typeof createApiKeyRequest>;
 

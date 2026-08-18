@@ -6615,6 +6615,7 @@
             "maximum": 9007199254740991
           },
           "tenantId": {
+            "description": "Operator tooling only. Ignored for API-key and session callers, whose workspace comes from their credential.",
             "type": "string",
             "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
           }
