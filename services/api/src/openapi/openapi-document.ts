@@ -1,10 +1,9 @@
-import { enveloped } from "@app/contracts";
 import {
   ALWAYS_POSSIBLE_ERRORS,
   errorEnvelopeSchema,
   errorResponse,
 } from "./openapi-errors.js";
-import { toRequestSchema, toResponseSchema } from "./openapi-schema.js";
+import { schemaRef } from "./openapi-schema.js";
 import type {
   RouteBinding,
   RouteBindings,
@@ -87,6 +86,7 @@ function operationFor(
   nestPath: string,
   publicOnly: boolean,
   routeLabel: string,
+  components: Map<string, Record<string, unknown>>,
 ): Record<string, unknown> {
   const parameters: Record<string, unknown>[] = pathParameters(nestPath);
   if (binding.query) {
@@ -97,7 +97,7 @@ function operationFor(
       name: "query",
       in: "query",
       required: false,
-      schema: toRequestSchema(binding.query),
+      schema: schemaRef(binding.query, "request", components),
       style: "form",
       explode: true,
     });
@@ -115,9 +115,22 @@ function operationFor(
                 // JSON successes are wrapped by ResponseEnvelopeInterceptor at runtime, so the
                 // document wraps them too. Applying it HERE rather than in each binding is what
                 // keeps the spec and the interceptor from ever disagreeing.
-                schema: toResponseSchema(
-                  isJson ? enveloped(binding.response) : binding.response,
-                ),
+                // The envelope wrapper itself is anonymous, so it inlines and its `data` member
+                // carries the $ref — the Models entry stays the contract, not the wrapper.
+                schema: isJson
+                  ? {
+                      type: "object",
+                      required: ["data", "request_id"],
+                      properties: {
+                        data: schemaRef(
+                          binding.response,
+                          "response",
+                          components,
+                        ),
+                        request_id: { type: "string" },
+                      },
+                    }
+                  : schemaRef(binding.response, "response", components),
               },
             },
           }
@@ -149,7 +162,9 @@ function operationFor(
           requestBody: {
             required: true,
             content: {
-              "application/json": { schema: toRequestSchema(binding.request) },
+              "application/json": {
+                schema: schemaRef(binding.request, "request", components),
+              },
             },
           },
         }
@@ -199,6 +214,7 @@ export function buildOpenApiDocument(
   const paths: Record<string, Record<string, unknown>> = {};
   const usedTags = new Set<string>();
   const usedSchemes = new Set<string>();
+  const components = new Map<string, Record<string, unknown>>();
 
   for (const route of routes) {
     const binding = bindings[routeKey(route)];
@@ -212,6 +228,7 @@ export function buildOpenApiDocument(
       route.path,
       publicOnly,
       routeKey(route),
+      components,
     );
     paths[path][route.method.toLowerCase()] = operation;
     for (const tag of binding.tags) usedTags.add(tag);
@@ -255,7 +272,13 @@ export function buildOpenApiDocument(
           usedSchemes.has(name),
         ),
       ),
-      schemas: { ErrorEnvelope: errorEnvelopeSchema() },
+      schemas: {
+        ErrorEnvelope: errorEnvelopeSchema(),
+        // Sorted so the artifact is byte-stable regardless of route iteration order.
+        ...Object.fromEntries(
+          [...components].sort(([a], [b]) => a.localeCompare(b)),
+        ),
+      },
     },
   };
 }

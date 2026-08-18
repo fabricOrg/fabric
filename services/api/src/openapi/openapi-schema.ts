@@ -1,4 +1,5 @@
 import { type ZodType, z } from "zod";
+import { componentNameFor } from "./schema-names.js";
 
 /**
  * zod -> JSON Schema. The contracts in `@app/contracts` are the source of truth for every shape on
@@ -71,4 +72,27 @@ function convert(
   // and some generators choke on it. Strip it from the root only; nested `$defs` never carry one.
   delete generated.$schema;
   return generated;
+}
+
+/**
+ * Named contracts become `components.schemas` entries and are referenced; anything anonymous stays
+ * inlined. That gives the reference a Models section a reader can actually browse, and shrinks the
+ * document, without inventing names for schemas that have none.
+ */
+export function schemaRef(
+  schema: ZodType,
+  direction: "request" | "response",
+  components: Map<string, Record<string, unknown>>,
+): Record<string, unknown> {
+  const name = componentNameFor(schema);
+  const rendered =
+    direction === "request"
+      ? toRequestSchema(schema)
+      : toResponseSchema(schema);
+  if (!name) return rendered;
+  // Request and response renderings of the SAME contract differ (io: input vs output), so they
+  // cannot share one component. Suffixing keeps both honest rather than letting one overwrite.
+  const key = direction === "request" ? `${name}Input` : name;
+  if (!components.has(key)) components.set(key, rendered);
+  return { $ref: `#/components/schemas/${key}` };
 }
