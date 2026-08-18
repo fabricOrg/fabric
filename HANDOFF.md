@@ -1,6 +1,6 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-13. Point-in-time. **Verify against code and git before treating any of it as
+_Snapshot: 2026-08-18. Point-in-time. **Verify against code and git before treating any of it as
 fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 [CLAUDE.md](./CLAUDE.md) (how we build) and `docs/`. Superseded entries live in
 [docs/HANDOFF-ARCHIVE.md](./docs/HANDOFF-ARCHIVE.md)._
@@ -14,20 +14,86 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 ## Where things stand
 
-| ref | sha | note |
+| ref | through | note |
 | --- | --- | --- |
-| `origin/dev` | `5b5eeaf` | through #302 |
-| `origin/testing` | `ede8692` | promoted 2026-08-13. **Level with `dev`.** 151 migrations, none added all day. |
+| `origin/dev` | #307, #309, #308 | the OpenAPI surface, the contract-coverage fix, this snapshot |
+| `origin/testing` | same | promoted 2026-08-18, **level with `dev`** |
 
-### Start here — nothing is open; verify the deploy, then pick from Open work
+Deliberately no shas here: every one written in this table has been stale within the day, and a
+wrong sha is worse than none because it reads as checked. `git ls-remote --heads origin dev testing`
+is authoritative and takes a second.
 
-Everything merged: #297 → #302. No PR of ours is waiting. Dependabot #279–#282 and the old
-#200/#203/#214 are untouched and unrelated.
+**On reading a green deploy.** `Deploy testing (Vercel + Render)` is the real one — confirm all six
+of its jobs (Gate, Migrate, Render · api, and the three Vercel apps). The plain `Deploy` workflow
+ALSO reports success while skipping 7 of its 8 jobs; it is the gated AWS/ECS path and is never
+evidence. Counting it was this snapshot's own first mistake.
 
-**First thing to check:** `ede8692` was the last promotion and its deploy was still running when the
-session ended. Confirm all six jobs of `Deploy testing (Vercel + Render)` — the plain `Deploy` greens
-while skipping every job, so it is not evidence. Then confirm a WhatsApp send still works (below):
-that promotion changed the seeded default price AND both pricing write paths.
+### Start here — confirm the deploy, then read Open work below (which is NOT empty)
+
+`OPERATOR_TOKEN`, `WEBHOOK_INGRESS_TOKEN` and `OPENAPI_RESPONSE_VALIDATION` were all set on the
+Render service by hand on 2026-08-18. **The last one is worth confirming rather than assuming**, and
+one command does it — no session here has ever held Render's secrets, so it has never been verified
+from this side:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H "authorization: Bearer sk_test_…" \
+  "https://fabric-jezz.onrender.com/v1/logs?limit=999"
+```
+
+**400** means strict is live. **200** means it is not. `limit` is published as `maximum: 100`, so 999
+violates the contract: strict rejects it, `warn` only logs. (Sanity-check with `?limit=10`, which
+must be 200 either way — a 401 is the key, not the mode.) The discriminator was verified by booting
+the same build under each mode, not reasoned out.
+
+Why it matters: `resolveValidationMode` degrades to `warn` when `NODE_ENV=production`, which Render
+sets for an unrelated reason (`PLUGIN_MASTER_KEY` derivation must not fall back to the dev key). In
+`warn`, `contracts:probe` against testing reports **"0 contract violations" having checked nothing**
+— and CLAUDE.md §12 cites strict validation as exactly what makes a 2xx count as proof. Nothing
+errors; the claim just becomes unfalsifiable.
+
+A caveat worth carrying: `render.yaml` declares all three, but a blueprint is **believed** not to be
+retro-applied to an already-provisioned service — the `PUBLIC_CORS_ALLOWED_ORIGINS` episode is the
+only in-repo evidence, and it has not been tested directly. Treat it as the reason to check the
+dashboard, not as a settled fact.
+
+Verified live after the promotion (§9 — the artefact, not the workflow's report):
+
+| check | result |
+| --- | --- |
+| `GET /health` | 200 |
+| `GET /health/z` | **404** — the array-path alias is gone, so the new code is live |
+| `GET /docs` with no credential | **401** + `WWW-Authenticate: Basic` — 401 rather than 404 proves `OPERATOR_TOKEN` is set and the gate is fail-closed |
+
+### QA has an API reference (2026-08-18, #307)
+
+`https://fabric-jezz.onrender.com/docs` — HTTP Basic, **any username**, `OPERATOR_TOKEN` as the
+password. It serves the FULL document (`/internal/admin/*` included), which is why it is gated.
+Locally use `pnpm docs` instead: no token, no API, no database.
+
+The document is derived, not written: routes from decorator metadata, schemas from the zod contracts.
+`assertCoverage` fails the build on an unbound route, `assertRefsResolve` refuses to emit a document
+whose pointers do not resolve, and every JSON response is wrapped in `{ data, request_id }` by an
+interceptor so the runtime cannot drift from the spec. 140 routes bound; **133 of 133** endpoints
+that return a body carry a response contract, the other 7 being bodiless `204` deletes.
+
+That figure was "129/129" until #309, and the difference is the lesson rather than the arithmetic:
+the denominator had been computed from the endpoints that HAD schemas, so it could not report
+anything but complete. The four it hid were `GET /health`, `GET /health/readyz`, `GET /docs` and
+`GET /docs/openapi.json` — the endpoint the deploy pipeline polls as its proof a release is live,
+and the document describing every other contract, both among them.
+
+`GET /health/readyz` now answers **503 `not_ready`** carrying the standard error envelope; it used to
+answer 503 with an ad-hoc `{ status, db }` object that appeared in no schema. Proven by pointing an
+instance at an unreachable database: `/health` stayed 200, so the dependency-free guarantee holds,
+and readyz returned the documented envelope.
+
+**What the independent review caught, since it is the pattern worth remembering:** the published
+customer artifact had **175 `$ref`s that resolved to nothing** — including the money field on
+`GET /v1/wallet` — and every gate was green, because `openapi:check` byte-compares and a
+*consistently* broken document passes forever. The fix was a check that did not exist, not a code
+change. Same shape as `GET /health/z`: a live route in neither artifact, invisible because
+`joinPath` rendered Nest's array path form as `""`.
 
 Promotion is a **real merge** (`git merge --no-ff origin/dev` — testing carries merge commits and
 this repo's git config is `ff = only`, so a plain `git merge dev` aborts with "Not possible to
