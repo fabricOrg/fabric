@@ -9169,12 +9169,24 @@
               "additionalProperties": false
             }
           },
+          "next_cursor": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "request_id": {
             "type": "string"
           }
         },
         "required": [
           "deliveries",
+          "next_cursor",
           "request_id"
         ],
         "additionalProperties": false,
@@ -10898,7 +10910,8 @@
           },
           "cursor": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 512
           }
         }
       },
