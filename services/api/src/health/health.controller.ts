@@ -15,7 +15,10 @@ import { APP_DB } from "../db/db.module.js";
 export class HealthController {
   constructor(@Inject(APP_DB) private readonly db: AppDb) {}
 
-  @Get(["", "/z"])
+  // `@Get(["", "/z"])` here served `/health/z`, not `/healthz` — the alias it was meant to add
+  // never existed, nothing ever called it, and being array-form it was invisible to the OpenAPI
+  // generator. Removed rather than documented. (breaking, pre-prod, §11)
+  @Get()
   live(): { status: "ok" } {
     return { status: "ok" };
   }

@@ -37,11 +37,23 @@ services:
         sync: false
       - key: OPERATOR_TOKEN
         sync: false
-      # Provider ingress secret for the delivery-receipt callbacks (`/v1/webhooks/*`). Fails CLOSED:
+      # Provider ingress secret for the carrier callbacks (`/webhooks/dlr/*`, `/webhooks/whatsapp/*`
+      # — NOT `/v1/webhooks`, which is the customer's own webhook-endpoint CRUD). Fails CLOSED:
       # unset means every carrier DLR is rejected 401, so delivery status silently never advances
       # past `accepted`. QA cannot exercise the documented callback routes without it.
       - key: WEBHOOK_INGRESS_TOKEN
         sync: false
+      # Testing validates BOTH directions STRICTLY, overriding the production default.
+      #
+      # `resolveValidationMode` degrades to `warn` when NODE_ENV=production so a slightly wrong
+      # schema cannot 500 the data plane. That posture is right for customer traffic and wrong
+      # here: this is the stakeholder-testing service, and NODE_ENV=production is set for an
+      # unrelated reason (PLUGIN_MASTER_KEY derivation must not fall back to the dev key). Left at
+      # the default, `contracts:probe` against this host would report "0 contract violations"
+      # having checked nothing — CLAUDE.md §12 calls a 2xx under strict validation "proven", and
+      # that is the one claim this environment exists to support.
+      - key: OPENAPI_RESPONSE_VALIDATION
+        value: strict
       # PII vault key material (index/data keys derive from the one master key)
       - key: PII_MASTER_KEY
         sync: false

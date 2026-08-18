@@ -37,7 +37,9 @@ const page = `<!doctype html>
   <title>${info.title}</title></head>
   <body>
     <div id="app"></div>
-    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.65.1"
+            integrity="sha384-NAMzfHXRsxRYhcKmRnZGVLvlBeXTWtpYd0jWgeZ7fk89X95GIJBK1H4bUwkP4IZJ"
+            crossorigin="anonymous"></script>
     <script>Scalar.createApiReference('#app', { url: '/openapi.json' });</script>
   </body>
 </html>`;
@@ -50,7 +52,12 @@ createServer((req, res) => {
   }
   res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
   res.end(page);
-}).listen(PORT, () => {
+  // BIND LOCALHOST ONLY. Without a host, node listens on 0.0.0.0 — and the default artifact here is
+  // the INTERNAL one: every /internal/* path, the three staff/service header names, the env-var
+  // names. On any shared or café network that made the document `DocsAccessGuard` exists to protect
+  // available to anyone who guessed the port. This viewer has no gate by design, so the gate is the
+  // interface it binds.
+}).listen(PORT, "127.0.0.1", () => {
   const url = `http://localhost:${PORT}`;
   console.log(`\n  ${info.title}`);
   console.log(`  ${Object.keys(paths).length} paths  ·  ${which} artifact\n`);

@@ -282,17 +282,20 @@ describe("security schemes in the public artifact", () => {
     },
   };
 
-  it("strips STAFF schemes from public operations even where the guard accepts them", () => {
+  it("strips STAFF and SERVICE schemes from public operations even where the guard accepts them", () => {
     // OperatorOrTenantGuard really does take an operator token on ten /v1 routes, so listing it is
     // accurate — and tells an SDK reader that a credential-minting route accepts a cross-tenant
-    // staff token, naming the header to send it in.
+    // staff token, naming the header to send it in. `tenantToken` goes for the same reason one step
+    // removed: a BFF mints it for itself, and the scheme's own description says it is not issuable
+    // by customers, so publishing it offered readers a credential they can never hold.
     const doc = buildOpenApiDocument(routes, bindings, { ...OPTIONS });
     const op = operation(doc, "/v1/keys", "get") as {
       security: Record<string, unknown>[];
     };
     const schemes = op.security.flatMap((entry) => Object.keys(entry));
-    expect(schemes).toEqual(["secretKey", "tenantToken"]);
+    expect(schemes).toEqual(["secretKey"]);
     expect(schemes).not.toContain("operatorToken");
+    expect(schemes).not.toContain("tenantToken");
   });
 
   it("publishes only the schemes the included operations actually use", () => {
@@ -302,10 +305,7 @@ describe("security schemes in the public artifact", () => {
     const components = doc.components as {
       securitySchemes: Record<string, unknown>;
     };
-    expect(Object.keys(components.securitySchemes)).toEqual([
-      "secretKey",
-      "tenantToken",
-    ]);
+    expect(Object.keys(components.securitySchemes)).toEqual(["secretKey"]);
     expect(JSON.stringify(doc)).not.toContain("x-operator-token");
   });
 

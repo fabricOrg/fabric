@@ -58,11 +58,14 @@ function convert(
   const generated = z.toJSONSchema(schema, {
     target: TARGET,
     io,
-    // Shapes are inlined per operation, with genuinely repeated sub-schemas lifted into a local
-    // `$defs` block. The alternative — one shared `components.schemas` — needs a stable NAME per
-    // contract, and zod schemas carry no name at runtime. Inlining trades artifact size for the
-    // guarantee that no two operations can silently share a wrong definition.
-    reused: "ref",
+    // Repeats are INLINED, not lifted. `reused: "ref"` produced a `$defs` block local to each
+    // converted schema and pointed at it with `#/$defs/…` — a fragment that resolves against the
+    // DOCUMENT root, where no such block exists. 175 pointers in the public artifact dangled that
+    // way, including the money field on `GET /v1/wallet`. Inlining costs bytes and removes the
+    // failure mode entirely; it is also what the old comment here already claimed was happening.
+    reused: "inline",
+    // Cycles cannot be inlined by definition, so these are the only `$defs` that survive. Their
+    // pointers are repaired in `schemaRef`.
     cycles: "ref",
     unrepresentable: "any",
     override: overrideUnrepresentable,
@@ -89,10 +92,38 @@ export function schemaRef(
     direction === "request"
       ? toRequestSchema(schema)
       : toResponseSchema(schema);
-  if (!name) return rendered;
+  if (!name) {
+    if (rendered.$defs)
+      // Refuse rather than emit pointers that cannot resolve. An anonymous schema is inlined into
+      // the operation, so its `$defs` have no addressable home — and a dangling `$ref` is exactly
+      // the defect this repair exists to prevent.
+      throw new Error(
+        "An anonymous contract contains a cycle, so its `$defs` have nowhere addressable to live. " +
+          "Export it from @app/contracts so it becomes a named component.",
+      );
+    return rendered;
+  }
   // Request and response renderings of the SAME contract differ (io: input vs output), so they
   // cannot share one component. Suffixing keeps both honest rather than letting one overwrite.
   const key = direction === "request" ? `${name}Input` : name;
+  // The surviving cycle `$defs` travel WITH the schema into `components.schemas.<key>`, so their
+  // pointers must address them THERE. Left as `#/$defs/…` they resolve against the document root
+  // and find nothing — which a byte-comparing `openapi:check` cannot see.
+  repointDefs(rendered, `#/components/schemas/${key}`);
   if (!components.has(key)) components.set(key, rendered);
   return { $ref: `#/components/schemas/${key}` };
+}
+
+/** Rewrites every `#/$defs/X` beneath `node` to `<base>/$defs/X`, the defs' own refs included. */
+function repointDefs(node: unknown, base: string): void {
+  if (Array.isArray(node)) {
+    for (const item of node) repointDefs(item, base);
+    return;
+  }
+  if (!node || typeof node !== "object") return;
+  const record = node as Record<string, unknown>;
+  const ref = record.$ref;
+  if (typeof ref === "string" && ref.startsWith("#/$defs/"))
+    record.$ref = `${base}/$defs/${ref.slice("#/$defs/".length)}`;
+  for (const value of Object.values(record)) repointDefs(value, base);
 }

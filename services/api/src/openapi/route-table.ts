@@ -95,12 +95,21 @@ function routesFromClass(target: unknown, name: string): DiscoveredRoute[] {
           "Replace @All() with the verbs it actually serves.",
       );
     }
+    const handlerPath = Reflect.getMetadata(PATH_METADATA, descriptor.value);
+    if (Array.isArray(handlerPath) || Array.isArray(controllerPath)) {
+      // Nest accepts `@Get(["", "/z"])`. `joinPath` silently rendered a non-string as "", so the
+      // FIRST alias was documented and the rest became live, unbound, unvalidated routes that
+      // `assertCoverage` could not see — `GET /health/z` shipped exactly that way. Refuse, for the
+      // same reason @All() is refused: a route the generator cannot see is the failure this
+      // pipeline exists to prevent, and silence is how it recurs.
+      throw new Error(
+        `${name}.${handler} declares an array of paths. Give each path its own handler so every ` +
+          "route is discoverable, bound, and validated.",
+      );
+    }
     routes.push({
       method: verbName,
-      path: joinPath(
-        controllerPath,
-        Reflect.getMetadata(PATH_METADATA, descriptor.value),
-      ),
+      path: joinPath(controllerPath, handlerPath),
       controller: name,
       handler,
     });

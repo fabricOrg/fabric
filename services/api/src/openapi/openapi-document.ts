@@ -3,6 +3,7 @@ import {
   errorEnvelopeSchema,
   errorResponse,
 } from "./openapi-errors.js";
+import { assertRefsResolve } from "./openapi-refs.js";
 import { schemaRef } from "./openapi-schema.js";
 import type {
   RouteBinding,
@@ -104,7 +105,12 @@ function operationFor(
   }
 
   const successType = binding.successContentType ?? "application/json";
-  const isJson = successType === "application/json";
+  // `envelope: false` must be honoured HERE too. The interceptor checks `envelopeDisabledFor` before
+  // anything else, so a binding that opts out and also declares a response contract would be
+  // published as `{ data, request_id }` while the runtime serves the body bare — the exact
+  // spec/runtime divergence the wrapping below is meant to make impossible.
+  const isJson =
+    successType === "application/json" && binding.envelope !== false;
   const responses: Record<string, unknown> = {
     [String(binding.successStatus ?? 200)]: {
       description: "Success.",
@@ -236,7 +242,7 @@ export function buildOpenApiDocument(
       for (const scheme of Object.keys(entry)) usedSchemes.add(scheme);
   }
 
-  return {
+  const document = {
     openapi: "3.1.0",
     info: {
       title: options.title,
@@ -281,4 +287,7 @@ export function buildOpenApiDocument(
       },
     },
   };
+  // Emitting a document whose pointers do not resolve is worse than failing: it looks complete.
+  assertRefsResolve(document);
+  return document;
 }

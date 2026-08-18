@@ -172,9 +172,22 @@ async function probe(): Promise<void> {
     for (const line of skipped) console.log(`  ${line}`);
   }
 
-  // Only a CONTRACT violation fails the run. A 404 for a resource this environment does not have,
-  // or a 401 for a credential it was not given, says nothing about the specification.
+  // A CONTRACT violation fails the run. A 404 for a resource this environment does not have, or a
+  // 401 for a credential it was not given, says nothing about the specification, so those are
+  // reported and not failed.
   if (contractViolations > 0) process.exitCode = 1;
+
+  // And so does proving NOTHING. `contractViolations` counts violations found, so it is zero both
+  // when everything checked out and when nothing was ever checked — run this with the wrong
+  // credentials and every route 401s to a clean exit 0. §12 defines proven as "returned 2xx"; a run
+  // without a single 2xx has not met that bar and must not read as success.
+  if (ok.length === 0) {
+    console.error(
+      "\nPROVED NOTHING: no documented GET returned 2xx. Check the API is running and that " +
+        "BFF_INTERNAL_TOKEN / OPERATOR_TOKEN match the values it was started with.",
+    );
+    process.exitCode = 1;
+  }
 }
 
 await main();

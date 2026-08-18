@@ -70,9 +70,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -151,9 +148,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -232,9 +226,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -311,9 +302,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -421,9 +409,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -502,9 +487,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -581,9 +563,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -671,9 +650,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -750,9 +726,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -841,9 +814,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -922,9 +892,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -1002,9 +969,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -1093,9 +1057,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -1203,9 +1164,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -1303,9 +1261,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -1381,9 +1336,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -1481,9 +1433,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -1573,9 +1522,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -1651,9 +1597,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -1741,9 +1684,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -1820,9 +1760,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -1930,9 +1867,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -2030,9 +1964,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -2130,9 +2061,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -2222,9 +2150,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -2302,9 +2227,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -2381,9 +2303,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -2471,9 +2390,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -2628,9 +2544,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -2708,9 +2621,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -2787,9 +2697,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -2877,9 +2784,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -2977,9 +2881,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -3077,9 +2978,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -3155,9 +3053,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -3245,9 +3140,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -3325,9 +3217,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -3405,9 +3294,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -3485,9 +3371,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -3585,9 +3468,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -3666,9 +3546,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -3746,9 +3623,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -3824,9 +3698,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -3914,9 +3785,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -3994,9 +3862,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -4062,9 +3927,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "responses": {
@@ -4141,9 +4003,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -4231,9 +4090,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -4341,9 +4197,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -4432,9 +4285,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -4542,9 +4392,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -4642,9 +4489,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -4732,9 +4576,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -4833,9 +4674,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -4934,9 +4772,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -5025,9 +4860,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -5136,9 +4968,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -5248,9 +5077,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -5358,9 +5184,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -5468,9 +5291,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -5568,9 +5388,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -5659,9 +5476,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "requestBody": {
@@ -5759,9 +5573,6 @@
         "security": [
           {
             "secretKey": []
-          },
-          {
-            "tenantToken": []
           }
         ],
         "parameters": [
@@ -5866,12 +5677,6 @@
         "scheme": "bearer",
         "bearerFormat": "sk_test_… or sk_live_…",
         "description": "Customer API key. Server-to-server only — these must never reach a browser. The prefix encodes the environment, and scopes are per-key."
-      },
-      "tenantToken": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "short-lived minted tenant token",
-        "description": "Minted per request by a BFF for data-plane calls (ADR-0003). Short-lived and scoped to one tenant; not issuable by customers."
       }
     },
     "schemas": {
@@ -5916,17 +5721,6 @@
       "AddMessageDefinitionVersionRequestInput": {
         "oneOf": [
           {
-            "$ref": "#/$defs/__schema0"
-          },
-          {
-            "$ref": "#/$defs/__schema10"
-          },
-          {
-            "$ref": "#/$defs/__schema16"
-          }
-        ],
-        "$defs": {
-          "__schema0": {
             "type": "object",
             "properties": {
               "channel": {
@@ -5934,7 +5728,31 @@
                 "const": "sms"
               },
               "variable_schema": {
-                "$ref": "#/$defs/__schema1"
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "$ref": "#/components/schemas/AddMessageDefinitionVersionRequestInput/$defs/__schema0"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "properties"
+                ],
+                "additionalProperties": false
               },
               "content": {
                 "type": "object",
@@ -5956,7 +5774,8 @@
                     "default": {},
                     "type": "object",
                     "propertyNames": {
-                      "$ref": "#/$defs/__schema9"
+                      "type": "string",
+                      "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
                     },
                     "additionalProperties": {
                       "type": "object",
@@ -5979,7 +5798,8 @@
                 ]
               },
               "default_locale": {
-                "$ref": "#/$defs/__schema9"
+                "type": "string",
+                "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
               },
               "sender_id": {
                 "type": "string",
@@ -5995,23 +5815,227 @@
               "sender_id"
             ]
           },
-          "__schema1": {
-            "$ref": "#/$defs/__schema6"
+          {
+            "type": "object",
+            "properties": {
+              "channel": {
+                "type": "string",
+                "const": "email"
+              },
+              "variable_schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "$ref": "#/components/schemas/AddMessageDefinitionVersionRequestInput/$defs/__schema0"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "properties"
+                ],
+                "additionalProperties": false
+              },
+              "content": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "maxLength": 320,
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 998
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200000
+                  },
+                  "html": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 400000
+                  },
+                  "locales": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 998
+                        },
+                        "text": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200000
+                        },
+                        "html": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 400000
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "subject"
+                ]
+              },
+              "default_locale": {
+                "type": "string",
+                "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+              }
+            },
+            "required": [
+              "channel",
+              "variable_schema",
+              "content",
+              "default_locale"
+            ]
           },
-          "__schema2": {
-            "type": "string",
-            "const": "object"
-          },
-          "__schema3": {
+          {
+            "type": "object",
+            "properties": {
+              "channel": {
+                "type": "string",
+                "const": "whatsapp"
+              },
+              "variable_schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "$ref": "#/components/schemas/AddMessageDefinitionVersionRequestInput/$defs/__schema0"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "properties"
+                ],
+                "additionalProperties": false
+              },
+              "content": {
+                "type": "object",
+                "properties": {
+                  "template_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "template_language": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 35
+                  },
+                  "template_category": {
+                    "type": "string",
+                    "enum": [
+                      "marketing",
+                      "utility",
+                      "authentication"
+                    ]
+                  },
+                  "parameters": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    }
+                  },
+                  "locales": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "template_language": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 35
+                        }
+                      },
+                      "required": [
+                        "template_language"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "template_name",
+                  "template_language",
+                  "template_category"
+                ]
+              },
+              "default_locale": {
+                "type": "string",
+                "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+              }
+            },
+            "required": [
+              "channel",
+              "variable_schema",
+              "content",
+              "default_locale"
+            ]
+          }
+        ],
+        "$defs": {
+          "__schema0": {
             "type": "object",
             "propertyNames": {
               "type": "string"
             },
             "additionalProperties": {
-              "$ref": "#/$defs/__schema4"
+              "$ref": "#/components/schemas/AddMessageDefinitionVersionRequestInput/$defs/__schema1"
             }
           },
-          "__schema4": {
+          "__schema1": {
             "oneOf": [
               {
                 "type": "object",
@@ -6035,7 +6059,7 @@
                     "maxItems": 64,
                     "type": "array",
                     "items": {
-                      "$ref": "#/$defs/__schema5"
+                      "type": "string"
                     }
                   },
                   "format": {
@@ -6118,7 +6142,7 @@
                     "const": "array"
                   },
                   "items": {
-                    "$ref": "#/$defs/__schema4"
+                    "$ref": "#/components/schemas/AddMessageDefinitionVersionRequestInput/$defs/__schema1"
                   },
                   "maxItems": {
                     "type": "integer",
@@ -6139,219 +6163,32 @@
                 "additionalProperties": false
               },
               {
-                "$ref": "#/$defs/__schema6"
-              }
-            ]
-          },
-          "__schema5": {
-            "type": "string"
-          },
-          "__schema6": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema2"
-              },
-              "properties": {
-                "$ref": "#/$defs/__schema3"
-              },
-              "required": {
-                "$ref": "#/$defs/__schema7"
-              },
-              "additionalProperties": {
-                "$ref": "#/$defs/__schema8"
-              }
-            },
-            "required": [
-              "type",
-              "properties"
-            ],
-            "additionalProperties": false
-          },
-          "__schema7": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "__schema8": {
-            "type": "boolean",
-            "const": false
-          },
-          "__schema9": {
-            "type": "string",
-            "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
-          },
-          "__schema10": {
-            "type": "object",
-            "properties": {
-              "channel": {
-                "type": "string",
-                "const": "email"
-              },
-              "variable_schema": {
-                "$ref": "#/$defs/__schema1"
-              },
-              "content": {
                 "type": "object",
                 "properties": {
-                  "from": {
-                    "$ref": "#/$defs/__schema11"
-                  },
-                  "subject": {
-                    "$ref": "#/$defs/__schema12"
-                  },
-                  "text": {
-                    "$ref": "#/$defs/__schema13"
-                  },
-                  "html": {
-                    "$ref": "#/$defs/__schema14"
-                  },
-                  "locales": {
-                    "$ref": "#/$defs/__schema15"
-                  }
-                },
-                "required": [
-                  "subject"
-                ]
-              },
-              "default_locale": {
-                "$ref": "#/$defs/__schema9"
-              }
-            },
-            "required": [
-              "channel",
-              "variable_schema",
-              "content",
-              "default_locale"
-            ]
-          },
-          "__schema11": {
-            "type": "string",
-            "maxLength": 320,
-            "format": "email",
-            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-          },
-          "__schema12": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 998
-          },
-          "__schema13": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200000
-          },
-          "__schema14": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 400000
-          },
-          "__schema15": {
-            "default": {},
-            "type": "object",
-            "propertyNames": {
-              "$ref": "#/$defs/__schema9"
-            },
-            "additionalProperties": {
-              "type": "object",
-              "properties": {
-                "subject": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 998
-                },
-                "text": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 200000
-                },
-                "html": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 400000
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "__schema16": {
-            "type": "object",
-            "properties": {
-              "channel": {
-                "type": "string",
-                "const": "whatsapp"
-              },
-              "variable_schema": {
-                "$ref": "#/$defs/__schema1"
-              },
-              "content": {
-                "type": "object",
-                "properties": {
-                  "template_name": {
+                  "type": {
                     "type": "string",
-                    "minLength": 1,
-                    "maxLength": 512
+                    "const": "object"
                   },
-                  "template_language": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 35
+                  "properties": {
+                    "$ref": "#/components/schemas/AddMessageDefinitionVersionRequestInput/$defs/__schema0"
                   },
-                  "template_category": {
-                    "type": "string",
-                    "enum": [
-                      "marketing",
-                      "utility",
-                      "authentication"
-                    ]
-                  },
-                  "parameters": {
-                    "default": [],
+                  "required": {
                     "type": "array",
                     "items": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 128
+                      "type": "string"
                     }
                   },
-                  "locales": {
-                    "default": {},
-                    "type": "object",
-                    "propertyNames": {
-                      "$ref": "#/$defs/__schema9"
-                    },
-                    "additionalProperties": {
-                      "type": "object",
-                      "properties": {
-                        "template_language": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 35
-                        }
-                      },
-                      "required": [
-                        "template_language"
-                      ],
-                      "additionalProperties": false
-                    }
+                  "additionalProperties": {
+                    "type": "boolean",
+                    "const": false
                   }
                 },
                 "required": [
-                  "template_name",
-                  "template_language",
-                  "template_category"
-                ]
-              },
-              "default_locale": {
-                "$ref": "#/$defs/__schema9"
+                  "type",
+                  "properties"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "channel",
-              "variable_schema",
-              "content",
-              "default_locale"
             ]
           }
         }
@@ -6570,13 +6407,17 @@
                     "type": "object",
                     "properties": {
                       "channel_code": {
-                        "$ref": "#/$defs/__schema0"
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{1,31}$"
                       },
                       "unit_code": {
-                        "$ref": "#/$defs/__schema0"
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{1,31}$"
                       },
                       "quantity": {
-                        "$ref": "#/$defs/__schema1"
+                        "type": "string",
+                        "maxLength": 24,
+                        "pattern": "^\\d+$"
                       }
                     },
                     "required": [
@@ -6593,7 +6434,9 @@
                   "maximum": 9007199254740991
                 },
                 "amount_minor": {
-                  "$ref": "#/$defs/__schema1"
+                  "type": "string",
+                  "maxLength": 24,
+                  "pattern": "^\\d+$"
                 },
                 "currency": {
                   "type": "string",
@@ -6633,18 +6476,7 @@
         "required": [
           "purchases"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{1,31}$"
-          },
-          "__schema1": {
-            "type": "string",
-            "maxLength": 24,
-            "pattern": "^\\d+$"
-          }
-        }
+        "additionalProperties": false
       },
       "CommercialOfferPurchaseReceipt": {
         "type": "object",
@@ -6674,13 +6506,17 @@
               "type": "object",
               "properties": {
                 "channel_code": {
-                  "$ref": "#/$defs/__schema0"
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{1,31}$"
                 },
                 "unit_code": {
-                  "$ref": "#/$defs/__schema0"
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{1,31}$"
                 },
                 "quantity": {
-                  "$ref": "#/$defs/__schema1"
+                  "type": "string",
+                  "maxLength": 24,
+                  "pattern": "^\\d+$"
                 }
               },
               "required": [
@@ -6697,7 +6533,9 @@
             "maximum": 9007199254740991
           },
           "amount_minor": {
-            "$ref": "#/$defs/__schema1"
+            "type": "string",
+            "maxLength": 24,
+            "pattern": "^\\d+$"
           },
           "currency": {
             "type": "string",
@@ -6730,18 +6568,7 @@
           "created_at",
           "updated_at"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{1,31}$"
-          },
-          "__schema1": {
-            "type": "string",
-            "maxLength": 24,
-            "pattern": "^\\d+$"
-          }
-        }
+        "additionalProperties": false
       },
       "CreateApiKeyRequestInput": {
         "type": "object",
@@ -6761,11 +6588,26 @@
             "minItems": 1,
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema0"
+              "type": "string",
+              "enum": [
+                "sms:send",
+                "sms:read",
+                "email:send",
+                "email:read",
+                "whatsapp:send",
+                "wallet:read",
+                "request_logs:read",
+                "api_keys:read",
+                "api_keys:write",
+                "definitions:read",
+                "messages:send",
+                "messages:read"
+              ]
             }
           },
           "application_id": {
-            "$ref": "#/$defs/__schema1"
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
           },
           "expires_in_days": {
             "type": "integer",
@@ -6773,37 +6615,15 @@
             "maximum": 9007199254740991
           },
           "tenantId": {
-            "$ref": "#/$defs/__schema1"
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
           }
         },
         "required": [
           "name",
           "env",
           "scopes"
-        ],
-        "$defs": {
-          "__schema0": {
-            "type": "string",
-            "enum": [
-              "sms:send",
-              "sms:read",
-              "email:send",
-              "email:read",
-              "whatsapp:send",
-              "wallet:read",
-              "request_logs:read",
-              "api_keys:read",
-              "api_keys:write",
-              "definitions:read",
-              "messages:send",
-              "messages:read"
-            ]
-          },
-          "__schema1": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-          }
-        }
+        ]
       },
       "CreateApiKeyResult": {
         "type": "object",
@@ -6907,17 +6727,6 @@
       "CreateMessageDefinitionRequestInput": {
         "oneOf": [
           {
-            "$ref": "#/$defs/__schema0"
-          },
-          {
-            "$ref": "#/$defs/__schema11"
-          },
-          {
-            "$ref": "#/$defs/__schema17"
-          }
-        ],
-        "$defs": {
-          "__schema0": {
             "type": "object",
             "properties": {
               "channel": {
@@ -6930,10 +6739,37 @@
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
               "key": {
-                "$ref": "#/$defs/__schema1"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$"
               },
               "variable_schema": {
-                "$ref": "#/$defs/__schema2"
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "$ref": "#/components/schemas/CreateMessageDefinitionRequestInput/$defs/__schema0"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "properties"
+                ],
+                "additionalProperties": false
               },
               "content": {
                 "type": "object",
@@ -6955,7 +6791,8 @@
                     "default": {},
                     "type": "object",
                     "propertyNames": {
-                      "$ref": "#/$defs/__schema10"
+                      "type": "string",
+                      "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
                     },
                     "additionalProperties": {
                       "type": "object",
@@ -6978,7 +6815,8 @@
                 ]
               },
               "default_locale": {
-                "$ref": "#/$defs/__schema10"
+                "type": "string",
+                "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
               },
               "sender_id": {
                 "type": "string",
@@ -6995,29 +6833,251 @@
               "sender_id"
             ]
           },
-          "__schema1": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128,
-            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$"
+          {
+            "type": "object",
+            "properties": {
+              "channel": {
+                "type": "string",
+                "const": "email"
+              },
+              "application_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$"
+              },
+              "variable_schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "$ref": "#/components/schemas/CreateMessageDefinitionRequestInput/$defs/__schema0"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "properties"
+                ],
+                "additionalProperties": false
+              },
+              "content": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "maxLength": 320,
+                    "format": "email",
+                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 998
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200000
+                  },
+                  "html": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 400000
+                  },
+                  "locales": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 998
+                        },
+                        "text": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200000
+                        },
+                        "html": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 400000
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "subject"
+                ]
+              },
+              "default_locale": {
+                "type": "string",
+                "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+              }
+            },
+            "required": [
+              "channel",
+              "key",
+              "variable_schema",
+              "content",
+              "default_locale"
+            ]
           },
-          "__schema2": {
-            "$ref": "#/$defs/__schema7"
-          },
-          "__schema3": {
-            "type": "string",
-            "const": "object"
-          },
-          "__schema4": {
+          {
+            "type": "object",
+            "properties": {
+              "channel": {
+                "type": "string",
+                "const": "whatsapp"
+              },
+              "application_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$"
+              },
+              "variable_schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "$ref": "#/components/schemas/CreateMessageDefinitionRequestInput/$defs/__schema0"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "properties"
+                ],
+                "additionalProperties": false
+              },
+              "content": {
+                "type": "object",
+                "properties": {
+                  "template_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "template_language": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 35
+                  },
+                  "template_category": {
+                    "type": "string",
+                    "enum": [
+                      "marketing",
+                      "utility",
+                      "authentication"
+                    ]
+                  },
+                  "parameters": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    }
+                  },
+                  "locales": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "template_language": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 35
+                        }
+                      },
+                      "required": [
+                        "template_language"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "template_name",
+                  "template_language",
+                  "template_category"
+                ]
+              },
+              "default_locale": {
+                "type": "string",
+                "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+              }
+            },
+            "required": [
+              "channel",
+              "key",
+              "variable_schema",
+              "content",
+              "default_locale"
+            ]
+          }
+        ],
+        "$defs": {
+          "__schema0": {
             "type": "object",
             "propertyNames": {
               "type": "string"
             },
             "additionalProperties": {
-              "$ref": "#/$defs/__schema5"
+              "$ref": "#/components/schemas/CreateMessageDefinitionRequestInput/$defs/__schema1"
             }
           },
-          "__schema5": {
+          "__schema1": {
             "oneOf": [
               {
                 "type": "object",
@@ -7041,7 +7101,7 @@
                     "maxItems": 64,
                     "type": "array",
                     "items": {
-                      "$ref": "#/$defs/__schema6"
+                      "type": "string"
                     }
                   },
                   "format": {
@@ -7124,7 +7184,7 @@
                     "const": "array"
                   },
                   "items": {
-                    "$ref": "#/$defs/__schema5"
+                    "$ref": "#/components/schemas/CreateMessageDefinitionRequestInput/$defs/__schema1"
                   },
                   "maxItems": {
                     "type": "integer",
@@ -7145,237 +7205,32 @@
                 "additionalProperties": false
               },
               {
-                "$ref": "#/$defs/__schema7"
-              }
-            ]
-          },
-          "__schema6": {
-            "type": "string"
-          },
-          "__schema7": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema3"
-              },
-              "properties": {
-                "$ref": "#/$defs/__schema4"
-              },
-              "required": {
-                "$ref": "#/$defs/__schema8"
-              },
-              "additionalProperties": {
-                "$ref": "#/$defs/__schema9"
-              }
-            },
-            "required": [
-              "type",
-              "properties"
-            ],
-            "additionalProperties": false
-          },
-          "__schema8": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "__schema9": {
-            "type": "boolean",
-            "const": false
-          },
-          "__schema10": {
-            "type": "string",
-            "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
-          },
-          "__schema11": {
-            "type": "object",
-            "properties": {
-              "channel": {
-                "type": "string",
-                "const": "email"
-              },
-              "application_id": {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              "key": {
-                "$ref": "#/$defs/__schema1"
-              },
-              "variable_schema": {
-                "$ref": "#/$defs/__schema2"
-              },
-              "content": {
                 "type": "object",
                 "properties": {
-                  "from": {
-                    "$ref": "#/$defs/__schema12"
-                  },
-                  "subject": {
-                    "$ref": "#/$defs/__schema13"
-                  },
-                  "text": {
-                    "$ref": "#/$defs/__schema14"
-                  },
-                  "html": {
-                    "$ref": "#/$defs/__schema15"
-                  },
-                  "locales": {
-                    "$ref": "#/$defs/__schema16"
-                  }
-                },
-                "required": [
-                  "subject"
-                ]
-              },
-              "default_locale": {
-                "$ref": "#/$defs/__schema10"
-              }
-            },
-            "required": [
-              "channel",
-              "key",
-              "variable_schema",
-              "content",
-              "default_locale"
-            ]
-          },
-          "__schema12": {
-            "type": "string",
-            "maxLength": 320,
-            "format": "email",
-            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-          },
-          "__schema13": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 998
-          },
-          "__schema14": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200000
-          },
-          "__schema15": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 400000
-          },
-          "__schema16": {
-            "default": {},
-            "type": "object",
-            "propertyNames": {
-              "$ref": "#/$defs/__schema10"
-            },
-            "additionalProperties": {
-              "type": "object",
-              "properties": {
-                "subject": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 998
-                },
-                "text": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 200000
-                },
-                "html": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 400000
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "__schema17": {
-            "type": "object",
-            "properties": {
-              "channel": {
-                "type": "string",
-                "const": "whatsapp"
-              },
-              "application_id": {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              "key": {
-                "$ref": "#/$defs/__schema1"
-              },
-              "variable_schema": {
-                "$ref": "#/$defs/__schema2"
-              },
-              "content": {
-                "type": "object",
-                "properties": {
-                  "template_name": {
+                  "type": {
                     "type": "string",
-                    "minLength": 1,
-                    "maxLength": 512
+                    "const": "object"
                   },
-                  "template_language": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 35
+                  "properties": {
+                    "$ref": "#/components/schemas/CreateMessageDefinitionRequestInput/$defs/__schema0"
                   },
-                  "template_category": {
-                    "type": "string",
-                    "enum": [
-                      "marketing",
-                      "utility",
-                      "authentication"
-                    ]
-                  },
-                  "parameters": {
-                    "default": [],
+                  "required": {
                     "type": "array",
                     "items": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 128
+                      "type": "string"
                     }
                   },
-                  "locales": {
-                    "default": {},
-                    "type": "object",
-                    "propertyNames": {
-                      "$ref": "#/$defs/__schema10"
-                    },
-                    "additionalProperties": {
-                      "type": "object",
-                      "properties": {
-                        "template_language": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 35
-                        }
-                      },
-                      "required": [
-                        "template_language"
-                      ],
-                      "additionalProperties": false
-                    }
+                  "additionalProperties": {
+                    "type": "boolean",
+                    "const": false
                   }
                 },
                 "required": [
-                  "template_name",
-                  "template_language",
-                  "template_category"
-                ]
-              },
-              "default_locale": {
-                "$ref": "#/$defs/__schema10"
+                  "type",
+                  "properties"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "channel",
-              "key",
-              "variable_schema",
-              "content",
-              "default_locale"
             ]
           }
         }
@@ -7599,19 +7454,23 @@
                     "type": "object",
                     "properties": {
                       "channel_code": {
-                        "$ref": "#/$defs/__schema0"
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{1,31}$"
                       },
                       "channel_name": {
                         "type": "string"
                       },
                       "unit_code": {
-                        "$ref": "#/$defs/__schema0"
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{1,31}$"
                       },
                       "unit_label": {
                         "type": "string"
                       },
                       "paid_units": {
-                        "$ref": "#/$defs/__schema1"
+                        "type": "string",
+                        "maxLength": 24,
+                        "pattern": "^\\d+$"
                       },
                       "bonus_units": {
                         "type": "string",
@@ -7619,7 +7478,9 @@
                         "pattern": "^\\d+$"
                       },
                       "total_units": {
-                        "$ref": "#/$defs/__schema1"
+                        "type": "string",
+                        "maxLength": 24,
+                        "pattern": "^\\d+$"
                       },
                       "eligibility": {
                         "type": "object",
@@ -7629,7 +7490,8 @@
                             "maxItems": 250,
                             "type": "array",
                             "items": {
-                              "$ref": "#/$defs/__schema2"
+                              "type": "string",
+                              "pattern": "^[A-Z]{2}$"
                             }
                           },
                           "traffic_classes": {
@@ -7637,7 +7499,10 @@
                             "maxItems": 50,
                             "type": "array",
                             "items": {
-                              "$ref": "#/$defs/__schema3"
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120,
+                              "pattern": "^[a-zA-Z0-9._:-]+$"
                             }
                           },
                           "provider_vendors": {
@@ -7645,7 +7510,10 @@
                             "maxItems": 50,
                             "type": "array",
                             "items": {
-                              "$ref": "#/$defs/__schema3"
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120,
+                              "pattern": "^[a-zA-Z0-9._:-]+$"
                             }
                           },
                           "service_classes": {
@@ -7653,7 +7521,10 @@
                             "maxItems": 50,
                             "type": "array",
                             "items": {
-                              "$ref": "#/$defs/__schema3"
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120,
+                              "pattern": "^[a-zA-Z0-9._:-]+$"
                             }
                           }
                         },
@@ -7680,7 +7551,9 @@
                   }
                 },
                 "total_price_minor": {
-                  "$ref": "#/$defs/__schema1"
+                  "type": "string",
+                  "maxLength": 24,
+                  "pattern": "^\\d+$"
                 },
                 "currency": {
                   "type": "string",
@@ -7760,28 +7633,7 @@
           "catalog_name",
           "offers"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{1,31}$"
-          },
-          "__schema1": {
-            "type": "string",
-            "maxLength": 24,
-            "pattern": "^\\d+$"
-          },
-          "__schema2": {
-            "type": "string",
-            "pattern": "^[A-Z]{2}$"
-          },
-          "__schema3": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 120,
-            "pattern": "^[a-zA-Z0-9._:-]+$"
-          }
-        }
+        "additionalProperties": false
       },
       "DefinitionCatalogManifest": {
         "type": "object",
@@ -7860,7 +7712,12 @@
                   "minItems": 1,
                   "type": "array",
                   "items": {
-                    "$ref": "#/$defs/__schema0"
+                    "type": "string",
+                    "enum": [
+                      "sms",
+                      "email",
+                      "whatsapp"
+                    ]
                   }
                 },
                 "default_locale": {
@@ -7870,11 +7727,35 @@
                   "minItems": 1,
                   "type": "array",
                   "items": {
-                    "$ref": "#/$defs/__schema1"
+                    "type": "string"
                   }
                 },
                 "data_schema": {
-                  "$ref": "#/$defs/__schema6"
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "object"
+                    },
+                    "properties": {
+                      "$ref": "#/components/schemas/DefinitionCatalogManifest/$defs/__schema0"
+                    },
+                    "required": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": {
+                      "type": "boolean",
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "properties"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -7901,30 +7782,15 @@
         "additionalProperties": false,
         "$defs": {
           "__schema0": {
-            "type": "string",
-            "enum": [
-              "sms",
-              "email",
-              "whatsapp"
-            ]
-          },
-          "__schema1": {
-            "type": "string"
-          },
-          "__schema2": {
-            "type": "string",
-            "const": "object"
-          },
-          "__schema3": {
             "type": "object",
             "propertyNames": {
               "type": "string"
             },
             "additionalProperties": {
-              "$ref": "#/$defs/__schema4"
+              "$ref": "#/components/schemas/DefinitionCatalogManifest/$defs/__schema1"
             }
           },
-          "__schema4": {
+          "__schema1": {
             "oneOf": [
               {
                 "type": "object",
@@ -7948,7 +7814,7 @@
                     "maxItems": 64,
                     "type": "array",
                     "items": {
-                      "$ref": "#/$defs/__schema5"
+                      "type": "string"
                     }
                   },
                   "format": {
@@ -8031,7 +7897,7 @@
                     "const": "array"
                   },
                   "items": {
-                    "$ref": "#/$defs/__schema4"
+                    "$ref": "#/components/schemas/DefinitionCatalogManifest/$defs/__schema1"
                   },
                   "maxItems": {
                     "type": "integer",
@@ -8052,44 +7918,33 @@
                 "additionalProperties": false
               },
               {
-                "$ref": "#/$defs/__schema6"
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "$ref": "#/components/schemas/DefinitionCatalogManifest/$defs/__schema0"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "properties"
+                ],
+                "additionalProperties": false
               }
             ]
-          },
-          "__schema5": {
-            "type": "string"
-          },
-          "__schema6": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema2"
-              },
-              "properties": {
-                "$ref": "#/$defs/__schema3"
-              },
-              "required": {
-                "$ref": "#/$defs/__schema7"
-              },
-              "additionalProperties": {
-                "$ref": "#/$defs/__schema8"
-              }
-            },
-            "required": [
-              "type",
-              "properties"
-            ],
-            "additionalProperties": false
-          },
-          "__schema7": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "__schema8": {
-            "type": "boolean",
-            "const": false
           }
         }
       },
@@ -8550,7 +8405,31 @@
                           ]
                         },
                         "variable_schema": {
-                          "$ref": "#/$defs/__schema4"
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "object"
+                            },
+                            "properties": {
+                              "$ref": "#/components/schemas/ListMessageDefinitionsResponse/$defs/__schema0"
+                            },
+                            "required": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "additionalProperties": {
+                              "type": "boolean",
+                              "const": false
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "properties"
+                          ],
+                          "additionalProperties": false
                         },
                         "content": {
                           "anyOf": [
@@ -8574,7 +8453,8 @@
                                   "default": {},
                                   "type": "object",
                                   "propertyNames": {
-                                    "$ref": "#/$defs/__schema7"
+                                    "type": "string",
+                                    "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
                                   },
                                   "additionalProperties": {
                                     "type": "object",
@@ -8603,19 +8483,54 @@
                               "type": "object",
                               "properties": {
                                 "from": {
-                                  "$ref": "#/$defs/__schema8"
+                                  "type": "string",
+                                  "maxLength": 320,
+                                  "format": "email",
+                                  "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
                                 },
                                 "subject": {
-                                  "$ref": "#/$defs/__schema9"
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 998
                                 },
                                 "text": {
-                                  "$ref": "#/$defs/__schema10"
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200000
                                 },
                                 "html": {
-                                  "$ref": "#/$defs/__schema11"
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 400000
                                 },
                                 "locales": {
-                                  "$ref": "#/$defs/__schema12"
+                                  "default": {},
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string",
+                                    "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+                                  },
+                                  "additionalProperties": {
+                                    "type": "object",
+                                    "properties": {
+                                      "subject": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 998
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200000
+                                      },
+                                      "html": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 400000
+                                      }
+                                    },
+                                    "additionalProperties": false
+                                  }
                                 }
                               },
                               "required": [
@@ -8658,7 +8573,8 @@
                                   "default": {},
                                   "type": "object",
                                   "propertyNames": {
-                                    "$ref": "#/$defs/__schema7"
+                                    "type": "string",
+                                    "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
                                   },
                                   "additionalProperties": {
                                     "type": "object",
@@ -8688,7 +8604,8 @@
                           ]
                         },
                         "default_locale": {
-                          "$ref": "#/$defs/__schema7"
+                          "type": "string",
+                          "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
                         },
                         "created_at": {
                           "type": "string"
@@ -8814,19 +8731,15 @@
         "additionalProperties": false,
         "$defs": {
           "__schema0": {
-            "type": "string",
-            "const": "object"
-          },
-          "__schema1": {
             "type": "object",
             "propertyNames": {
               "type": "string"
             },
             "additionalProperties": {
-              "$ref": "#/$defs/__schema2"
+              "$ref": "#/components/schemas/ListMessageDefinitionsResponse/$defs/__schema1"
             }
           },
-          "__schema2": {
+          "__schema1": {
             "oneOf": [
               {
                 "type": "object",
@@ -8850,7 +8763,7 @@
                     "maxItems": 64,
                     "type": "array",
                     "items": {
-                      "$ref": "#/$defs/__schema3"
+                      "type": "string"
                     }
                   },
                   "format": {
@@ -8933,7 +8846,7 @@
                     "const": "array"
                   },
                   "items": {
-                    "$ref": "#/$defs/__schema2"
+                    "$ref": "#/components/schemas/ListMessageDefinitionsResponse/$defs/__schema1"
                   },
                   "maxItems": {
                     "type": "integer",
@@ -8954,97 +8867,33 @@
                 "additionalProperties": false
               },
               {
-                "$ref": "#/$defs/__schema4"
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "$ref": "#/components/schemas/ListMessageDefinitionsResponse/$defs/__schema0"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "properties"
+                ],
+                "additionalProperties": false
               }
             ]
-          },
-          "__schema3": {
-            "type": "string"
-          },
-          "__schema4": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema0"
-              },
-              "properties": {
-                "$ref": "#/$defs/__schema1"
-              },
-              "required": {
-                "$ref": "#/$defs/__schema5"
-              },
-              "additionalProperties": {
-                "$ref": "#/$defs/__schema6"
-              }
-            },
-            "required": [
-              "type",
-              "properties"
-            ],
-            "additionalProperties": false
-          },
-          "__schema5": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "__schema6": {
-            "type": "boolean",
-            "const": false
-          },
-          "__schema7": {
-            "type": "string",
-            "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
-          },
-          "__schema8": {
-            "type": "string",
-            "maxLength": 320,
-            "format": "email",
-            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-          },
-          "__schema9": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 998
-          },
-          "__schema10": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200000
-          },
-          "__schema11": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 400000
-          },
-          "__schema12": {
-            "default": {},
-            "type": "object",
-            "propertyNames": {
-              "$ref": "#/$defs/__schema7"
-            },
-            "additionalProperties": {
-              "type": "object",
-              "properties": {
-                "subject": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 998
-                },
-                "text": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 200000
-                },
-                "html": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 400000
-                }
-              },
-              "additionalProperties": false
-            }
           }
         }
       },
@@ -9120,10 +8969,23 @@
                 "metadata": {
                   "type": "object",
                   "propertyNames": {
-                    "$ref": "#/$defs/__schema0"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
                   },
                   "additionalProperties": {
-                    "$ref": "#/$defs/__schema1"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
                   }
                 },
                 "cost": {
@@ -9189,28 +9051,7 @@
           "next_cursor",
           "request_id"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
-          "__schema1": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 500
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          }
-        }
+        "additionalProperties": false
       },
       "ListOptOutsResponse": {
         "type": "object",
@@ -9768,7 +9609,31 @@
                     ]
                   },
                   "variable_schema": {
-                    "$ref": "#/$defs/__schema4"
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "object"
+                      },
+                      "properties": {
+                        "$ref": "#/components/schemas/MessageDefinitionState/$defs/__schema0"
+                      },
+                      "required": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "boolean",
+                        "const": false
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "properties"
+                    ],
+                    "additionalProperties": false
                   },
                   "content": {
                     "anyOf": [
@@ -9792,7 +9657,8 @@
                             "default": {},
                             "type": "object",
                             "propertyNames": {
-                              "$ref": "#/$defs/__schema7"
+                              "type": "string",
+                              "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
                             },
                             "additionalProperties": {
                               "type": "object",
@@ -9821,19 +9687,54 @@
                         "type": "object",
                         "properties": {
                           "from": {
-                            "$ref": "#/$defs/__schema8"
+                            "type": "string",
+                            "maxLength": 320,
+                            "format": "email",
+                            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
                           },
                           "subject": {
-                            "$ref": "#/$defs/__schema9"
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 998
                           },
                           "text": {
-                            "$ref": "#/$defs/__schema10"
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200000
                           },
                           "html": {
-                            "$ref": "#/$defs/__schema11"
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 400000
                           },
                           "locales": {
-                            "$ref": "#/$defs/__schema12"
+                            "default": {},
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string",
+                              "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+                            },
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+                                "subject": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 998
+                                },
+                                "text": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200000
+                                },
+                                "html": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 400000
+                                }
+                              },
+                              "additionalProperties": false
+                            }
                           }
                         },
                         "required": [
@@ -9876,7 +9777,8 @@
                             "default": {},
                             "type": "object",
                             "propertyNames": {
-                              "$ref": "#/$defs/__schema7"
+                              "type": "string",
+                              "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
                             },
                             "additionalProperties": {
                               "type": "object",
@@ -9906,7 +9808,8 @@
                     ]
                   },
                   "default_locale": {
-                    "$ref": "#/$defs/__schema7"
+                    "type": "string",
+                    "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
                   },
                   "created_at": {
                     "type": "string"
@@ -10025,19 +9928,15 @@
         "additionalProperties": false,
         "$defs": {
           "__schema0": {
-            "type": "string",
-            "const": "object"
-          },
-          "__schema1": {
             "type": "object",
             "propertyNames": {
               "type": "string"
             },
             "additionalProperties": {
-              "$ref": "#/$defs/__schema2"
+              "$ref": "#/components/schemas/MessageDefinitionState/$defs/__schema1"
             }
           },
-          "__schema2": {
+          "__schema1": {
             "oneOf": [
               {
                 "type": "object",
@@ -10061,7 +9960,7 @@
                     "maxItems": 64,
                     "type": "array",
                     "items": {
-                      "$ref": "#/$defs/__schema3"
+                      "type": "string"
                     }
                   },
                   "format": {
@@ -10144,7 +10043,7 @@
                     "const": "array"
                   },
                   "items": {
-                    "$ref": "#/$defs/__schema2"
+                    "$ref": "#/components/schemas/MessageDefinitionState/$defs/__schema1"
                   },
                   "maxItems": {
                     "type": "integer",
@@ -10165,97 +10064,33 @@
                 "additionalProperties": false
               },
               {
-                "$ref": "#/$defs/__schema4"
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "$ref": "#/components/schemas/MessageDefinitionState/$defs/__schema0"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "properties"
+                ],
+                "additionalProperties": false
               }
             ]
-          },
-          "__schema3": {
-            "type": "string"
-          },
-          "__schema4": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "$ref": "#/$defs/__schema0"
-              },
-              "properties": {
-                "$ref": "#/$defs/__schema1"
-              },
-              "required": {
-                "$ref": "#/$defs/__schema5"
-              },
-              "additionalProperties": {
-                "$ref": "#/$defs/__schema6"
-              }
-            },
-            "required": [
-              "type",
-              "properties"
-            ],
-            "additionalProperties": false
-          },
-          "__schema5": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "__schema6": {
-            "type": "boolean",
-            "const": false
-          },
-          "__schema7": {
-            "type": "string",
-            "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
-          },
-          "__schema8": {
-            "type": "string",
-            "maxLength": 320,
-            "format": "email",
-            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-          },
-          "__schema9": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 998
-          },
-          "__schema10": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200000
-          },
-          "__schema11": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 400000
-          },
-          "__schema12": {
-            "default": {},
-            "type": "object",
-            "propertyNames": {
-              "$ref": "#/$defs/__schema7"
-            },
-            "additionalProperties": {
-              "type": "object",
-              "properties": {
-                "subject": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 998
-                },
-                "text": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 200000
-                },
-                "html": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 400000
-                }
-              },
-              "additionalProperties": false
-            }
           }
         }
       },
@@ -10371,7 +10206,17 @@
                 "type": "string"
               },
               "status": {
-                "$ref": "#/$defs/__schema0"
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "sending",
+                  "accepted",
+                  "sent",
+                  "delivered",
+                  "undelivered",
+                  "failed",
+                  "expired"
+                ]
               },
               "encoding": {
                 "type": "string",
@@ -10445,7 +10290,17 @@
                   "type": "object",
                   "properties": {
                     "status": {
-                      "$ref": "#/$defs/__schema0"
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "sending",
+                        "accepted",
+                        "sent",
+                        "delivered",
+                        "undelivered",
+                        "failed",
+                        "expired"
+                      ]
                     },
                     "at": {
                       "type": "string"
@@ -10493,22 +10348,7 @@
           "message",
           "request_id"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "string",
-            "enum": [
-              "queued",
-              "sending",
-              "accepted",
-              "sent",
-              "delivered",
-              "undelivered",
-              "failed",
-              "expired"
-            ]
-          }
-        }
+        "additionalProperties": false
       },
       "MessageListResponse": {
         "type": "object",
@@ -10638,19 +10478,48 @@
             "type": "object",
             "properties": {
               "total_sent": {
-                "$ref": "#/$defs/__schema0"
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
               },
               "delivered": {
-                "$ref": "#/$defs/__schema1"
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
               },
               "failed": {
-                "$ref": "#/$defs/__schema2"
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
               },
               "avg_segments": {
-                "$ref": "#/$defs/__schema3"
+                "type": "number",
+                "minimum": 0
               },
               "errors": {
-                "$ref": "#/$defs/__schema4"
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "description",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
               }
             },
             "required": [
@@ -10670,53 +10539,7 @@
           "summary",
           "request_id"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "__schema1": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "__schema2": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "__schema3": {
-            "type": "number",
-            "minimum": 0
-          },
-          "__schema4": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "code": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                },
-                "count": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 9007199254740991
-                }
-              },
-              "required": [
-                "code",
-                "description",
-                "count"
-              ],
-              "additionalProperties": false
-            }
-          }
-        }
+        "additionalProperties": false
       },
       "OptOutDto": {
         "type": "object",
@@ -10771,10 +10594,48 @@
             "maximum": 1
           },
           "spendThisMonth": {
-            "$ref": "#/$defs/__schema0"
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "GHS",
+                  "NGN",
+                  "USD"
+                ]
+              },
+              "minor": {
+                "type": "string",
+                "pattern": "^-?\\d+$"
+              }
+            },
+            "required": [
+              "currency",
+              "minor"
+            ],
+            "additionalProperties": false
           },
           "walletBalance": {
-            "$ref": "#/$defs/__schema0"
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "GHS",
+                  "NGN",
+                  "USD"
+                ]
+              },
+              "minor": {
+                "type": "string",
+                "pattern": "^-?\\d+$"
+              }
+            },
+            "required": [
+              "currency",
+              "minor"
+            ],
+            "additionalProperties": false
           },
           "traffic": {
             "type": "array",
@@ -10818,7 +10679,26 @@
                   ]
                 },
                 "spend": {
-                  "$ref": "#/$defs/__schema0"
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "minor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "minor"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -10874,31 +10754,7 @@
           "spendByChannel",
           "recentActivity"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "object",
-            "properties": {
-              "currency": {
-                "type": "string",
-                "enum": [
-                  "GHS",
-                  "NGN",
-                  "USD"
-                ]
-              },
-              "minor": {
-                "type": "string",
-                "pattern": "^-?\\d+$"
-              }
-            },
-            "required": [
-              "currency",
-              "minor"
-            ],
-            "additionalProperties": false
-          }
-        }
+        "additionalProperties": false
       },
       "PageQueryInput": {
         "type": "object",
@@ -11043,13 +10899,39 @@
           "blockers": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema0"
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "code"
+              ],
+              "additionalProperties": false
             }
           },
           "warnings": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema0"
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "code"
+              ],
+              "additionalProperties": false
             }
           },
           "eligible": {
@@ -11254,25 +11136,7 @@
           "whatsapp_preview",
           "request_id"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "object",
-            "properties": {
-              "path": {
-                "type": "string"
-              },
-              "code": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "path",
-              "code"
-            ],
-            "additionalProperties": false
-          }
-        }
+        "additionalProperties": false
       },
       "PublicPricingResponse": {
         "type": "object",
@@ -11398,13 +11262,17 @@
               "type": "object",
               "properties": {
                 "channel_code": {
-                  "$ref": "#/$defs/__schema0"
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{1,31}$"
                 },
                 "unit_code": {
-                  "$ref": "#/$defs/__schema0"
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{1,31}$"
                 },
                 "quantity": {
-                  "$ref": "#/$defs/__schema1"
+                  "type": "string",
+                  "maxLength": 24,
+                  "pattern": "^\\d+$"
                 }
               },
               "required": [
@@ -11416,7 +11284,9 @@
             }
           },
           "amount_minor": {
-            "$ref": "#/$defs/__schema1"
+            "type": "string",
+            "maxLength": 24,
+            "pattern": "^\\d+$"
           },
           "currency": {
             "type": "string",
@@ -11436,18 +11306,7 @@
           "amount_minor",
           "currency"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{1,31}$"
-          },
-          "__schema1": {
-            "type": "string",
-            "maxLength": 24,
-            "pattern": "^\\d+$"
-          }
-        }
+        "additionalProperties": false
       },
       "ReplayWebhookDeliveryResponse": {
         "type": "object",
@@ -11595,10 +11454,24 @@
                 "type": "string"
               },
               "channel": {
-                "$ref": "#/$defs/__schema0"
+                "type": "string",
+                "enum": [
+                  "sms",
+                  "email",
+                  "whatsapp"
+                ]
               },
               "status": {
-                "$ref": "#/$defs/__schema1"
+                "type": "string",
+                "enum": [
+                  "accepted",
+                  "processing",
+                  "sent",
+                  "delivered",
+                  "undelivered",
+                  "failed",
+                  "expired"
+                ]
               },
               "resource_version": {
                 "type": "integer",
@@ -11621,10 +11494,23 @@
               "metadata": {
                 "type": "object",
                 "propertyNames": {
-                  "$ref": "#/$defs/__schema2"
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
                 },
                 "additionalProperties": {
-                  "$ref": "#/$defs/__schema3"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
                 }
               },
               "cost": {
@@ -11661,7 +11547,12 @@
                       "maximum": 9007199254740991
                     },
                     "channel": {
-                      "$ref": "#/$defs/__schema0"
+                      "type": "string",
+                      "enum": [
+                        "sms",
+                        "email",
+                        "whatsapp"
+                      ]
                     },
                     "message_id": {
                       "anyOf": [
@@ -11676,7 +11567,16 @@
                       ]
                     },
                     "status": {
-                      "$ref": "#/$defs/__schema1"
+                      "type": "string",
+                      "enum": [
+                        "accepted",
+                        "processing",
+                        "sent",
+                        "delivered",
+                        "undelivered",
+                        "failed",
+                        "expired"
+                      ]
                     },
                     "cost": {
                       "type": "object",
@@ -11761,48 +11661,7 @@
           "delivery",
           "request_id"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "string",
-            "enum": [
-              "sms",
-              "email",
-              "whatsapp"
-            ]
-          },
-          "__schema1": {
-            "type": "string",
-            "enum": [
-              "accepted",
-              "processing",
-              "sent",
-              "delivered",
-              "undelivered",
-              "failed",
-              "expired"
-            ]
-          },
-          "__schema2": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
-          "__schema3": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 500
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          }
-        }
+        "additionalProperties": false
       },
       "RunFlowRequestInput": {
         "anyOf": [
@@ -11907,13 +11766,38 @@
                     "type": "string"
                   },
                   "amount": {
-                    "$ref": "#/$defs/__schema0"
+                    "type": "object",
+                    "properties": {
+                      "currency": {
+                        "type": "string",
+                        "enum": [
+                          "GHS",
+                          "NGN",
+                          "USD"
+                        ]
+                      },
+                      "minor": {
+                        "type": "string",
+                        "pattern": "^-?\\d+$"
+                      }
+                    },
+                    "required": [
+                      "currency",
+                      "minor"
+                    ],
+                    "additionalProperties": false
                   },
                   "verify": {
                     "type": "object",
                     "properties": {
                       "status": {
-                        "$ref": "#/$defs/__schema1"
+                        "type": "string",
+                        "enum": [
+                          "done",
+                          "failed",
+                          "skipped",
+                          "pending"
+                        ]
                       },
                       "verificationId": {
                         "anyOf": [
@@ -11947,7 +11831,13 @@
                     "type": "object",
                     "properties": {
                       "status": {
-                        "$ref": "#/$defs/__schema1"
+                        "type": "string",
+                        "enum": [
+                          "done",
+                          "failed",
+                          "skipped",
+                          "pending"
+                        ]
                       },
                       "at": {
                         "anyOf": [
@@ -11978,7 +11868,26 @@
                               ]
                             },
                             "amount": {
-                              "$ref": "#/$defs/__schema0"
+                              "type": "object",
+                              "properties": {
+                                "currency": {
+                                  "type": "string",
+                                  "enum": [
+                                    "GHS",
+                                    "NGN",
+                                    "USD"
+                                  ]
+                                },
+                                "minor": {
+                                  "type": "string",
+                                  "pattern": "^-?\\d+$"
+                                }
+                              },
+                              "required": [
+                                "currency",
+                                "minor"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -12002,7 +11911,13 @@
                     "type": "object",
                     "properties": {
                       "status": {
-                        "$ref": "#/$defs/__schema1"
+                        "type": "string",
+                        "enum": [
+                          "done",
+                          "failed",
+                          "skipped",
+                          "pending"
+                        ]
                       },
                       "messageId": {
                         "anyOf": [
@@ -12080,40 +11995,7 @@
             ],
             "additionalProperties": false
           }
-        ],
-        "$defs": {
-          "__schema0": {
-            "type": "object",
-            "properties": {
-              "currency": {
-                "type": "string",
-                "enum": [
-                  "GHS",
-                  "NGN",
-                  "USD"
-                ]
-              },
-              "minor": {
-                "type": "string",
-                "pattern": "^-?\\d+$"
-              }
-            },
-            "required": [
-              "currency",
-              "minor"
-            ],
-            "additionalProperties": false
-          },
-          "__schema1": {
-            "type": "string",
-            "enum": [
-              "done",
-              "failed",
-              "skipped",
-              "pending"
-            ]
-          }
-        }
+        ]
       },
       "SandboxAllowancesResponse": {
         "type": "object",
@@ -12133,7 +12015,44 @@
             "maxItems": 3,
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema0"
+              "type": "object",
+              "properties": {
+                "channel": {
+                  "type": "string",
+                  "enum": [
+                    "sms",
+                    "email",
+                    "whatsapp"
+                  ]
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "segment",
+                    "message"
+                  ]
+                },
+                "used": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                },
+                "limit": {
+                  "type": "string",
+                  "pattern": "^[1-9]\\d*$"
+                },
+                "remaining": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              },
+              "required": [
+                "channel",
+                "unit",
+                "used",
+                "limit",
+                "remaining"
+              ],
+              "additionalProperties": false
             }
           },
           "request_id": {
@@ -12146,49 +12065,7 @@
           "allowances",
           "request_id"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "object",
-            "properties": {
-              "channel": {
-                "type": "string",
-                "enum": [
-                  "sms",
-                  "email",
-                  "whatsapp"
-                ]
-              },
-              "unit": {
-                "type": "string",
-                "enum": [
-                  "segment",
-                  "message"
-                ]
-              },
-              "used": {
-                "type": "string",
-                "pattern": "^\\d+$"
-              },
-              "limit": {
-                "type": "string",
-                "pattern": "^[1-9]\\d*$"
-              },
-              "remaining": {
-                "type": "string",
-                "pattern": "^\\d+$"
-              }
-            },
-            "required": [
-              "channel",
-              "unit",
-              "used",
-              "limit",
-              "remaining"
-            ],
-            "additionalProperties": false
-          }
-        }
+        "additionalProperties": false
       },
       "SendEmailApiResponse": {
         "type": "object",
@@ -12226,55 +12103,44 @@
         "type": "object",
         "properties": {
           "to": {
-            "$ref": "#/$defs/__schema0"
+            "type": "string",
+            "maxLength": 320,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           },
           "from": {
-            "$ref": "#/$defs/__schema0"
+            "type": "string",
+            "maxLength": 320,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           },
           "subject": {
-            "$ref": "#/$defs/__schema1"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 998
           },
           "text": {
-            "$ref": "#/$defs/__schema2"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000000
           },
           "html": {
-            "$ref": "#/$defs/__schema3"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000000
           },
           "reply_to": {
-            "$ref": "#/$defs/__schema4"
+            "type": "string",
+            "maxLength": 320,
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           }
         },
         "required": [
           "to",
           "from",
           "subject"
-        ],
-        "$defs": {
-          "__schema0": {
-            "type": "string",
-            "maxLength": 320,
-            "format": "email",
-            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-          },
-          "__schema1": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 998
-          },
-          "__schema2": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 1000000
-          },
-          "__schema3": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2000000
-          },
-          "__schema4": {
-            "$ref": "#/$defs/__schema0"
-          }
-        }
+        ]
       },
       "SenderDto": {
         "type": "object",
@@ -12395,10 +12261,23 @@
             "default": {},
             "type": "object",
             "propertyNames": {
-              "$ref": "#/$defs/__schema0"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
             },
             "additionalProperties": {
-              "$ref": "#/$defs/__schema1"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
             }
           },
           "limits": {
@@ -12431,28 +12310,7 @@
         "required": [
           "key",
           "to"
-        ],
-        "$defs": {
-          "__schema0": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
-          "__schema1": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 500
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          }
-        }
+        ]
       },
       "SendSmsApiResponse": {
         "type": "object",
@@ -12525,43 +12383,35 @@
         "type": "object",
         "properties": {
           "items": {
-            "$ref": "#/$defs/__schema0"
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "$defs": {
-          "__schema0": {
             "minItems": 1,
             "maxItems": 100,
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema1"
-            }
-          },
-          "__schema1": {
-            "type": "object",
-            "properties": {
-              "client_reference": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 100
+              "type": "object",
+              "properties": {
+                "client_reference": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "to": {},
+                "sender_id": {},
+                "body": {},
+                "currency": {},
+                "class": {}
               },
-              "to": {},
-              "sender_id": {},
-              "body": {},
-              "currency": {},
-              "class": {}
-            },
-            "required": [
-              "client_reference",
-              "to",
-              "sender_id",
-              "body"
-            ]
+              "required": [
+                "client_reference",
+                "to",
+                "sender_id",
+                "body"
+              ]
+            }
           }
-        }
+        },
+        "required": [
+          "items"
+        ]
       },
       "SendSmsRequestInput": {
         "type": "object",
@@ -12859,13 +12709,38 @@
                   "type": "string"
                 },
                 "amount": {
-                  "$ref": "#/$defs/__schema0"
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "minor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "minor"
+                  ],
+                  "additionalProperties": false
                 },
                 "verify": {
                   "type": "object",
                   "properties": {
                     "status": {
-                      "$ref": "#/$defs/__schema1"
+                      "type": "string",
+                      "enum": [
+                        "done",
+                        "failed",
+                        "skipped",
+                        "pending"
+                      ]
                     },
                     "verificationId": {
                       "anyOf": [
@@ -12899,7 +12774,13 @@
                   "type": "object",
                   "properties": {
                     "status": {
-                      "$ref": "#/$defs/__schema1"
+                      "type": "string",
+                      "enum": [
+                        "done",
+                        "failed",
+                        "skipped",
+                        "pending"
+                      ]
                     },
                     "at": {
                       "anyOf": [
@@ -12930,7 +12811,26 @@
                             ]
                           },
                           "amount": {
-                            "$ref": "#/$defs/__schema0"
+                            "type": "object",
+                            "properties": {
+                              "currency": {
+                                "type": "string",
+                                "enum": [
+                                  "GHS",
+                                  "NGN",
+                                  "USD"
+                                ]
+                              },
+                              "minor": {
+                                "type": "string",
+                                "pattern": "^-?\\d+$"
+                              }
+                            },
+                            "required": [
+                              "currency",
+                              "minor"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -12954,7 +12854,13 @@
                   "type": "object",
                   "properties": {
                     "status": {
-                      "$ref": "#/$defs/__schema1"
+                      "type": "string",
+                      "enum": [
+                        "done",
+                        "failed",
+                        "skipped",
+                        "pending"
+                      ]
                     },
                     "messageId": {
                       "anyOf": [
@@ -13045,66 +12951,22 @@
           "transactions",
           "series"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "object",
-            "properties": {
-              "currency": {
-                "type": "string",
-                "enum": [
-                  "GHS",
-                  "NGN",
-                  "USD"
-                ]
-              },
-              "minor": {
-                "type": "string",
-                "pattern": "^-?\\d+$"
-              }
-            },
-            "required": [
-              "currency",
-              "minor"
-            ],
-            "additionalProperties": false
-          },
-          "__schema1": {
-            "type": "string",
-            "enum": [
-              "done",
-              "failed",
-              "skipped",
-              "pending"
-            ]
-          }
-        }
+        "additionalProperties": false
       },
       "UpdateSmsTemplateRequestInput": {
         "type": "object",
         "properties": {
           "name": {
-            "$ref": "#/$defs/__schema0"
-          },
-          "body": {
-            "$ref": "#/$defs/__schema1"
-          },
-          "class": {
-            "$ref": "#/$defs/__schema2"
-          }
-        },
-        "$defs": {
-          "__schema0": {
             "type": "string",
             "minLength": 1,
             "maxLength": 80
           },
-          "__schema1": {
+          "body": {
             "type": "string",
             "minLength": 1,
             "maxLength": 1600
           },
-          "__schema2": {
+          "class": {
             "type": "string",
             "enum": [
               "transactional",
@@ -13349,10 +13211,48 @@
               "type": "object",
               "properties": {
                 "balance": {
-                  "$ref": "#/$defs/__schema0"
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "minor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "minor"
+                  ],
+                  "additionalProperties": false
                 },
                 "lowBalanceThreshold": {
-                  "$ref": "#/$defs/__schema0"
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "minor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "minor"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -13386,10 +13286,48 @@
                   ]
                 },
                 "amount": {
-                  "$ref": "#/$defs/__schema0"
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "minor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "minor"
+                  ],
+                  "additionalProperties": false
                 },
                 "runningBalance": {
-                  "$ref": "#/$defs/__schema0"
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "GHS",
+                        "NGN",
+                        "USD"
+                      ]
+                    },
+                    "minor": {
+                      "type": "string",
+                      "pattern": "^-?\\d+$"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "minor"
+                  ],
+                  "additionalProperties": false
                 },
                 "createdAt": {
                   "type": "string"
@@ -13418,31 +13356,7 @@
           "ledger",
           "request_id"
         ],
-        "additionalProperties": false,
-        "$defs": {
-          "__schema0": {
-            "type": "object",
-            "properties": {
-              "currency": {
-                "type": "string",
-                "enum": [
-                  "GHS",
-                  "NGN",
-                  "USD"
-                ]
-              },
-              "minor": {
-                "type": "string",
-                "pattern": "^-?\\d+$"
-              }
-            },
-            "required": [
-              "currency",
-              "minor"
-            ],
-            "additionalProperties": false
-          }
-        }
+        "additionalProperties": false
       },
       "WhatsappMessageListResponse": {
         "type": "object",

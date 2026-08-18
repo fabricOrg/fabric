@@ -66,4 +66,9 @@ export const INTERNAL_ONLY_SCHEMES: ReadonlySet<string> = new Set([
   "bffInternal",
   "operatorToken",
   "webhookToken",
+  // `tenantToken` is minted BY a BFF, for itself. Its own description says it is "not issuable by
+  // customers" — so listing it in the customer artifact as an accepted alternative on every public
+  // operation told SDK readers about a credential they can never hold. No public operation accepts
+  // it alone, so stripping it never empties an operation's security.
+  "tenantToken",
 ]);
