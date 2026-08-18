@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { discover } from "./probe-discover.js";
 
 /**
  * END-TO-END CONTRACT PROBE — calls every documented GET against a running API and reports anything
@@ -13,17 +14,17 @@ import { fileURLToPath } from "node:url";
  * actually returns — the exact class of defect that let a dead CloudFront url and a missing
  * WhatsApp channel sit in the artifact for weeks.
  *
- *   pnpm --filter @app/api contracts:probe
+ *   pnpm contracts:probe        (with the API running)
  *
- * Needs a running API and credentials. Everything is read from the environment so no secret is
- * baked in:
- *   PROBE_BASE_URL            default http://localhost:3000
- *   PROBE_TENANT_TOKEN        Bearer token for /v1/* routes (mint via /internal/identity/tenant-token)
- *   PROBE_API_KEY             an application-scoped sk_* key; several routes require one
- *   BFF_INTERNAL_TOKEN        for /internal/*
- *   OPERATOR_TOKEN            for operator-guarded routes
- *   WEBHOOK_INGRESS_TOKEN     for /webhooks/dlr/*
- *   PROBE_IDS                 JSON map of path-parameter values (see resolveId)
+ * SELF-CONFIGURING. It reads ids from the database, mints its own tenant token through
+ * /internal/identity/tenant-token, and creates a temporary API key which it revokes afterwards.
+ * The only inputs are the ones a running API already needs:
+ *   BFF_INTERNAL_TOKEN, OPERATOR_TOKEN   the values the API was started with
+ *   DATABASE_URL_SUPER (or _APP)         to discover ids — normally already in .env
+ *   PROBE_BASE_URL                       default http://localhost:3000
+ *
+ * It used to require five variables and a hand-built JSON map of path parameters, which meant only
+ * whoever wrote the incantation could run it. A proof step nobody can reproduce is not a proof step.
  *
  * A route whose parameters cannot be resolved is reported as SKIPPED, never called with a nonsense
  * value — a 404 from a made-up id would look like a contract failure and is not one.
@@ -32,9 +33,9 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SPEC = resolve(HERE, "../../../docs/api/openapi.internal.json");
 const BASE = process.env.PROBE_BASE_URL ?? "http://localhost:3000";
-const TENANT_TOKEN = process.env.PROBE_TENANT_TOKEN ?? "";
-const API_KEY = process.env.PROBE_API_KEY ?? "";
-const IDS: Record<string, string> = JSON.parse(process.env.PROBE_IDS ?? "{}");
+let TENANT_TOKEN = "";
+let API_KEY = "";
+let IDS: Record<string, string> = {};
 
 interface Operation {
   readonly security?: readonly Record<string, unknown>[];
@@ -102,6 +103,18 @@ function queryFor(path: string): string {
 }
 
 async function main(): Promise<void> {
+  const context = await discover(BASE, process.env.BFF_INTERNAL_TOKEN ?? "");
+  TENANT_TOKEN = context.tenantToken;
+  API_KEY = context.apiKey;
+  IDS = context.ids;
+  try {
+    await probe();
+  } finally {
+    await context.cleanup();
+  }
+}
+
+async function probe(): Promise<void> {
   const spec = JSON.parse(readFileSync(SPEC, "utf8")) as {
     paths: Record<string, Record<string, Operation>>;
   };

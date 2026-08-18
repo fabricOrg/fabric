@@ -41,53 +41,52 @@ longer exists.
 route, so it is `public`; `BffTokenGuard` means only a server-side BFF can call it. `/v1` on its own
 means nothing — several `/v1` routes are dashboard features that a key nonetheless opens.
 
-## Testing it end to end
+## Testing it — two commands
 
-Three layers, cheapest first. Only the third proves the document matches reality.
-
-**1. Is the committed artifact current?**
+**Look at it:**
 
 ```bash
-pnpm openapi:check      # fails if a route is unbound, orphaned, or the file is stale
+pnpm docs
 ```
-Runs inside `pnpm validate`, so it gates every push. Needs no database and no running API.
 
-**2. Read it in a browser.**
+Serves the reference at `http://localhost:4000` and opens a browser. No API, no database, no
+credentials, no auth prompt — it reads the committed artifact. `pnpm docs:public` shows the customer
+artifact instead of the internal one.
+
+**Check it is true:**
 
 ```bash
-OPERATOR_TOKEN=<a-real-secret> pnpm --filter @app/api dev
+pnpm contracts:probe        # with the API running
 ```
-Open `http://localhost:3000/docs`. The browser prompts for HTTP Basic — any username, the operator
-token as the password. You get the FULL document, `/internal/*` included. With no `OPERATOR_TOKEN`
-set the endpoint answers 404, not 401: a disabled docs surface should be indistinguishable from one
-that was never built.
 
-**3. Call every documented endpoint against a running API.**
+Calls every documented GET and reports anything that is not a 2xx. It is self-configuring: it reads
+ids from the database, mints its own tenant token, and creates a temporary API key which it revokes
+afterwards — including when it fails. The only inputs are the values the API was already started
+with (`BFF_INTERNAL_TOKEN`, `OPERATOR_TOKEN`) plus a `DATABASE_URL_*`, which `.env` normally has.
+
+It exits non-zero **only** on a `response_contract_violation` — the published schema disagreeing
+with the real payload. A 404 for a row this database does not have, or a 401 for a credential it was
+not given, says nothing about the specification, so those are reported and not failed. A route whose
+path parameters cannot be resolved is SKIPPED rather than called with an invented id.
+
+**Third, and it runs on every push anyway:**
 
 ```bash
-pnpm --filter @app/api contracts:probe
+pnpm openapi:check          # no database, no API; inside `pnpm validate`
 ```
-This is the one that matters. Response validation is strict outside production, so a
-`500 response_contract_violation` means the published schema disagrees with the real payload — the
-class of defect that let a dead `servers` url and a missing WhatsApp channel sit in the artifact for
-weeks. The probe exits non-zero on a contract violation ONLY; a 404 for a row this environment lacks,
-or a 401 for a credential it was not given, says nothing about the specification.
 
-It reads credentials and path-parameter values from the environment, so nothing is baked in:
+Fails when a route has no binding, a binding names a dead route, or the committed artifact is stale.
 
-| variable | for |
-| --- | --- |
-| `PROBE_BASE_URL` | defaults to `http://localhost:3000` |
-| `PROBE_TENANT_TOKEN` | `/v1/*` routes — mint one via `POST /internal/identity/tenant-token` |
-| `PROBE_API_KEY` | an application-scoped `sk_*` key; email, WhatsApp and batches require one |
-| `BFF_INTERNAL_TOKEN` · `OPERATOR_TOKEN` · `WEBHOOK_INGRESS_TOKEN` | the other credential paths |
-| `PROBE_IDS` | JSON map of path-parameter values (`tenantId`, `messageId`, `emailId`, …) |
+### Why `pnpm docs` and not the API's own `/docs`
 
-A route whose parameters cannot be resolved is reported SKIPPED rather than called with an invented
-id — a 404 from a made-up value looks like a contract failure and is not one.
+The API serves the same document at `/docs`, gated on `OPERATOR_TOKEN` and failing closed, because
+it describes `/internal/admin/*` — kill switches, impersonation, wallet adjustment. That gate is
+right for a deployed service and wrong for reading the spec on your laptop, where it costs an env
+var, a running API and a Basic-auth prompt. Use `/docs` when you need the reference on a deployed
+environment; use `pnpm docs` locally.
 
-**CLAUDE.md §12 makes all three a rule**: no endpoint may be consumed anywhere until it is bound,
-present in the artifact, and has returned a real 2xx here.
+**CLAUDE.md §12 makes this a rule**: no endpoint may be consumed anywhere until it is bound, present
+in the artifact, and has returned a real 2xx from `contracts:probe` or an integration test.
 
 ## Browsing it
 
