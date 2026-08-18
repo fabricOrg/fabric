@@ -1028,7 +1028,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -1087,7 +1094,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenApiDocumentResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -1144,7 +1158,26 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/HealthLiveResponse"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -1192,7 +1225,7 @@
     "/health/readyz": {
       "get": {
         "summary": "Readiness probe",
-        "description": "Checked by the deploy pipeline against the live URL. Does NOT exercise Redis or the queue, so a green readyz is not evidence those work.",
+        "description": "Checked by the deploy pipeline against the live URL. Does NOT exercise Redis or the queue, so a green readyz is not evidence those work. Answers 503 `not_ready` while the database is unreachable.",
         "tags": [
           "Health"
         ],
@@ -1201,7 +1234,26 @@
         ],
         "responses": {
           "200": {
-            "description": "Success."
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/HealthReadyResponse"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request.",
@@ -1235,6 +1287,16 @@
           },
           "500": {
             "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See `error.code` for the reason.",
             "content": {
               "application/json": {
                 "schema": {
@@ -17064,6 +17126,37 @@
         ],
         "additionalProperties": false
       },
+      "HealthLiveResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "HealthReadyResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok"
+          },
+          "db": {
+            "type": "string",
+            "const": "up"
+          }
+        },
+        "required": [
+          "status",
+          "db"
+        ],
+        "additionalProperties": false
+      },
       "IngestAck": {
         "type": "object",
         "properties": {
@@ -21087,6 +21180,18 @@
           "ok"
         ],
         "additionalProperties": false
+      },
+      "OpenApiDocumentResponse": {
+        "type": "object",
+        "properties": {
+          "openapi": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "openapi"
+        ],
+        "additionalProperties": {}
       },
       "OptOutDto": {
         "type": "object",

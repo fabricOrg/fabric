@@ -20,7 +20,7 @@ quality gates must cover every maintained application.
 | P1 | API-key touches and request-log inserts amplify writes without bounded backpressure. | Five-minute key-touch coalescing; 100-row/250ms bounded log batches; focused tests. | Complete |
 | P1 | Every API replica also starts queue workers, cron jobs, and webhook delivery. | `api`/`worker`/`scheduler` role gates using the same image; deployment services still required. | In progress |
 | P1 | SMS batches prepare up to 100 items serially before existing queued delivery. | Bounded ten-item preparation; provider delivery remains on the durable send queue. | Complete |
-| P1 | Database readiness is used as container liveness. | Dependency-free `/health` + `/healthz`; database-aware `/health/readyz`. | Complete |
+| P1 | Database readiness is used as container liveness. | Dependency-free `/health`; database-aware `/health/readyz`, which answers 503 `not_ready`. | Complete |
 | P2 | Webhook materialization, metrics, and network fan-out are insufficiently bounded. | 1,000-pair materialization cap, concurrency 10, global metrics every five ticks. | Complete |
 | P2 | Turbo is configured but unused, and the file-length guard excludes frontend applications. | Turbo-backed root tasks and all application sources covered by the guard. | Complete |
 | P2 | Docker dependency layers are invalidated by every source change. | Lockfile-first `pnpm fetch` layers in all runtime Dockerfiles. | Complete |

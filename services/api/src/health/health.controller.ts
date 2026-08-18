@@ -1,11 +1,7 @@
 import type { AppDb } from "@app/db";
-import {
-  Controller,
-  Get,
-  Inject,
-  ServiceUnavailableException,
-} from "@nestjs/common";
+import { Controller, Get, Inject } from "@nestjs/common";
 import { APP_DB } from "../db/db.module.js";
+import { apiError } from "../http/api-error.js";
 
 /**
  * Liveness is dependency-free so a database outage does not cause container restart loops.
@@ -30,9 +26,17 @@ export class HealthController {
       if (rows[0]?.ok !== 1) throw new Error("database probe returned no row");
       return { status: "ok", db: "up" };
     } catch {
-      throw new ServiceUnavailableException({
-        status: "unavailable",
-        db: "down",
+      // `apiError`, not `ServiceUnavailableException`. With no global exception filter, Nest
+      // serialises an exception's payload verbatim — so the old `{ status, db }` object went out as
+      // a 503 in a shape the document does not publish and that carries no `error.code` to branch
+      // on. The one response this endpoint gives when something is actually WRONG was the one
+      // nobody could parse, on the endpoint the deploy pipeline polls.
+      throw apiError({
+        type: "api_error",
+        code: "not_ready",
+        message:
+          "The database is not reachable, so this instance should receive no traffic.",
+        status: 503,
       });
     }
   }
