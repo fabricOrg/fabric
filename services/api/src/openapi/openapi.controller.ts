@@ -23,8 +23,8 @@ export class OpenApiController {
   // Belt and braces: a token-gated page must never be cached by an intermediary.
   @Header("cache-control", "no-store")
   @Header("x-robots-tag", "noindex, nofollow")
-  page(): string {
-    return DOCS_HTML;
+  async page(): Promise<string> {
+    return docsPage(await this.openapi.servedDocument());
   }
 
   @Get("openapi.json")
@@ -41,16 +41,26 @@ export class OpenApiController {
  * environment ever forbids external script origins, vendor it then — the spec endpoint is unchanged.
  *
  * PINNED AND HASHED, because the trust model here is not the usual one. This page is opened with a
- * staff Basic credential and fetches the full internal specification with `credentials:
- * "same-origin"`. An unpinned `@scalar/api-reference` meant any future release — or a compromised
- * CDN — would execute in this API's origin in a staff browser and could exfiltrate that document
- * using the credential the browser attaches for it. `integrity` makes substituted bytes fail to
- * execute; the pin makes the bytes predictable. Bump both together, never one alone.
+ * staff Basic credential and carries the full internal specification inline. An unpinned
+ * `@scalar/api-reference` meant any future release — or a compromised CDN — would execute in this
+ * API's origin in a staff browser with that document already in the DOM. `integrity` makes
+ * substituted bytes fail to execute; the pin makes the bytes predictable. Bump both together.
  *
- * The spec is fetched with `credentials: "same-origin"` so the Basic credential the browser already
- * holds for this realm is reused; the token is never re-entered and never lands in a URL.
+ * THE DOCUMENT IS EMBEDDED, NOT FETCHED, and that is the fix for a page that rendered its shell and
+ * then said "Document 'api-1' could not be loaded" on the deployed environment. Handing Scalar a
+ * `url` makes the BROWSER fetch it as a second request, and that request did not carry the Basic
+ * credential the page itself was opened with. The `fetch` override that was supposed to solve it —
+ * passing `credentials: "same-origin"` — is not a supported configuration option, so it was silently
+ * ignored; it read like protection and did nothing. `content` is documented, removes the second
+ * request altogether, and cannot desynchronise from what `/docs/openapi.json` would have served
+ * because both come from `servedDocument()`.
  */
-const DOCS_HTML = `<!doctype html>
+function docsPage(document: Record<string, unknown>): string {
+  // `<` is escaped so a string anywhere in the document cannot close this script tag early. The
+  // document is ours, but "the data is trusted" is exactly the assumption that turns an injection
+  // into an incident, and the escape costs nothing.
+  const embedded = JSON.stringify(document).replace(/</g, "\\u003c");
+  return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -64,11 +74,8 @@ const DOCS_HTML = `<!doctype html>
             integrity="sha384-NAMzfHXRsxRYhcKmRnZGVLvlBeXTWtpYd0jWgeZ7fk89X95GIJBK1H4bUwkP4IZJ"
             crossorigin="anonymous"></script>
     <script>
-      Scalar.createApiReference('#app', {
-        url: '/docs/openapi.json',
-        fetch: (input, init) =>
-          fetch(input, { ...init, credentials: 'same-origin' }),
-      });
+      Scalar.createApiReference('#app', { content: ${embedded} });
     </script>
   </body>
 </html>`;
+}
