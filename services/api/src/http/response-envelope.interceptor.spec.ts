@@ -1,6 +1,7 @@
 import type { CallHandler, ExecutionContext } from "@nestjs/common";
 import { lastValueFrom, of } from "rxjs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 /**
  * The three branches that decide whether a body is wrapped — an explicit `envelope: false`, a
@@ -100,5 +101,56 @@ describe("ResponseEnvelopeInterceptor", () => {
   it("passes an empty body through — 204 has nothing to wrap", async () => {
     expect(await run(contextWith(), undefined)).toBeUndefined();
     expect(await run(contextWith(), null)).toBeNull();
+  });
+});
+
+/**
+ * Validation must not depend on wrapping.
+ *
+ * These were one decision, so any route that opted out of the envelope was documented with a
+ * response schema that was never checked — `GET /docs/openapi.json` among them, which is to say the
+ * document describing every contract was the one response nobody verified.
+ */
+/** The thrown value is an HttpException whose stable `code` lives in its payload, not its message. */
+async function violationCodeOf(payload: unknown): Promise<string> {
+  try {
+    await run(contextWith(), payload);
+    return "no-throw";
+  } catch (error) {
+    const body = (error as { getResponse?: () => unknown }).getResponse?.();
+    return (
+      (body as { error?: { code?: string } } | undefined)?.error?.code ??
+      "unknown"
+    );
+  }
+}
+
+describe("ResponseEnvelopeInterceptor validation is independent of wrapping", () => {
+  beforeEach(() => {
+    bindings.envelopeDisabled = false;
+    bindings.successContentType = null;
+    bindings.responseContract = null;
+  });
+
+  it("validates a body that is NOT enveloped (envelope: false)", async () => {
+    bindings.envelopeDisabled = true;
+    bindings.responseContract = z.object({ openapi: z.string() });
+    expect(await violationCodeOf({ openapi: 123 })).toBe(
+      "response_contract_violation",
+    );
+  });
+
+  it("validates a body behind a declared non-JSON media type", async () => {
+    bindings.successContentType = "text/csv";
+    bindings.responseContract = z.string();
+    expect(await violationCodeOf(42)).toBe("response_contract_violation");
+  });
+
+  it("still returns the un-enveloped body unchanged when it DOES match", async () => {
+    bindings.envelopeDisabled = true;
+    bindings.responseContract = z.object({ openapi: z.string() });
+    expect(await run(contextWith(), { openapi: "3.1.0" })).toEqual({
+      openapi: "3.1.0",
+    });
   });
 });

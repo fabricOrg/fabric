@@ -55,14 +55,23 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       map((payload) => {
-        // NON-JSON PASSES THROUGH UNTOUCHED. The statement export sets `text/csv` and a download
+        // 204 and other empty bodies have nothing to validate or wrap.
+        if (payload === undefined || payload === null) return payload;
+
+        // VALIDATION IS INDEPENDENT OF WRAPPING. These used to be one decision, so a route that
+        // opted out of the envelope — `envelope: false`, or a declared non-JSON media type — was
+        // documented with a response schema that was never once checked against a real payload.
+        // Publishing a shape and not enforcing it is the precise failure this interceptor exists
+        // to prevent, and it applied to `GET /docs/openapi.json`: the document describing every
+        // contract was itself the one response nobody verified.
+        this.validate(context, payload);
+
+        // NON-JSON PASSES THROUGH UNWRAPPED. The statement export sets `text/csv` and a download
         // filename; the Meta handshake echoes a bare challenge string it will compare verbatim.
         // Wrapping either corrupts it — a spreadsheet becomes an object, and Meta rejects the
-        // subscription. Detected from the response's own content-type, set by the handler.
+        // subscription. Detected from the binding first, then the response's own content-type.
         if (!this.isJson(context, http.getResponse())) return payload;
-        // 204 and other empty bodies have nothing to wrap.
-        if (payload === undefined || payload === null) return payload;
-        this.validate(context, payload);
+
         return {
           data: payload,
           request_id: requestIdOf(request),

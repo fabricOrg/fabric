@@ -1,4 +1,11 @@
-import { acceptedAck, batchIngestAck, ingestAck } from "@app/contracts";
+import {
+  acceptedAck,
+  batchIngestAck,
+  healthLiveResponse,
+  healthReadyResponse,
+  ingestAck,
+  openApiDocumentResponse,
+} from "@app/contracts";
 import type { RouteBindings } from "../route-binding.types.js";
 
 /**
@@ -88,6 +95,7 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Health"],
     visibility: "internal",
     security: ["none"],
+    response: healthLiveResponse,
   },
   "GET /health/readyz": {
     summary: "Readiness probe",
@@ -97,6 +105,7 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Health"],
     visibility: "internal",
     security: ["none"],
+    response: healthReadyResponse,
   },
 
   // ---- The docs surface itself -------------------------------------------------------------
@@ -105,6 +114,10 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Health"],
     visibility: "internal",
     security: ["operatorToken"],
+    // An HTML page, so it carries a media type rather than a zod contract. Declaring it also keeps
+    // the envelope interceptor off it: the binding is authoritative there, and Fastify only stamps
+    // the content-type after the interceptor has already decided.
+    successContentType: "text/html",
   },
   "GET /docs/openapi.json": {
     summary: "Retrieve the full OpenAPI document",
@@ -115,5 +128,6 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["operatorToken"],
     envelope: false,
+    response: openApiDocumentResponse,
   },
 };
