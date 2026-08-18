@@ -17,19 +17,36 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 | ref | sha | note |
 | --- | --- | --- |
 | `origin/dev` | `a5e99d8` | through #307 |
-| `origin/testing` | `8e90383` | promoted 2026-08-18. **Level with `dev`.** All three workflows green. |
+| `origin/testing` | `8e90383` | promoted 2026-08-18. **Level with `dev`.** CI green; all six jobs of `Deploy testing (Vercel + Render)` genuinely ran. The plain `Deploy` also shows green having skipped 7 of its 8 jobs — it is the gated AWS/ECS path and is never evidence. |
 
-### Start here — ONE thing is outstanding, and it is silent if skipped
+### Start here — confirm the deploy, then read Open work below (which is NOT empty)
 
-**Set `OPENAPI_RESPONSE_VALIDATION=strict` on the Render `fabric-api` service.** `render.yaml`
-declares it, but the blueprint is **not retro-applied to an already-provisioned service** (the same
-trap `PUBLIC_CORS_ALLOWED_ORIGINS` hit), so it must be set in the dashboard.
+`OPERATOR_TOKEN`, `WEBHOOK_INGRESS_TOKEN` and `OPENAPI_RESPONSE_VALIDATION` were all set on the
+Render service by hand on 2026-08-18. **The last one is worth confirming rather than assuming**, and
+one command does it — no session here has ever held Render's secrets, so it has never been verified
+from this side:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H "authorization: Bearer sk_test_…" \
+  "https://fabric-jezz.onrender.com/v1/logs?limit=999"
+```
+
+**400** means strict is live. **200** means it is not. `limit` is published as `maximum: 100`, so 999
+violates the contract: strict rejects it, `warn` only logs. (Sanity-check with `?limit=10`, which
+must be 200 either way — a 401 is the key, not the mode.) The discriminator was verified by booting
+the same build under each mode, not reasoned out.
 
 Why it matters: `resolveValidationMode` degrades to `warn` when `NODE_ENV=production`, which Render
-sets for an unrelated reason (`PLUGIN_MASTER_KEY` derivation must not fall back to the dev key).
-Left at the default, `contracts:probe` against testing reports **"0 contract violations" having
-checked nothing** — and CLAUDE.md §12 cites strict validation as exactly what makes a 2xx count as
-proof. Nothing errors; the claim just becomes unfalsifiable.
+sets for an unrelated reason (`PLUGIN_MASTER_KEY` derivation must not fall back to the dev key). In
+`warn`, `contracts:probe` against testing reports **"0 contract violations" having checked nothing**
+— and CLAUDE.md §12 cites strict validation as exactly what makes a 2xx count as proof. Nothing
+errors; the claim just becomes unfalsifiable.
+
+A caveat worth carrying: `render.yaml` declares all three, but a blueprint is **believed** not to be
+retro-applied to an already-provisioned service — the `PUBLIC_CORS_ALLOWED_ORIGINS` episode is the
+only in-repo evidence, and it has not been tested directly. Treat it as the reason to check the
+dashboard, not as a settled fact.
 
 Verified live after the promotion (§9 — the artefact, not the workflow's report):
 
@@ -48,8 +65,14 @@ Locally use `pnpm docs` instead: no token, no API, no database.
 The document is derived, not written: routes from decorator metadata, schemas from the zod contracts.
 `assertCoverage` fails the build on an unbound route, `assertRefsResolve` refuses to emit a document
 whose pointers do not resolve, and every JSON response is wrapped in `{ data, request_id }` by an
-interceptor so the runtime cannot drift from the spec. 140 routes bound; 129/129 body-returning
-endpoints carry a response contract.
+interceptor so the runtime cannot drift from the spec. 140 routes bound; **133 of 133** endpoints
+that return a body carry a response contract, the other 7 being bodiless `204` deletes.
+
+That figure was "129/129" until #309, and the difference is the lesson rather than the arithmetic:
+the denominator had been computed from the endpoints that HAD schemas, so it could not report
+anything but complete. The four it hid were `GET /health`, `GET /health/readyz`, `GET /docs` and
+`GET /docs/openapi.json` — the endpoint the deploy pipeline polls as its proof a release is live,
+and the document describing every other contract, both among them.
 
 **What the independent review caught, since it is the pattern worth remembering:** the published
 customer artifact had **175 `$ref`s that resolved to nothing** — including the money field on
