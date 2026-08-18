@@ -101,11 +101,15 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     summary: "Readiness probe",
     description:
       "Checked by the deploy pipeline against the live URL. Does NOT exercise Redis or the queue, " +
-      "so a green readyz is not evidence those work.",
+      "so a green readyz is not evidence those work. Answers 503 `not_ready` while the database is " +
+      "unreachable.",
     tags: ["Health"],
     visibility: "internal",
     security: ["none"],
     response: healthReadyResponse,
+    // The failure status is the whole point of a readiness probe, so it is documented rather than
+    // left to a reader to discover from an outage.
+    errorStatuses: [503],
   },
 
   // ---- The docs surface itself -------------------------------------------------------------
@@ -114,9 +118,9 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Health"],
     visibility: "internal",
     security: ["operatorToken"],
-    // An HTML page, so it carries a media type rather than a zod contract. Declaring it also keeps
-    // the envelope interceptor off it: the binding is authoritative there, and Fastify only stamps
-    // the content-type after the interceptor has already decided.
+    // An HTML page, so it carries a media type rather than a zod contract. The `@Header` on the
+    // handler is what sets it at runtime — Nest applies a handler's headers BEFORE interceptors run,
+    // so this route was already un-enveloped by header inference. This declares it in the document.
     successContentType: "text/html",
   },
   "GET /docs/openapi.json": {

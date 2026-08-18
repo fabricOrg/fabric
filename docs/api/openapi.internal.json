@@ -1225,7 +1225,7 @@
     "/health/readyz": {
       "get": {
         "summary": "Readiness probe",
-        "description": "Checked by the deploy pipeline against the live URL. Does NOT exercise Redis or the queue, so a green readyz is not evidence those work.",
+        "description": "Checked by the deploy pipeline against the live URL. Does NOT exercise Redis or the queue, so a green readyz is not evidence those work. Answers 503 `not_ready` while the database is unreachable.",
         "tags": [
           "Health"
         ],
@@ -1287,6 +1287,16 @@
           },
           "500": {
             "description": "Unexpected server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "See `error.code` for the reason.",
             "content": {
               "application/json": {
                 "schema": {

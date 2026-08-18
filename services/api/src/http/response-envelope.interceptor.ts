@@ -64,7 +64,7 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
         // Publishing a shape and not enforcing it is the precise failure this interceptor exists
         // to prevent, and it applied to `GET /docs/openapi.json`: the document describing every
         // contract was itself the one response nobody verified.
-        this.validate(context, payload);
+        this.validate(context, payload, http.getResponse());
 
         // NON-JSON PASSES THROUGH UNWRAPPED. The statement export sets `text/csv` and a download
         // filename; the Meta handshake echoes a bare challenge string it will compare verbatim.
@@ -106,7 +106,11 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
   }
 
   /** See response-validation.ts for why the posture differs by environment. */
-  private validate(context: ExecutionContext, payload: unknown): void {
+  private validate(
+    context: ExecutionContext,
+    payload: unknown,
+    response: unknown,
+  ): void {
     if (this.mode === "off") return;
     const contract = responseContractFor(
       context.getClass(),
@@ -126,6 +130,15 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
       return;
     }
     // strict: a mismatch is a defect and the reference is meant to be trustworthy.
+    //
+    // Reset the content-type FIRST. Nest sets a handler's `@Header`s before interceptors run, and a
+    // handler taking `@Res({ passthrough: true })` may already have stamped its own — so a route
+    // declaring `text/csv` would have the JSON error envelope sent under that type, and Fastify
+    // rejects the mismatch with FST_ERR_REP_INVALID_PAYLOAD_TYPE. There is no global exception
+    // filter to repair it: `apiError`'s body IS the envelope, serialised verbatim by Nest's default.
+    // `wallet.controller.ts` documents this exact crash as the reason it avoids `@Header`; validating
+    // non-JSON responses re-opens the same door from the other side.
+    forceJsonContentType(response);
     throw apiError({
       type: "api_error",
       code: "response_contract_violation",
@@ -133,6 +146,24 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
       status: 500,
     });
   }
+}
+
+/**
+ * Point the response at JSON before an error envelope is written to it.
+ *
+ * Both spellings are tried because the object differs by adapter and by how the handler obtained it:
+ * Fastify's reply exposes `header()`, a Node `ServerResponse` exposes `setHeader()`. Neither being
+ * present is not an error — a route that never set a content-type does not need correcting.
+ */
+function forceJsonContentType(response: unknown): void {
+  const reply = response as {
+    header?: (name: string, value: string) => unknown;
+    setHeader?: (name: string, value: string) => unknown;
+  };
+  const type = "application/json; charset=utf-8";
+  if (typeof reply?.header === "function") reply.header("content-type", type);
+  else if (typeof reply?.setHeader === "function")
+    reply.setHeader("content-type", type);
 }
 
 function isJsonResponse(response: unknown): boolean {

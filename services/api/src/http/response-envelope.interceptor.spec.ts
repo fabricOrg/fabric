@@ -28,11 +28,19 @@ const { ResponseEnvelopeInterceptor } = await import(
   "./response-envelope.interceptor.js"
 );
 
+/** Captures what the interceptor writes back to the reply, so header effects can be asserted. */
+const written: Record<string, string> = {};
+
 function contextWith(contentType?: string): ExecutionContext {
   return {
     switchToHttp: () => ({
       getRequest: () => ({ id: "req_test", headers: {} }),
-      getResponse: () => ({ getHeader: () => contentType }),
+      getResponse: () => ({
+        getHeader: () => written["content-type"] ?? contentType,
+        header: (name: string, value: string) => {
+          written[name] = value;
+        },
+      }),
     }),
     getClass: () => class Controller {},
     getHandler: () => function handler() {},
@@ -60,6 +68,7 @@ describe("ResponseEnvelopeInterceptor", () => {
     bindings.envelopeDisabled = false;
     bindings.successContentType = null;
     bindings.responseContract = null;
+    for (const key of Object.keys(written)) delete written[key];
   });
 
   it("wraps a JSON body in { data, request_id }, reusing the request's own id", async () => {
@@ -130,6 +139,7 @@ describe("ResponseEnvelopeInterceptor validation is independent of wrapping", ()
     bindings.envelopeDisabled = false;
     bindings.successContentType = null;
     bindings.responseContract = null;
+    for (const key of Object.keys(written)) delete written[key];
   });
 
   it("validates a body that is NOT enveloped (envelope: false)", async () => {
@@ -152,5 +162,23 @@ describe("ResponseEnvelopeInterceptor validation is independent of wrapping", ()
     expect(await run(contextWith(), { openapi: "3.1.0" })).toEqual({
       openapi: "3.1.0",
     });
+  });
+
+  it("repoints the reply at JSON before throwing, so the error envelope can serialise", async () => {
+    // Nest applies a handler's `@Header`s BEFORE interceptors run, and a `@Res({ passthrough: true })`
+    // handler may have stamped its own. Throwing the JSON envelope while the reply still says
+    // `text/csv` is FST_ERR_REP_INVALID_PAYLOAD_TYPE, and there is no global exception filter to
+    // repair it — `wallet.controller.ts` avoids `@Header` for exactly this reason.
+    bindings.successContentType = "text/csv";
+    bindings.responseContract = z.string();
+    expect(await violationCodeOf(42)).toBe("response_contract_violation");
+    expect(written["content-type"]).toBe("application/json; charset=utf-8");
+  });
+
+  it("leaves the content-type alone when the payload MATCHES", async () => {
+    bindings.successContentType = "text/csv";
+    bindings.responseContract = z.string();
+    expect(await run(contextWith("text/csv"), "a,b|1,2")).toBe("a,b|1,2");
+    expect(written["content-type"]).toBeUndefined();
   });
 });

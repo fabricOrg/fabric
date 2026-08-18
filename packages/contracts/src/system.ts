@@ -19,7 +19,9 @@ export type HealthLiveResponse = z.infer<typeof healthLiveResponse>;
 
 /**
  * Readiness. `db: "up"` is the only dependency it asserts — Redis and the queue are NOT exercised,
- * so a green readyz is not evidence those work. A failing check answers 503 rather than a body.
+ * so a green readyz is not evidence those work. A failing check answers 503 carrying the standard
+ * error envelope with `code: "not_ready"`, which the binding documents; it used to answer 503 with
+ * an ad-hoc `{ status, db }` object that appeared in no schema.
  */
 export const healthReadyResponse = z.object({
   status: z.literal("ok"),
