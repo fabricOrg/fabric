@@ -65,6 +65,13 @@ export const providerCostRateInputSchema = providerCostRateShape.superRefine(
 );
 export type ProviderCostRateInput = z.infer<typeof providerCostRateInputSchema>;
 
+/**
+ * READ shape. `source_reference` is required again here, which it can be because migration 0151
+ * dropped the column's empty-string DEFAULT, added a CHECK, and marked the pre-existing rows
+ * `UNRECORDED — predates 0151`. The read and write constraints agree once more BECAUSE the database
+ * enforces the rule — briefly they had to diverge, since a read contract must describe what the
+ * table can actually hold and the table could hold empties.
+ */
 export const providerCostRateDtoSchema = providerCostRateShape
   .omit({ effective_from: true })
   .extend({

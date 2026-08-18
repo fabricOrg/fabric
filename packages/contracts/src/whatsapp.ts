@@ -91,3 +91,22 @@ export const whatsappTemplateListResponse = z.object({
 export type WhatsappTemplateListResponse = z.infer<
   typeof whatsappTemplateListResponse
 >;
+
+/**
+ * Outcome of a WhatsApp template sync run.
+ *
+ * `locked: false` means another run held the advisory lock and this one did nothing — distinct from
+ * a run that executed and synced zero records. Without that flag the two are indistinguishable, and
+ * "synced: 0" reads as success for a silent failure. `failed` and `firstError` exist for the same
+ * reason: a run where every tenant threw must not report the same shape as a quiet one.
+ */
+export const whatsappTemplateSyncResultSchema = z.object({
+  locked: z.boolean(),
+  synced: z.number().int().nonnegative(),
+  tenants: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  firstError: z.string().optional(),
+});
+export type WhatsappTemplateSyncResult = z.infer<
+  typeof whatsappTemplateSyncResultSchema
+>;

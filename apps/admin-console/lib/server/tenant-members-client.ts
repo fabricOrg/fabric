@@ -8,6 +8,7 @@ import {
   memberDtoSchema,
   type UpdateMemberRequest,
 } from "@app/contracts";
+import { unwrapEnvelope } from "./response-envelope";
 
 /**
  * Staff-side management of a TENANT's members, via the api's BffToken-guarded
@@ -43,7 +44,7 @@ export async function listTenantMembers(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new TenantMemberApiError(response.status, payload);
-  return listMembersResponseSchema.parse(payload);
+  return listMembersResponseSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function inviteTenantMember(
@@ -62,7 +63,7 @@ export async function inviteTenantMember(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new TenantMemberApiError(response.status, payload);
-  return memberDtoSchema.parse(payload);
+  return memberDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function updateTenantMemberRole(
@@ -82,7 +83,7 @@ export async function updateTenantMemberRole(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new TenantMemberApiError(response.status, payload);
-  return memberDtoSchema.parse(payload);
+  return memberDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function removeTenantMember(

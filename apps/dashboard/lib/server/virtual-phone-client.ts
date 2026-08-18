@@ -4,6 +4,7 @@ import {
   type DeliveryMode,
   type MessagingSettings,
   messagingSettings,
+  unwrapEnvelope,
   type VirtualPhoneInbox,
   type VirtualPhoneReplyResponse,
   virtualPhoneInbox,
@@ -37,7 +38,7 @@ async function request(
       },
     },
   );
-  const payload = (await response.json()) as unknown;
+  const payload = unwrapEnvelope((await response.json()) as unknown);
   if (!response.ok) throw new BffError(response.status, payload);
   return payload;
 }

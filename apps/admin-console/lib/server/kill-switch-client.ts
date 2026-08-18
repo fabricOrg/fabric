@@ -7,6 +7,7 @@ import {
   listKillSwitchesResponseSchema,
   type ToggleKillSwitchRequest,
 } from "@app/contracts";
+import { unwrapEnvelope } from "./response-envelope";
 
 /** Kill-switch control plane via the api's BffToken-guarded /internal/admin/kill-switches. */
 export class KillSwitchApiError extends Error {
@@ -35,7 +36,7 @@ export async function listKillSwitches(): Promise<ListKillSwitchesResponse> {
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new KillSwitchApiError(response.status, payload);
-  return listKillSwitchesResponseSchema.parse(payload);
+  return listKillSwitchesResponseSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function toggleKillSwitch(
@@ -63,5 +64,5 @@ export async function toggleKillSwitch(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new KillSwitchApiError(response.status, payload);
-  return killSwitchDtoSchema.parse(payload);
+  return killSwitchDtoSchema.parse(unwrapEnvelope(payload));
 }

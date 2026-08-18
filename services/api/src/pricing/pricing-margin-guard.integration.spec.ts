@@ -104,8 +104,8 @@ describeDb("pricing margin guard", () => {
     const vendor = `margin-guard-${randomUUID()}`;
     await db.db.execute(sql`
       INSERT INTO provider_cost_rates
-        (provider_vendor, channel, currency, unit_basis, numerator_minor, denominator, effective_from)
-      VALUES (${vendor}, 'whatsapp', 'USD', 'message', 200, 1, now() - interval '1 hour')`);
+        (provider_vendor, channel, currency, unit_basis, numerator_minor, denominator, effective_from, source_reference)
+      VALUES (${vendor}, 'whatsapp', 'USD', 'message', 200, 1, now() - interval '1 hour', 'margin guard spec')`);
     vendors.push(vendor);
 
     const belowCost = req([{ channel: "whatsapp", currency: "USD", p: "12" }]);

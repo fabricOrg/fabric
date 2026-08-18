@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ErasureResult, SubjectSummary } from "@app/contracts";
+import { unwrapEnvelope } from "./response-envelope";
 
 /**
  * DSR (data-subject rights) calls into the api. Server-only: the BFF token never reaches a browser,
@@ -25,7 +26,7 @@ export class PrivacyApiError extends Error {
 }
 
 async function parse(response: Response): Promise<unknown> {
-  const payload = await response.json().catch(() => null);
+  const payload = unwrapEnvelope(await response.json().catch(() => null));
   if (!response.ok) throw new PrivacyApiError(response.status, payload);
   return payload;
 }
@@ -34,7 +35,7 @@ async function parse(response: Response): Promise<unknown> {
 export async function lookupSubject(
   tenantId: string,
   msisdn: string,
-): Promise<SubjectSummary | { found: false }> {
+): Promise<SubjectSummary> {
   const { baseUrl, bffToken } = config();
   const url = new URL(
     `/internal/admin/privacy/tenants/${tenantId}/subject`,
@@ -45,7 +46,7 @@ export async function lookupSubject(
     cache: "no-store",
     headers: { "x-bff-token": bffToken },
   });
-  return (await parse(response)) as SubjectSummary | { found: false };
+  return (await parse(response)) as SubjectSummary;
 }
 
 /** IRREVERSIBLE. Destroys the subject's key; no backup brings the data back. */

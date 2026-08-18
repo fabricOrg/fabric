@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import { STATUS_RANK } from "@app/integrations";
 import type { ConfigService } from "@nestjs/config";
@@ -58,7 +59,8 @@ describeDb("SDK-007 managed email dispatch recovery", () => {
     });
     expect(response.statusCode).toBe(202);
     return String(
-      (response.json() as { delivery: { id: string } }).delivery.id,
+      (unwrapEnvelope(response.json()) as { delivery: { id: string } }).delivery
+        .id,
     );
   }
 

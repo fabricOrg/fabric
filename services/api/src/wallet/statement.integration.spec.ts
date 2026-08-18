@@ -4,6 +4,7 @@
 // construction, not by trust. tier: test:integration.
 // ============================================================================================
 
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import { credit, refund, reserve } from "@app/wallet";
 import { NestFactory } from "@nestjs/core";
@@ -177,8 +178,8 @@ describe("statement export (B1)", () => {
       headers: { authorization: `Bearer ${KEY}` },
     });
     expect(res.statusCode).toBe(400);
-    expect((res.json() as { error: { code: string } }).error.code).toBe(
-      "invalid_period",
-    );
+    expect(
+      (unwrapEnvelope(res.json()) as { error: { code: string } }).error.code,
+    ).toBe("invalid_period");
   });
 });

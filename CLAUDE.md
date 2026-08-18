@@ -276,3 +276,69 @@ Bulk work is routed to external agent CLIs to conserve Claude quota — see
 - **`dev` is shared** (§5) — a delegate never rebases, resets, or force-pushes it, and
   never advances it outside a squash-merge.
 
+
+---
+
+## 11. Pre-production: breaking changes are ALLOWED
+
+**Status: DEVELOPMENT. This section is live until the project owner says we are in production.**
+
+Fabric has no external callers to protect. Treating a pre-prod codebase as if it did is how an
+inconsistency becomes permanent at launch — three different webhook acknowledgement shapes, a list
+endpoint returning a bare array while every sibling returns an envelope, a request body parsed with
+an unchecked cast. Each of those survived a review by being labelled "breaking to change".
+
+So, until told otherwise:
+
+- **Break freely.** Response shapes, request contracts, enum values, route paths, database columns.
+- **Do not build a compatibility path** — no deprecation window, no dual-shape adapter, no
+  `v2` alias — unless explicitly asked for one.
+- **Fix the inconsistency at its source** rather than documenting it as a known quirk. A doc entry
+  describing a wart is a decision to keep the wart.
+- **Say so in the commit body**: "breaking, pre-prod, allowed by §11". The change still gets a
+  message explaining what moved and why.
+
+**This does NOT waive §7.** Those redlines are about SAFETY, not compatibility: no `terraform
+apply`, no deploy-gate flips, no live SMS or payments, no production database access, no live
+external write without explicit human confirmation. "Breaking changes are allowed" means
+compatibility is not a constraint. It does not mean risk is not a constraint.
+
+**The §5 review gate still applies.** A breaking change is reviewed like any other — arguably more
+carefully, since nothing downstream will catch it.
+
+**When production is declared, delete this section** and replace it with the versioning policy
+(F8.1). Leaving it in place after go-live would authorise exactly the wrong thing.
+
+---
+
+## 12. An endpoint is not usable until it is documented AND proven
+
+**Hard rule. No endpoint may be consumed — by the dashboard, the admin console, the SDK, a
+customer, or a test fixture — until all three of these are true.**
+
+1. **It has a route binding** in `services/api/src/openapi/route-bindings/`, naming its summary,
+   tags, visibility, security scheme, and the zod contracts for its request and response.
+2. **It appears in the emitted artifact.** `pnpm openapi:generate` writes it; `pnpm openapi:check`
+   proves the committed copy is current.
+3. **It has been exercised against a running API and returned 2xx** —
+   `pnpm --filter @app/api contracts:probe`, or an integration test that calls it over HTTP.
+
+Step 1 is already mechanical: `assertCoverage` FAILS THE BUILD when a route has no binding, so an
+undocumented endpoint cannot reach `dev`. Steps 2 and 3 are the ones a person can still skip, and
+they are the ones that matter — a documented endpoint that has never been called is a claim, not a
+capability.
+
+**Why this rule exists.** Every false "it works" in this repo has had the same shape: a schema, a
+green gate, or a deploy log was trusted instead of a response. The WhatsApp channel shipped and was
+absent from the API reference for weeks with every pipeline green. A CSV export was documented as
+JSON. A read DTO inherited a write constraint and 500'd on real rows. None of those were caught by
+a type, a test, or a review — each was caught the first time something actually called the endpoint.
+
+**What "proven" means.** A 2xx from the real route, with response validation strict (the default
+outside production), so the payload was checked against the schema the document publishes. A 404
+because the environment has no such row does not count as proven; neither does a unit test that
+calls the controller method directly, since that bypasses the guards, the pipes and the envelope.
+
+**When it cannot be proven** — a route needing a live provider, a funded wallet, or an approved
+sender — say so explicitly in the PR rather than letting the gap pass as done. An unprovable
+endpoint is a known risk; an unproven one presented as working is how the last one got shipped.

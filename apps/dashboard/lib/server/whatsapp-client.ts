@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  unwrapEnvelope,
   type WhatsappMessageListResponse,
   type WhatsappSendRequest,
   type WhatsappSendResponse,
@@ -43,7 +44,9 @@ async function request(
       },
     },
   );
-  const payload: unknown = await response.json().catch(() => null);
+  const payload: unknown = unwrapEnvelope(
+    await response.json().catch(() => null),
+  );
   if (!response.ok) throw new BffError(response.status, payload);
   return payload;
 }

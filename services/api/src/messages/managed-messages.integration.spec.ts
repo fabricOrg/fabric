@@ -17,6 +17,7 @@ import {
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../app.module.js";
+import { jsonBody } from "../testing/response.js";
 import {
   cleanManagedTenant,
   seedManagedTenant,
@@ -102,8 +103,9 @@ describeDb(
     it("persists one delivery + attempt + message and replays byte-for-byte on the same key", async () => {
       const first = await send(payload, "send-001");
       expect(first.statusCode).toBe(202);
-      const delivery = (first.json() as { delivery: Record<string, unknown> })
-        .delivery;
+      const delivery = (
+        jsonBody(first) as { delivery: Record<string, unknown> }
+      ).delivery;
       expect(delivery).toMatchObject({
         key: "order.shipped",
         environment: "sandbox",
@@ -136,7 +138,8 @@ describeDb(
 
       const replay = await send(payload, "send-001");
       expect(replay.statusCode).toBe(202);
-      const replayed = (replay.json() as { delivery: { id: string } }).delivery;
+      const replayed = (jsonBody(replay) as { delivery: { id: string } })
+        .delivery;
       // Deterministic delivery id: same tenant/app/env/key → the same resource, not a sibling.
       expect(replayed.id).toBe(delivery.id);
       // The load-bearing guarantee: no second message, reserve, attempt, or outbox event.
@@ -145,7 +148,7 @@ describeDb(
 
     it("retrieves the delivery by id with its attempt history", async () => {
       const sent = await send(payload, "send-001");
-      const id = (sent.json() as { delivery: { id: string } }).delivery.id;
+      const id = (jsonBody(sent) as { delivery: { id: string } }).delivery.id;
       const response = await app.inject({
         method: "GET",
         url: `/v1/message-deliveries/${id}`,
@@ -153,7 +156,7 @@ describeDb(
       });
       expect(response.statusCode).toBe(200);
       const delivery = (
-        response.json() as {
+        jsonBody(response) as {
           delivery: { id: string; attempts: unknown[] };
         }
       ).delivery;
@@ -175,7 +178,7 @@ describeDb(
       const ids = new Set(
         [a, b, c].map(
           (response) =>
-            (response.json() as { delivery: { id: string } }).delivery.id,
+            (jsonBody(response) as { delivery: { id: string } }).delivery.id,
         ),
       );
       expect(ids.size).toBe(1);
@@ -197,7 +200,7 @@ describeDb(
         headers: { authorization: `Bearer ${rawKey}` },
       });
       expect(response.statusCode).toBe(200);
-      const { deliveries } = response.json() as {
+      const { deliveries } = jsonBody(response) as {
         deliveries: Array<Record<string, unknown>>;
       };
       // send-001 + the concurrent-race delivery from the earlier tests.
@@ -219,11 +222,13 @@ describeDb(
           headers: { authorization: `Bearer ${rawKey}` },
         });
       const sent = await send(payload, "send-001");
-      const id = (sent.json() as { delivery: { id: string } }).delivery.id;
+      const id = (jsonBody(sent) as { delivery: { id: string } }).delivery.id;
       // No endpoints registered → observable, just empty.
       const before = await getWebhooks(id);
       expect(before.statusCode).toBe(200);
-      expect((before.json() as { webhooks: unknown[] }).webhooks).toEqual([]);
+      expect((jsonBody(before) as { webhooks: unknown[] }).webhooks).toEqual(
+        [],
+      );
 
       // Register an endpoint and fan the acceptance event out to it (the poller's job — its own
       // worker specs cover fan-out; here we assert the delivery-scoped observability read).
@@ -248,7 +253,7 @@ describeDb(
 
       const response = await getWebhooks(id);
       expect(response.statusCode).toBe(200);
-      const { webhooks } = response.json() as {
+      const { webhooks } = jsonBody(response) as {
         webhooks: Array<Record<string, unknown>>;
       };
       expect(webhooks).toHaveLength(1);
@@ -275,7 +280,7 @@ describeDb(
         headers: auth,
       });
       expect(missing.statusCode).toBe(400);
-      expect(missing.json()).toMatchObject({
+      expect(jsonBody(missing)).toMatchObject({
         error: { code: "environment_id_required" },
       });
       const listed = await app.inject({
@@ -284,7 +289,7 @@ describeDb(
         headers: auth,
       });
       expect(listed.statusCode).toBe(200);
-      const first = (listed.json() as { deliveries: Array<{ id: string }> })
+      const first = (jsonBody(listed) as { deliveries: Array<{ id: string }> })
         .deliveries[0];
       if (!first) throw new Error("expected at least one delivery");
       const detail = await app.inject({
@@ -293,8 +298,9 @@ describeDb(
         headers: auth,
       });
       expect(detail.statusCode).toBe(200);
-      const delivery = (detail.json() as { delivery: { attempts: unknown[] } })
-        .delivery;
+      const delivery = (
+        jsonBody(detail) as { delivery: { attempts: unknown[] } }
+      ).delivery;
       expect(delivery.attempts).toHaveLength(1);
     });
 
@@ -305,7 +311,7 @@ describeDb(
         "send-001",
       );
       expect(response.statusCode).toBe(409);
-      expect(response.json()).toMatchObject({
+      expect(jsonBody(response)).toMatchObject({
         error: { code: "idempotency_conflict" },
       });
       expect(await counts()).toEqual(before);
@@ -314,7 +320,7 @@ describeDb(
     it("requires an Idempotency-Key header", async () => {
       const response = await send(payload);
       expect(response.statusCode).toBe(400);
-      expect(response.json()).toMatchObject({
+      expect(jsonBody(response)).toMatchObject({
         error: { code: "idempotency_key_required" },
       });
     });
@@ -329,7 +335,7 @@ describeDb(
         "send-cost-cap",
       );
       expect(response.statusCode).toBe(400);
-      expect(response.json()).toMatchObject({
+      expect(jsonBody(response)).toMatchObject({
         error: { code: "max_cost_exceeded" },
       });
       expect(await counts()).toEqual(before);
@@ -341,7 +347,7 @@ describeDb(
         "send-invalid",
       );
       expect(response.statusCode).toBe(400);
-      expect(response.json()).toMatchObject({
+      expect(jsonBody(response)).toMatchObject({
         error: { code: "missing_required" },
       });
     });

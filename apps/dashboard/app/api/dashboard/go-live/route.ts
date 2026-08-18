@@ -2,7 +2,7 @@
 // The tenant id and requester email come from the AUTHENTICATED SESSION — never the client body —
 // and ride to the api as x-tenant-id / x-actor-email under the BFF service token.
 
-import { goLiveRequestSchema } from "@app/contracts";
+import { goLiveRequestSchema, unwrapEnvelope } from "@app/contracts";
 import { NextResponse } from "next/server";
 import {
   readDashboardSession,
@@ -43,7 +43,9 @@ export async function GET() {
       headers: { "x-bff-token": bffToken, "x-tenant-id": session.orgId },
     },
   );
-  return NextResponse.json(await response.json(), {
+  // Unwrap before proxying: the browser component reads the fields directly, and passing the
+  // envelope through renders every one of them undefined.
+  return NextResponse.json(unwrapEnvelope(await response.json()), {
     status: response.status,
   });
 }
@@ -90,7 +92,9 @@ export async function POST(request: Request) {
       body: JSON.stringify(parsed.data),
     },
   );
-  return NextResponse.json(await response.json(), {
+  // Unwrap before proxying: the browser component reads the fields directly, and passing the
+  // envelope through renders every one of them undefined.
+  return NextResponse.json(unwrapEnvelope(await response.json()), {
     status: response.status,
   });
 }

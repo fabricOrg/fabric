@@ -171,9 +171,14 @@ const fallbackRates = Object.fromEntries(
     };
 
     const publishedRates = (payload: unknown): CalculatorRates | null => {
-      if (!isRecord(payload) || !Array.isArray(payload.rates)) return null;
+      // The API wraps every JSON success in `{ data, request_id }`. Without unwrapping,
+      // `payload.rates` is undefined, publishedRates returns null, and the calculator silently
+      // falls back to hard-coded numbers — no error, no console output. That exact failure is
+      // what the comment below already warns about.
+      const envelope = isRecord(payload) && "data" in payload ? payload.data : payload;
+      if (!isRecord(envelope) || !Array.isArray(envelope.rates)) return null;
       const next: Record<string, { sms?: number; email?: number }> = {};
-      for (const rate of payload.rates) {
+      for (const rate of envelope.rates) {
         // `continue`, NOT `return null`. The published book carries every channel staff priced, and
         // this calculator only quotes SMS and email — so a WhatsApp rate is an unrecognised ROW, not a
         // broken payload. Discarding the whole response for it silently reverted the page to the

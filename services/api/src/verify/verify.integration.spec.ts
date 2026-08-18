@@ -5,6 +5,7 @@
 // present for sandbox tenants and ABSENT for live ones. tier: test:integration.
 // ============================================================================================
 
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import { credit } from "@app/wallet";
 import { NestFactory } from "@nestjs/core";
@@ -138,7 +139,7 @@ describe("Verify V1 (golden path core)", () => {
   it("start → metered OTP SMS (sandbox allowance, virtual phone) → wrong codes bounded → verify → idempotent re-check", async () => {
     const started = await post(SANDBOX_KEY, "/v1/verify", { to: PHONE });
     expectStatus(started, 201);
-    const startBody = started.json() as {
+    const startBody = unwrapEnvelope(started.json()) as {
       id: string;
       status: string;
       debug_code?: string;
@@ -176,9 +177,9 @@ describe("Verify V1 (golden path core)", () => {
       code: wrongCode,
     });
     expectStatus(wrong, 400);
-    expect((wrong.json() as { error: { code: string } }).error.code).toBe(
-      "verification_invalid_code",
-    );
+    expect(
+      (unwrapEnvelope(wrong.json()) as { error: { code: string } }).error.code,
+    ).toBe("verification_invalid_code");
 
     // Correct code verifies.
     const ok = await post(SANDBOX_KEY, "/v1/verify/check", {
@@ -186,22 +187,26 @@ describe("Verify V1 (golden path core)", () => {
       code: startBody.debug_code,
     });
     expectStatus(ok, 201);
-    expect((ok.json() as { status: string }).status).toBe("verified");
+    expect((unwrapEnvelope(ok.json()) as { status: string }).status).toBe(
+      "verified",
+    );
 
     // Re-check of a verified id = idempotent success.
     const again = await post(SANDBOX_KEY, "/v1/verify/check", {
       id: startBody.id,
       code: startBody.debug_code,
     });
-    expect((again.json() as { status: string }).status).toBe("verified");
+    expect((unwrapEnvelope(again.json()) as { status: string }).status).toBe(
+      "verified",
+    );
   });
 
   it("throttles an immediate resend to the same number", async () => {
     const res = await post(SANDBOX_KEY, "/v1/verify", { to: PHONE });
     expectStatus(res, 400);
-    expect((res.json() as { error: { code: string } }).error.code).toBe(
-      "verify_resend_throttled",
-    );
+    expect(
+      (unwrapEnvelope(res.json()) as { error: { code: string } }).error.code,
+    ).toBe("verify_resend_throttled");
   });
 
   it("exhausts after max wrong attempts and rejects further checks", async () => {
@@ -209,7 +214,7 @@ describe("Verify V1 (golden path core)", () => {
       to: `+23324${SUFFIX}2`,
     });
     expectStatus(started, 201); // a throttled/failed start would cascade confusingly
-    const { id, debug_code } = started.json() as {
+    const { id, debug_code } = unwrapEnvelope(started.json()) as {
       id: string;
       debug_code: string;
     };
@@ -223,9 +228,9 @@ describe("Verify V1 (golden path core)", () => {
       code: debug_code,
     });
     expectStatus(after, 400);
-    expect((after.json() as { error: { code: string } }).error.code).toBe(
-      "verification_exhausted",
-    );
+    expect(
+      (unwrapEnvelope(after.json()) as { error: { code: string } }).error.code,
+    ).toBe("verification_exhausted");
   });
 
   it("rejects an expired code (expiry forced in the DB)", async () => {
@@ -235,7 +240,7 @@ describe("Verify V1 (golden path core)", () => {
     // This is the assertion that failed once in CI (#253) as a bare `400 ≠ 201`. It now reports the
     // error body, which is the only way the next occurrence gets diagnosed.
     expectStatus(started, 201);
-    const { id, debug_code } = started.json() as {
+    const { id, debug_code } = unwrapEnvelope(started.json()) as {
       id: string;
       debug_code: string;
     };
@@ -250,9 +255,9 @@ describe("Verify V1 (golden path core)", () => {
       code: debug_code,
     });
     expectStatus(res, 400);
-    expect((res.json() as { error: { code: string } }).error.code).toBe(
-      "verification_expired",
-    );
+    expect(
+      (unwrapEnvelope(res.json()) as { error: { code: string } }).error.code,
+    ).toBe("verification_expired");
   });
 
   it("overview: real funnel + recent list, masked recipients (V2 surface)", async () => {
@@ -262,7 +267,7 @@ describe("Verify V1 (golden path core)", () => {
       headers: { authorization: `Bearer ${SANDBOX_KEY}` },
     });
     expectStatus(res, 200);
-    const overview = res.json() as {
+    const overview = unwrapEnvelope(res.json()) as {
       recent: Array<{ msisdn: string; status: string }>;
       stats: { sent: number; delivered: number; verified: number };
       trend: Array<{ attempts: number; verified: number }>;
@@ -284,7 +289,7 @@ describe("Verify V1 (golden path core)", () => {
     });
     expectStatus(started, 201);
     expect(
-      (started.json() as { debug_code?: string }).debug_code,
+      (unwrapEnvelope(started.json()) as { debug_code?: string }).debug_code,
     ).toBeUndefined();
   });
 });

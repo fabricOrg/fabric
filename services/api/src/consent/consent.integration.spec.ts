@@ -5,6 +5,7 @@
 // bind promo only (deterministic against the pure window fn). tier: test:integration.
 // ============================================================================================
 
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import { credit } from "@app/wallet";
 import { NestFactory } from "@nestjs/core";
@@ -65,7 +66,7 @@ function describeResponse(response: {
 }) {
   const body = (() => {
     try {
-      return response.json() as { error?: { code?: string } };
+      return unwrapEnvelope(response.json()) as { error?: { code?: string } };
     } catch {
       return undefined;
     }
@@ -143,16 +144,16 @@ describe("consent / DND enforcement (E10-S5)", () => {
       scope: "promotional",
     });
     expect(added.statusCode).toBe(201);
-    const dto = added.json() as { id: string; msisdn: string };
+    const dto = unwrapEnvelope(added.json()) as { id: string; msisdn: string };
     optOutId = dto.id;
     expect(dto.msisdn).not.toContain(SUFFIX); // masked — raw number never echoed
 
     const promo = await send({ class: "promotional" });
     expect(promo.statusCode).toBe(400);
     // Suppression is checked before quiet hours, so this is deterministic day or night.
-    expect((promo.json() as { error: { code: string } }).error.code).toBe(
-      "recipient_opted_out",
-    );
+    expect(
+      (unwrapEnvelope(promo.json()) as { error: { code: string } }).error.code,
+    ).toBe("recipient_opted_out");
 
     const transactional = await send({});
     expect(transactional.statusCode).toBe(201); // OTP/receipts bypass DND 24/7
@@ -164,12 +165,15 @@ describe("consent / DND enforcement (E10-S5)", () => {
       scope: "all",
     });
     expect(upgraded.statusCode).toBe(201);
-    expect((upgraded.json() as { id: string }).id).toBe(optOutId); // upsert, not a second row
+    expect((unwrapEnvelope(upgraded.json()) as { id: string }).id).toBe(
+      optOutId,
+    ); // upsert, not a second row
 
     const transactional = await send({});
     expect(transactional.statusCode).toBe(400);
     expect(
-      (transactional.json() as { error: { code: string } }).error.code,
+      (unwrapEnvelope(transactional.json()) as { error: { code: string } })
+        .error.code,
     ).toBe("recipient_opted_out");
   });
 
@@ -185,9 +189,10 @@ describe("consent / DND enforcement (E10-S5)", () => {
     if (!registry) throw new Error("registry opt-out insert returned no row");
     const removed = await optOuts("DELETE", `/${registry.id}`);
     expect(removed.statusCode).toBe(400);
-    expect((removed.json() as { error: { code: string } }).error.code).toBe(
-      "managed_opt_out",
-    );
+    expect(
+      (unwrapEnvelope(removed.json()) as { error: { code: string } }).error
+        .code,
+    ).toBe("managed_opt_out");
     await owner`DELETE FROM opt_outs WHERE id = ${registry.id}`;
   });
 
@@ -195,7 +200,9 @@ describe("consent / DND enforcement (E10-S5)", () => {
     const removed = await optOuts("DELETE", `/${optOutId}`);
     expect(removed.statusCode).toBe(200);
     const list = await optOuts("GET");
-    expect((list.json() as { opt_outs: unknown[] }).opt_outs).toHaveLength(0);
+    expect(
+      (unwrapEnvelope(list.json()) as { opt_outs: unknown[] }).opt_outs,
+    ).toHaveLength(0);
     const transactional = await send({});
     expect(transactional.statusCode).toBe(201);
   });

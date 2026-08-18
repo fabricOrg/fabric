@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { createHmac, randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import type { Creds } from "@app/integrations";
 import { credit } from "@app/wallet";
@@ -235,7 +236,7 @@ describeDb("WhatsApp template lifecycle", () => {
 
     const blocked = await send("order_update", "wa-template-paused");
     expect(blocked.statusCode).toBe(400);
-    expect(blocked.json()).toMatchObject({
+    expect(unwrapEnvelope(blocked.json())).toMatchObject({
       error: { code: "whatsapp_template_paused" },
     });
   });
@@ -266,7 +267,9 @@ describeDb("WhatsApp template lifecycle", () => {
       "wa-stale-open",
     );
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({ status: "accepted" });
+    expect(unwrapEnvelope(response.json())).toMatchObject({
+      status: "accepted",
+    });
   });
 
   async function fund(key: string): Promise<void> {

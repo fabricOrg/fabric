@@ -1,6 +1,6 @@
 import "server-only";
 
-import { mintTenantTokenResponseSchema } from "@app/contracts";
+import { mintTenantTokenResponseSchema, unwrapEnvelope } from "@app/contracts";
 import type { AppSession } from "@app/fe-auth";
 import { readDashboardSession, refreshDashboardSession } from "./auth";
 
@@ -59,7 +59,7 @@ async function mintTenantToken(tenantId: string): Promise<string> {
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new BffError(response.status, payload);
-  const minted = mintTenantTokenResponseSchema.parse(payload);
+  const minted = mintTenantTokenResponseSchema.parse(unwrapEnvelope(payload));
   cacheTenantToken(tenantId, {
     token: minted.token,
     expiresAt: Date.now() + minted.expires_in * 1000,
@@ -112,7 +112,10 @@ async function apiRequest<T>(
       ? undefined
       : ((await response.json().catch(() => null)) as unknown);
   if (!response.ok) throw new BffError(response.status, payload);
-  return payload as T;
+  // The API wraps every JSON success in `{ data, request_id }` (contracts/envelope.ts). Unwrapping
+  // HERE keeps all ~24 client modules untouched — the envelope is a transport concern, not
+  // something every caller should destructure. Errors keep their own envelope and are thrown above.
+  return unwrapEnvelope(payload) as T;
 }
 
 function requirePermission(session: AppSession, permission: string): void {

@@ -12,6 +12,7 @@ import { hashApiKey } from "../api-keys/api-key.crypto.js";
 import { AppModule } from "../app.module.js";
 import { EffectivePricingService } from "../pricing/effective-pricing.service.js";
 import { effectivePricingStub } from "../testing/effective-pricing.stub.js";
+import { jsonBody } from "../testing/response.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
 const APP_URL = process.env.DATABASE_URL_APP;
@@ -154,7 +155,7 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
     });
 
     expect(res.statusCode).toBe(201);
-    const json = res.json() as {
+    const json = jsonBody(res) as {
       id: string;
       status: string;
       request_id: string;
@@ -191,7 +192,7 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
     });
 
     expect(res.statusCode).toBe(201);
-    expect((res.json() as { status: string }).status).toBe("delivered");
+    expect((jsonBody(res) as { status: string }).status).toBe("delivered");
     // post-commit DLR is a no-op for money (decideResolution → 'none'): balances unchanged.
     expect(await balance("customer")).toBe(customerBefore);
     expect(await balance("revenue")).toBe(revenueBefore);
@@ -206,7 +207,7 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
       headers,
     });
     expect(messages.statusCode).toBe(200);
-    const messageBody = messages.json() as {
+    const messageBody = jsonBody(messages) as {
       messages: Array<{ id: string; status: string; cost: { minor: string } }>;
       request_id: string;
     };
@@ -227,7 +228,7 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
       headers,
     });
     expect(detail.statusCode).toBe(200);
-    expect(detail.json()).toMatchObject({
+    expect(jsonBody(detail)).toMatchObject({
       message: {
         id: messageId,
         status: "delivered",
@@ -241,7 +242,7 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
       headers,
     });
     expect(wallet.statusCode).toBe(200);
-    const walletBody = wallet.json() as {
+    const walletBody = jsonBody(wallet) as {
       balances: Array<{ balance: { currency: string; minor: string } }>;
       ledger: Array<{
         type: string;
@@ -272,7 +273,9 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
       headers,
     });
     expect(messages.statusCode).toBe(200);
-    expect((messages.json() as { messages: unknown[] }).messages).toEqual([]);
+    expect((jsonBody(messages) as { messages: unknown[] }).messages).toEqual(
+      [],
+    );
 
     const detail = await app.inject({
       method: "GET",
@@ -318,7 +321,7 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
     });
 
     expect(res.statusCode).toBe(201);
-    expect((res.json() as { status: string }).status).toBe("failed");
+    expect((jsonBody(res) as { status: string }).status).toBe("failed");
     // reserve-then-refund nets to zero: customer restored, nothing parked, no revenue recognized.
     expect(await balance("customer")).toBe(customerBefore);
     expect(await balance("reserved_clearing")).toBe(0n);

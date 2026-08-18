@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import type { WhatsAppSenderPlugin } from "@app/integrations";
 import { FakeWhatsAppProvider } from "@app/integrations/testing/whatsapp";
@@ -130,7 +131,7 @@ describeDb("public WhatsApp API", () => {
   it("rejects API keys without whatsapp:send", async () => {
     const response = await send(noScopeKey, "missing-scope-1");
     expect(response.statusCode).toBe(403);
-    expect(response.json()).toMatchObject({
+    expect(unwrapEnvelope(response.json())).toMatchObject({
       error: { code: "insufficient_scope" },
     });
   });
@@ -140,7 +141,7 @@ describeDb("public WhatsApp API", () => {
     const replay = await send(sandboxKey, "wa-sandbox-1");
     expect(first.statusCode).toBe(201);
     expect(replay.statusCode).toBe(201);
-    const body = first.json() as {
+    const body = unwrapEnvelope(first.json()) as {
       id: string;
       provider: string;
       status: string;
@@ -148,7 +149,9 @@ describeDb("public WhatsApp API", () => {
     messageId = body.id;
     expect(body.provider).toBe("sandbox-whatsapp");
     expect(body.status).toBe("accepted");
-    expect((replay.json() as { id: string }).id).toBe(messageId);
+    expect((unwrapEnvelope(replay.json()) as { id: string }).id).toBe(
+      messageId,
+    );
 
     const rows = await owner`
       SELECT m.provider_slug, m.provider_ref, m.subject_id, m.cost_minor::text AS cost_minor
@@ -216,7 +219,7 @@ describeDb("public WhatsApp API", () => {
       );
     const response = await send(sandboxKey, "wa-paused-1");
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toMatchObject({
+    expect(unwrapEnvelope(response.json())).toMatchObject({
       error: { code: "whatsapp_sending_paused" },
     });
     await app
@@ -231,7 +234,7 @@ describeDb("public WhatsApp API", () => {
   it("refuses live sends with no funding before dispatch", async () => {
     const response = await send(liveKey, "wa-unfunded-1");
     expect(response.statusCode).toBe(402);
-    expect(response.json()).toMatchObject({
+    expect(unwrapEnvelope(response.json())).toMatchObject({
       error: { code: "insufficient_funds" },
     });
   });
@@ -248,15 +251,15 @@ describeDb("public WhatsApp API", () => {
     const replay = await send(liveKey, "wa-live-funded-1");
     expect(first.statusCode).toBe(201);
     expect(replay.statusCode).toBe(201);
-    expect((replay.json() as { id: string }).id).toBe(
-      (first.json() as { id: string }).id,
+    expect((unwrapEnvelope(replay.json()) as { id: string }).id).toBe(
+      (unwrapEnvelope(first.json()) as { id: string }).id,
     );
     // A send legitimately writes TWO ledger rows against one reference: the `pending` reserve and the
     // `committed` terminal. Counting all `sms_charge` rows and expecting 1 therefore fails on a
     // perfectly correct send — it reads as a double charge and is not one. What "charged once" means
     // is exactly one TERMINAL transaction for this message, which is also what the partial unique
     // index on (tenant_id, reference_id) WHERE status IN ('committed','refunded') enforces.
-    const messageId = (first.json() as { id: string }).id;
+    const messageId = (unwrapEnvelope(first.json()) as { id: string }).id;
     const terminal = await owner`
       SELECT count(*)::int AS count FROM ledger_transactions
        WHERE tenant_id = ${tenantId}
@@ -283,7 +286,7 @@ describeDb("public WhatsApp API", () => {
     try {
       const res = await send(liveKey, `wa-live-fail-${randomUUID()}`);
       expect(res.statusCode).toBe(201);
-      const id = (res.json() as { id: string }).id;
+      const id = (unwrapEnvelope(res.json()) as { id: string }).id;
 
       const [msg] = await owner`
         SELECT status::text, provider_ref FROM whatsapp_messages WHERE id = ${id}`;
