@@ -1,4 +1,11 @@
-import { Controller, Get, Header, Inject, UseGuards } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Header,
+  Inject,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
 import { DocsAccessGuard } from "./docs-access.guard.js";
 import { OpenApiService } from "./openapi.service.js";
 
@@ -11,9 +18,17 @@ import { OpenApiService } from "./openapi.service.js";
  * one — which is correct and worth stating plainly, because the comment here used to claim it was
  * excluded from its own spec, and it never was.
  */
+/** Structural reply shape — fastify is not a direct dependency of this package. */
+interface ReplyLike {
+  status(code: number): unknown;
+}
+
 @Controller("docs")
 @UseGuards(DocsAccessGuard)
 export class OpenApiController {
+  /** Rendered once per process: the document cannot change without a restart. */
+  private rendered: string | null = null;
+
   constructor(
     @Inject(OpenApiService) private readonly openapi: OpenApiService,
   ) {}
@@ -23,8 +38,29 @@ export class OpenApiController {
   // Belt and braces: a token-gated page must never be cached by an intermediary.
   @Header("cache-control", "no-store")
   @Header("x-robots-tag", "noindex, nofollow")
-  async page(): Promise<string> {
-    return docsPage(await this.openapi.servedDocument());
+  async page(@Res({ passthrough: true }) reply: ReplyLike): Promise<string> {
+    if (this.rendered) return this.rendered;
+    try {
+      this.rendered = docsPage(await this.openapi.servedDocument());
+      return this.rendered;
+    } catch {
+      // 503, not 200. A page whose body reads "unavailable" while its status says OK is a lie a
+      // monitor believes; `passthrough` sets the status without taking over serialisation.
+      reply.status(503);
+      // ANSWER IN HTML, ALWAYS. `servedDocument()` throws a 503 whose message names the exact
+      // command that fixes it — but `@Header` has already stamped `text/html` on this reply, and
+      // Nest's Fastify adapter only repairs the content-type when the error body carries a
+      // `statusCode` key, which our envelope does not. The JSON envelope therefore goes out under
+      // `text/html` and dies in Fastify's serializer as
+      // `500 Attempted to send payload of invalid type 'object'` — destroying the one message an
+      // operator needed, at the only moment it exists. Measured, not theorised: that is verbatim
+      // what `/docs` returned with the artifact missing.
+      //
+      // `wallet.controller.ts` avoids `@Header` for this same reason, and the response interceptor
+      // repoints the content-type before throwing. This page is HTML either way, so it degrades to
+      // an HTML page rather than juggling the header.
+      return DOCS_UNAVAILABLE_HTML;
+    }
   }
 
   @Get("openapi.json")
@@ -47,13 +83,22 @@ export class OpenApiController {
  * substituted bytes fail to execute; the pin makes the bytes predictable. Bump both together.
  *
  * THE DOCUMENT IS EMBEDDED, NOT FETCHED, and that is the fix for a page that rendered its shell and
- * then said "Document 'api-1' could not be loaded" on the deployed environment. Handing Scalar a
- * `url` makes the BROWSER fetch it as a second request, and that request did not carry the Basic
- * credential the page itself was opened with. The `fetch` override that was supposed to solve it —
- * passing `credentials: "same-origin"` — is not a supported configuration option, so it was silently
- * ignored; it read like protection and did nothing. `content` is documented, removes the second
- * request altogether, and cannot desynchronise from what `/docs/openapi.json` would have served
- * because both come from `servedDocument()`.
+ * then said "Document 'api-1' could not be loaded" on the deployed environment.
+ *
+ * WHAT IS ESTABLISHED: handing Scalar a `url` makes the BROWSER issue a second request for the
+ * document, and that request failed on the deployed environment while `/docs/openapi.json` answered
+ * 200 to curl. WHAT IS NOT: exactly why. The obvious suspect is the Basic credential not being
+ * replayed on the sub-request, but nobody measured it, and this comment is not the place to record
+ * a guess as a cause — `content` is the fix because it deletes the dependency, not because the
+ * dependency was diagnosed.
+ *
+ * One thing to correct for whoever reads this next: Scalar DOES have a fetch hook, spelled
+ * `customFetch`. The old code passed `fetch`, which is not a configuration key, so it was ignored —
+ * but even spelled correctly it would have changed nothing, because `fetch()` already defaults to
+ * `credentials: "same-origin"`. It read like protection and was a no-op twice over.
+ *
+ * `content` is documented, removes the second request altogether, and cannot desynchronise from what
+ * `/docs/openapi.json` would have served because both come from `servedDocument()`.
  */
 function docsPage(document: Record<string, unknown>): string {
   // `<` is escaped so a string anywhere in the document cannot close this script tag early. The
@@ -79,3 +124,27 @@ function docsPage(document: Record<string, unknown>): string {
   </body>
 </html>`;
 }
+
+/**
+ * Shown when the specification cannot be assembled. Names the command that fixes it, because the
+ * audience is an operator who can run it, and says nothing else — the guard has already established
+ * they hold the operator token, but a failure page is still a poor place to volunteer internals.
+ */
+const DOCS_UNAVAILABLE_HTML = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Fabric API — reference unavailable</title>
+  </head>
+  <body style="font-family: ui-sans-serif, system-ui, sans-serif; max-width: 42rem; margin: 4rem auto; padding: 0 1rem; line-height: 1.6">
+    <h1 style="font-size: 1.25rem">The API reference is not available</h1>
+    <p>The OpenAPI artifact could not be read, so there is nothing to render.</p>
+    <p>Generate it and restart the service:</p>
+    <pre style="background: #f4f4f5; padding: 0.75rem; border-radius: 0.375rem; overflow-x: auto"><code>pnpm --filter @app/api openapi:generate</code></pre>
+    <p>If this is a deployed environment, the artifact is missing from the image rather than from the
+    repository — check that <code>docs/api/openapi.internal.json</code> ships, or set
+    <code>OPENAPI_INTERNAL_PATH</code>.</p>
+  </body>
+</html>`;
