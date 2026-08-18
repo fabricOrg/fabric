@@ -14,10 +14,19 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 ## Where things stand
 
-| ref | sha | note |
+| ref | through | note |
 | --- | --- | --- |
-| `origin/dev` | `a5e99d8` | through #307 |
-| `origin/testing` | `8e90383` | promoted 2026-08-18. **Level with `dev`.** CI green; all six jobs of `Deploy testing (Vercel + Render)` genuinely ran. The plain `Deploy` also shows green having skipped 7 of its 8 jobs — it is the gated AWS/ECS path and is never evidence. |
+| `origin/dev` | #307, #309, #308 | the OpenAPI surface, the contract-coverage fix, this snapshot |
+| `origin/testing` | same | promoted 2026-08-18, **level with `dev`** |
+
+Deliberately no shas here: every one written in this table has been stale within the day, and a
+wrong sha is worse than none because it reads as checked. `git ls-remote --heads origin dev testing`
+is authoritative and takes a second.
+
+**On reading a green deploy.** `Deploy testing (Vercel + Render)` is the real one — confirm all six
+of its jobs (Gate, Migrate, Render · api, and the three Vercel apps). The plain `Deploy` workflow
+ALSO reports success while skipping 7 of its 8 jobs; it is the gated AWS/ECS path and is never
+evidence. Counting it was this snapshot's own first mistake.
 
 ### Start here — confirm the deploy, then read Open work below (which is NOT empty)
 
@@ -73,6 +82,11 @@ the denominator had been computed from the endpoints that HAD schemas, so it cou
 anything but complete. The four it hid were `GET /health`, `GET /health/readyz`, `GET /docs` and
 `GET /docs/openapi.json` — the endpoint the deploy pipeline polls as its proof a release is live,
 and the document describing every other contract, both among them.
+
+`GET /health/readyz` now answers **503 `not_ready`** carrying the standard error envelope; it used to
+answer 503 with an ad-hoc `{ status, db }` object that appeared in no schema. Proven by pointing an
+instance at an unreachable database: `/health` stayed 200, so the dependency-free guarantee holds,
+and readyz returned the documented envelope.
 
 **What the independent review caught, since it is the pattern worth remembering:** the published
 customer artifact had **175 `$ref`s that resolved to nothing** — including the money field on
