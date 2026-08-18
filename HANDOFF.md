@@ -1,6 +1,6 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-13. Point-in-time. **Verify against code and git before treating any of it as
+_Snapshot: 2026-08-18. Point-in-time. **Verify against code and git before treating any of it as
 fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 [CLAUDE.md](./CLAUDE.md) (how we build) and `docs/`. Superseded entries live in
 [docs/HANDOFF-ARCHIVE.md](./docs/HANDOFF-ARCHIVE.md)._
@@ -16,18 +16,47 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | sha | note |
 | --- | --- | --- |
-| `origin/dev` | `5b5eeaf` | through #302 |
-| `origin/testing` | `ede8692` | promoted 2026-08-13. **Level with `dev`.** 151 migrations, none added all day. |
+| `origin/dev` | `a5e99d8` | through #307 |
+| `origin/testing` | `8e90383` | promoted 2026-08-18. **Level with `dev`.** All three workflows green. |
 
-### Start here — nothing is open; verify the deploy, then pick from Open work
+### Start here — ONE thing is outstanding, and it is silent if skipped
 
-Everything merged: #297 → #302. No PR of ours is waiting. Dependabot #279–#282 and the old
-#200/#203/#214 are untouched and unrelated.
+**Set `OPENAPI_RESPONSE_VALIDATION=strict` on the Render `fabric-api` service.** `render.yaml`
+declares it, but the blueprint is **not retro-applied to an already-provisioned service** (the same
+trap `PUBLIC_CORS_ALLOWED_ORIGINS` hit), so it must be set in the dashboard.
 
-**First thing to check:** `ede8692` was the last promotion and its deploy was still running when the
-session ended. Confirm all six jobs of `Deploy testing (Vercel + Render)` — the plain `Deploy` greens
-while skipping every job, so it is not evidence. Then confirm a WhatsApp send still works (below):
-that promotion changed the seeded default price AND both pricing write paths.
+Why it matters: `resolveValidationMode` degrades to `warn` when `NODE_ENV=production`, which Render
+sets for an unrelated reason (`PLUGIN_MASTER_KEY` derivation must not fall back to the dev key).
+Left at the default, `contracts:probe` against testing reports **"0 contract violations" having
+checked nothing** — and CLAUDE.md §12 cites strict validation as exactly what makes a 2xx count as
+proof. Nothing errors; the claim just becomes unfalsifiable.
+
+Verified live after the promotion (§9 — the artefact, not the workflow's report):
+
+| check | result |
+| --- | --- |
+| `GET /health` | 200 |
+| `GET /health/z` | **404** — the array-path alias is gone, so the new code is live |
+| `GET /docs` with no credential | **401** + `WWW-Authenticate: Basic` — 401 rather than 404 proves `OPERATOR_TOKEN` is set and the gate is fail-closed |
+
+### QA has an API reference (2026-08-18, #307)
+
+`https://fabric-jezz.onrender.com/docs` — HTTP Basic, **any username**, `OPERATOR_TOKEN` as the
+password. It serves the FULL document (`/internal/admin/*` included), which is why it is gated.
+Locally use `pnpm docs` instead: no token, no API, no database.
+
+The document is derived, not written: routes from decorator metadata, schemas from the zod contracts.
+`assertCoverage` fails the build on an unbound route, `assertRefsResolve` refuses to emit a document
+whose pointers do not resolve, and every JSON response is wrapped in `{ data, request_id }` by an
+interceptor so the runtime cannot drift from the spec. 140 routes bound; 129/129 body-returning
+endpoints carry a response contract.
+
+**What the independent review caught, since it is the pattern worth remembering:** the published
+customer artifact had **175 `$ref`s that resolved to nothing** — including the money field on
+`GET /v1/wallet` — and every gate was green, because `openapi:check` byte-compares and a
+*consistently* broken document passes forever. The fix was a check that did not exist, not a code
+change. Same shape as `GET /health/z`: a live route in neither artifact, invisible because
+`joinPath` rendered Nest's array path form as `""`.
 
 Promotion is a **real merge** (`git merge --no-ff origin/dev` — testing carries merge commits and
 this repo's git config is `ff = only`, so a plain `git merge dev` aborts with "Not possible to
