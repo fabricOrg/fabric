@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  unwrapEnvelope,
   type WhatsappMessageListResponse,
   type WhatsappSendRequest,
   type WhatsappSendResponse,
@@ -43,7 +44,9 @@ async function request(
       },
     },
   );
-  const payload: unknown = await response.json().catch(() => null);
+  const payload: unknown = unwrapEnvelope(
+    await response.json().catch(() => null),
+  );
   if (!response.ok) throw new BffError(response.status, payload);
   return payload;
 }
@@ -51,9 +54,14 @@ async function request(
 export async function listWhatsappMessages(
   tenantId: string,
   env: "sandbox" | "live",
+  page: { limit?: string; cursor?: string; status?: string } = {},
 ): Promise<WhatsappMessageListResponse> {
+  const query = new URLSearchParams({ env });
+  if (page.limit) query.set("limit", page.limit);
+  if (page.cursor) query.set("cursor", page.cursor);
+  if (page.status) query.set("status", page.status);
   return whatsappMessageListResponse.parse(
-    await request(tenantId, `/whatsapp?env=${env}`),
+    await request(tenantId, `/whatsapp?${query.toString()}`),
   );
 }
 

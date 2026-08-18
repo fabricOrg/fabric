@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import type { VariableSchema } from "@app/contracts";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import { NestFactory } from "@nestjs/core";
 import {
@@ -170,7 +171,7 @@ describeDb("SDK-007 managed email send negatives", () => {
     );
 
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toMatchObject({
+    expect(unwrapEnvelope(response.json())).toMatchObject({
       error: { code: "email_payload_too_large" },
     });
     expect(await sideEffects()).toEqual(before);
@@ -185,7 +186,7 @@ describeDb("SDK-007 managed email send negatives", () => {
     );
 
     expect(response.statusCode).toBe(400);
-    const body = response.json() as {
+    const body = unwrapEnvelope(response.json()) as {
       error: { code: string; message: string; param?: string };
     };
     expect(body.error).toMatchObject({
@@ -208,7 +209,9 @@ describeDb("SDK-007 managed email send negatives", () => {
     );
 
     expect(response.statusCode).toBe(400);
-    const body = response.json() as { error: { code: string; param?: string } };
+    const body = unwrapEnvelope(response.json()) as {
+      error: { code: string; param?: string };
+    };
     expect(body.error.code).toBe("missing_required");
     expect(body.error.param).toBe("name");
     expect(await sideEffects()).toEqual(before);

@@ -3,6 +3,7 @@ import {
   isTerminalMessageStatus,
   type MessageStatus,
   messageStatus,
+  messageStatusGroupOf,
   TERMINAL_MESSAGE_STATUSES,
 } from "./message-status.js";
 
@@ -28,6 +29,17 @@ describe("messageStatus", () => {
     expect(messageStatus.safeParse("rejected").success).toBe(false);
     expect(messageStatus.safeParse("received").success).toBe(false);
     expect(messageStatus.safeParse("").success).toBe(false);
+  });
+});
+
+describe("message status groups", () => {
+  it("keeps every unsuccessful terminal state out of in-progress activity", () => {
+    expect(messageStatusGroupOf("queued")).toBe("active");
+    expect(messageStatusGroupOf("accepted")).toBe("active");
+    expect(messageStatusGroupOf("delivered")).toBe("delivered");
+    expect(messageStatusGroupOf("undelivered")).toBe("failed");
+    expect(messageStatusGroupOf("failed")).toBe("failed");
+    expect(messageStatusGroupOf("expired")).toBe("failed");
   });
 });
 

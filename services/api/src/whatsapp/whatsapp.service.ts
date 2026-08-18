@@ -1,4 +1,5 @@
 import type {
+  MessageStatusGroup,
   WhatsappMessage,
   WhatsappMessageListResponse,
   WhatsappSendRequest,
@@ -244,6 +245,7 @@ export class WhatsappService {
     tenantId: string,
     environmentId: string,
     page: PageInput,
+    status?: MessageStatusGroup,
   ): Promise<Omit<WhatsappMessageListResponse, "request_id">> {
     return listWhatsappMessages(
       this.db,
@@ -251,6 +253,7 @@ export class WhatsappService {
       tenantId,
       environmentId,
       page,
+      status,
     );
   }
 

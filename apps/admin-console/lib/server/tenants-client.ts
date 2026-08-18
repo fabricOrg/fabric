@@ -10,6 +10,7 @@ import {
   type UpdateSandboxAllowancePolicy,
   type UpdateTenantStatusRequest,
 } from "@app/contracts";
+import { unwrapEnvelope } from "./response-envelope";
 
 /**
  * Tenant list via the api's BffToken-guarded GET /internal/admin/tenants (real accounts, no mock).
@@ -37,7 +38,7 @@ export async function getSandboxAllowancePolicy(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new TenantApiError(response.status, payload);
-  return sandboxAllowancePolicySchema.parse(payload);
+  return sandboxAllowancePolicySchema.parse(unwrapEnvelope(payload));
 }
 
 export async function updateSandboxAllowancePolicy(
@@ -62,7 +63,7 @@ export async function updateSandboxAllowancePolicy(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new TenantApiError(response.status, payload);
-  return sandboxAllowancePolicySchema.parse(payload);
+  return sandboxAllowancePolicySchema.parse(unwrapEnvelope(payload));
 }
 
 function connection(): { baseUrl: string; bffToken: string } {
@@ -90,7 +91,7 @@ export async function listTenants(
   });
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new TenantApiError(response.status, payload);
-  return listTenantsResponseSchema.parse(payload);
+  return listTenantsResponseSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function updateTenantStatus(
@@ -119,5 +120,5 @@ export async function updateTenantStatus(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new TenantApiError(response.status, payload);
-  return tenantSummaryDtoSchema.parse(payload);
+  return tenantSummaryDtoSchema.parse(unwrapEnvelope(payload));
 }

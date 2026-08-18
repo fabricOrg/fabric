@@ -10,6 +10,7 @@ import { AppModule } from "../app.module.js";
 import { ConsentService } from "../consent/consent.service.js";
 import { PiiErasureService } from "../privacy/pii-erasure.service.js";
 import { PiiVaultService } from "../privacy/pii-vault.service.js";
+import { jsonBody } from "../testing/response.js";
 import { VirtualPhoneService } from "./virtual-phone.service.js";
 
 const SUPER_URL = process.env.DATABASE_URL_SUPER;
@@ -152,7 +153,7 @@ describe("sandbox provider pinning (F3)", () => {
   it("delivers a sandbox send through the virtual phone, PII in the vault", async () => {
     const res = await sendAs(SANDBOX_KEY);
     expect(res.statusCode).toBe(201);
-    expect(res.json().status).toBe("delivered");
+    expect((jsonBody(res) as { status: string }).status).toBe("delivered");
     await expect(providerOf(SANDBOX_TENANT)).resolves.toBe("virtual-phone");
 
     const rows = (await owner.unsafe(
@@ -313,7 +314,7 @@ describe("sandbox provider pinning (F3)", () => {
 
     const res = await sendAs(SANDBOX_KEY);
     expect(res.statusCode).toBe(201);
-    expect(res.json().status).toBe("delivered");
+    expect((jsonBody(res) as { status: string }).status).toBe("delivered");
 
     const [after] = (await owner.unsafe(
       "SELECT count(*)::int AS n FROM data_subjects WHERE tenant_id = $1",

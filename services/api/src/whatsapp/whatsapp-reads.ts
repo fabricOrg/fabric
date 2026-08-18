@@ -1,4 +1,4 @@
-import type { WhatsappMessage } from "@app/contracts";
+import type { MessageStatusGroup, WhatsappMessage } from "@app/contracts";
 import type { AppDb } from "@app/db";
 import { notFound } from "../http/api-error.js";
 import { encodeCursor, type PageInput } from "../http/cursor.js";
@@ -18,6 +18,7 @@ export async function listWhatsappMessages(
   tenantId: string,
   environmentId: string,
   page: PageInput,
+  status?: MessageStatusGroup,
 ): Promise<WhatsappPageResult> {
   const rows = (await db.withTenant(
     tenantId,
@@ -28,6 +29,7 @@ export async function listWhatsappMessages(
              to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_ts
       FROM whatsapp_messages
       WHERE environment_id = ${environmentId}
+      ${statusClause(tx, status)}
       ${
         page.before
           ? tx`AND (created_at, id) < (${page.before.createdAt}::text::timestamptz, ${page.before.id})`
@@ -49,6 +51,20 @@ export async function listWhatsappMessages(
           })
         : null,
   };
+}
+
+function statusClause(
+  tx: Parameters<Parameters<AppDb["withTenant"]>[1]>[0],
+  status: MessageStatusGroup | undefined,
+) {
+  if (status === "active") {
+    return tx`AND status IN ('queued', 'sending', 'accepted', 'sent')`;
+  }
+  if (status === "delivered") return tx`AND status = 'delivered'`;
+  if (status === "failed") {
+    return tx`AND status IN ('undelivered', 'failed', 'expired')`;
+  }
+  return tx``;
 }
 
 export async function getWhatsappMessage(

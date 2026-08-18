@@ -147,7 +147,9 @@ export const providerCostRates = pgTable(
       .notNull()
       .defaultNow(),
     effectiveTo: timestamp("effective_to", { withTimezone: true }),
-    sourceReference: text("source_reference").notNull().default(""),
+    // No DEFAULT: a cost rate that prices money must record where the number came from (0151).
+    // The empty-string default silently produced money records with no audit trail.
+    sourceReference: text("source_reference").notNull(),
     ...timestamps,
   },
   (t) => [

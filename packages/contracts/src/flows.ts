@@ -98,3 +98,24 @@ export const confirmFlowResponse = z.object({
   authorizationUrl: z.string().url().nullable(),
 });
 export type ConfirmFlowResponse = z.infer<typeof confirmFlowResponse>;
+
+/**
+ * `POST /v1/flows` resolves at runtime on `action`: "start" returns a started flow, "confirm" a
+ * confirmed one. Composed HERE rather than in an OpenAPI binding — a binding names one contract and
+ * must never build shapes, or it becomes the second source of truth this pipeline exists to remove.
+ */
+export const runFlowResponse = z.union([
+  startFlowResponse,
+  confirmFlowResponse,
+]);
+export type RunFlowResponse = z.infer<typeof runFlowResponse>;
+
+/**
+ * `POST /v1/flows` discriminates on `action` at runtime: "start" carries a start body, "confirm" a
+ * confirm body. Composed HERE, beside `runFlowResponse`, for the same reason — a binding names one
+ * contract and must never build shapes, or it becomes a second source of truth. Declining to model
+ * the request while modelling the response left the route's body undocumented AND unchecked by the
+ * request-contract interceptor.
+ */
+export const runFlowRequest = z.union([startFlowRequest, confirmFlowRequest]);
+export type RunFlowRequest = z.infer<typeof runFlowRequest>;

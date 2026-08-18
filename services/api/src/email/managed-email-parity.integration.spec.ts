@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import { NestFactory } from "@nestjs/core";
 import {
@@ -162,7 +163,7 @@ describeDb("SDK-007 managed email preview/send parity", () => {
     });
     expect(previewResponse.statusCode).toBe(201);
     const preview = (
-      previewResponse.json() as {
+      unwrapEnvelope(previewResponse.json()) as {
         email_preview: {
           subject: string;
           text: string;
@@ -180,8 +181,9 @@ describeDb("SDK-007 managed email preview/send parity", () => {
       payload,
     });
     expect(sendResponse.statusCode).toBe(202);
-    const deliveryId = (sendResponse.json() as { delivery: { id: string } })
-      .delivery.id;
+    const deliveryId = (
+      unwrapEnvelope(sendResponse.json()) as { delivery: { id: string } }
+    ).delivery.id;
 
     await expect(storedEmailContent(deliveryId)).resolves.toMatchObject({
       subject: preview.subject,
@@ -224,7 +226,8 @@ describeDb("SDK-007 managed email preview/send parity", () => {
     const ids = new Set(
       [a, b, c].map(
         (response) =>
-          (response.json() as { delivery: { id: string } }).delivery.id,
+          (unwrapEnvelope(response.json()) as { delivery: { id: string } })
+            .delivery.id,
       ),
     );
     expect(ids.size).toBe(1);

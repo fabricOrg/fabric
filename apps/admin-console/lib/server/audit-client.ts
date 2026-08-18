@@ -4,6 +4,7 @@ import {
   type ListAuditResponse,
   listAuditResponseSchema,
 } from "@app/contracts";
+import { unwrapEnvelope } from "./response-envelope";
 
 /** Audit log read via the api's BffToken-guarded GET /internal/admin/audit. */
 export class AuditApiError extends Error {
@@ -33,5 +34,5 @@ export async function listAudit(
   });
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new AuditApiError(response.status, payload);
-  return listAuditResponseSchema.parse(payload);
+  return listAuditResponseSchema.parse(unwrapEnvelope(payload));
 }

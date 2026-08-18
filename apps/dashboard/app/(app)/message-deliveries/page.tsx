@@ -1,6 +1,7 @@
 import type { MessageDeliverySummary } from "@app/contracts";
 import { PageContainer } from "@app/ui/components/ui/app-shell";
 import { Badge } from "@app/ui/components/ui/badge";
+import { Button } from "@app/ui/components/ui/button";
 import {
   PageHeader,
   PageHeaderDescription,
@@ -17,6 +18,7 @@ import {
   TableRow,
 } from "@app/ui/components/ui/table";
 import { formatDateTimeFull } from "@app/ui/lib/datetime";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { DefinitionApplicationSelector } from "@/components/message-definitions/definition-application-selector";
 import { BffError } from "@/lib/server/api-client";
@@ -33,6 +35,7 @@ const STATUS_STYLE: Record<string, string> = {
   failed: "border-transparent bg-destructive/12 text-destructive",
   expired: "border-transparent bg-destructive/12 text-destructive",
 };
+const PAGE_SIZE = 20;
 
 function costLabel(cost: MessageDeliverySummary["cost"]): string {
   return `${cost.minor} minor ${cost.currency}`;
@@ -96,12 +99,18 @@ function DeliveriesTable({
 export default async function MessageDeliveriesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ application?: string }>;
+  searchParams: Promise<{
+    application?: string;
+    cursor?: string;
+    history?: string;
+  }>;
 }) {
   await requireDashboardSession();
 
-  const requestedApplication = (await searchParams).application;
+  const params = await searchParams;
+  const requestedApplication = params.application;
   let deliveries: MessageDeliverySummary[] = [];
+  let nextCursor: string | null = null;
   let applications: Awaited<
     ReturnType<typeof listApplications>
   >["applications"] = [];
@@ -117,7 +126,12 @@ export default async function MessageDeliveriesPage({
       (environment) => environment.type === "sandbox",
     );
     if (sandbox) {
-      deliveries = (await listMessageDeliveries(sandbox.id)).deliveries;
+      const result = await listMessageDeliveries(sandbox.id, {
+        limit: PAGE_SIZE,
+        ...(params.cursor ? { cursor: params.cursor } : {}),
+      });
+      deliveries = result.deliveries;
+      nextCursor = result.next_cursor;
     }
   } catch (error) {
     loadError = error instanceof BffError || error instanceof Error;
@@ -158,19 +172,120 @@ export default async function MessageDeliveriesPage({
           title="Create an application first"
           description="Managed deliveries belong to an application's sandbox environment."
         />
-      ) : deliveries.length === 0 ? (
+      ) : deliveries.length === 0 && !params.cursor ? (
         <TableEmptyState
           title="No managed deliveries yet"
           description="Send a released definition by stable key with fabric.messages.send and it will appear here."
         />
       ) : (
-        <div className="rounded-xl border bg-card">
-          <DeliveriesTable
-            deliveries={deliveries}
+        <div className="flex flex-col gap-3 rounded-xl border bg-card">
+          {deliveries.length === 0 ? (
+            <TableEmptyState
+              title="No deliveries on this page"
+              description="Return to the previous page to continue browsing."
+            />
+          ) : (
+            <DeliveriesTable
+              deliveries={deliveries}
+              applicationSlug={selectedApplication?.slug ?? ""}
+            />
+          )}
+          <DeliveryPagination
             applicationSlug={selectedApplication?.slug ?? ""}
+            cursor={params.cursor}
+            history={params.history}
+            nextCursor={nextCursor}
+            rowCount={deliveries.length}
           />
         </div>
       )}
     </PageContainer>
   );
+}
+
+function DeliveryPagination({
+  applicationSlug,
+  cursor,
+  history,
+  nextCursor,
+  rowCount,
+}: {
+  applicationSlug: string;
+  cursor?: string;
+  history?: string;
+  nextCursor: string | null;
+  rowCount: number;
+}) {
+  const trail = history?.split(",").filter(Boolean) ?? [];
+  const previousCursor = trail.at(-1);
+  const previousTrail = trail.slice(0, -1);
+  const pageIndex = trail.length;
+  if (pageIndex === 0 && !nextCursor) return null;
+
+  return (
+    <div className="flex items-center justify-between border-t px-4 py-3">
+      <span className="text-muted-foreground text-sm tabular-nums">
+        {rowCount === 0
+          ? "No rows on this page"
+          : `Rows ${pageIndex * PAGE_SIZE + 1}-${pageIndex * PAGE_SIZE + rowCount}`}
+      </span>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          disabled={pageIndex === 0}
+          aria-label="Previous page"
+          asChild={pageIndex > 0}
+        >
+          {pageIndex > 0 ? (
+            <Link
+              href={deliveryPageHref(
+                applicationSlug,
+                previousCursor === "_" ? undefined : previousCursor,
+                previousTrail,
+              )}
+            >
+              <ChevronLeft />
+            </Link>
+          ) : (
+            <ChevronLeft />
+          )}
+        </Button>
+        <span className="min-w-20 px-2 text-center text-sm tabular-nums">
+          Page {pageIndex + 1}
+        </span>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          disabled={!nextCursor}
+          aria-label="Next page"
+          asChild={Boolean(nextCursor)}
+        >
+          {nextCursor ? (
+            <Link
+              href={deliveryPageHref(applicationSlug, nextCursor, [
+                ...trail,
+                cursor ?? "_",
+              ])}
+            >
+              <ChevronRight />
+            </Link>
+          ) : (
+            <ChevronRight />
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function deliveryPageHref(
+  applicationSlug: string,
+  cursor: string | undefined,
+  history: string[],
+) {
+  const query = new URLSearchParams({ application: applicationSlug });
+  if (cursor) query.set("cursor", cursor);
+  if (history.length > 0) query.set("history", history.join(","));
+  return `/message-deliveries?${query.toString()}`;
 }

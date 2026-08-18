@@ -37,3 +37,15 @@ export function isTerminalMessageStatus(
 ): status is TerminalMessageStatus {
   return (TERMINAL_MESSAGE_STATUSES as readonly string[]).includes(status);
 }
+
+export const messageStatusGroup = z.enum(["active", "delivered", "failed"]);
+export type MessageStatusGroup = z.infer<typeof messageStatusGroup>;
+
+/** Dashboard grouping: terminal delivery failures must never appear as queued/in progress. */
+export function messageStatusGroupOf(
+  status: MessageStatus,
+): MessageStatusGroup {
+  if (status === "delivered") return "delivered";
+  if (["undelivered", "failed", "expired"].includes(status)) return "failed";
+  return "active";
+}

@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { createHmac, randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import type { Creds } from "@app/integrations";
 import { credit } from "@app/wallet";
@@ -134,7 +135,10 @@ describeDb("WhatsApp webhook ingress", () => {
     const raw = metaStatusBody(`wamid.${messageId}`, "delivered");
     const response = await postWebhook(raw, signed(raw));
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ accepted: true, processed: 1 });
+    expect(unwrapEnvelope(response.json())).toMatchObject({
+      accepted: true,
+      processed: 1,
+    });
 
     const [msg] = await owner`
       SELECT status::text FROM whatsapp_messages WHERE id = ${messageId}`;
@@ -207,7 +211,10 @@ describeDb("WhatsApp webhook ingress", () => {
       payload: whatsappPayload(),
     });
     expect(response.statusCode).toBe(201);
-    const body = response.json() as { id: string; status: string };
+    const body = unwrapEnvelope(response.json()) as {
+      id: string;
+      status: string;
+    };
     expect(body.status).toBe("accepted");
     return body.id;
   }

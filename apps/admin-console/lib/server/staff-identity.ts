@@ -5,6 +5,7 @@ import {
   resolveStaffSessionResponseSchema,
 } from "@app/contracts";
 import type { AppSession, WorkOSSessionClaims } from "@app/fe-auth";
+import { unwrapEnvelope } from "./response-envelope";
 
 /**
  * Staff identity — resolved against the platform `staff_users` allowlist table via the api's
@@ -51,7 +52,9 @@ export async function resolveStaffSession(
     return null;
   }
   return toAppSession(
-    resolveStaffSessionResponseSchema.parse(await response.json()),
+    resolveStaffSessionResponseSchema.parse(
+      unwrapEnvelope(await response.json()),
+    ),
     claims.email,
     claims.name,
   );

@@ -1,3 +1,4 @@
+import { unwrapEnvelope } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import { requireTrustedOrigin } from "@/lib/server/origin";
@@ -69,7 +70,7 @@ export async function GET() {
       cache: "no-store",
       headers: { "x-bff-token": token },
     });
-    const payload = (await res.json()) as {
+    const payload = unwrapEnvelope(await res.json()) as {
       instances?: Record<string, unknown>[];
     };
     if (!res.ok) return NextResponse.json(payload, { status: res.status });
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
       headers: { "content-type": "application/json", "x-bff-token": token },
       body: JSON.stringify({ id: body.id, action: body.action }),
     });
-    const payload = (await res.json()) as Record<string, unknown>;
+    const payload = unwrapEnvelope(await res.json()) as Record<string, unknown>;
     if (!res.ok) return NextResponse.json(payload, { status: res.status });
     return NextResponse.json(withRegion(payload));
   } catch {

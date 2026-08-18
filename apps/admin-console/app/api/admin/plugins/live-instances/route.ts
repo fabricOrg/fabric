@@ -1,4 +1,7 @@
-import { createLiveInstanceRequestSchema } from "@app/contracts";
+import {
+  createLiveInstanceRequestSchema,
+  unwrapEnvelope,
+} from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import { requireTrustedOrigin } from "@/lib/server/origin";
@@ -66,7 +69,11 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify(parsed.data),
       },
     );
-    const payload = (await res.json()) as Record<string, unknown>;
+    // Unwrap before proxying: the browser destructures these fields directly, and forwarding the
+    // envelope makes every one of them undefined. The credentials dialog then reports
+    // "Version undefined · fingerprint undefined" after a LIVE credential install succeeded — the
+    // only readout proving which version is armed, silently wrong.
+    const payload = unwrapEnvelope(await res.json()) as Record<string, unknown>;
     return NextResponse.json(payload, { status: res.status });
   } catch {
     return fail(

@@ -11,6 +11,7 @@ import { DbModule } from "./db/db.module.js";
 import { EmailModule } from "./email/email.module.js";
 import { FlowsModule } from "./flows/flows.module.js";
 import { HealthModule } from "./health/health.module.js";
+import { HttpContractsModule } from "./http/http-contracts.module.js";
 import { loggerParams } from "./http/logging.config.js";
 import { IdentityModule } from "./identity/identity.module.js";
 import { ImpersonationModule } from "./impersonation/impersonation.module.js";
@@ -19,6 +20,7 @@ import { MaintenanceModule } from "./maintenance/maintenance.module.js";
 import { MembersModule } from "./members/members.module.js";
 import { MessageDefinitionsModule } from "./message-definitions/message-definitions.module.js";
 import { MessagesModule } from "./messages/messages.module.js";
+import { OpenApiModule } from "./openapi/openapi.module.js";
 import { OverviewModule } from "./overview/overview.module.js";
 import { PaymentsModule } from "./payments/payments.module.js";
 import { PluginsModule } from "./plugins/plugins.module.js";
@@ -76,6 +78,12 @@ import { WhatsappModule } from "./whatsapp/whatsapp.module.js";
     WalletModule,
     WebhooksModule,
     WhatsappModule,
+    // Serves the operator-gated /docs surface and builds both OpenAPI artifacts from the real
+    // route table. Fails closed: no OPERATOR_TOKEN, no docs.
+    OpenApiModule,
+    // Registers the request-contract check and the response envelope as APP_INTERCEPTORs, so tests
+    // that build AppModule get them too. See the module for why this is not useGlobalInterceptors.
+    HttpContractsModule,
   ],
 })
 export class AppModule {}

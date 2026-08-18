@@ -17,6 +17,7 @@
 
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { createAppDb } from "@app/db";
 import { NestFactory } from "@nestjs/core";
 import {
@@ -139,7 +140,9 @@ describeDb("SDK-005 managed sends — pre-acceptance gates fail closed", () => {
     const response = await send(fundedKey, OPTED_OUT, `optout-${randomUUID()}`);
 
     expect(response.statusCode).toBe(400);
-    const body = response.json() as { error: { code: string; param?: string } };
+    const body = unwrapEnvelope(response.json()) as {
+      error: { code: string; param?: string };
+    };
     expect(body.error.code).toBe("recipient_opted_out");
     expect(await counts(fundedTenant)).toEqual(before);
   });
@@ -163,7 +166,9 @@ describeDb("SDK-005 managed sends — pre-acceptance gates fail closed", () => {
     // 429 + the declared `rate_limit_error` category — NOT an opaque 500. Same regression guard the
     // 402 case carried: the gate error must stay mapped so an SDK can branch on it.
     expect(response.statusCode).toBe(429);
-    const body = response.json() as { error: { type: string; code: string } };
+    const body = unwrapEnvelope(response.json()) as {
+      error: { type: string; code: string };
+    };
     expect(body.error.type).toBe("rate_limit_error");
     expect(body.error.code).toBe("sandbox_daily_limit_exceeded");
     // Fails closed: the gate rejects inside the acceptance transaction, so no partial row survives —
@@ -191,7 +196,9 @@ describeDb("SDK-005 managed sends — pre-acceptance gates fail closed", () => {
     });
 
     expect(response.statusCode).toBe(429);
-    const body = response.json() as { error: { type: string; code: string } };
+    const body = unwrapEnvelope(response.json()) as {
+      error: { type: string; code: string };
+    };
     expect(body.error.type).toBe("rate_limit_error");
     expect(body.error.code).toBe("sandbox_daily_limit_exceeded");
     expect(await counts(brokeTenant)).toEqual(before);

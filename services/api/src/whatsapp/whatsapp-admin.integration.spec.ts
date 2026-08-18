@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
+import { unwrapEnvelope } from "@app/contracts";
 import { NestFactory } from "@nestjs/core";
 import {
   FastifyAdapter,
@@ -95,7 +96,7 @@ describeDb("WhatsApp admin template sync", () => {
     const scheduler = app.get(WhatsappTemplateSyncScheduler);
     const original = scheduler.run.bind(scheduler);
     Object.assign(scheduler, {
-      run: async () => ({ locked: true, synced: 7 }),
+      run: async () => ({ locked: true, synced: 7, tenants: 1, failed: 0 }),
     });
     try {
       const response = await app.inject({
@@ -107,7 +108,10 @@ describeDb("WhatsApp admin template sync", () => {
         },
       });
       expect(response.statusCode).toBe(201);
-      expect(response.json()).toMatchObject({ locked: true, synced: 7 });
+      expect(unwrapEnvelope(response.json())).toMatchObject({
+        locked: true,
+        synced: 7,
+      });
     } finally {
       Object.assign(scheduler, { run: original });
     }

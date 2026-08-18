@@ -19,6 +19,7 @@ import {
   type PublishCommercialOfferVersionRequest,
   type RetireCommercialOfferVersionRequest,
 } from "@app/contracts";
+import { unwrapEnvelope } from "./response-envelope";
 
 /**
  * Commercial-offer control plane via the api's BffToken-guarded `/internal/admin/commercial-offers`
@@ -86,7 +87,7 @@ async function request<T>(
 
 export function listCommercialOffers(): Promise<ListCommercialOffersResponse> {
   return request("", { method: "GET" }, (payload) =>
-    listCommercialOffersResponseSchema.parse(payload),
+    listCommercialOffersResponseSchema.parse(unwrapEnvelope(payload)),
   );
 }
 
@@ -95,7 +96,7 @@ export function createCommercialOffer(
   actor: Actor,
 ): Promise<CommercialOfferDto> {
   return request("", { method: "POST", actor, body }, (payload) =>
-    commercialOfferDtoSchema.parse(payload),
+    commercialOfferDtoSchema.parse(unwrapEnvelope(payload)),
   );
 }
 
@@ -104,7 +105,7 @@ export function createCommercialPackage(
   actor: Actor,
 ): Promise<CreateCommercialPackageResponse> {
   return request("/packages", { method: "POST", actor, body }, (payload) =>
-    createCommercialPackageResponseSchema.parse(payload),
+    createCommercialPackageResponseSchema.parse(unwrapEnvelope(payload)),
   );
 }
 
@@ -116,7 +117,7 @@ export function createOfferVersion(
   return request(
     `/${encodeURIComponent(offerId)}/versions`,
     { method: "POST", actor, body },
-    (payload) => commercialOfferVersionDtoSchema.parse(payload),
+    (payload) => commercialOfferVersionDtoSchema.parse(unwrapEnvelope(payload)),
   );
 }
 
@@ -128,7 +129,7 @@ export function updateOfferVersion(
   return request(
     `/versions/${encodeURIComponent(versionId)}`,
     { method: "PUT", actor, body },
-    (payload) => commercialOfferVersionDtoSchema.parse(payload),
+    (payload) => commercialOfferVersionDtoSchema.parse(unwrapEnvelope(payload)),
   );
 }
 
@@ -139,7 +140,7 @@ export function cloneOfferVersion(
   return request(
     `/versions/${encodeURIComponent(versionId)}/clone`,
     { method: "POST", actor },
-    (payload) => commercialOfferVersionDtoSchema.parse(payload),
+    (payload) => commercialOfferVersionDtoSchema.parse(unwrapEnvelope(payload)),
   );
 }
 
@@ -151,7 +152,7 @@ export function publishOfferVersion(
   return request(
     `/versions/${encodeURIComponent(versionId)}/publish`,
     { method: "POST", actor, body },
-    (payload) => commercialOfferVersionDtoSchema.parse(payload),
+    (payload) => commercialOfferVersionDtoSchema.parse(unwrapEnvelope(payload)),
   );
 }
 
@@ -163,7 +164,7 @@ export function retireOfferVersion(
   return request(
     `/versions/${encodeURIComponent(versionId)}/retire`,
     { method: "POST", actor, body },
-    (payload) => commercialOfferVersionDtoSchema.parse(payload),
+    (payload) => commercialOfferVersionDtoSchema.parse(unwrapEnvelope(payload)),
   );
 }
 
@@ -171,7 +172,7 @@ export function previewOfferMargin(
   body: PreviewCommercialOfferMarginRequest,
 ): Promise<CommercialOfferMarginPreview> {
   return request("/margin-preview", { method: "POST", body }, (payload) =>
-    commercialOfferMarginPreviewSchema.parse(payload),
+    commercialOfferMarginPreviewSchema.parse(unwrapEnvelope(payload)),
   );
 }
 

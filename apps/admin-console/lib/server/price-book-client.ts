@@ -12,6 +12,7 @@ import {
   providerCostRateDtoSchema,
   type UpsertPriceBookRequest,
 } from "@app/contracts";
+import { unwrapEnvelope } from "./response-envelope";
 
 /** Price-book control plane via the api's BffToken-guarded /internal/admin/price-books (ADR-0010). */
 export class PriceBookApiError extends Error {
@@ -57,7 +58,7 @@ export async function listPriceBooks(): Promise<ListPriceBooksResponse> {
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new PriceBookApiError(response.status, payload);
-  return listPriceBooksResponseSchema.parse(payload);
+  return listPriceBooksResponseSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function createPriceBook(
@@ -76,7 +77,7 @@ export async function createPriceBook(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new PriceBookApiError(response.status, payload);
-  return priceBookDtoSchema.parse(payload);
+  return priceBookDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function updatePriceBook(
@@ -96,7 +97,7 @@ export async function updatePriceBook(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new PriceBookApiError(response.status, payload);
-  return priceBookDtoSchema.parse(payload);
+  return priceBookDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function assignPriceBook(
@@ -134,7 +135,8 @@ export async function listProviderCostRates(): Promise<ProviderCostRateDto[]> {
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new PriceBookApiError(response.status, payload);
-  return listProviderCostRatesResponseSchema.parse(payload).rates;
+  return listProviderCostRatesResponseSchema.parse(unwrapEnvelope(payload))
+    .rates;
 }
 
 export async function publishProviderCostRate(
@@ -153,5 +155,5 @@ export async function publishProviderCostRate(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new PriceBookApiError(response.status, payload);
-  return providerCostRateDtoSchema.parse(payload);
+  return providerCostRateDtoSchema.parse(unwrapEnvelope(payload));
 }

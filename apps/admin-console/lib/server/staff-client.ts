@@ -8,6 +8,7 @@ import {
   staffDtoSchema,
   type UpdateStaffRequest,
 } from "@app/contracts";
+import { unwrapEnvelope } from "./response-envelope";
 
 /**
  * Staff management via the api's BffToken-guarded /internal/admin/staff. Staff aren't org-scoped, so
@@ -44,7 +45,7 @@ export async function listStaff(
   });
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new StaffApiError(response.status, payload);
-  return listStaffResponseSchema.parse(payload);
+  return listStaffResponseSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function inviteStaff(
@@ -59,7 +60,7 @@ export async function inviteStaff(
   });
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new StaffApiError(response.status, payload);
-  return staffDtoSchema.parse(payload);
+  return staffDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function updateStaff(
@@ -78,7 +79,7 @@ export async function updateStaff(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new StaffApiError(response.status, payload);
-  return staffDtoSchema.parse(payload);
+  return staffDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 export async function removeStaff(id: string): Promise<void> {

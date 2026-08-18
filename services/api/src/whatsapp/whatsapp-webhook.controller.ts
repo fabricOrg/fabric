@@ -28,6 +28,13 @@ export class WhatsappWebhookController {
   ) {}
 
   @Get(":provider")
+  /**
+   * Meta compares this body VERBATIM, so it must not be enveloped. That is enforced by the route
+   * binding's `successContentType: "text/plain"`, which the response interceptor now reads — NOT by
+   * an `@Header` on this handler. `@Header` applies to every response including the 403 for a wrong
+   * verify token, which then tried to serialise a JSON error body as text/plain and turned it into
+   * a 500. Fastify sets text/plain for a string return on its own.
+   */
   async verify(
     @Param("provider") provider: string,
     @Query("hub.mode") mode: unknown,
