@@ -139,11 +139,18 @@ rather than silently breaking v1.
 
 ## Known gaps
 
-Measured from the artifact, not asserted: **140 operations. All 129 that return a body carry a
-response schema.** 62 of 79 writes carry a request contract, and the 17 without are body-less by
-design — seven `DELETE`s, the five provider webhook ingress routes (which carry Meta's, Paystack's,
-Arkesel's and SNS's payloads, not ours), and `clone` / `archive` / `mark-read` / `template-sync` /
-`replay`.
+Measured from the artifact, not asserted: **140 operations. All 133 that return a body carry a
+response schema**, the remaining 7 being `204` deletes.
+
+That denominator is the point. It previously read "129 of 129", counted from the endpoints that HAD
+schemas — a figure that cannot report anything but complete. Counted honestly it was 129 of 133, and
+the four gaps were `GET /health`, `GET /health/readyz`, `GET /docs` and `GET /docs/openapi.json`.
+One of those is the endpoint the deploy pipeline polls as its evidence a release is live, and
+another is the document describing every other contract. Both now have one.
+
+62 of 79 writes carry a request contract, and the 17 without are body-less by design — seven
+`DELETE`s, the five provider webhook ingress routes (which carry Meta's, Paystack's, Arkesel's and
+SNS's payloads, not ours), and `clone` / `archive` / `mark-read` / `template-sync` / `replay`.
 
 The two recorded `TODO(contract)` defects are gone: `POST /v1/api-keys` no longer parses its body
 with an unchecked cast, and `POST /v1/flows` resolves its discriminated union through a contract.

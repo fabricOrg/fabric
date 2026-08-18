@@ -1,4 +1,11 @@
-import { acceptedAck, batchIngestAck, ingestAck } from "@app/contracts";
+import {
+  acceptedAck,
+  batchIngestAck,
+  healthLiveResponse,
+  healthReadyResponse,
+  ingestAck,
+  openApiDocumentResponse,
+} from "@app/contracts";
 import type { RouteBindings } from "../route-binding.types.js";
 
 /**
@@ -88,15 +95,21 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Health"],
     visibility: "internal",
     security: ["none"],
+    response: healthLiveResponse,
   },
   "GET /health/readyz": {
     summary: "Readiness probe",
     description:
       "Checked by the deploy pipeline against the live URL. Does NOT exercise Redis or the queue, " +
-      "so a green readyz is not evidence those work.",
+      "so a green readyz is not evidence those work. Answers 503 `not_ready` while the database is " +
+      "unreachable.",
     tags: ["Health"],
     visibility: "internal",
     security: ["none"],
+    response: healthReadyResponse,
+    // The failure status is the whole point of a readiness probe, so it is documented rather than
+    // left to a reader to discover from an outage.
+    errorStatuses: [503],
   },
 
   // ---- The docs surface itself -------------------------------------------------------------
@@ -105,6 +118,10 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     tags: ["Health"],
     visibility: "internal",
     security: ["operatorToken"],
+    // An HTML page, so it carries a media type rather than a zod contract. The `@Header` on the
+    // handler is what sets it at runtime — Nest applies a handler's headers BEFORE interceptors run,
+    // so this route was already un-enveloped by header inference. This declares it in the document.
+    successContentType: "text/html",
   },
   "GET /docs/openapi.json": {
     summary: "Retrieve the full OpenAPI document",
@@ -115,5 +132,6 @@ export const SYSTEM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["operatorToken"],
     envelope: false,
+    response: openApiDocumentResponse,
   },
 };
