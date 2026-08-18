@@ -29,7 +29,7 @@ export class OpenApiController {
   @Get("openapi.json")
   @Header("cache-control", "no-store")
   document(): Promise<Record<string, unknown>> {
-    return this.openapi.fullDocument();
+    return this.openapi.servedDocument();
   }
 }
 

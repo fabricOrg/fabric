@@ -30,10 +30,25 @@
 ## 2. Render (API)
 
 `render.yaml` at the repo root is the blueprint. In Render: New → Blueprint → pick the repo.
-Set the `sync: false` secrets from Infisical (values never live in git):
-`DATABASE_URL_APP`, `DATABASE_URL_PROVISIONER` (Neon role URLs), `BFF_INTERNAL_TOKEN`,
-`TENANT_TOKEN_SECRET`, `OPERATOR_TOKEN`, `PII_MASTER_KEY`, plus the WorkOS API key/client id the
-identity module reads. Health check: `/health`.
+Set the `sync: false` secrets from Infisical (values never live in git). Health check: `/health`.
+
+| secret | unset means |
+| --- | --- |
+| `DATABASE_URL_APP`, `DATABASE_URL_PROVISIONER` | Neon role URLs — the service cannot start |
+| `BFF_INTERNAL_TOKEN` | every `/internal/*` call from a BFF is 401 |
+| `TENANT_TOKEN_SECRET` | no tenant token can be minted (ADR-0003) |
+| `OPERATOR_TOKEN` | `/docs` returns **404** and the admin surface is closed |
+| `WEBHOOK_INGRESS_TOKEN` | every carrier DLR is 401, so delivery status never leaves `accepted` |
+| `PII_MASTER_KEY` | PII vault reads/writes fail |
+| `PLUGIN_MASTER_KEY` | `NODE_ENV=production` makes key derivation throw — every credential write 500s |
+| WorkOS API key + client id | identity cannot resolve a session |
+
+The table is the point: each of these **fails closed**, and a closed failure looks like a bug in a
+feature rather than a missing variable. `WEBHOOK_INGRESS_TOKEN` was absent from this list and from
+the blueprint for exactly that reason — nothing errors at boot, delivery receipts just never arrive.
+
+`RENDER_EXTERNAL_URL` is injected by the platform and needs no setting; the docs page uses it to
+point "Test Request" at the deployment rather than at the reader's laptop.
 
 ## 3. Vercel (dashboard + admin-console)
 

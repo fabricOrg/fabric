@@ -15,7 +15,7 @@ export const SECURITY_SCHEMES: Readonly<Record<string, unknown>> = {
   bffInternal: {
     type: "apiKey",
     in: "header",
-    name: "x-internal-token",
+    name: "x-bff-token",
     description:
       "Shared secret between the Next.js BFFs and this API (`BFF_INTERNAL_TOKEN`). A browser " +
       "never holds this: the route handler runs server-side and supplies the tenant from the " +

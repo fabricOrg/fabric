@@ -88,11 +88,43 @@ environment; use `pnpm docs` locally.
 **CLAUDE.md §12 makes this a rule**: no endpoint may be consumed anywhere until it is bound, present
 in the artifact, and has returned a real 2xx from `contracts:probe` or an integration test.
 
-## Browsing it
+## Handing it to QA (a deployed environment)
 
-`GET /docs` renders the **full** document, gated by `OPERATOR_TOKEN` and failing closed: no token
-configured means 404, not open docs. Browsers authenticate with HTTP Basic (any username, the token
-as the password); scripts send `x-operator-token`.
+The testing API serves the reference at **<https://fabric-jezz.onrender.com/docs>**.
+
+Sign in with HTTP Basic: **any username**, and `OPERATOR_TOKEN` as the **password**. The browser
+keeps it for the realm, so the token is entered once and never appears in a URL. Scripts skip Basic
+and send the header directly:
+
+```bash
+curl -H "x-operator-token: $OPERATOR_TOKEN" https://fabric-jezz.onrender.com/docs/openapi.json
+```
+
+It is the **full** document — `/internal/admin/*` included, meaning kill switches, impersonation and
+wallet adjustment — so the gate fails closed in both directions: a wrong token is 401, and *no*
+`OPERATOR_TOKEN` configured is **404**, never open docs.
+
+**"Test Request" targets the deployment it was served from.** The committed artifact carries a
+`{baseUrl}` template that defaults to `http://localhost:3000`; serving it unchanged would make every
+trial request from a deployed page fire at the tester's own laptop and fail in a way that reads as a
+broken API. The served copy therefore substitutes the real base url, resolved from configuration
+(`PUBLIC_API_BASE_URL`, or `RENDER_EXTERNAL_URL` which Render injects) and never from the request —
+behind a proxy the container sees its internal host. The file in git stays hermetic.
+
+What QA needs beyond the token, to exercise rather than only read:
+
+| to call | credential | note |
+| --- | --- | --- |
+| `/v1/*` | `Authorization: Bearer sk_test_…` | a sandbox key from the dashboard |
+| `/internal/*` | `x-internal-token` | `BFF_INTERNAL_TOKEN` — server-side seam, not a customer credential |
+| `/internal/admin/*` | `x-operator-token` | same token as the docs gate |
+| `/webhooks/*` | `x-webhook-token` | `WEBHOOK_INGRESS_TOKEN`. **Unset means every carrier DLR is 401** and delivery status never advances past `accepted` |
+
+Redlines still hold on that environment: `SMS_PROVIDER=fake`, `sk_test_` keys only, no live payments.
+A send there returns a `provider_ref` of `fake-<messageId>`, which is what proves it was the fake
+provider and not a carrier.
+
+Locally, prefer `pnpm docs` — no token, no API, no database.
 
 ## Authentication
 
@@ -107,17 +139,14 @@ rather than silently breaking v1.
 
 ## Known gaps
 
-**60 of 72 writes carry a request contract; 75 of the 122 operations that return a body carry a
-response contract.** The gaps are deliberate and each is one of four kinds:
+Measured from the artifact, not asserted: **140 operations. All 129 that return a body carry a
+response schema.** 62 of 79 writes carry a request contract, and the 17 without are body-less by
+design — seven `DELETE`s, the five provider webhook ingress routes (which carry Meta's, Paystack's,
+Arkesel's and SNS's payloads, not ours), and `clone` / `archive` / `mark-read` / `template-sync` /
+`replay`.
 
-- **no body by design** — 204 deletes, `clone`, `archive`, mark-read, template-sync;
-- **not our shape** — the five provider webhook ingress routes carry Meta's, Paystack's, Arkesel's
-  and SNS's payloads;
-- **no DTO exists** — mostly single-resource admin writes returning service-layer objects. Verified
-  by exhausting the exports of `@app/contracts`, not assumed;
-- **two recorded defects**, marked `TODO(contract)` at the binding with the reason:
-  `POST /v1/api-keys` parses its body with an unchecked cast and has no DTO at all, and
-  `POST /v1/flows` resolves a discriminated union at runtime on `action`.
+The two recorded `TODO(contract)` defects are gone: `POST /v1/api-keys` no longer parses its body
+with an unchecked cast, and `POST /v1/flows` resolves its discriminated union through a contract.
 
 A missing schema is visible in the document rather than implying the endpoint takes or returns
 nothing. No shape is ever hand-written to fill a gap — that is the failure this pipeline replaced.

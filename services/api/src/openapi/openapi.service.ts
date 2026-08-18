@@ -24,6 +24,7 @@ export class OpenApiService {
 
   constructor(@Inject(ConfigService) private readonly config: ConfigService) {}
 
+  /** The artifact exactly as committed. Hermetic — the server url is still the `{baseUrl}` template. */
   async fullDocument(): Promise<Record<string, unknown>> {
     if (this.cached) return this.cached;
     const raw = await this.readArtifact();
@@ -40,6 +41,42 @@ export class OpenApiService {
     }
     this.cached = JSON.parse(raw) as Record<string, unknown>;
     return this.cached;
+  }
+
+  /**
+   * The document as the DOCS PAGE should see it: same content, but pointed at the deployment it was
+   * served from.
+   *
+   * The committed artifact deliberately carries a `{baseUrl}` template defaulting to
+   * `http://localhost:3000` — right for a file in git, wrong for a page a tester is about to click
+   * "Test Request" on. Left alone, every trial request from the deployed docs fires at the TESTER'S
+   * OWN machine and fails in a way that reads as "the API is broken".
+   *
+   * Resolved from configuration, never from the request. Behind Render's proxy — as behind API
+   * Gateway + VPC Link — the container sees its internal host, so `Host`/`x-forwarded-*` are not a
+   * trustworthy source for a url handed to a caller. Same lesson as the auth redirects.
+   * `RENDER_EXTERNAL_URL` is injected by the platform, so testing needs no extra secret; set
+   * `PUBLIC_API_BASE_URL` to override anywhere else. With neither, the template is left untouched
+   * rather than guessed at.
+   */
+  async servedDocument(): Promise<Record<string, unknown>> {
+    const document = await this.fullDocument();
+    const baseUrl = this.publicBaseUrl();
+    if (!baseUrl) return document;
+    // Shallow copy: the cached artifact stays byte-identical to the committed file, so nothing that
+    // reads it later is looking at a mutated singleton.
+    return {
+      ...document,
+      servers: [{ url: baseUrl, description: "This deployment." }],
+    };
+  }
+
+  private publicBaseUrl(): string | null {
+    const configured =
+      this.config.get<string>("PUBLIC_API_BASE_URL") ??
+      this.config.get<string>("RENDER_EXTERNAL_URL");
+    const trimmed = configured?.trim().replace(/\/+$/, "");
+    return trimmed ? trimmed : null;
   }
 
   /**

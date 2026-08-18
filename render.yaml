@@ -37,6 +37,11 @@ services:
         sync: false
       - key: OPERATOR_TOKEN
         sync: false
+      # Provider ingress secret for the delivery-receipt callbacks (`/v1/webhooks/*`). Fails CLOSED:
+      # unset means every carrier DLR is rejected 401, so delivery status silently never advances
+      # past `accepted`. QA cannot exercise the documented callback routes without it.
+      - key: WEBHOOK_INGRESS_TOKEN
+        sync: false
       # PII vault key material (index/data keys derive from the one master key)
       - key: PII_MASTER_KEY
         sync: false
