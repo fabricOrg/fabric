@@ -108,8 +108,12 @@ export const SYSTEM_BINDINGS: RouteBindings = {
   },
   "GET /docs/openapi.json": {
     summary: "Retrieve the full OpenAPI document",
+    description:
+      "The raw document, unwrapped. A renderer looks for a top-level `openapi` key, so this is the " +
+      "one JSON route that must NOT carry the response envelope.",
     tags: ["Health"],
     visibility: "internal",
     security: ["operatorToken"],
+    envelope: false,
   },
 };

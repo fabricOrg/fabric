@@ -1,4 +1,9 @@
 import { enveloped } from "@app/contracts";
+import {
+  ALWAYS_POSSIBLE_ERRORS,
+  errorEnvelopeSchema,
+  errorResponse,
+} from "./openapi-errors.js";
 import { toRequestSchema, toResponseSchema } from "./openapi-schema.js";
 import type {
   RouteBinding,
@@ -22,16 +27,6 @@ export interface BuildOptions {
   readonly description: string;
   readonly version: string;
 }
-
-/** Every route returns the platform error envelope, so it is documented once, not 138 times. */
-const ERROR_RESPONSE_REF = "#/components/schemas/ErrorEnvelope";
-
-const ALWAYS_POSSIBLE_ERRORS: Readonly<Record<string, string>> = {
-  "400": "Invalid request.",
-  "401": "Missing or invalid credentials.",
-  "429": "Rate limited. Retry after the interval in `Retry-After`.",
-  "500": "Unexpected server error.",
-};
 
 export class BindingCoverageError extends Error {}
 
@@ -91,6 +86,7 @@ function operationFor(
   binding: RouteBinding,
   nestPath: string,
   publicOnly: boolean,
+  routeLabel: string,
 ): Record<string, unknown> {
   const parameters: Record<string, unknown>[] = pathParameters(nestPath);
   if (binding.query) {
@@ -146,7 +142,7 @@ function operationFor(
     ...(binding.description ? { description: binding.description } : {}),
     tags: [...binding.tags],
     ...(binding.deprecated ? { deprecated: true } : {}),
-    security: securityFor(binding, publicOnly),
+    security: securityFor(binding, publicOnly, routeLabel),
     ...(parameters.length > 0 ? { parameters } : {}),
     ...(binding.request
       ? {
@@ -165,12 +161,13 @@ function operationFor(
 /**
  * The security list for an operation. In the PUBLIC artifact, staff/service schemes are removed —
  * see INTERNAL_ONLY_SCHEMES for why accuracy to the wrong audience is the problem. Never returns an
- * empty list for a route that declares credentials: if stripping would empty it, the original is
- * kept, because "no security" is a far worse lie than an over-broad one.
+ * empty list: if stripping would empty it, generation FAILS. The previous fallback re-published the
+ * staff scheme it had just removed, which is worse than either alternative.
  */
 function securityFor(
   binding: RouteBinding,
   publicOnly: boolean,
+  routeLabel: string,
 ): Record<string, unknown>[] {
   const asEntries = (schemes: readonly string[]) =>
     schemes.map((scheme) => (scheme === "none" ? {} : { [scheme]: [] }));
@@ -178,16 +175,18 @@ function securityFor(
   const customerFacing = binding.security.filter(
     (scheme) => !INTERNAL_ONLY_SCHEMES.has(scheme),
   );
-  return asEntries(
-    customerFacing.length > 0 ? customerFacing : binding.security,
-  );
-}
-
-function errorResponse(description: string): Record<string, unknown> {
-  return {
-    description,
-    content: { "application/json": { schema: { $ref: ERROR_RESPONSE_REF } } },
-  };
+  if (customerFacing.length === 0) {
+    // REFUSE, rather than fall back to the unfiltered list. The fallback silently re-published
+    // `operatorToken` — header name, env var and "Opens the admin surface" — into the customer
+    // artifact, which is the leak this filter exists to prevent. A public route whose only
+    // credential is a staff one is mis-labelled: either it is not public, or its binding is wrong.
+    throw new BindingCoverageError(
+      `Route "${routeLabel}" is marked visibility: "public" but declares only staff credentials ` +
+        `(${binding.security.join(", ")}). Mark it internal, or add the customer credential it ` +
+        "really accepts.",
+    );
+  }
+  return asEntries(customerFacing);
 }
 
 export function buildOpenApiDocument(
@@ -208,7 +207,12 @@ export function buildOpenApiDocument(
     paths[path] ??= {};
     const publicOnly =
       options.include.length === 1 && options.include[0] === "public";
-    const operation = operationFor(binding, route.path, publicOnly);
+    const operation = operationFor(
+      binding,
+      route.path,
+      publicOnly,
+      routeKey(route),
+    );
     paths[path][route.method.toLowerCase()] = operation;
     for (const tag of binding.tags) usedTags.add(tag);
     for (const entry of operation.security as Record<string, unknown>[])
@@ -252,39 +256,6 @@ export function buildOpenApiDocument(
         ),
       ),
       schemas: { ErrorEnvelope: errorEnvelopeSchema() },
-    },
-  };
-}
-
-/**
- * The F8.3 envelope, written out rather than derived: `@app/contracts` exports the PARSER for it,
- * and parsers are permissive by design (they accept what older servers emit). The doc must describe
- * what this server PRODUCES, which is narrower.
- */
-function errorEnvelopeSchema(): Record<string, unknown> {
-  return {
-    type: "object",
-    required: ["error"],
-    properties: {
-      error: {
-        type: "object",
-        required: ["type", "code", "message"],
-        properties: {
-          type: { type: "string" },
-          code: {
-            type: "string",
-            description:
-              "Stable, branchable identifier. Prefer this over `message`.",
-          },
-          message: { type: "string" },
-          param: { type: "string" },
-          doc_url: { type: "string" },
-        },
-      },
-      request_id: {
-        type: "string",
-        description: "Quote this in a support request.",
-      },
     },
   };
 }

@@ -58,8 +58,9 @@ export const SECURITY_SCHEMES: Readonly<Record<string, unknown>> = {
  * token granting cross-tenant access, and name the header to send it in.
  *
  * The operator path is real and stays documented — in the internal artifact, for the people who
- * have that credential. Stripping never empties an operation's security: every public route also
- * accepts `secretKey`/`tenantToken`, and the builder asserts a scheme survives.
+ * have that credential. Stripping never empties an operation's security, and the builder now
+ * genuinely enforces that: a `public` route declaring only staff credentials fails generation
+ * rather than silently re-publishing the scheme.
  */
 export const INTERNAL_ONLY_SCHEMES: ReadonlySet<string> = new Set([
   "bffInternal",

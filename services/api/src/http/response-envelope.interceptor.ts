@@ -8,6 +8,7 @@ import {
 import type { Observable } from "rxjs";
 import { map } from "rxjs/operators";
 import {
+  envelopeDisabledFor,
   responseContractFor,
   successContentTypeFor,
 } from "../openapi/response-contracts.js";
@@ -81,6 +82,11 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
    * for routes with no binding at all.
    */
   private isJson(context: ExecutionContext, response: unknown): boolean {
+    // An explicit opt-out wins over every inference. `GET /docs/openapi.json` returns JSON that
+    // must stay a bare OpenAPI document — no media type distinguishes it, so nothing inferred from
+    // headers or content types could have caught it.
+    if (envelopeDisabledFor(context.getClass(), context.getHandler()))
+      return false;
     const declared = successContentTypeFor(
       context.getClass(),
       context.getHandler(),

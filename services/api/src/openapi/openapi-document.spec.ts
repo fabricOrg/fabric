@@ -267,3 +267,81 @@ describe("document shape", () => {
     expect(op.parameters?.[0]).toMatchObject({ name: "id", required: true });
   });
 });
+
+describe("security schemes in the public artifact", () => {
+  const routes = [route("GET", "/v1/keys"), route("GET", "/internal/thing")];
+  const bindings: RouteBindings = {
+    "GET /v1/keys": {
+      ...binding,
+      security: ["secretKey", "tenantToken", "operatorToken"],
+    },
+    "GET /internal/thing": {
+      ...binding,
+      visibility: "internal",
+      security: ["bffInternal"],
+    },
+  };
+
+  it("strips STAFF schemes from public operations even where the guard accepts them", () => {
+    // OperatorOrTenantGuard really does take an operator token on ten /v1 routes, so listing it is
+    // accurate — and tells an SDK reader that a credential-minting route accepts a cross-tenant
+    // staff token, naming the header to send it in.
+    const doc = buildOpenApiDocument(routes, bindings, { ...OPTIONS });
+    const op = operation(doc, "/v1/keys", "get") as {
+      security: Record<string, unknown>[];
+    };
+    const schemes = op.security.flatMap((entry) => Object.keys(entry));
+    expect(schemes).toEqual(["secretKey", "tenantToken"]);
+    expect(schemes).not.toContain("operatorToken");
+  });
+
+  it("publishes only the schemes the included operations actually use", () => {
+    // components used to be emitted wholesale, so the customer artifact named x-internal-token,
+    // x-webhook-token and their env vars even though no public route referenced them.
+    const doc = buildOpenApiDocument(routes, bindings, { ...OPTIONS });
+    const components = doc.components as {
+      securitySchemes: Record<string, unknown>;
+    };
+    expect(Object.keys(components.securitySchemes)).toEqual([
+      "secretKey",
+      "tenantToken",
+    ]);
+    expect(JSON.stringify(doc)).not.toContain("x-operator-token");
+  });
+
+  it("keeps every scheme in the internal artifact", () => {
+    const doc = buildOpenApiDocument(routes, bindings, {
+      ...OPTIONS,
+      include: ["public", "internal", "webhook"],
+    });
+    const components = doc.components as {
+      securitySchemes: Record<string, unknown>;
+    };
+    expect(Object.keys(components.securitySchemes)).toContain("bffInternal");
+    expect(Object.keys(components.securitySchemes)).toContain("operatorToken");
+  });
+
+  it("REFUSES a public route whose only credential is a staff one", () => {
+    // The previous fallback kept the unfiltered list here, silently re-publishing the very scheme
+    // the filter had just removed. Failing is the only honest outcome: the binding is wrong.
+    expect(() =>
+      buildOpenApiDocument(
+        [route("GET", "/v1/oops")],
+        { "GET /v1/oops": { ...binding, security: ["operatorToken"] } },
+        { ...OPTIONS },
+      ),
+    ).toThrow(/only staff credentials/);
+  });
+});
+
+describe("envelope opt-out", () => {
+  it("lets a binding declare that its JSON body must NOT be wrapped", () => {
+    // GET /docs/openapi.json returns JSON that must stay a bare OpenAPI document: a renderer looks
+    // for a top-level `openapi` key, and `{ data: {...} }` has none. No media type distinguishes
+    // it, so nothing inferred from headers could catch this — only an explicit flag.
+    const bindings: RouteBindings = {
+      "GET /raw": { ...binding, envelope: false },
+    };
+    expect(bindings["GET /raw"]?.envelope).toBe(false);
+  });
+});

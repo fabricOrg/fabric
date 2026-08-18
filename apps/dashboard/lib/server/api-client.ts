@@ -1,6 +1,6 @@
 import "server-only";
 
-import { mintTenantTokenResponseSchema } from "@app/contracts";
+import { mintTenantTokenResponseSchema, unwrapEnvelope } from "@app/contracts";
 import type { AppSession } from "@app/fe-auth";
 import { readDashboardSession, refreshDashboardSession } from "./auth";
 
@@ -116,20 +116,6 @@ async function apiRequest<T>(
   // HERE keeps all ~24 client modules untouched — the envelope is a transport concern, not
   // something every caller should destructure. Errors keep their own envelope and are thrown above.
   return unwrapEnvelope(payload) as T;
-}
-
-/** `{ data, request_id }` -> `data`. Anything else passes through — a 204 has no body, and a
- *  non-enveloped payload means an endpoint that deliberately opts out (a file download). */
-function unwrapEnvelope(payload: unknown): unknown {
-  if (
-    payload !== null &&
-    typeof payload === "object" &&
-    "data" in payload &&
-    "request_id" in payload
-  ) {
-    return (payload as { data: unknown }).data;
-  }
-  return payload;
 }
 
 function requirePermission(session: AppSession, permission: string): void {

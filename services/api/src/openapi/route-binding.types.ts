@@ -72,6 +72,20 @@ export interface RouteBinding {
    */
   readonly successContentType?: string;
   /**
+   * Set `false` for a JSON route whose body must reach the caller UNWRAPPED.
+   *
+   * Exists because the wrap decision was previously inferred — first from a response header Fastify
+   * has not set yet, then from `successContentType`, which only covers NON-JSON exceptions. That
+   * enumeration missed `GET /docs/openapi.json`: a JSON response that must stay a bare OpenAPI
+   * document, because a renderer looks for a top-level `openapi` key and `{ data: {...} }` has none.
+   * The reference page for this very API rendered nothing.
+   *
+   * An explicit flag beats a clever content-type: `"application/openapi+json"` would also work,
+   * but only because it fails an `.includes("application/json")` substring test — which is a
+   * coincidence, not a rule, and the next person would delete it as redundant.
+   */
+  readonly envelope?: boolean;
+  /**
    * Documented failure codes BEYOND the global set every route can return (400/401/429/500).
    * List the ones a caller must branch on — 402 insufficient funds, 409 idempotency conflict.
    */

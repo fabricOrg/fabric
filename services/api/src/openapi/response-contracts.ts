@@ -77,6 +77,14 @@ export function successContentTypeFor(
   return bindingFor(controllerClass, handler)?.successContentType ?? null;
 }
 
+/** Whether this route's binding opts OUT of the response envelope. */
+export function envelopeDisabledFor(
+  controllerClass: object,
+  handler: object,
+): boolean {
+  return bindingFor(controllerClass, handler)?.envelope === false;
+}
+
 /** The query-string contract for this handler, or null when the binding declares none. */
 export function queryContractFor(
   controllerClass: object,
