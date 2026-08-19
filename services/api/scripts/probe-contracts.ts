@@ -126,7 +126,10 @@ async function probe(): Promise<void> {
   for (const [path, methods] of Object.entries(spec.paths)) {
     const operation = methods.get;
     if (!operation) continue;
-    if (path.startsWith("/docs")) continue; // serves the artifact this probe reads
+    // `/docs` used to be skipped here, on the reasoning that it "serves the artifact this probe
+    // reads". That justified skipping a byte-comparison, not skipping the REQUEST — and the gap is
+    // how a documentation page that rendered its shell and then failed to load the document reached
+    // a deployed environment with every gate green. Both /docs routes are now called like any other.
 
     const missing: string[] = [];
     const url = path.replace(/\{(\w+)\}/g, (_, name: string) => {

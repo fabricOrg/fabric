@@ -31,11 +31,16 @@ export class OpenApiService {
     if (raw === null) {
       // Explicit and actionable, never an empty document. A blank spec would read as "this API has
       // no endpoints", which is a far more confusing thing to hand an operator than an error.
+      // Name the override when one is set. "Not generated" and "your OPENAPI_INTERNAL_PATH points at
+      // nothing" are different problems with the same symptom, and an operator reading only the
+      // first will regenerate a file the process was never going to look at.
+      const configured = this.config.get<string>("OPENAPI_INTERNAL_PATH");
       throw apiError({
         type: "api_error",
         code: "openapi_artifact_missing",
-        message:
-          "The OpenAPI artifact has not been generated. Run: pnpm --filter @app/api openapi:generate",
+        message: configured
+          ? `OPENAPI_INTERNAL_PATH is set to "${configured}" and could not be read. Point it at a generated artifact, or unset it to use the copy that ships with the build.`
+          : "The OpenAPI artifact has not been generated. Run: pnpm --filter @app/api openapi:generate",
         status: 503,
       });
     }
@@ -93,6 +98,11 @@ export class OpenApiService {
     if (configured)
       return readFile(resolve(configured), "utf8").catch(() => null);
 
+    // REPO LAYOUT FIRST. In a checkout this is the file `openapi:generate` just wrote and
+    // `openapi:check` just proved current, so it must outrank a `dist/` copy that a build may have
+    // produced earlier — otherwise `pnpm start` after a regenerate serves the previous document with
+    // no signal that it is stale. In a packaged deployment there is no repo above the module, so
+    // these eight `stat`s miss and cost nothing; the result is cached either way.
     let dir = dirname(fileURLToPath(import.meta.url));
     for (let depth = 0; depth < 8; depth += 1) {
       const candidate = resolve(dir, "docs/api/openapi.internal.json");
@@ -102,6 +112,22 @@ export class OpenApiService {
       if (parent === dir) break;
       dir = parent;
     }
+
+    // THEN THE COPY THAT SHIPS WITH THE PACKAGE. The api build writes the artifact into `dist/`,
+    // which is the one directory that travels with this package under EVERY packaging strategy — a
+    // pruned `pnpm deploy` image, a platform-native build, a tarball. That is the point: the lookup
+    // stops depending on how the app was shipped, rather than growing a special case per platform.
+    //
+    // Deliberately not a claim about why the deployed environment answered 503
+    // `openapi_artifact_missing`. That happened, and it means the artifact was not findable there;
+    // which of the plausible mechanisms it was has not been established, and a comment is the wrong
+    // place to record a guess as a cause.
+    const packaged = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      "../openapi.internal.json",
+    );
+    const shipped = await readFile(packaged, "utf8").catch(() => null);
+    if (shipped !== null) return shipped;
     return null;
   }
 }
