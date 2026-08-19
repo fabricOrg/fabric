@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "//": "Turbo caches package tasks; global pass-through variables belong to root scripts and are not cache inputs.",
+  "globalDependencies": ["docs/api/openapi.internal.json"],
+  "//": "Turbo caches package tasks; global pass-through variables belong to root scripts and are not cache inputs. globalDependencies carries docs/api/openapi.internal.json because the api build copies it into dist/ — the file lives outside services/api, so nothing else makes turbo re-run that build when the spec changes, and a cache hit would restore a dist holding the previous document.",
   "globalPassThroughEnv": [
     "DATABASE_URL_APP",
     "DATABASE_URL_SUPER",
