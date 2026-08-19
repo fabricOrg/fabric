@@ -1,5 +1,16 @@
+# Build context excludes. Anything not needed INSIDE the image belongs here — the context is
+# transferred to the daemon before the first instruction runs, so a stray cache directory is paid
+# for on every build.
+#
+# `.turbo` is the one that bit: it reached 51GB locally and, being unlisted, was streamed into the
+# build until the Docker daemon fell over. Caches are rebuilt on demand and must never be shipped.
 .git
 .github
+.turbo
+**/.turbo
+.codex-temp
+.pnpm-store
+tmp
 **/.next
 **/.terraform
 **/coverage
@@ -13,3 +24,9 @@ team
 *.tfstate.*
 .env
 .env.*
+
+# …except the OpenAPI artifact, which the api build copies into `dist/` so the running container can
+# serve it. Excluding all of `docs` is why the deployed `/docs/openapi.json` answered 503
+# `openapi_artifact_missing`: the file is committed and tracked, and simply never entered the image.
+# .dockerignore takes the LAST matching pattern, so this re-include must stay below `docs`.
+!docs/api/openapi.internal.json

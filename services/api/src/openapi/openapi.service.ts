@@ -93,6 +93,21 @@ export class OpenApiService {
     if (configured)
       return readFile(resolve(configured), "utf8").catch(() => null);
 
+    // NEXT TO THE COMPILED MODULE FIRST. The build copies the artifact into `dist/`, which is the
+    // one directory that travels with the package however it is shipped. The walk-up below assumes
+    // the repo IS the deployment, and the container is not: it is built with
+    // `pnpm --filter @app/api deploy`, which packages this package alone, so repo-root `docs/api/`
+    // never enters the image. That is why the deployed `/docs/openapi.json` answered 503
+    // `openapi_artifact_missing` while every gate, every test and the deploy pipeline stayed green —
+    // all of them ran where the repo exists.
+    const packaged = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      "../openapi.internal.json",
+    );
+    const shipped = await readFile(packaged, "utf8").catch(() => null);
+    if (shipped !== null) return shipped;
+
+    // Falls back to the repo layout, for `pnpm dev` and for anything run from a checkout.
     let dir = dirname(fileURLToPath(import.meta.url));
     for (let depth = 0; depth < 8; depth += 1) {
       const candidate = resolve(dir, "docs/api/openapi.internal.json");
