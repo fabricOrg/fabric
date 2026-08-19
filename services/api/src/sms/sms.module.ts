@@ -24,7 +24,7 @@ import { VirtualPhoneService } from "./virtual-phone.service.js";
 import { WebhookTokenGuard } from "./webhook-token.guard.js";
 
 /**
- * SMS HTTP surface (L5): POST /v1/sms/send (ApiKeyGuard) + POST /webhooks/dlr/:provider.
+ * SMS HTTP surface (L5): POST /v1/sms/messages (ApiKeyGuard) + POST /webhooks/dlr/:provider.
  * ApiKeysModule supplies the API-key guard and KillSwitchModule gates sending.
  */
 @Module({

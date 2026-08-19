@@ -37,7 +37,7 @@ interface AuthedRequest {
 }
 
 /**
- * POST /v1/sms/send — the public send endpoint (F5.2). ApiKeyGuard authenticates the key and attaches
+ * POST /v1/sms/messages — the public send endpoint (F5.2). ApiKeyGuard authenticates the key and attaches
  * req.tenant; the handler runs the L5 pipeline under that tenant. Segmentation/rating/reserve/commit
  * all happen in the engine. Success → 201 { id, status, request_id }; bad field → 400 invalid_request_error.
  */
@@ -115,16 +115,6 @@ export class SmsController {
     }
   }
 
-  /** Compatibility alias for beta clients. New SDK releases use POST /v1/sms/messages. */
-  @Post("sms/send")
-  async legacySend(
-    @Req() req: AuthedRequest,
-    @Body() body: unknown,
-    @Headers("idempotency-key") idempotencyKey?: string,
-  ): Promise<SendSmsApiResponse> {
-    return this.send(req, body, idempotencyKey);
-  }
-
   private async execute(input: {
     tenantId: string;
     to: string;
@@ -136,8 +126,7 @@ export class SmsController {
     applicationId?: string | null;
   }): Promise<SendSmsApiResponse> {
     // Mapped at the HTTP boundary, not inside SmsService: the service keeps throwing the wallet
-    // DOMAIN error so ManagedMessagesService can still branch on it. Both single-send routes
-    // (`sms/messages` and the `sms/send` alias) funnel through here; batches are a separate
+    // DOMAIN error so ManagedMessagesService can still branch on it. Batches are a separate
     // controller and map it there.
     const result = await this.sms
       .send(input)

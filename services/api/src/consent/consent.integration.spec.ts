@@ -40,7 +40,7 @@ let app: NestFastifyApplication;
 async function send(payload: Record<string, unknown>) {
   return app.inject({
     method: "POST",
-    url: "/v1/sms/send",
+    url: "/v1/sms/messages",
     headers: {
       authorization: `Bearer ${KEY}`,
       "content-type": "application/json",

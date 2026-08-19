@@ -12,7 +12,7 @@ import { type TenantId, timestamps } from "./_shared.js";
 /**
  * API IDEMPOTENCY KEYS — client-supplied `Idempotency-Key` header on money POSTs (ARCHITECTURE §7,
  * remediation finding 3). The engine's internal keys (`reserve:{messageId}`) protect INTERNAL
- * retries only — they key on the server-generated id, so a client retry of POST /v1/sms/send
+ * retries only — they key on the server-generated id, so a client retry of POST /v1/sms/messages
  * (timeout, network blip) would mint a NEW message + NEW reservation = double charge. This table
  * closes that: UNIQUE(tenant_id, key) makes the first request the winner; a retry with the same
  * key + same body replays the stored response; same key + different body is a 409.

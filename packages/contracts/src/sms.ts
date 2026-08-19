@@ -67,7 +67,7 @@ export type MessageDetail = z.infer<typeof messageDetail>;
 export const messageClass = z.enum(["transactional", "promotional"]);
 export type MessageClass = z.infer<typeof messageClass>;
 
-/** POST /v1/sms/send request. Server re-computes segments/cost — client estimate is advisory. */
+/** POST /v1/sms/messages request. Server re-computes segments/cost — client estimate is advisory. */
 export const sendSmsRequest = z
   .object({
     to: z.string().regex(/^\+[1-9]\d{7,14}$/, "Must be one E.164 number."),
