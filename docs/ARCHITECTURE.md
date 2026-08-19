@@ -283,7 +283,7 @@ COMMIT;
 ### Send pipeline
 
 ```
-POST /v1/sms/send
+POST /v1/sms/messages
    │  authN (api key) · rate limit · idempotency
    ▼
 Engine.normalize   → E.164 numbers, validate
@@ -343,7 +343,7 @@ later — consistent with Principle #1.
 - **Test mode:** `sk_test_` keys hit a sandbox that never charges or sends.
 
 ```
-POST /v1/sms/send           # single or bulk
+POST /v1/sms/messages           # single or bulk
 GET  /v1/sms/:id            # status + DLR
 GET  /v1/messages           # list/filter
 GET  /v1/wallet             # balance + recent ledger
@@ -426,7 +426,7 @@ tenant, within the entitlement bounds the control plane sets.
 - **OTP / Verify (SMS channel)** — generate + verify, attempt limits, auto-redacted bodies
 - **Opt-out / STOP suppression** — block sends to opted-out recipients (compliance, not optional)
 - DLR ingestion + reconciliation + **reservation-TTL sweeper** (resolve "stuck" reservations)
-- `POST /v1/sms/send`, `GET /v1/sms/:id`, `GET /v1/wallet`, OTP send/verify endpoints
+- `POST /v1/sms/messages`, `GET /v1/sms/:id`, `GET /v1/wallet`, OTP send/verify endpoints
 - Minimal dev portal: key management, usage logs, docs
 - **Exit criteria:** a developer can sign up, get a key, fund a (test) wallet, send,
   run an OTP verify, and see accurate billing + DLR — with the ledger invariant green under load.
