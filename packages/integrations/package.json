@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@app/contracts": "workspace:*",
-    "@aws-sdk/client-sesv2": "^3.1101.0",
+    "@aws-sdk/client-sesv2": "^3.1116.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
