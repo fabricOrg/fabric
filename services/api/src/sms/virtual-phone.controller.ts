@@ -1,4 +1,7 @@
-import { deliveryMode, virtualPhoneReply } from "@app/contracts";
+import {
+  updateMessagingSettingsRequest,
+  virtualPhoneReply,
+} from "@app/contracts";
 import {
   Body,
   Controller,
@@ -39,15 +42,20 @@ export class VirtualPhoneController {
     @Headers("x-actor-email") actorEmail?: string,
   ) {
     assertUuid(tenantId);
-    const parsed = deliveryMode.safeParse(
-      (body as { delivery_mode?: unknown })?.delivery_mode,
-    );
+    // Parsed against the SAME contract the binding publishes. It used to cast `body` to a shape and
+    // read one field off it, which is how the binding came to name the bare enum while the handler
+    // wanted an object: nothing connected the two, so nothing could disagree out loud.
+    const parsed = updateMessagingSettingsRequest.safeParse(body);
     if (!parsed.success)
       throw invalidRequest(
         "invalid_delivery_mode",
         "Delivery mode must be virtual or live.",
       );
-    return this.virtualPhone.updateSettings(tenantId, parsed.data, actorEmail);
+    return this.virtualPhone.updateSettings(
+      tenantId,
+      parsed.data.delivery_mode,
+      actorEmail,
+    );
   }
 
   @Get(":tenantId/virtual-phone/messages")
