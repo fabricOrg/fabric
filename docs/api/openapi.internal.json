@@ -10566,7 +10566,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/PluginInstanceDto"
+                      "$ref": "#/components/schemas/PluginCredentialAck"
                     },
                     "request_id": {
                       "type": "string"
@@ -21383,6 +21383,24 @@
           "id",
           "action"
         ]
+      },
+      "PluginCredentialAck": {
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "fingerprint",
+          "version"
+        ],
+        "additionalProperties": false
       },
       "PluginInstanceDto": {
         "type": "object",
