@@ -74,9 +74,11 @@ export class AutoTopupService {
     request: UpdateAutoTopupRequest,
   ): Promise<AutoTopupResponse> {
     const scoped = tenantId as TenantId;
-    // Both checks are ENABLE-only. A disable must never be refused for the value being disabled: the
-    // dashboard sends the STORED currency when turning off, so guarding that too would make an
-    // already-mismatched config impossible to stop while the cron kept charging it.
+    // Both checks are ENABLE-only. A disable must never be refused for the value being disabled: a
+    // caller turning off an already-mismatched config sends the STORED currency, and guarding that
+    // too would make it impossible to stop — a config nothing can charge would also be a config
+    // nothing can clear. (The dashboard now always sends the billing currency, because the response
+    // reports it; the SDK and any script still can't be assumed to.)
     if (request.enabled) {
       const [card] = await this.provisioning.db
         .select({ id: paymentAuthorizations.id })
