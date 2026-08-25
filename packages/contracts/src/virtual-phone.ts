@@ -4,6 +4,22 @@ import { messageStatus } from "./message-status.js";
 export const deliveryMode = z.enum(["virtual", "live"]);
 export type DeliveryMode = z.infer<typeof deliveryMode>;
 
+/**
+ * The PATCH body, as an object — the shape the handler actually reads.
+ *
+ * The route binding used to name the bare `deliveryMode` enum as its request contract, so the
+ * document published the body as the literal string "virtual", while every caller correctly sent
+ * `{ delivery_mode: "virtual" }`. That was inert while the specification was decoration; once
+ * request validation went strict it rejected every call at `<root>` with "expected one of
+ * virtual|live" — an error message describing a body nobody has ever sent.
+ */
+export const updateMessagingSettingsRequest = z.object({
+  delivery_mode: deliveryMode,
+});
+export type UpdateMessagingSettingsRequest = z.infer<
+  typeof updateMessagingSettingsRequest
+>;
+
 export const messagingSettings = z.object({
   delivery_mode: deliveryMode,
   locked: z.boolean(),

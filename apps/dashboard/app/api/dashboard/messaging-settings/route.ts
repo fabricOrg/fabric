@@ -1,4 +1,4 @@
-import { deliveryMode } from "@app/contracts";
+import { updateMessagingSettingsRequest } from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError } from "@/lib/server/api-client";
 import {
@@ -50,9 +50,10 @@ export async function PATCH(request: Request) {
       { status: 403 },
     );
   }
-  const parsed = deliveryMode.safeParse(
-    ((await request.json()) as { delivery_mode?: unknown }).delivery_mode,
-  );
+  // The SAME contract the API publishes and parses, rather than a third local copy of the shape.
+  // Casting the body and picking one field off it is exactly how the API's binding and handler
+  // drifted until the published body said `"virtual"` and every caller sent `{ delivery_mode }`.
+  const parsed = updateMessagingSettingsRequest.safeParse(await request.json());
   if (!parsed.success)
     return NextResponse.json(
       { error: { message: "Invalid delivery mode." } },
@@ -60,7 +61,11 @@ export async function PATCH(request: Request) {
     );
   try {
     return NextResponse.json(
-      await setMessagingMode(current.orgId, parsed.data, current.email),
+      await setMessagingMode(
+        current.orgId,
+        parsed.data.delivery_mode,
+        current.email,
+      ),
     );
   } catch (error) {
     return respond(error);

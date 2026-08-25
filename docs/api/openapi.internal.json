@@ -3555,7 +3555,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DeliveryModeInput"
+                "$ref": "#/components/schemas/UpdateMessagingSettingsRequestInput"
               }
             }
           }
@@ -16616,13 +16616,6 @@
           }
         }
       },
-      "DeliveryModeInput": {
-        "type": "string",
-        "enum": [
-          "virtual",
-          "live"
-        ]
-      },
       "EmailContentResponse": {
         "type": "object",
         "properties": {
@@ -24797,6 +24790,21 @@
             "type": "boolean"
           }
         }
+      },
+      "UpdateMessagingSettingsRequestInput": {
+        "type": "object",
+        "properties": {
+          "delivery_mode": {
+            "type": "string",
+            "enum": [
+              "virtual",
+              "live"
+            ]
+          }
+        },
+        "required": [
+          "delivery_mode"
+        ]
       },
       "UpdateSandboxAllowancePolicyInput": {
         "type": "object",
