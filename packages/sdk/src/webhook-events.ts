@@ -24,7 +24,7 @@ export interface MessageWebhookData {
   readonly key?: string;
   readonly versionId?: string;
   readonly resourceVersion?: number;
-  readonly channel?: "sms" | "email";
+  readonly channel?: "sms" | "email" | "whatsapp";
   readonly status?: MessageStatus;
   readonly previousStatus?: MessageStatus;
   readonly errorCode?: string;
@@ -32,7 +32,12 @@ export interface MessageWebhookData {
 
 export interface InboundMessageWebhookData {
   readonly messageId: string;
-  readonly channel: "sms" | "email";
+  /**
+   * WhatsApp is the only channel that delivers inbound today — the SMS provider has no
+   * mobile-originated path — so excluding it, as this union did, excluded the only value that can
+   * actually arrive.
+   */
+  readonly channel: "sms" | "email" | "whatsapp";
 }
 
 export type KnownWebhookEvent =

@@ -2,10 +2,19 @@
 
 ## Unreleased
 
+- **Fixed:** a WhatsApp managed delivery threw `ApiShapeError` instead of parsing.
+  `parseMessageDelivery` validated `channel` against `["sms", "email"]` while the API publishes
+  `["sms", "email", "whatsapp"]`, so the SDK rejected a response the API is documented to return —
+  as a runtime exception, not a type error. The same narrow union was in `MessageDelivery`,
+  `MessageDeliveryAttempt`, the message list filters, the catalog channel constraint, and both
+  webhook event payloads. `InboundMessageWebhookData` was the sharpest case: inbound is WhatsApp-only
+  today, so the union excluded the one channel that can actually arrive.
 - **Breaking (pre-production):** `POST /v1/sms/send` is removed. The SDK has posted to
-  `POST /v1/sms/messages` since 0.1.0-beta.6, so generated clients and `sms.send()` are unaffected —
-  but a hand-rolled request against the old path now 404s. An earlier entry below says that route
-  "remains compatible"; that is no longer true.
+  `POST /v1/sms/messages` since **0.1.0-beta.4**, but beta.4 and beta.5 were never published — so
+  **0.1.0-beta.6 is the first published version that survives this change**. Anything on
+  0.1.0-beta.3 or earlier sends to the removed path and will 404.
+  Install `@fabric-messaging/sdk@beta` or pin `>=0.1.0-beta.6`. An earlier entry below says the old
+  route "remains compatible"; that is no longer true.
 
 ## 0.1.0-beta.6
 
