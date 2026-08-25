@@ -1,6 +1,6 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-18. Point-in-time. **Verify against code and git before treating any of it as
+_Snapshot: 2026-08-25. Point-in-time. **Verify against code and git before treating any of it as
 fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 [CLAUDE.md](./CLAUDE.md) (how we build) and `docs/`. Superseded entries live in
 [docs/HANDOFF-ARCHIVE.md](./docs/HANDOFF-ARCHIVE.md)._
@@ -16,8 +16,8 @@ fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 
 | ref | through | note |
 | --- | --- | --- |
-| `origin/dev` | #307, #309, #308 | the OpenAPI surface, the contract-coverage fix, this snapshot |
-| `origin/testing` | same | promoted 2026-08-18, **level with `dev`** |
+| `origin/dev` | #311, #312, #313, #314, #315 | alias removal, two contract fixes, SDK channel repair, SDK 0.1.0-beta.7 |
+| `origin/testing` | same | promoted 2026-08-25, **level with `dev`**, all six deploy jobs green and verified live |
 
 Deliberately no shas here: every one written in this table has been stale within the day, and a
 wrong sha is worse than none because it reads as checked. `git ls-remote --heads origin dev testing`
@@ -26,44 +26,124 @@ is authoritative and takes a second.
 **On reading a green deploy.** `Deploy testing (Vercel + Render)` is the real one — confirm all six
 of its jobs (Gate, Migrate, Render · api, and the three Vercel apps). The plain `Deploy` workflow
 ALSO reports success while skipping 7 of its 8 jobs; it is the gated AWS/ECS path and is never
-evidence. Counting it was this snapshot's own first mistake.
+evidence. It reported success again on 2026-08-25 while the real workflow FAILED, so this is not
+theoretical.
 
-### Start here — confirm the deploy, then read Open work below (which is NOT empty)
+---
 
-`OPERATOR_TOKEN`, `WEBHOOK_INGRESS_TOKEN` and `OPENAPI_RESPONSE_VALIDATION` were all set on the
-Render service by hand on 2026-08-18. **The last one is worth confirming rather than assuming**, and
-one command does it — no session here has ever held Render's secrets, so it has never been verified
-from this side:
+### START HERE — two live defects that commit a side effect, then answer 500
+
+Both are pre-production, both are on `testing` now, and both are the same defect: **a route binding
+publishes a response shape its handler has never returned.** Strict validation rejects the reply
+AFTER the write has committed, so the operator sees a red failure on work that actually succeeded —
+and the natural recovery instinct is to retry.
+
+**1. `POST /internal/admin/senders/:id/decide`** — `internal-admin.ts` binds `adminSenderDtoSchema`;
+`senders.service.ts` returns `toDto(updated)`, which omits `tenant_id`, `carrier_status`,
+`carrier_ref` and `carrier_decided_at` — all four required. Approving or rejecting a sender ID
+commits the decision AND writes the audit record, then 500s. This is the live-SMS approval gate.
+The adjacent `POST .../carrier-status` binds the same schema and is CORRECT because it returns
+`toAdminDto` — so the fix is to use that here too.
+
+**2. `POST /internal/admin/privacy/tenants/:tenantId/erasures`** — `internal-pricing.ts` binds
+`erasureResultSchema` = `{ subject_id, erased }`; `pii-erasure.service.ts` returns
+`{ ...result, subjectId }` in camelCase. It **crypto-shreds the subject's key irreversibly** and
+then answers 500. Worst blast radius of the set: an operator who retries a "failed" erasure is
+retrying something already done, against a key that no longer exists.
+
+Three more of the same family, lower severity:
+
+- `POST /v1/message-definitions/:id/archive` binds `messageDefinitionState` (4 required fields); the
+  handler returns `{ archived: true }`.
+- Plugin registry mutations return `credential_fingerprint: null` because `toDto(updated)` is called
+  without the fingerprint argument. This one is SILENT — it validates fine, but the admin console
+  computes `configured = credential_fingerprint !== null`, so after "Activate live" the row reads
+  "No credentials" and offers to install one that already exists.
+- Five `DELETE`s are documented `204` while returning a body, and 37 POSTs are documented `200` while
+  Nest answers `201` (`successStatus` is documentation-only; it never becomes an `@HttpCode`).
+
+**Why this keeps happening, and it is the thing to fix.** `services/api/scripts/probe-contracts.ts`
+reads `const operation = methods.get` — it is **GET-only by construction**. §12's "proven" step
+structurally cannot exercise a single mutating endpoint, and every defect above is a POST or DELETE.
+`assertCoverage` only proves a binding EXISTS. `openapi:check` only proves the artifact matches the
+bindings — which it faithfully did, because binding and handler were wrong together.
+
+**What now guards which half:**
+
+- REQUESTS: `services/api/src/openapi/binding-request-shape.spec.ts` fails the build when a
+  body-carrying route publishes a non-object request contract. Added after `PATCH
+  /internal/tenants/:id/messaging-settings` published a bare enum and 400'd every dashboard call.
+- RESPONSES: no blanket test is possible (a response legitimately takes many shapes). The pattern
+  that works is typing the handler as the published contract — `Promise<PluginCredentialAck>` in
+  `plugin-registry.controller.ts`. Verified: adding a field to the contract fails `tsc`. Note it
+  catches a contract that GROWS or RENAMES a field, but NOT one that shrinks, and not an extra field
+  on the service — structural typing lets those through.
+
+The highest-value fix is extending the probe to mutating routes with a fixture body derived from the
+published request schema. Until that exists, this class ships again.
+
+---
+
+### SDK is published and safe to hand to a customer (2026-08-25)
+
+`@fabric-messaging/sdk@0.1.0-beta.7`, `latest` AND `beta`, provenance attestations present.
+
+It fixes two runtime defects, not typing ones: `webhooks.verify()` threw
+`WebhookVerificationError` on **every live inbound webhook** (the parser rejected `channel:
+"whatsapp"`, which is exactly what `whatsapp-inbound.service.ts` sends), and WhatsApp delivery
+events silently lost their `channel`. Both were invisible because the only inbound test used
+`channel: "sms"`.
+
+Two facts worth carrying:
+
+- The channel set is now pinned against the API's enum (`KNOWN_WEBHOOK_CHANNELS` vs
+  `messageChannel.options`), the way event types already were. That asymmetry was the whole bug.
+- Live inbound is WhatsApp-only, but **sandbox inbound is SMS** — `virtual-phone-operations.ts`
+  emits `message.received` with `channel: "sms"` through the same outbox. An earlier version of this
+  file claimed WhatsApp was the only inbound channel; that was wrong.
+
+Publishing goes through `.github/workflows/publish.yml` — OIDC trusted publishing, provenance, no
+stored token. Two traps: it runs in the `testing` GitHub Environment whose branch policy allows only
+the **`testing` branch**, so a dispatch from `dev` dies in ~12s with NO job log (that shape means the
+environment gate, not a build failure); and it publishes prereleases to `beta` only, so `latest` must
+be moved by hand. A local `npm publish` fails closed on provenance — do not route around it with
+`--provenance=false`.
+
+### Arkesel delivery callback is SET but UNPROVEN
+
+`arkesel (live) v2` carries the delivery-report URL
+`https://fabric-jezz.onrender.com/webhooks/dlr/arkesel-sms?token=<WEBHOOK_INGRESS_TOKEN>`.
+Arkesel's dashboard has NO callback field — our adapter sends `callback_url` per request from the
+plugin credential, so this is configured entirely on our side.
+
+Credential install is a FULL REPLACEMENT (write-only storage, no GET), so adding the URL required
+re-entering the API key, and the dialog warns the previous version stops immediately.
+
+Not yet proven: no message has been observed reaching `delivered`. The dialog's own help says
+"Without it, status stops at accepted and never reaches delivered" — so the proof is one live send
+transitioning past `accepted`. That is real money to a real phone and stays a §7 human call.
+
+### Still unconfirmed — strict validation on the deployed API
+
+`OPENAPI_RESPONSE_VALIDATION=strict` was set on the Render service by hand on 2026-08-18 and has
+never been verified from a session, because no session has held Render's secrets. It matters: with
+`NODE_ENV=production` the default is `warn`, and in `warn` mode `contracts:probe` reports
+"0 contract violations" having checked nothing.
+
+One command settles it, with an `sk_test_` key:
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' \
-  -H "authorization: Bearer sk_test_…" \
-  "https://fabric-jezz.onrender.com/v1/logs?limit=999"
+curl -s -o /dev/null -w '%{http_code}
+'   -H "authorization: Bearer sk_test_…"   "https://fabric-jezz.onrender.com/v1/logs?limit=999"
 ```
 
-**400** means strict is live. **200** means it is not. `limit` is published as `maximum: 100`, so 999
-violates the contract: strict rejects it, `warn` only logs. (Sanity-check with `?limit=10`, which
-must be 200 either way — a 401 is the key, not the mode.) The discriminator was verified by booting
-the same build under each mode, not reasoned out.
+**400** means strict is live; **200** means it is not. `limit` publishes `maximum: 100`, so 999
+violates the contract — strict rejects it, `warn` only logs. Sanity-check with `?limit=10`, which
+must be 200 either way; a 401 is the key, not the mode. The discriminator was verified by booting
+the same build under each mode.
 
-Why it matters: `resolveValidationMode` degrades to `warn` when `NODE_ENV=production`, which Render
-sets for an unrelated reason (`PLUGIN_MASTER_KEY` derivation must not fall back to the dev key). In
-`warn`, `contracts:probe` against testing reports **"0 contract violations" having checked nothing**
-— and CLAUDE.md §12 cites strict validation as exactly what makes a 2xx count as proof. Nothing
-errors; the claim just becomes unfalsifiable.
-
-A caveat worth carrying: `render.yaml` declares all three, but a blueprint is **believed** not to be
-retro-applied to an already-provisioned service — the `PUBLIC_CORS_ALLOWED_ORIGINS` episode is the
-only in-repo evidence, and it has not been tested directly. Treat it as the reason to check the
-dashboard, not as a settled fact.
-
-Verified live after the promotion (§9 — the artefact, not the workflow's report):
-
-| check | result |
-| --- | --- |
-| `GET /health` | 200 |
-| `GET /health/z` | **404** — the array-path alias is gone, so the new code is live |
-| `GET /docs` with no credential | **401** + `WWW-Authenticate: Basic` — 401 rather than 404 proves `OPERATOR_TOKEN` is set and the gate is fail-closed |
+Circumstantial evidence it IS strict: the credential-install 500 on 2026-08-25 was a
+`response_contract_violation` from the deployed API, which only throws in strict mode.
 
 ### QA has an API reference (2026-08-18, #307)
 
