@@ -36,7 +36,11 @@ export function parseMessageDelivery(
       "environment",
     ),
     locale: stringField(data.locale, "locale"),
-    channel: enumField(data.channel, ["sms", "email"] as const, "channel"),
+    channel: enumField(
+      data.channel,
+      ["sms", "email", "whatsapp"] as const,
+      "channel",
+    ),
     status: enumField(data.status, DELIVERY_STATUSES, "status"),
     resourceVersion: numberField(data.resource_version, "resource_version"),
     recipient: stringField(data.recipient, "recipient"),
@@ -55,7 +59,7 @@ function parseAttempt(data: Record<string, unknown>): MessageDeliveryAttempt {
     ordinal: numberField(data.ordinal, "attempts.ordinal"),
     channel: enumField(
       data.channel,
-      ["sms", "email"] as const,
+      ["sms", "email", "whatsapp"] as const,
       "attempts.channel",
     ),
     messageId: typeof data.message_id === "string" ? data.message_id : null,

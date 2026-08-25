@@ -207,7 +207,7 @@ export type MessageDeliveryStatus =
 export interface MessageDeliveryAttempt {
   readonly id: string;
   readonly ordinal: number;
-  readonly channel: "sms" | "email";
+  readonly channel: "sms" | "email" | "whatsapp";
   readonly messageId: string | null;
   readonly status: MessageDeliveryStatus;
   readonly cost: Money;
@@ -226,7 +226,7 @@ export interface MessageDelivery {
   readonly versionId: string;
   readonly environment: FabricEnvironment;
   readonly locale: string;
-  readonly channel: "sms" | "email";
+  readonly channel: "sms" | "email" | "whatsapp";
   readonly status: MessageDeliveryStatus;
   readonly resourceVersion: number;
   readonly recipient: string;

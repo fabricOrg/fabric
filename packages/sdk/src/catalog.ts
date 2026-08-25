@@ -18,7 +18,7 @@ export interface UngeneratedCatalog extends DefinitionCatalog {
       string,
       {
         readonly data: Record<string, unknown>;
-        readonly channels: "sms" | "email";
+        readonly channels: "sms" | "email" | "whatsapp";
         readonly locales: string;
       }
     >
