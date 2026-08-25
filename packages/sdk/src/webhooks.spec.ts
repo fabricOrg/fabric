@@ -90,6 +90,50 @@ describe("webhook verification", () => {
     });
   });
 
+  it("maps a WhatsApp inbound event — the only channel inbound actually uses", () => {
+    // The API hardcodes `channel: "whatsapp"` on every inbound event
+    // (whatsapp-inbound.service.ts), because the SMS provider has no mobile-originated path. The
+    // parser rejected exactly that value, so 100% of inbound webhooks threw — and threw
+    // `WebhookVerificationError`, which reads as a forged payload rather than a contract gap.
+    // The existing case above uses "sms", the one value that can never arrive, which is why a green
+    // suite said nothing about this.
+    const body = JSON.stringify({
+      type: "message.inbound",
+      data: { id: "inbound_wa", channel: "whatsapp" },
+    });
+    expect(
+      webhooks.verify({
+        payload: body,
+        signature: signature(body),
+        secret,
+        now,
+      }),
+    ).toMatchObject({
+      type: "message.inbound",
+      data: { messageId: "inbound_wa", channel: "whatsapp" },
+    });
+  });
+
+  it("keeps the channel on a WhatsApp delivery event instead of dropping it", () => {
+    // This one never threw — it silently omitted `channel`, so a handler branching on
+    // `data.channel === "whatsapp"` never fired and had nothing to debug.
+    const body = JSON.stringify({
+      type: "message.delivered",
+      data: { message_id: "msg_wa", channel: "whatsapp", status: "delivered" },
+    });
+    expect(
+      webhooks.verify({
+        payload: body,
+        signature: signature(body),
+        secret,
+        now,
+      }),
+    ).toMatchObject({
+      type: "message.delivered",
+      data: { messageId: "msg_wa", channel: "whatsapp" },
+    });
+  });
+
   it("rejects a signed known event whose data violates the SDK contract", () => {
     const body = JSON.stringify({
       type: "message.delivered",

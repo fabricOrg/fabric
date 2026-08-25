@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseMessageDelivery } from "./message-delivery.js";
+import { ApiShapeError } from "./validation.js";
 
 /**
  * A WhatsApp managed delivery used to THROW here, not mistype.
@@ -49,8 +50,13 @@ describe("parseMessageDelivery", () => {
   });
 
   it("still rejects a channel the API cannot return", () => {
+    // Asserted on the TYPE and the field, not a bare `toThrow()` — which would keep passing if the
+    // fixture rotted and the throw came from a missing `recipient` instead of the channel.
     expect(() =>
       parseMessageDelivery({ ...WHATSAPP_DELIVERY, channel: "carrier-pigeon" }),
-    ).toThrow();
+    ).toThrow(ApiShapeError);
+    expect(() =>
+      parseMessageDelivery({ ...WHATSAPP_DELIVERY, channel: "carrier-pigeon" }),
+    ).toThrow(/channel/);
   });
 });

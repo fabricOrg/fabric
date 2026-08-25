@@ -6,7 +6,8 @@
   `parseMessageDelivery` validated `channel` against `["sms", "email"]` while the API publishes
   `["sms", "email", "whatsapp"]`, so the SDK rejected a response the API is documented to return —
   as a runtime exception, not a type error. The same narrow union was in `MessageDelivery`,
-  `MessageDeliveryAttempt`, the message list filters, the catalog channel constraint, and both
+  `MessageDeliveryAttempt`, the preview and send channel assertions, the catalog channel
+  constraint, and both
   webhook event payloads. `InboundMessageWebhookData` was the sharpest case: inbound is WhatsApp-only
   today, so the union excluded the one channel that can actually arrive.
 - **Breaking (pre-production):** `POST /v1/sms/send` is removed. The SDK has posted to
@@ -73,6 +74,6 @@
 `fabric-messaging@0.1.0-beta.1` and `0.1.0-beta.2` are deprecated. Install
 `@fabric-messaging/sdk@beta` instead.
 
-Cursor pagination shipped after beta.5 (see Unreleased). CommonJS is intentionally not included:
-Node >= 22 can `require()` ESM natively. (Email and batch sending shipped in beta.4/beta.5 —
-earlier copies of this note predate them.)
+Cursor pagination landed in 0.1.0-beta.6. CommonJS is intentionally not included: Node >= 22 can
+`require()` ESM natively. Email and batch sending were written up under beta.4/beta.5, but neither
+of those reached the registry — 0.1.0-beta.6 is the first published version carrying them.

@@ -116,7 +116,9 @@ function parseMessageData(value: unknown): MessageWebhookData {
     ...(typeof data.resource_version === "number"
       ? { resourceVersion: data.resource_version }
       : {}),
-    ...(data.channel === "sms" || data.channel === "email"
+    ...(data.channel === "sms" ||
+    data.channel === "email" ||
+    data.channel === "whatsapp"
       ? { channel: data.channel }
       : {}),
     ...(isMessageStatus(data.status) ? { status: data.status } : {}),
@@ -132,7 +134,10 @@ function parseMessageData(value: unknown): MessageWebhookData {
 function parseInboundData(value: unknown): InboundMessageWebhookData {
   const data = webhookRecord(value);
   const channel = data.channel;
-  if (channel !== "sms" && channel !== "email") {
+  // WhatsApp belongs here more than the other two do: it is the ONLY channel that delivers inbound
+  // today. Rejecting it threw `WebhookVerificationError` on every inbound event, which reads as a
+  // forged payload or a wrong secret — sending the reader after a security problem that isn't there.
+  if (channel !== "sms" && channel !== "email" && channel !== "whatsapp") {
     throw invalidEvent("data.channel");
   }
   return {
