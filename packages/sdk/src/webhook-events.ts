@@ -18,13 +18,22 @@ interface WebhookEventBase<TData> {
   readonly data: TData;
 }
 
+/**
+ * The channels a webhook payload can name. Exported so a test can pin it against the API's own
+ * `messageChannel` enum — the event TYPES already have that pin (`KNOWN_WEBHOOK_EVENT_TYPES`), and
+ * the channels did not, which is how this list drifted a channel behind the API and rejected every
+ * live inbound event.
+ */
+export const KNOWN_WEBHOOK_CHANNELS = ["sms", "email", "whatsapp"] as const;
+export type KnownWebhookChannel = (typeof KNOWN_WEBHOOK_CHANNELS)[number];
+
 export interface MessageWebhookData {
   readonly messageId: string;
   readonly deliveryId?: string;
   readonly key?: string;
   readonly versionId?: string;
   readonly resourceVersion?: number;
-  readonly channel?: "sms" | "email" | "whatsapp";
+  readonly channel?: KnownWebhookChannel;
   readonly status?: MessageStatus;
   readonly previousStatus?: MessageStatus;
   readonly errorCode?: string;
@@ -33,11 +42,11 @@ export interface MessageWebhookData {
 export interface InboundMessageWebhookData {
   readonly messageId: string;
   /**
-   * WhatsApp is the only channel that delivers inbound today — the SMS provider has no
-   * mobile-originated path — so excluding it, as this union did, excluded the only value that can
-   * actually arrive.
+   * Live inbound is WhatsApp (the SMS provider has no mobile-originated path); the sandbox Virtual
+   * Phone emits inbound `sms`. This union excluded WhatsApp entirely, so every live inbound event
+   * was rejected.
    */
-  readonly channel: "sms" | "email" | "whatsapp";
+  readonly channel: KnownWebhookChannel;
 }
 
 export type KnownWebhookEvent =
@@ -134,9 +143,10 @@ function parseMessageData(value: unknown): MessageWebhookData {
 function parseInboundData(value: unknown): InboundMessageWebhookData {
   const data = webhookRecord(value);
   const channel = data.channel;
-  // WhatsApp belongs here more than the other two do: it is the ONLY channel that delivers inbound
-  // today. Rejecting it threw `WebhookVerificationError` on every inbound event, which reads as a
-  // forged payload or a wrong secret — sending the reader after a security problem that isn't there.
+  // Rejecting "whatsapp" threw `WebhookVerificationError` on every LIVE inbound event, which reads
+  // as a forged payload or a wrong signing secret — sending the reader after a security problem that
+  // isn't there. Both other values are real too: the sandbox Virtual Phone emits inbound `sms`
+  // (`virtual-phone-operations.ts`), through the same outbox.
   if (channel !== "sms" && channel !== "email" && channel !== "whatsapp") {
     throw invalidEvent("data.channel");
   }

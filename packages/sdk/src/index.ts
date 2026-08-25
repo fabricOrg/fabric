@@ -78,7 +78,10 @@ export type {
   UnknownWebhookEvent,
   WebhookEvent,
 } from "./webhook-events.js";
-export { KNOWN_WEBHOOK_EVENT_TYPES } from "./webhook-events.js";
+export {
+  KNOWN_WEBHOOK_CHANNELS,
+  KNOWN_WEBHOOK_EVENT_TYPES,
+} from "./webhook-events.js";
 export type {
   CreatedWebhookEndpoint,
   CreateWebhookParams,

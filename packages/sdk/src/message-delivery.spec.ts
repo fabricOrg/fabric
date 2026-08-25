@@ -51,7 +51,8 @@ describe("parseMessageDelivery", () => {
 
   it("still rejects a channel the API cannot return", () => {
     // Asserted on the TYPE and the field, not a bare `toThrow()` — which would keep passing if the
-    // fixture rotted and the throw came from a missing `recipient` instead of the channel.
+    // fixture rotted and the throw came from one of the fields parsed BEFORE channel (`attempts`,
+    // `id`, `key`, `version_id`, `environment`, `locale`) rather than from the channel itself.
     expect(() =>
       parseMessageDelivery({ ...WHATSAPP_DELIVERY, channel: "carrier-pigeon" }),
     ).toThrow(ApiShapeError);

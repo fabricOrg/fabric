@@ -1,8 +1,9 @@
 import { createHmac } from "node:crypto";
-import { webhookEventType } from "@app/contracts";
+import { messageChannel, webhookEventType } from "@app/contracts";
 import { describe, expect, it } from "vitest";
 import {
   Fabric,
+  KNOWN_WEBHOOK_CHANNELS,
   KNOWN_WEBHOOK_EVENT_TYPES,
   WebhookVerificationError,
 } from "./index.js";
@@ -28,6 +29,13 @@ describe("webhook verification", () => {
 
   it("matches the canonical shared event catalog", () => {
     expect(KNOWN_WEBHOOK_EVENT_TYPES).toEqual(webhookEventType.options);
+  });
+
+  it("matches the canonical channel set", () => {
+    // The event TYPES have had this pin all along; the channels did not, and that asymmetry is the
+    // whole story — the SDK sat a channel behind the API and rejected every live inbound event
+    // while 67 tests stayed green.
+    expect(KNOWN_WEBHOOK_CHANNELS).toEqual(messageChannel.options);
   });
 
   it("verifies and parses the exact raw payload", () => {
@@ -90,13 +98,12 @@ describe("webhook verification", () => {
     });
   });
 
-  it("maps a WhatsApp inbound event — the only channel inbound actually uses", () => {
-    // The API hardcodes `channel: "whatsapp"` on every inbound event
-    // (whatsapp-inbound.service.ts), because the SMS provider has no mobile-originated path. The
-    // parser rejected exactly that value, so 100% of inbound webhooks threw — and threw
-    // `WebhookVerificationError`, which reads as a forged payload rather than a contract gap.
-    // The existing case above uses "sms", the one value that can never arrive, which is why a green
-    // suite said nothing about this.
+  it("maps a WhatsApp inbound event — the live inbound channel", () => {
+    // `whatsapp-inbound.service.ts` hardcodes `channel: "whatsapp"` on every live inbound event, and
+    // the parser rejected exactly that value, so 100% of them threw `WebhookVerificationError` —
+    // which reads as a forged payload rather than a contract gap. The pre-existing case above uses
+    // "sms", which is real (the sandbox Virtual Phone emits it) but was the ONLY inbound case, so a
+    // green suite said nothing about the live path.
     const body = JSON.stringify({
       type: "message.inbound",
       data: { id: "inbound_wa", channel: "whatsapp" },
