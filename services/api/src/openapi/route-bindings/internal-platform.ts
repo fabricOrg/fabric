@@ -14,6 +14,7 @@ import {
   okAck,
   pageQuery,
   pluginActionRequestSchema,
+  pluginCredentialAckSchema,
   pluginInstanceDtoSchema,
   pluginListResponseSchema,
   resolveStaffSessionRequestSchema,
@@ -254,6 +255,6 @@ export const INTERNAL_PLATFORM_BINDINGS: RouteBindings = {
     visibility: "internal",
     security: ["bffInternal"],
     request: configurePluginRequestSchema,
-    response: pluginInstanceDtoSchema,
+    response: pluginCredentialAckSchema,
   },
 };
