@@ -221,7 +221,7 @@ export async function failPreparedSend(
   return { messageId: prepared.messageId, status };
 }
 
-/** POST /v1/sms/send inline core: prepare (tx1) → dispatch (send + tx2), one call. */
+/** POST /v1/sms/messages inline core: prepare (tx1) → dispatch (send + tx2), one call. */
 export async function sendSms(
   deps: EngineDeps,
   input: SendInput,

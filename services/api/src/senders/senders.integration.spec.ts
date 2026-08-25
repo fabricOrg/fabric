@@ -119,7 +119,7 @@ afterAll(async () => {
 describe("sender-id enforcement (E10-S4)", () => {
   it("blocks a LIVE tenant's send with sender_not_registered until activation, then flows", async () => {
     // 1. Unregistered → structured block, no message row, no money moved.
-    const blocked = await post(LIVE_KEY, "/v1/sms/send", smsPayload);
+    const blocked = await post(LIVE_KEY, "/v1/sms/messages", smsPayload);
     expect(blocked.statusCode).toBe(400);
     expect(
       (unwrapEnvelope(blocked.json()) as { error: { code: string } }).error
@@ -143,7 +143,7 @@ describe("sender-id enforcement (E10-S4)", () => {
       status: string;
     };
     expect(senderRow.status).toBe("pending");
-    const stillBlocked = await post(LIVE_KEY, "/v1/sms/send", smsPayload);
+    const stillBlocked = await post(LIVE_KEY, "/v1/sms/messages", smsPayload);
     expect(stillBlocked.statusCode).toBe(400);
 
     // 3. Staff activate (provisioning connection) → the send flows.
@@ -168,7 +168,11 @@ describe("sender-id enforcement (E10-S4)", () => {
           error as { getResponse?: () => { error?: { code?: string } } }
         ).getResponse?.()?.error?.code === "carrier_not_approved",
     );
-    const blockedByCarrier = await post(LIVE_KEY, "/v1/sms/send", smsPayload);
+    const blockedByCarrier = await post(
+      LIVE_KEY,
+      "/v1/sms/messages",
+      smsPayload,
+    );
     expect(blockedByCarrier.statusCode).toBe(400);
 
     // 3b. Operator records the carrier's approval, THEN activates the customer.
@@ -178,7 +182,7 @@ describe("sender-id enforcement (E10-S4)", () => {
       actor,
     );
     await service.decide(senderRow.id, { status: "active" }, actor);
-    const sent = await post(LIVE_KEY, "/v1/sms/send", smsPayload);
+    const sent = await post(LIVE_KEY, "/v1/sms/messages", smsPayload);
     expect(sent.statusCode).toBe(201);
     await provisioning.end();
   });
@@ -196,7 +200,7 @@ describe("sender-id enforcement (E10-S4)", () => {
   });
 
   it("SANDBOX tenants skip the gate entirely (fake provider, quickstart sender works)", async () => {
-    const res = await post(SANDBOX_KEY, "/v1/sms/send", smsPayload);
+    const res = await post(SANDBOX_KEY, "/v1/sms/messages", smsPayload);
     expect(res.statusCode).toBe(201);
   });
 });

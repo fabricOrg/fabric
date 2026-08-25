@@ -12,6 +12,24 @@ export const pluginCapabilities = [
   "identity",
 ] as const;
 
+/**
+ * What installing a credential answers with — deliberately NOT the instance.
+ *
+ * The endpoint seals the secret and returns a fingerprint plus the new version, because the
+ * plaintext is never readable again: there is no GET, and the only thing any read can surface is
+ * this fingerprint. The binding used to publish `pluginInstanceDtoSchema` here, so strict response
+ * validation rejected a payload the endpoint had ALREADY committed — the operator saw
+ * "id: expected string, received undefined" on a credential that installed fine, on the one screen
+ * where a scary error invites a retry, and a retry means installing again.
+ */
+export const pluginCredentialAckSchema = z.object({
+  /** Stable digest of the sealed secret. Same secret, same fingerprint — so it does NOT change on a
+   *  rotation that reuses the key; `version` is what moves. */
+  fingerprint: z.string(),
+  version: z.number().int().positive(),
+});
+export type PluginCredentialAck = z.infer<typeof pluginCredentialAckSchema>;
+
 export const pluginInstanceDtoSchema = z.object({
   id: z.string(),
   capability: z.enum(pluginCapabilities),

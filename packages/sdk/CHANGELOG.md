@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed:** `webhooks.verify()` rejected **every live inbound webhook**. `InboundMessageWebhookData`'s
+  parser required `channel` to be `sms` or `email`, while the API sends `whatsapp` — and it failed as
+  `WebhookVerificationError`, which reads as a forged payload or a wrong signing secret, sending you
+  after a security problem that does not exist. Separately, a WhatsApp delivery event silently lost
+  its `channel` field, so a handler branching on `data.channel === "whatsapp"` never fired.
+- **Fixed:** a WhatsApp managed delivery threw `ApiShapeError` instead of parsing.
+  `parseMessageDelivery` validated `channel` against `["sms", "email"]` while the API publishes
+  `["sms", "email", "whatsapp"]`, so the SDK rejected a response the API is documented to return —
+  as a runtime exception, not a type error. The same narrow union was in `MessageDelivery`,
+  `MessageDeliveryAttempt`, the preview and send channel assertions, the catalog channel
+  constraint, and both
+  webhook event payloads.
+- **Breaking (pre-production):** `POST /v1/sms/send` is removed. The SDK has posted to
+  `POST /v1/sms/messages` since **0.1.0-beta.4**, but beta.4 and beta.5 were never published — so
+  **0.1.0-beta.6 is the first published version that survives this change**. Anything on
+  0.1.0-beta.3 or earlier sends to the removed path and will 404.
+  Install `@fabric-messaging/sdk@beta` or pin `>=0.1.0-beta.6`.
+  **Note:** the published 0.1.0-beta.6 — currently both `latest` and `beta` — still carries the
+  webhook parser defects fixed above. They ship in the next publish; until then, do not point a
+  consumer at inbound webhooks. An earlier entry below says the old
+  route "remains compatible"; that is no longer true.
+
 ## 0.1.0-beta.6
 
 - **Breaking:** `sms.list`, `email.list`, and `webhooks.listDeliveries` now return a page —
@@ -57,6 +81,7 @@
 `fabric-messaging@0.1.0-beta.1` and `0.1.0-beta.2` are deprecated. Install
 `@fabric-messaging/sdk@beta` instead.
 
-Cursor pagination shipped after beta.5 (see Unreleased). CommonJS is intentionally not included:
-Node >= 22 can `require()` ESM natively. (Email and batch sending shipped in beta.4/beta.5 —
-earlier copies of this note predate them.)
+Cursor pagination landed in 0.1.0-beta.6. CommonJS is intentionally not included: Node >= 22 can
+`require()` ESM natively. Email landed in beta.4 and batch sending in beta.4 as well (it never got its
+own entry). Neither beta.4 nor beta.5 reached the registry, so 0.1.0-beta.6 is the first published
+version carrying them.

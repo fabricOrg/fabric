@@ -39,7 +39,7 @@ export interface PreviewMessageOptions extends RequestOptions {
    * Optional assertion of the definition's channel. With a generated catalog this is narrowed to the
    * key's released channel, so a mismatched literal fails to compile; the server rejects a mismatch.
    */
-  readonly channel?: "sms" | "email";
+  readonly channel?: "sms" | "email" | "whatsapp";
 }
 
 export interface SendMessageOptions extends IdempotentWriteOptions {
@@ -53,7 +53,7 @@ export interface SendMessageOptions extends IdempotentWriteOptions {
    * Optional assertion of the definition's channel. With a generated catalog this is narrowed to the
    * key's released channel, so a mismatched literal fails to compile; the server rejects a mismatch.
    */
-  readonly channel?: "sms" | "email";
+  readonly channel?: "sms" | "email" | "whatsapp";
   /** Pricing currency (ISO-4217). Defaults to GHS server-side. */
   readonly currency?: string;
   /** Caller correlation id surfaced on the delivery. */

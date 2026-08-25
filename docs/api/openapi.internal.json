@@ -3555,7 +3555,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DeliveryModeInput"
+                "$ref": "#/components/schemas/UpdateMessagingSettingsRequestInput"
               }
             }
           }
@@ -10566,7 +10566,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/PluginInstanceDto"
+                      "$ref": "#/components/schemas/PluginCredentialAck"
                     },
                     "request_id": {
                       "type": "string"
@@ -11312,118 +11312,6 @@
         "tags": [
           "SMS"
         ],
-        "security": [
-          {
-            "secretKey": []
-          },
-          {
-            "tenantToken": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SendSmsRequestInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "Success.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data",
-                    "request_id"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/SendSmsApiResponse"
-                    },
-                    "request_id": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid credentials.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "See `error.code` for the reason.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "See `error.code` for the reason.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limited. Retry after the interval in `Retry-After`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/sms/send": {
-      "post": {
-        "summary": "Send an SMS (legacy alias)",
-        "description": "Compatibility alias for `POST /v1/sms/messages`. Prefer that path.",
-        "tags": [
-          "SMS"
-        ],
-        "deprecated": true,
         "security": [
           {
             "secretKey": []
@@ -16728,13 +16616,6 @@
           }
         }
       },
-      "DeliveryModeInput": {
-        "type": "string",
-        "enum": [
-          "virtual",
-          "live"
-        ]
-      },
       "EmailContentResponse": {
         "type": "object",
         "properties": {
@@ -21503,6 +21384,24 @@
           "action"
         ]
       },
+      "PluginCredentialAck": {
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "fingerprint",
+          "version"
+        ],
+        "additionalProperties": false
+      },
       "PluginInstanceDto": {
         "type": "object",
         "properties": {
@@ -24909,6 +24808,21 @@
             "type": "boolean"
           }
         }
+      },
+      "UpdateMessagingSettingsRequestInput": {
+        "type": "object",
+        "properties": {
+          "delivery_mode": {
+            "type": "string",
+            "enum": [
+              "virtual",
+              "live"
+            ]
+          }
+        },
+        "required": [
+          "delivery_mode"
+        ]
       },
       "UpdateSandboxAllowancePolicyInput": {
         "type": "object",

@@ -1,6 +1,7 @@
 import {
   configurePluginRequestSchema,
   createLiveInstanceRequestSchema,
+  type PluginCredentialAck,
   pluginActionRequestSchema,
 } from "@app/contracts";
 import {
@@ -74,12 +75,15 @@ export class PluginRegistryController {
    * rather than a redeploy (ADR-0011).
    */
   @Post(":id/credentials")
+  // Typed as the contract the binding PUBLISHES, so the two cannot drift silently. They did: the
+  // binding named the instance DTO while this returns a fingerprint + version, and nothing failed
+  // until strict validation rejected a credential that had already been written.
   async configure(
     @Param("id") id: string,
     @Body() body: unknown,
     @Headers("x-actor-email") actorEmail?: string,
     @Headers("x-actor-staff-id") actorStaffId?: string,
-  ) {
+  ): Promise<PluginCredentialAck> {
     if (!actorEmail) {
       throw unauthorized("missing_actor", "Actor identity is required.");
     }

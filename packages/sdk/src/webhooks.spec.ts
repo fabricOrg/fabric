@@ -1,8 +1,9 @@
 import { createHmac } from "node:crypto";
-import { webhookEventType } from "@app/contracts";
+import { messageChannel, webhookEventType } from "@app/contracts";
 import { describe, expect, it } from "vitest";
 import {
   Fabric,
+  KNOWN_WEBHOOK_CHANNELS,
   KNOWN_WEBHOOK_EVENT_TYPES,
   WebhookVerificationError,
 } from "./index.js";
@@ -28,6 +29,13 @@ describe("webhook verification", () => {
 
   it("matches the canonical shared event catalog", () => {
     expect(KNOWN_WEBHOOK_EVENT_TYPES).toEqual(webhookEventType.options);
+  });
+
+  it("matches the canonical channel set", () => {
+    // The event TYPES have had this pin all along; the channels did not, and that asymmetry is the
+    // whole story — the SDK sat a channel behind the API and rejected every live inbound event
+    // while 67 tests stayed green.
+    expect(KNOWN_WEBHOOK_CHANNELS).toEqual(messageChannel.options);
   });
 
   it("verifies and parses the exact raw payload", () => {
@@ -87,6 +95,49 @@ describe("webhook verification", () => {
     ).toMatchObject({
       type: "message.inbound",
       data: { messageId: "inbound_1", channel: "sms" },
+    });
+  });
+
+  it("maps a WhatsApp inbound event — the live inbound channel", () => {
+    // `whatsapp-inbound.service.ts` hardcodes `channel: "whatsapp"` on every live inbound event, and
+    // the parser rejected exactly that value, so 100% of them threw `WebhookVerificationError` —
+    // which reads as a forged payload rather than a contract gap. The pre-existing case above uses
+    // "sms", which is real (the sandbox Virtual Phone emits it) but was the ONLY inbound case, so a
+    // green suite said nothing about the live path.
+    const body = JSON.stringify({
+      type: "message.inbound",
+      data: { id: "inbound_wa", channel: "whatsapp" },
+    });
+    expect(
+      webhooks.verify({
+        payload: body,
+        signature: signature(body),
+        secret,
+        now,
+      }),
+    ).toMatchObject({
+      type: "message.inbound",
+      data: { messageId: "inbound_wa", channel: "whatsapp" },
+    });
+  });
+
+  it("keeps the channel on a WhatsApp delivery event instead of dropping it", () => {
+    // This one never threw — it silently omitted `channel`, so a handler branching on
+    // `data.channel === "whatsapp"` never fired and had nothing to debug.
+    const body = JSON.stringify({
+      type: "message.delivered",
+      data: { message_id: "msg_wa", channel: "whatsapp", status: "delivered" },
+    });
+    expect(
+      webhooks.verify({
+        payload: body,
+        signature: signature(body),
+        secret,
+        now,
+      }),
+    ).toMatchObject({
+      type: "message.delivered",
+      data: { messageId: "msg_wa", channel: "whatsapp" },
     });
   });
 
