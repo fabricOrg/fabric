@@ -41,6 +41,16 @@ export type TopupRequest = z.infer<typeof topupRequest>;
 
 /** GET /v1/wallet - balances and the customer-visible ledger in one dashboard read. */
 export const walletSnapshot = z.object({
+  /**
+   * The one currency this workspace may be CHARGED in (`accounts.billing_currency`). Every charge
+   * path rejects anything else — a top-up, an auto-top-up and a package purchase all raise
+   * `billing_currency_mismatch` — so a caller that guesses offers a choice the server refuses.
+   *
+   * It is not derivable from `balances`: those are ledger accounts ordered alphabetically by
+   * currency, so `balances[0]` is whichever sorts first, and it is empty on a workspace that has
+   * never been funded — which is exactly when the first top-up picks a currency.
+   */
+  billing_currency: currency,
   balances: z.array(walletBalance),
   ledger: z.array(ledgerEntry),
   request_id: z.string(),

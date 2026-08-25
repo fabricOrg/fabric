@@ -6257,11 +6257,20 @@
           },
           "has_card": {
             "type": "boolean"
+          },
+          "billing_currency": {
+            "type": "string",
+            "enum": [
+              "GHS",
+              "NGN",
+              "USD"
+            ]
           }
         },
         "required": [
           "config",
-          "has_card"
+          "has_card",
+          "billing_currency"
         ],
         "additionalProperties": false
       },
@@ -13097,6 +13106,14 @@
       "WalletSnapshot": {
         "type": "object",
         "properties": {
+          "billing_currency": {
+            "type": "string",
+            "enum": [
+              "GHS",
+              "NGN",
+              "USD"
+            ]
+          },
           "balances": {
             "type": "array",
             "items": {
@@ -13244,6 +13261,7 @@
           }
         },
         "required": [
+          "billing_currency",
           "balances",
           "ledger",
           "request_id"

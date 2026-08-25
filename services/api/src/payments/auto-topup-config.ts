@@ -6,12 +6,15 @@ import {
   type TenantId,
 } from "@app/db";
 import { eq } from "drizzle-orm";
+import { billingCurrencyOf } from "./billing-currency.js";
 
 /**
  * The stored auto-top-up config plus whether a reusable card exists.
  *
  * `has_card` is read separately because enabling requires one: without it the dashboard would offer
- * a switch the API refuses.
+ * a switch the API refuses. `billing_currency` is read for the same reason and matters more: the
+ * cron SKIPS a config whose currency is not the billing one, so without it `enabled: true` reads as
+ * armed when it is permanently inert.
  */
 export async function readAutoTopup(
   provisioning: ProvisioningDb,
@@ -28,6 +31,7 @@ export async function readAutoTopup(
     .where(eq(paymentAuthorizations.tenantId, tenantId))
     .limit(1);
   return {
+    billing_currency: await billingCurrencyOf(provisioning, tenantId),
     has_card: Boolean(card),
     config: row
       ? {

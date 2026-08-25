@@ -321,10 +321,10 @@ describeDb("wallet top-up (Paystack)", () => {
     vi.restoreAllMocks();
   });
 
-  // Disable is deliberately NOT currency-guarded: the dashboard sends the STORED currency when
-  // turning off, so guarding it would make a mismatched config unstoppable while the cron charged
-  // it. Pinned because hoisting the guard out of the enable block would restore that trap. Last in
-  // the file because it leaves auto top-up disabled.
+  // Disable is deliberately NOT currency-guarded: a caller turning off an already-mismatched config
+  // sends the STORED currency, so guarding it would leave a config that nothing can charge and
+  // nothing can clear. Pinned because hoisting the guard out of the enable block would restore that
+  // trap. Last in the file because it leaves auto top-up disabled.
   it("lets a mismatched auto top-up be turned OFF, but not turned on", async () => {
     await expect(
       autoTopupService.updateAutoTopup(tenantId, {
