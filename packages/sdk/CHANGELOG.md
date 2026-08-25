@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Breaking (pre-production):** `POST /v1/sms/send` is removed. The SDK has posted to
+  `POST /v1/sms/messages` since 0.1.0-beta.6, so generated clients and `sms.send()` are unaffected —
+  but a hand-rolled request against the old path now 404s. An earlier entry below says that route
+  "remains compatible"; that is no longer true.
+
 ## 0.1.0-beta.6
 
 - **Breaking:** `sms.list`, `email.list`, and `webhooks.listDeliveries` now return a page —

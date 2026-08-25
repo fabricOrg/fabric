@@ -22,7 +22,7 @@ production concerns that should not obscure first success.
 
 | Capability | SDK | Public API | Notes |
 | --- | --- | --- | --- |
-| Send SMS | Yes | `POST /v1/sms/messages` | Idempotency supported; `/sms/send` is a compatibility alias |
+| Send SMS | Yes | `POST /v1/sms/messages` | Idempotency supported |
 | Retrieve/list SMS | Yes | `GET /v1/sms/:id`, `GET /v1/messages` | List is not yet paginated |
 | Verify OTP | Yes | `POST /v1/verify`, `/check` | Sandbox may return a debug code |
 | Sender IDs | Create/list | `POST/GET /v1/senders` | Retrieve-by-ID is not available |

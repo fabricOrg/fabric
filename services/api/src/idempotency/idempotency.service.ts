@@ -8,7 +8,7 @@ import { apiError, invalidRequest } from "../http/api-error.js";
 /**
  * CLIENT IDEMPOTENCY (ARCHITECTURE §7, remediation finding 3) — honors the `Idempotency-Key`
  * header on money POSTs. The engine's internal keys (`reserve:{messageId}`) only protect internal
- * retries; without THIS layer a client retry of POST /v1/sms/send mints a new message + new
+ * retries; without THIS layer a client retry of POST /v1/sms/messages mints a new message + new
  * reservation = double charge.
  *
  * Contract (Stripe semantics):

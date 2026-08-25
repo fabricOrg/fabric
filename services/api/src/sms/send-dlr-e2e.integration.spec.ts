@@ -135,7 +135,7 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
   let messageId: string;
   let cost: bigint;
 
-  it("5+6. POST /v1/sms/send with a valid key charges the customer exactly once (committed at accepted)", async () => {
+  it("5+6. POST /v1/sms/messages with a valid key charges the customer exactly once (committed at accepted)", async () => {
     const funded = await balance("customer");
     expect(funded).toBe(FUNDING_MINOR); // seed landed via the ledger, not a hand-set balance
 
@@ -307,7 +307,7 @@ describe("walking-skeleton capstone: authed send → DLR → correct money (E2E)
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/sms/send",
+      url: "/v1/sms/messages",
       headers: {
         authorization: `Bearer ${ACTIVE_RAW}`,
         "content-type": "application/json",

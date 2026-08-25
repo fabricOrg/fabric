@@ -99,7 +99,7 @@ describeDb("request logs (real RLS)", () => {
         applicationId: null,
         environmentId: null,
         method: "POST",
-        path: "/v1/sms/send",
+        path: "/v1/sms/messages",
         statusCode: 201,
         requestId: "req_x",
         latencyMs: 1,
@@ -109,8 +109,8 @@ describeDb("request logs (real RLS)", () => {
   });
 
   it("lists a tenant's logs scoped to an environment, with env joined", async () => {
-    await seedLog(sandboxEnvId, "/v1/sms/send", 201);
-    await seedLog(liveEnvId, "/v1/sms/send", 201);
+    await seedLog(sandboxEnvId, "/v1/sms/messages", 201);
+    await seedLog(liveEnvId, "/v1/sms/messages", 201);
 
     const sandbox = await svc.list(TENANT, {
       applicationId: appId,
@@ -118,7 +118,7 @@ describeDb("request logs (real RLS)", () => {
     });
     expect(sandbox.logs.length).toBe(1);
     expect(sandbox.logs[0]?.env).toBe("sandbox");
-    expect(sandbox.logs[0]?.path).toBe("/v1/sms/send");
+    expect(sandbox.logs[0]?.path).toBe("/v1/sms/messages");
 
     const live = await svc.list(TENANT, {
       applicationId: appId,

@@ -38,7 +38,7 @@ const liveMode = {
 
 /**
  * CLIENT IDEMPOTENCY — integration spec (finding 3 of the architecture remediation).
- * The exact hole being closed: a client retry of POST /v1/sms/send used to mint a NEW message +
+ * The exact hole being closed: a client retry of POST /v1/sms/messages used to mint a NEW message +
  * NEW reservation (the engine's internal keys are keyed on the server-generated id). Proven here
  * end-to-end through the REAL controller path against a real migrated Postgres:
  *   - two identical CONCURRENT sends with one key → exactly ONE message + ONE reservation
@@ -51,7 +51,7 @@ const superUrl = process.env.DATABASE_URL_SUPER;
 const appUrl = process.env.DATABASE_URL_APP ?? superUrl;
 const describeDb = superUrl ? describe : describe.skip;
 
-describeDb("client Idempotency-Key on POST /v1/sms/send", () => {
+describeDb("client Idempotency-Key on POST /v1/sms/messages", () => {
   const provisioning = createProvisioningDb(superUrl ?? "", { max: 2 });
   const appDb = createAppDb(appUrl ?? "");
   const owner = postgres(superUrl ?? "", { max: 1 });

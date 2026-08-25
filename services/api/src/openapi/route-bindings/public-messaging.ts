@@ -45,19 +45,6 @@ export const PUBLIC_MESSAGING_BINDINGS: RouteBindings = {
     successStatus: 202,
     errorStatuses: [402, 409],
   },
-  "POST /v1/sms/send": {
-    summary: "Send an SMS (legacy alias)",
-    description:
-      "Compatibility alias for `POST /v1/sms/messages`. Prefer that path.",
-    tags: ["SMS"],
-    visibility: "public",
-    security: ["secretKey", "tenantToken"],
-    request: sendSmsRequest,
-    response: sendSmsApiResponse,
-    successStatus: 202,
-    errorStatuses: [402, 409],
-    deprecated: true,
-  },
   "GET /v1/sms/:id": {
     summary: "Retrieve an SMS",
     tags: ["SMS"],

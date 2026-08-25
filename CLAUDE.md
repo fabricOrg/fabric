@@ -221,7 +221,7 @@ what changed.
   leaves a clean-looking exit if it is piped, and `dev`→`testing` is a real merge (testing carries
   merge commits, so `--ff-only` cannot work).
 - **A send is proven by `provider_ref`, never by `status`.** FakeProvider returns `accepted` exactly
-  as a carrier does: `fake-<messageId>` vs a real vendor UUID. `/v1/sms/send` only reserves and
+  as a carrier does: `fake-<messageId>` vs a real vendor UUID. `/v1/sms/messages` only reserves and
   enqueues — the **worker** calls the provider, so any API process sharing `REDIS_QUEUE_URL`
   competes for the job, and a sandbox-configured worker can swallow a live send silently.
 - **Read grants back after a migration.** `ALTER DEFAULT PRIVILEGES` grants `app_runtime` DML on

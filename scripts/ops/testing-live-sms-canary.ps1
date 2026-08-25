@@ -38,7 +38,7 @@ $payload = @{
 
 Invoke-RestMethod `
   -Method Post `
-  -Uri "$ApiBaseUrl/v1/sms/send" `
+  -Uri "$ApiBaseUrl/v1/sms/messages" `
   -Headers $headers `
   -ContentType "application/json" `
   -Body $payload

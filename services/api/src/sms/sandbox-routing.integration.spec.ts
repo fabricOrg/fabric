@@ -107,7 +107,7 @@ async function cleanTenant(id: string) {
 async function sendAs(rawKey: string, to = "+233545227189") {
   return app.inject({
     method: "POST",
-    url: "/v1/sms/send",
+    url: "/v1/sms/messages",
     headers: {
       authorization: `Bearer ${rawKey}`,
       "content-type": "application/json",
