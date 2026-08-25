@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-beta.7
 
 - **Fixed:** `webhooks.verify()` rejected **every live inbound webhook**. `InboundMessageWebhookData`'s
   parser required `channel` to be `sms` or `email`, while the API sends `whatsapp` — and it failed as
@@ -19,9 +19,8 @@
   **0.1.0-beta.6 is the first published version that survives this change**. Anything on
   0.1.0-beta.3 or earlier sends to the removed path and will 404.
   Install `@fabric-messaging/sdk@beta` or pin `>=0.1.0-beta.6`.
-  **Note:** the published 0.1.0-beta.6 — currently both `latest` and `beta` — still carries the
-  webhook parser defects fixed above. They ship in the next publish; until then, do not point a
-  consumer at inbound webhooks. An earlier entry below says the old
+  **0.1.0-beta.6 and earlier carry the webhook parser defects fixed above** — install 0.1.0-beta.7 or
+  later before pointing a consumer at inbound webhooks. An earlier entry below says the old
   route "remains compatible"; that is no longer true.
 
 ## 0.1.0-beta.6
