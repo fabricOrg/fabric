@@ -3,6 +3,12 @@ import type { FabricResponse, Money, RequestOptions } from "./types.js";
 import { ApiShapeError, enumField, record, stringField } from "./validation.js";
 
 export interface WalletSnapshot {
+  /**
+   * The only currency this workspace may be CHARGED in. A top-up in any other is rejected with
+   * `billing_currency_mismatch`, and it cannot be read off `balances`: those are ledger accounts, so
+   * they are empty until the first top-up and still list the old currency after billing changes.
+   */
+  readonly billingCurrency: Money["currency"];
   readonly balances: ReadonlyArray<{
     readonly balance: Money;
     readonly lowBalanceThreshold?: Money;
@@ -38,6 +44,11 @@ export class WalletResource {
     return {
       ...response,
       data: {
+        billingCurrency: enumField(
+          response.data.billing_currency,
+          ["GHS", "NGN", "USD"] as const,
+          "billing_currency",
+        ),
         balances: response.data.balances.map((value) =>
           parseBalance(record(value)),
         ),

@@ -244,8 +244,15 @@ export default async function WalletPage({
               `${BigInt(balance.available).toLocaleString("en")} ${balance.channel}`,
           )
           .join(" · ");
+  // The ledger can hold entries in more than one currency — a workspace whose billing currency
+  // changed keeps its old ledger accounts — and both the total and the chart below carry a SINGLE
+  // currency label. Summing across currencies would print one number that is true of neither, so
+  // both read only the currency they claim to be in.
+  const billedLedger = ledger.filter(
+    (e) => e.amount.currency === billingCurrency,
+  );
   // "This month" spend = Σ|sms_charge| (exact bigint minor units, never float).
-  const monthSpendMinor = ledger
+  const monthSpendMinor = billedLedger
     .filter((e) => e.type === "sms_charge")
     .reduce((sum, e) => {
       const m = BigInt(e.amount.minor);
@@ -255,7 +262,7 @@ export default async function WalletPage({
 
   // Running-balance series (chronological) for the trend chart. Number is display-only — the exact
   // money stays in bigint minor units on `runningBalance`.
-  const balancePoints = [...ledger]
+  const balancePoints = [...billedLedger]
     .sort(
       (a, b) =>
         new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),

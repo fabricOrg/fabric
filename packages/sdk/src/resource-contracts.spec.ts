@@ -60,6 +60,7 @@ describe("canonical contract parity", () => {
 
   it("maps canonical wallet responses without losing exact minor units", async () => {
     const payload = walletSnapshot.parse({
+      billing_currency: "GHS",
       balances: [{ balance: { minor: "120403", currency: "GHS" } }],
       ledger: [
         {
@@ -77,7 +78,12 @@ describe("canonical contract parity", () => {
       clientReturning(payload).wallet.retrieve(),
     ).resolves.toMatchObject({
       requestId: "req_wallet",
-      data: { balances: [{ balance: { minor: "120403", currency: "GHS" } }] },
+      data: {
+        // The currency a charge may be raised in, which is NOT inferable from `balances` — they are
+        // ledger accounts, and a workspace whose billing currency changed still holds the old one.
+        billingCurrency: "GHS",
+        balances: [{ balance: { minor: "120403", currency: "GHS" } }],
+      },
     });
   });
 
