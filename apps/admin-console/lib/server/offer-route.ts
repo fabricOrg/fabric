@@ -4,6 +4,13 @@ import { type NextRequest, NextResponse } from "next/server";
 import type { ZodType } from "zod";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
+import {
   type Actor,
   CommercialOfferApiError,
 } from "@/lib/server/commercial-offers-client";
@@ -18,15 +25,6 @@ import { requireTrustedOrigin } from "@/lib/server/origin";
  * gate seven times is how one of them eventually ships without it.
  */
 
-export function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-): NextResponse {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
-
 /**
  * The api rejects an unattributed write, so an actor is resolved here or the request never leaves.
  * `schema` is the request contract — pass null for actions that carry no body (a clone).
@@ -39,12 +37,12 @@ export async function withStaffWrite<T>(
   const denied = requireTrustedOrigin(request);
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can author commercial pricing.",
-      403,
     );
   }
   // `userId` on a staff session is the `staff_users` row id — the same value the audit log records,
@@ -60,20 +58,13 @@ export async function withStaffWrite<T>(
     try {
       raw = await request.json();
     } catch {
-      return fail(
-        "invalid_request",
-        "Malformed body.",
-        400,
-        "validation_error",
-      );
+      return bffInvalidRequest("invalid_request", "Malformed body.");
     }
     const result = schema.safeParse(raw);
     if (!result.success) {
-      return fail(
+      return bffUnprocessable(
         "invalid_request",
         result.error.issues[0]?.message ?? "Invalid request.",
-        422,
-        "validation_error",
       );
     }
     parsed = result.data;
@@ -93,7 +84,8 @@ export async function withStaffRead(
   handler: () => Promise<unknown>,
 ): Promise<NextResponse> {
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   try {
     return NextResponse.json(await handler());
   } catch (error) {
@@ -110,10 +102,9 @@ function toResponse(error: unknown): NextResponse {
   if (error instanceof CommercialOfferApiError) {
     return NextResponse.json(error.payload, { status: error.status });
   }
-  return fail(
+  return bffFailure(
     "commercial_offers_unavailable",
     "The pricing service is unavailable.",
     502,
-    "api_error",
   );
 }

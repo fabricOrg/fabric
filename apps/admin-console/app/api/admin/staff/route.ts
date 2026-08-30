@@ -1,6 +1,13 @@
 import { inviteStaffRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   inviteStaff,
@@ -13,29 +20,16 @@ import {
  * session itself (the page guard isn't enough). Listing needs any staff session; inviting needs
  * staff:write (admin role) — an operator can view but not grant access.
  */
-function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-) {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
 
 function errorResponse(error: unknown) {
   return error instanceof StaffApiError
     ? NextResponse.json(error.payload, { status: error.status })
-    : fail(
-        "staff_unavailable",
-        "Staff service is unavailable.",
-        502,
-        "api_error",
-      );
+    : bffFailure("staff_unavailable", "Staff service is unavailable.", 502);
 }
 
 export async function GET(request: NextRequest) {
   if (!(await readAdminSessionWithRefresh())) {
-    return fail("invalid_session", "Staff sign-in required.", 401);
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   }
   const cursor = request.nextUrl.searchParams.get("cursor") ?? undefined;
   try {
@@ -50,29 +44,23 @@ export async function POST(request: NextRequest) {
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
   if (!session) {
-    return fail("invalid_session", "Staff sign-in required.", 401);
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   }
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can manage staff.",
-      403,
     );
   }
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return fail("invalid_request", "Malformed body.", 400, "validation_error");
+    return bffInvalidRequest("invalid_request", "Malformed body.");
   }
   const parsed = inviteStaffRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(
-      "invalid_request",
-      "Enter a valid email and role.",
-      422,
-      "validation_error",
-    );
+    return bffUnprocessable("invalid_request", "Enter a valid email and role.");
   }
   try {
     return NextResponse.json(await inviteStaff(parsed.data), { status: 201 });

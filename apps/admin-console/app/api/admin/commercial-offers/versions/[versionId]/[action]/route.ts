@@ -3,12 +3,13 @@ import {
   retireCommercialOfferVersionRequestSchema,
 } from "@app/contracts";
 import type { NextRequest } from "next/server";
+import { bffNotFound } from "@/lib/server/bff-error";
 import {
   cloneOfferVersion,
   publishOfferVersion,
   retireOfferVersion,
 } from "@/lib/server/commercial-offers-client";
-import { fail, withStaffWrite } from "@/lib/server/offer-route";
+import { withStaffWrite } from "@/lib/server/offer-route";
 
 /**
  * The three lifecycle actions on a version. One route with an ALLOWLISTED action, rather than three
@@ -39,10 +40,5 @@ export async function POST(
       (actor, body) => retireOfferVersion(versionId, body, actor),
     );
   }
-  return fail(
-    "unknown_action",
-    "Expected clone, publish, or retire.",
-    404,
-    "validation_error",
-  );
+  return bffNotFound("unknown_action", "Expected clone, publish, or retire.");
 }

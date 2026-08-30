@@ -1,20 +1,18 @@
 import { decideProposalRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   decideProposal,
   ProposalApiError,
 } from "@/lib/server/proposals-client";
-
-function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-) {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
 
 /** Approve/reject a proposal. staff:write only; the api enforces maker ≠ checker + audits. */
 export async function POST(
@@ -24,12 +22,12 @@ export async function POST(
   const denied = requireTrustedOrigin(request);
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can decide proposals.",
-      403,
     );
   }
   const { id } = await params;
@@ -37,16 +35,11 @@ export async function POST(
   try {
     body = await request.json();
   } catch {
-    return fail("invalid_request", "Malformed body.", 400, "validation_error");
+    return bffInvalidRequest("invalid_request", "Malformed body.");
   }
   const parsed = decideProposalRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(
-      "invalid_request",
-      "Invalid decision.",
-      422,
-      "validation_error",
-    );
+    return bffUnprocessable("invalid_request", "Invalid decision.");
   }
   try {
     const updated = await decideProposal(id, parsed.data, {
@@ -57,11 +50,10 @@ export async function POST(
   } catch (error) {
     return error instanceof ProposalApiError
       ? NextResponse.json(error.payload, { status: error.status })
-      : fail(
+      : bffFailure(
           "proposals_unavailable",
           "Proposals service is unavailable.",
           502,
-          "api_error",
         );
   }
 }

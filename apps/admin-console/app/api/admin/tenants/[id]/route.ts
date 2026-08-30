@@ -1,20 +1,17 @@
 import { updateTenantStatusRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   TenantApiError,
   updateTenantStatus,
 } from "@/lib/server/tenants-client";
-
-function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-) {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
 
 /** Suspend / reinstate / soft-close a tenant. Origin-gated (mutation) + staff:write; audited. */
 export async function PATCH(
@@ -24,12 +21,12 @@ export async function PATCH(
   const denied = requireTrustedOrigin(request);
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can change a tenant's status.",
-      403,
     );
   }
 
@@ -38,11 +35,9 @@ export async function PATCH(
     await request.json(),
   );
   if (!parsed.success) {
-    return fail(
+    return bffUnprocessable(
       "invalid_request",
       "Choose a status and give a reason (at least 8 characters).",
-      422,
-      "validation_error",
     );
   }
   try {
@@ -54,11 +49,6 @@ export async function PATCH(
   } catch (error) {
     return error instanceof TenantApiError
       ? NextResponse.json(error.payload, { status: error.status })
-      : fail(
-          "tenant_unavailable",
-          "Tenant service unavailable.",
-          502,
-          "api_error",
-        );
+      : bffFailure("tenant_unavailable", "Tenant service unavailable.", 502);
   }
 }

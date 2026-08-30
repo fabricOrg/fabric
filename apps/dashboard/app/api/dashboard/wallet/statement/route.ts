@@ -3,6 +3,7 @@
 
 import { NextResponse } from "next/server";
 import { BffError, dashboardApiRaw } from "@/lib/server/api-client";
+import { bffFailure } from "@/lib/server/bff-error";
 
 export async function GET(request: Request) {
   const incoming = new URL(request.url);
@@ -23,15 +24,6 @@ export async function GET(request: Request) {
   } catch (error) {
     return error instanceof BffError
       ? NextResponse.json(error.payload, { status: error.status })
-      : NextResponse.json(
-          {
-            error: {
-              type: "api_error",
-              code: "bff_error",
-              message: "Statement export failed.",
-            },
-          },
-          { status: 500 },
-        );
+      : bffFailure("bff_error", "Statement export failed.");
   }
 }

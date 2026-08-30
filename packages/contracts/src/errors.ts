@@ -39,6 +39,38 @@ export const apiErrorEnvelope = z.object({
 });
 export type ApiErrorEnvelope = z.infer<typeof apiErrorEnvelope>;
 
+/**
+ * Build the envelope. For any producer that is NOT the Nest API — today that is the BFF route
+ * handlers, which refuse a request on their own authority (no session, wrong role, untrusted origin,
+ * unparseable body) instead of forwarding one.
+ *
+ * It exists because those refusals used to emit a bare `{ error: { message } }`, and `parseApiError`
+ * REQUIRES `type` and `code`: the parse failed, the real reason was replaced by "Something went
+ * wrong", and every caller that branches on a code saw `"unknown"`. A `member` clicking Live was
+ * told nothing rather than "only owners and admins can change delivery mode".
+ *
+ * `request_id` is omitted on purpose. The refusal never reached the API, so there is no upstream
+ * request to correlate with, and inventing a `req_…` here would put an id in a support conversation
+ * that appears in no log.
+ */
+export function errorEnvelope(init: {
+  readonly type: ErrorType;
+  readonly code: string;
+  readonly message: string;
+  readonly param?: string;
+  readonly docUrl?: string;
+}): ApiErrorEnvelope {
+  return {
+    error: {
+      type: init.type,
+      code: init.code,
+      message: init.message,
+      ...(init.param !== undefined ? { param: init.param } : {}),
+      ...(init.docUrl !== undefined ? { doc_url: init.docUrl } : {}),
+    },
+  };
+}
+
 /** A normalized, always-safe view for the UI — never throws, always has something to render. */
 export interface ParsedApiError {
   readonly type: ErrorType;

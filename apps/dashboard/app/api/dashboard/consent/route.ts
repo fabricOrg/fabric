@@ -3,9 +3,18 @@
 // promotional window are platform policy coded in the api (ConsentService.promoWindowOpen) —
 // displayed here, not editable, so "save-quiet-hours" honestly reports not_configurable.
 
-import type { ListOptOutsResponse, OptOutDto } from "@app/contracts";
+import {
+  listOptOutsResponseSchema,
+  type OptOutDto,
+  optOutDtoSchema,
+} from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+} from "@/lib/server/bff-error";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
 /** The coded promotional window, displayed (strictest-reading GH rule incl. Sundays). */
@@ -52,9 +61,8 @@ function toUi(dto: OptOutDto) {
 
 export async function GET() {
   try {
-    const response = await dashboardApi<ListOptOutsResponse>(
-      "/v1/opt-outs",
-      "sms:read",
+    const response = listOptOutsResponseSchema.parse(
+      await dashboardApi("/v1/opt-outs", "sms:read"),
     );
     return NextResponse.json({
       optOuts: response.opt_outs.map(toUi),
@@ -76,44 +84,26 @@ export async function POST(request: Request) {
     };
 
     if (input.action === "save-quiet-hours") {
-      return NextResponse.json(
-        {
-          error: {
-            type: "invalid_request_error",
-            code: "not_configurable",
-            message:
-              "The promotional window is platform policy (GH 08:00–19:00 no Sundays; NG 08:00–20:00 WAT) and can't be changed per workspace yet.",
-          },
-        },
-        { status: 400 },
+      return bffInvalidRequest(
+        "not_configurable",
+        "The promotional window is platform policy (GH 08:00–19:00 no Sundays; NG 08:00–20:00 WAT) and can't be changed per workspace yet.",
       );
     }
 
     if (input.action === "add-optout") {
-      const created = await dashboardApi<OptOutDto>(
-        "/v1/opt-outs",
-        "sms:send",
-        {
+      const created = optOutDtoSchema.parse(
+        await dashboardApi("/v1/opt-outs", "sms:send", {
           method: "POST",
           body: JSON.stringify({
             msisdn: typeof input.msisdn === "string" ? input.msisdn : "",
             scope: input.scope === "all" ? "all" : "promotional",
           }),
-        },
+        }),
       );
       return NextResponse.json({ optOut: toUi(created) }, { status: 201 });
     }
 
-    return NextResponse.json(
-      {
-        error: {
-          type: "validation_error",
-          code: "unknown_action",
-          message: "Unsupported consent action.",
-        },
-      },
-      { status: 400 },
-    );
+    return bffInvalidRequest("unknown_action", "Unsupported consent action.");
   } catch (error) {
     return errorResponse(error);
   }
@@ -123,19 +113,10 @@ export async function DELETE(request: Request) {
   if (!hasTrustedOrigin(request)) return forbidden();
   const id = new URL(request.url).searchParams.get("id");
   if (!id) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "validation_error",
-          code: "missing_id",
-          message: "An opt-out id is required.",
-        },
-      },
-      { status: 400 },
-    );
+    return bffInvalidRequest("missing_id", "An opt-out id is required.");
   }
   try {
-    await dashboardApi<{ removed: boolean }>(`/v1/opt-outs/${id}`, "sms:send", {
+    await dashboardApi(`/v1/opt-outs/${id}`, "sms:send", {
       method: "DELETE",
     });
     return NextResponse.json({ removed: true, id });
@@ -145,29 +126,11 @@ export async function DELETE(request: Request) {
 }
 
 function forbidden() {
-  return NextResponse.json(
-    {
-      error: {
-        type: "auth_error",
-        code: "invalid_origin",
-        message: "Request rejected.",
-      },
-    },
-    { status: 403 },
-  );
+  return bffForbidden("invalid_origin", "Request rejected.");
 }
 
 function errorResponse(error: unknown) {
   return error instanceof BffError
     ? NextResponse.json(error.payload, { status: error.status })
-    : NextResponse.json(
-        {
-          error: {
-            type: "api_error",
-            code: "bff_error",
-            message: "Request failed.",
-          },
-        },
-        { status: 500 },
-      );
+    : bffFailure("bff_error", "Request failed.");
 }

@@ -5,6 +5,12 @@ import {
   readDashboardSession,
   refreshDashboardSession,
 } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { addMessageDefinitionVersion } from "@/lib/server/message-definitions-client";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
@@ -13,28 +19,26 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   if (!hasTrustedOrigin(request)) {
-    return errorResponse("invalid_origin", "Request rejected.", 403);
+    return bffForbidden("invalid_origin", "Request rejected.");
   }
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session) {
-    return errorResponse("invalid_session", "Sign in again to continue.", 401);
+    return bffUnauthorized("invalid_session", "Sign in again to continue.");
   }
   if (!session.permissions.includes("definitions:write")) {
-    return errorResponse(
+    return bffForbidden(
       "insufficient_permission",
       "You do not have permission to author message definitions.",
-      403,
     );
   }
   const parsed = addMessageDefinitionVersionRequest.safeParse(
     await request.json(),
   );
   if (!parsed.success) {
-    return errorResponse(
+    return bffUnprocessable(
       "invalid_request",
       parsed.error.issues[0]?.message ?? "Invalid definition version.",
-      422,
     );
   }
   try {
@@ -46,13 +50,6 @@ export async function POST(
   } catch (error) {
     return error instanceof BffError
       ? NextResponse.json(error.payload, { status: error.status })
-      : errorResponse("bff_error", "Request failed.", 500);
+      : bffFailure("bff_error", "Request failed.");
   }
-}
-
-function errorResponse(code: string, message: string, status: number) {
-  return NextResponse.json(
-    { error: { type: "api_error", code, message } },
-    { status },
-  );
 }

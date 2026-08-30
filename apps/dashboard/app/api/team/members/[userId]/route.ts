@@ -5,6 +5,13 @@ import {
   readDashboardSession,
   refreshDashboardSession,
 } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { removeMember, updateMemberRole } from "@/lib/server/members-client";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
@@ -22,22 +29,12 @@ export async function PATCH(
   try {
     const parsed = updateMemberRequestSchema.safeParse(await request.json());
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: {
-            type: "validation_error",
-            code: "invalid_role",
-            message: "Provide a valid role.",
-          },
-        },
-        { status: 422 },
-      );
+      return bffUnprocessable("invalid_role", "Provide a valid role.");
     }
     if (userId === gate.userId && parsed.data.role !== undefined) {
-      return unauthorized(
+      return bffInvalidRequest(
         "self_role_change",
         "You cannot change your own role. Ask another owner or admin.",
-        400,
       );
     }
     const member = await updateMemberRole(
@@ -60,10 +57,9 @@ export async function DELETE(
   if ("response" in gate) return gate.response;
   const { userId } = await params;
   if (userId === gate.userId) {
-    return unauthorized(
+    return bffInvalidRequest(
       "self_removal",
       "You cannot remove your own workspace access.",
-      400,
     );
   }
   try {
@@ -83,26 +79,24 @@ async function authorize(
 > {
   if (!hasTrustedOrigin(request)) {
     return {
-      response: unauthorized("invalid_origin", "Request rejected.", 403),
+      response: bffForbidden("invalid_origin", "Request rejected."),
     };
   }
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session) {
     return {
-      response: unauthorized(
+      response: bffUnauthorized(
         "invalid_session",
         "Sign in again to continue.",
-        401,
       ),
     };
   }
   if (session.role !== "owner" && session.role !== "admin") {
     return {
-      response: unauthorized(
+      response: bffForbidden(
         "insufficient_permission",
         "Only owners and admins can manage members.",
-        403,
       ),
     };
   }
@@ -116,21 +110,5 @@ async function authorize(
 function toErrorResponse(error: unknown) {
   return error instanceof BffError
     ? NextResponse.json(error.payload, { status: error.status })
-    : NextResponse.json(
-        {
-          error: {
-            type: "api_error",
-            code: "bff_error",
-            message: "Request failed.",
-          },
-        },
-        { status: 500 },
-      );
-}
-
-function unauthorized(code: string, message: string, status: number) {
-  return NextResponse.json(
-    { error: { type: "auth_error", code, message } },
-    { status },
-  );
+    : bffFailure("bff_error", "Request failed.");
 }

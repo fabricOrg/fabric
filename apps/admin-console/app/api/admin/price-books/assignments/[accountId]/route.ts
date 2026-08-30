@@ -1,20 +1,18 @@
 import { assignPriceBookRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   assignPriceBook,
   PriceBookApiError,
 } from "@/lib/server/price-book-client";
-
-function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-) {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
 
 /** Assign (or clear → default) a tenant's price book. staff:write only; audited. */
 export async function POST(
@@ -24,12 +22,12 @@ export async function POST(
   const denied = requireTrustedOrigin(request);
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can edit pricing.",
-      403,
     );
   }
   const { accountId } = await params;
@@ -37,15 +35,13 @@ export async function POST(
   try {
     body = await request.json();
   } catch {
-    return fail("invalid_request", "Malformed body.", 400, "validation_error");
+    return bffInvalidRequest("invalid_request", "Malformed body.");
   }
   const parsed = assignPriceBookRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(
+    return bffUnprocessable(
       "invalid_request",
       "Provide a price_book_id or null.",
-      422,
-      "validation_error",
     );
   }
   try {
@@ -57,11 +53,10 @@ export async function POST(
   } catch (error) {
     return error instanceof PriceBookApiError
       ? NextResponse.json(error.payload, { status: error.status })
-      : fail(
+      : bffFailure(
           "pricing_unavailable",
           "Pricing service is unavailable.",
           502,
-          "api_error",
         );
   }
 }

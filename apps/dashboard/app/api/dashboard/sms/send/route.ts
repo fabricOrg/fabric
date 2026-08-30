@@ -1,20 +1,16 @@
-import { sendSmsRequest } from "@app/contracts";
+import { sendSmsRequest, sendSmsResponse } from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+} from "@/lib/server/bff-error";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
 export async function POST(request: Request) {
   if (!hasTrustedOrigin(request)) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "auth_error",
-          code: "invalid_origin",
-          message: "Request rejected.",
-        },
-      },
-      { status: 403 },
-    );
+    return bffForbidden("invalid_origin", "Request rejected.");
   }
   try {
     const parsed = sendSmsRequest.safeParse(await request.json());
@@ -26,11 +22,13 @@ export async function POST(request: Request) {
       return invalidRequest("An Idempotency-Key is required.");
     }
     return NextResponse.json(
-      await dashboardApi("/v1/sms/messages", "sms:send", {
-        method: "POST",
-        headers: { "idempotency-key": idempotencyKey },
-        body: JSON.stringify(parsed.data),
-      }),
+      sendSmsResponse.parse(
+        await dashboardApi("/v1/sms/messages", "sms:send", {
+          method: "POST",
+          headers: { "idempotency-key": idempotencyKey },
+          body: JSON.stringify(parsed.data),
+        }),
+      ),
     );
   } catch (error) {
     return errorResponse(error);
@@ -38,29 +36,11 @@ export async function POST(request: Request) {
 }
 
 function invalidRequest(message: string) {
-  return NextResponse.json(
-    {
-      error: {
-        type: "invalid_request_error",
-        code: "invalid_send_request",
-        message,
-      },
-    },
-    { status: 400 },
-  );
+  return bffInvalidRequest("invalid_send_request", message);
 }
 
 function errorResponse(error: unknown) {
   return error instanceof BffError
     ? NextResponse.json(error.payload, { status: error.status })
-    : NextResponse.json(
-        {
-          error: {
-            type: "api_error",
-            code: "bff_error",
-            message: "Request failed.",
-          },
-        },
-        { status: 500 },
-      );
+    : bffFailure("bff_error", "Request failed.");
 }

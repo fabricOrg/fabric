@@ -2,19 +2,17 @@ import { toggleKillSwitchRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
+import {
   KillSwitchApiError,
   toggleKillSwitch,
 } from "@/lib/server/kill-switch-client";
 import { requireTrustedOrigin } from "@/lib/server/origin";
-
-function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-) {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
 
 /** Toggle a kill switch. staff:write only; the reason + actor are recorded to the audit log. */
 export async function POST(
@@ -24,12 +22,12 @@ export async function POST(
   const denied = requireTrustedOrigin(request);
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can flip kill switches.",
-      403,
     );
   }
 
@@ -38,15 +36,13 @@ export async function POST(
   try {
     body = await request.json();
   } catch {
-    return fail("invalid_request", "Malformed body.", 400, "validation_error");
+    return bffInvalidRequest("invalid_request", "Malformed body.");
   }
   const parsed = toggleKillSwitchRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(
+    return bffUnprocessable(
       "invalid_request",
       "Provide a reason (at least 8 characters).",
-      422,
-      "validation_error",
     );
   }
 
@@ -59,11 +55,10 @@ export async function POST(
   } catch (error) {
     return error instanceof KillSwitchApiError
       ? NextResponse.json(error.payload, { status: error.status })
-      : fail(
+      : bffFailure(
           "kill_switch_unavailable",
           "Kill-switch service is unavailable.",
           502,
-          "api_error",
         );
   }
 }
