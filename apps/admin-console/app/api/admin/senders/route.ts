@@ -1,30 +1,21 @@
 import { NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import { bffFailure, bffUnauthorized } from "@/lib/server/bff-error";
 import { listSenderQueue, SenderApiError } from "@/lib/server/senders-client";
-
-function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-) {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
 
 export async function GET() {
   if (!(await readAdminSessionWithRefresh())) {
-    return fail("invalid_session", "Staff sign-in required.", 401);
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   }
   try {
     return NextResponse.json(await listSenderQueue());
   } catch (error) {
     return error instanceof SenderApiError
       ? NextResponse.json(error.payload, { status: error.status })
-      : fail(
+      : bffFailure(
           "senders_unavailable",
           "Senders service is unavailable.",
           502,
-          "api_error",
         );
   }
 }

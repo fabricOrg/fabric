@@ -4,6 +4,11 @@ import {
   readDashboardUserSession,
   refreshDashboardUserSession,
 } from "@/lib/server/auth";
+import {
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+} from "@/lib/server/bff-error";
 import { createWorkspaceForUser } from "@/lib/server/identity-client";
 import {
   sealWorkspaceSelector,
@@ -24,30 +29,15 @@ export async function POST(request: Request) {
   const session =
     (await readDashboardUserSession()) ?? (await refreshDashboardUserSession());
   if (!session) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "auth_error",
-          code: "invalid_session",
-          message: "Sign in again to continue.",
-        },
-      },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Sign in again to continue.");
   }
   const parsed = onboardingRequestSchema.safeParse(
     await request.json().catch(() => null),
   );
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "invalid_request_error",
-          code: "invalid_workspace_name",
-          message: "Give your workspace a name (up to 120 characters).",
-        },
-      },
-      { status: 400 },
+    return bffInvalidRequest(
+      "invalid_workspace_name",
+      "Give your workspace a name (up to 120 characters).",
     );
   }
   const created = await createWorkspaceForUser({
@@ -57,16 +47,9 @@ export async function POST(request: Request) {
     workspaceName: parsed.data.workspace_name,
   });
   if (!created) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "invalid_request_error",
-          code: "workspace_creation_refused",
-          message:
-            "We couldn't create a workspace right now. Please try again later.",
-        },
-      },
-      { status: 403 },
+    return bffForbidden(
+      "workspace_creation_refused",
+      "We couldn't create a workspace right now. Please try again later.",
     );
   }
   const response = NextResponse.json(created, { status: 201 });

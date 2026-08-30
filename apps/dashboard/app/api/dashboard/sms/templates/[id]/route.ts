@@ -1,6 +1,11 @@
-import { type SmsTemplate, updateSmsTemplateRequest } from "@app/contracts";
+import { smsTemplate, updateSmsTemplateRequest } from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+} from "@/lib/server/bff-error";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
 interface RouteContext {
@@ -14,10 +19,12 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
   try {
     return NextResponse.json(
-      await dashboardApi<SmsTemplate>(
-        `/v1/sms/templates/${encodeURIComponent(id)}`,
-        "sms:send",
-        { method: "PATCH", body: JSON.stringify(parsed.data) },
+      smsTemplate.parse(
+        await dashboardApi(
+          `/v1/sms/templates/${encodeURIComponent(id)}`,
+          "sms:send",
+          { method: "PATCH", body: JSON.stringify(parsed.data) },
+        ),
       ),
     );
   } catch (error) {
@@ -41,29 +48,18 @@ export async function DELETE(request: Request, context: RouteContext) {
 }
 
 function rejectedOrigin() {
-  return NextResponse.json(
-    { error: { code: "invalid_origin", message: "Request rejected." } },
-    { status: 403 },
-  );
+  return bffForbidden("invalid_origin", "Request rejected.");
 }
 
 function invalidTemplate() {
-  return NextResponse.json(
-    {
-      error: {
-        code: "invalid_sms_template",
-        message: "The SMS template is invalid.",
-      },
-    },
-    { status: 400 },
+  return bffInvalidRequest(
+    "invalid_sms_template",
+    "The SMS template is invalid.",
   );
 }
 
 function respond(error: unknown) {
   return error instanceof BffError
     ? NextResponse.json(error.payload, { status: error.status })
-    : NextResponse.json(
-        { error: { code: "bff_error", message: "Request failed." } },
-        { status: 500 },
-      );
+    : bffFailure("bff_error", "Request failed.");
 }

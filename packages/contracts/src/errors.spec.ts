@@ -1,5 +1,49 @@
 import { describe, expect, it } from "vitest";
-import { parseApiError } from "./errors.js";
+import { errorEnvelope, parseApiError } from "./errors.js";
+
+// The pairing is the point: a producer that hand-rolls the envelope drifts from the parser, and the
+// drift is SILENT — `parseApiError` never throws, it degrades to "Something went wrong" and
+// `code: "unknown"`. So every builder is asserted through the parser rather than against a literal.
+describe("errorEnvelope round-trips through parseApiError", () => {
+  it("carries the code a caller branches on", () => {
+    const parsed = parseApiError(
+      errorEnvelope({
+        type: "auth_error",
+        code: "insufficient_permission",
+        message: "Only owners and admins can change delivery mode.",
+      }),
+    );
+    expect(parsed.type).toBe("auth_error");
+    expect(parsed.code).toBe("insufficient_permission");
+    expect(parsed.message).toBe(
+      "Only owners and admins can change delivery mode.",
+    );
+  });
+
+  it("keeps `param` so a form can mark the offending field", () => {
+    const parsed = parseApiError(
+      errorEnvelope({
+        type: "invalid_request_error",
+        code: "invalid_delivery_mode",
+        message: "Choose either virtual or live.",
+        param: "delivery_mode",
+      }),
+    );
+    expect(parsed.param).toBe("delivery_mode");
+  });
+
+  it("omits request_id rather than inventing one, and parsing still succeeds", () => {
+    const envelope = errorEnvelope({
+      type: "api_error",
+      code: "bff_error",
+      message: "Request failed.",
+    });
+    expect("request_id" in envelope).toBe(false);
+    // The generic message is what an UNPARSEABLE body produces, so its absence here is the proof
+    // that the envelope parsed rather than degraded.
+    expect(parseApiError(envelope).message).toBe("Request failed.");
+  });
+});
 
 describe("parseApiError", () => {
   it("parses a well-formed F8.3 envelope with all fields", () => {

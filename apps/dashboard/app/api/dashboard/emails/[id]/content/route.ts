@@ -4,6 +4,11 @@ import {
   readDashboardSession,
   refreshDashboardSession,
 } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+} from "@/lib/server/bff-error";
 import { getEmailContent } from "@/lib/server/emails-client";
 
 /** Decrypted content for one email in the session's environment. Gated on email:read. */
@@ -14,12 +19,11 @@ export async function GET(
   const { id } = await params;
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
-  if (!session) return authError("invalid_session", "Sign in again.", 401);
+  if (!session) return bffUnauthorized("invalid_session", "Sign in again.");
   if (!session.permissions.includes("email:read")) {
-    return authError(
+    return bffForbidden(
       "insufficient_permission",
       "You don't have access to emails.",
-      403,
     );
   }
   const env = session.plan === "sandbox" ? "sandbox" : "live";
@@ -28,22 +32,6 @@ export async function GET(
   } catch (error) {
     return error instanceof BffError
       ? NextResponse.json(error.payload, { status: error.status })
-      : NextResponse.json(
-          {
-            error: {
-              type: "api_error",
-              code: "bff_error",
-              message: "Request failed.",
-            },
-          },
-          { status: 500 },
-        );
+      : bffFailure("bff_error", "Request failed.");
   }
-}
-
-function authError(code: string, message: string, status: number) {
-  return NextResponse.json(
-    { error: { type: "auth_error", code, message } },
-    { status },
-  );
 }

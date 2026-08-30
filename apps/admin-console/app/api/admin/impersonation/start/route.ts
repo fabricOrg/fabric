@@ -8,54 +8,45 @@ import {
   readAdminSessionWithRefresh,
   sessionCookieOptions,
 } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { recordImpersonationStart } from "@/lib/server/impersonation-client";
 import { requireTrustedOrigin } from "@/lib/server/origin";
-
-function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-) {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
 
 /** Start impersonating a tenant: seal a time-boxed claim cookie + audit. staff:write only. */
 export async function POST(request: NextRequest) {
   const denied = requireTrustedOrigin(request);
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can impersonate.",
-      403,
     );
   }
   const password = impersonationCookiePassword();
   if (password.length < 32) {
-    return fail(
-      "not_configured",
-      "Impersonation isn't configured.",
-      500,
-      "api_error",
-    );
+    return bffFailure("not_configured", "Impersonation isn't configured.");
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return fail("invalid_request", "Malformed body.", 400, "validation_error");
+    return bffInvalidRequest("invalid_request", "Malformed body.");
   }
   const parsed = startImpersonationRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(
+    return bffUnprocessable(
       "invalid_request",
       "Pick a tenant and give a reason (≥ 8 chars).",
-      422,
-      "validation_error",
     );
   }
 
@@ -63,11 +54,10 @@ export async function POST(request: NextRequest) {
   try {
     await recordImpersonationStart(parsed.data, actor);
   } catch {
-    return fail(
+    return bffFailure(
       "audit_failed",
       "Couldn't record impersonation. Aborted.",
       502,
-      "api_error",
     );
   }
 

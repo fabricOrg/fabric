@@ -1,4 +1,4 @@
-import { virtualPhoneReply } from "@app/contracts";
+import { apiErrorEnvelope, virtualPhoneReply } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { BffError } from "@/lib/server/api-client";
 import {
@@ -6,43 +6,47 @@ import {
   refreshDashboardSession,
 } from "@/lib/server/auth";
 import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+} from "@/lib/server/bff-error";
+import {
   clearVirtualPhoneInbox,
   getVirtualPhoneInbox,
   sendVirtualPhoneReply,
 } from "@/lib/server/virtual-phone-client";
 
 /**
- * Forward an upstream failure, guaranteeing the `{ error: { message } }` envelope the client reads.
- * An api error that escaped unstructured (a bare throw → Nest's `{statusCode, message}`) used to be
- * proxied verbatim, so the dashboard found no message and fell back to a generic one — which is how a
- * failed reply came to report "Virtual phone data could not be loaded."
+ * Forward an upstream failure, guaranteeing a PARSEABLE envelope. An api error that escaped
+ * unstructured (a bare throw → Nest's `{statusCode, message}`) used to be proxied verbatim, so the
+ * dashboard found no message and fell back to a generic one — which is how a failed reply came to
+ * report "Virtual phone data could not be loaded."
+ *
+ * The upstream envelope is passed through only when it carries a `type`, because that is what
+ * `parseApiError` requires; a partial one is replaced rather than forwarded, since forwarding it
+ * loses the fallback message too.
  */
 function failure(error: unknown, fallback: string) {
   if (error instanceof BffError) {
-    const payload = error.payload as { error?: { message?: unknown } } | null;
-    if (typeof payload?.error?.message === "string") {
-      return NextResponse.json(payload, { status: error.status });
+    const parsed = apiErrorEnvelope.safeParse(error.payload);
+    if (parsed.success) {
+      return NextResponse.json(parsed.data, { status: error.status });
     }
-    return NextResponse.json(
-      { error: { message: fallback } },
-      { status: error.status },
-    );
+    return bffFailure("virtual_phone_unavailable", fallback, error.status);
   }
-  return NextResponse.json({ error: { message: fallback } }, { status: 500 });
+  return bffFailure("virtual_phone_unavailable", fallback);
 }
 
 export async function GET(request: NextRequest) {
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session)
-    return NextResponse.json(
-      { error: { message: "Sign in to continue." } },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Sign in to continue.");
   if (!session.permissions.includes("sms:read")) {
-    return NextResponse.json(
-      { error: { message: "Your role cannot read message content." } },
-      { status: 403 },
+    return bffForbidden(
+      "insufficient_permission",
+      "Your role cannot read message content.",
     );
   }
   try {
@@ -64,14 +68,11 @@ export async function DELETE() {
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session)
-    return NextResponse.json(
-      { error: { message: "Sign in to continue." } },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Sign in to continue.");
   if (session.role !== "owner" && session.role !== "admin") {
-    return NextResponse.json(
-      { error: { message: "Only owners and admins can clear this inbox." } },
-      { status: 403 },
+    return bffForbidden(
+      "insufficient_permission",
+      "Only owners and admins can clear this inbox.",
     );
   }
   try {
@@ -90,23 +91,18 @@ export async function POST(request: NextRequest) {
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session)
-    return NextResponse.json(
-      { error: { message: "Sign in to continue." } },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Sign in to continue.");
   if (!session.permissions.includes("sms:send")) {
-    return NextResponse.json(
-      { error: { message: "Your role cannot send virtual replies." } },
-      { status: 403 },
+    return bffForbidden(
+      "insufficient_permission",
+      "Your role cannot send virtual replies.",
     );
   }
   const parsed = virtualPhoneReply.safeParse(await request.json());
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: { message: parsed.error.issues[0]?.message ?? "Invalid reply." },
-      },
-      { status: 400 },
+    return bffInvalidRequest(
+      "invalid_reply",
+      parsed.error.issues[0]?.message ?? "Invalid reply.",
     );
   }
   try {

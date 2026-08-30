@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { AuditApiError, listAudit } from "@/lib/server/audit-client";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import { bffFailure, bffUnauthorized } from "@/lib/server/bff-error";
 
 /**
  * Audit-log page fetch (finding A3). The first page is server-rendered by the page; this
@@ -9,31 +10,17 @@ import { readAdminSessionWithRefresh } from "@/lib/server/auth";
  */
 export async function GET(request: NextRequest) {
   if (!(await readAdminSessionWithRefresh())) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "auth_error",
-          code: "invalid_session",
-          message: "Staff sign-in required.",
-        },
-      },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   }
   const cursor = request.nextUrl.searchParams.get("cursor") ?? undefined;
   try {
     return NextResponse.json(await listAudit(cursor ? { cursor } : {}));
   } catch (error) {
     const status = error instanceof AuditApiError ? error.status : 502;
-    return NextResponse.json(
-      {
-        error: {
-          type: "api_error",
-          code: "audit_unavailable",
-          message: "Audit log is unavailable right now.",
-        },
-      },
-      { status },
+    return bffFailure(
+      "audit_unavailable",
+      "Audit log is unavailable right now.",
+      status,
     );
   }
 }

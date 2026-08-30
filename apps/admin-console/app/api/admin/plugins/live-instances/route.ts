@@ -4,6 +4,13 @@ import {
 } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 
 /**
@@ -12,52 +19,37 @@ import { requireTrustedOrigin } from "@/lib/server/origin";
  * Creating the row is not activating it: it arrives disabled with no credentials, and carrier
  * delivery still needs credentials installed plus an explicit activate-live.
  */
-function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-) {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
 
 export async function POST(request: NextRequest) {
   const denied = requireTrustedOrigin(request);
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can add a live provider instance.",
-      403,
     );
   }
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return fail("invalid_request", "Malformed body.", 400, "validation_error");
+    return bffInvalidRequest("invalid_request", "Malformed body.");
   }
   const parsed = createLiveInstanceRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(
+    return bffUnprocessable(
       "invalid_request",
       parsed.error.issues[0]?.message ?? "The request is invalid.",
-      422,
-      "validation_error",
     );
   }
 
   const baseUrl = process.env.API_BASE_URL;
   const token = process.env.BFF_INTERNAL_TOKEN;
   if (!baseUrl || !token) {
-    return fail(
-      "registry_unavailable",
-      "Registry is unavailable.",
-      502,
-      "api_error",
-    );
+    return bffFailure("registry_unavailable", "Registry is unavailable.", 502);
   }
   try {
     const res = await fetch(
@@ -76,11 +68,10 @@ export async function POST(request: NextRequest) {
     const payload = unwrapEnvelope(await res.json()) as Record<string, unknown>;
     return NextResponse.json(payload, { status: res.status });
   } catch {
-    return fail(
+    return bffFailure(
       "registry_unavailable",
       "Plugin registry is unavailable.",
       502,
-      "api_error",
     );
   }
 }

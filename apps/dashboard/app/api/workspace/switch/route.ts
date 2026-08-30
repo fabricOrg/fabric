@@ -5,6 +5,11 @@ import {
   refreshDashboardUserSession,
 } from "@/lib/server/auth";
 import {
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+} from "@/lib/server/bff-error";
+import {
   sealWorkspaceSelector,
   WORKSPACE_COOKIE,
   workspaceCookieOptions,
@@ -21,45 +26,21 @@ export async function POST(request: Request) {
   const session =
     (await readDashboardUserSession()) ?? (await refreshDashboardUserSession());
   if (!session) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "auth_error",
-          code: "invalid_session",
-          message: "Sign in again to continue.",
-        },
-      },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Sign in again to continue.");
   }
   const parsed = switchRequestSchema.safeParse(
     await request.json().catch(() => null),
   );
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "invalid_request_error",
-          code: "invalid_workspace",
-          message: "A tenant_id is required.",
-        },
-      },
-      { status: 400 },
-    );
+    return bffInvalidRequest("invalid_workspace", "A tenant_id is required.");
   }
   const membership = session.memberships.find(
     (candidate) => candidate.tenantId === parsed.data.tenant_id,
   );
   if (!membership) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "auth_error",
-          code: "workspace_not_allowed",
-          message: "You are not a member of that workspace.",
-        },
-      },
-      { status: 403 },
+    return bffForbidden(
+      "workspace_not_allowed",
+      "You are not a member of that workspace.",
     );
   }
   const response = NextResponse.json({

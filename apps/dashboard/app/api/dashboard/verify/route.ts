@@ -3,10 +3,10 @@
 // the HONEST platform state (SMS live; voice/whatsapp/email arrive as Verify fallbacks later,
 // so they render disabled). POST drives /v1/verify + /v1/verify/check.
 
-import type {
-  VerifyCheckResponse,
-  VerifyOverviewResponse,
-  VerifyStartResponse,
+import {
+  verifyCheckResponse,
+  verifyOverviewResponse,
+  verifyStartResponse,
 } from "@app/contracts";
 import { NextResponse } from "next/server";
 import {
@@ -16,6 +16,11 @@ import {
   type Verification,
 } from "@/lib/client/verify-api";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+} from "@/lib/server/bff-error";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
 /** Honest channel state: only SMS is live. Order = future failover rank. */
@@ -28,9 +33,8 @@ const CHANNELS = [
 
 export async function GET() {
   try {
-    const overview = await dashboardApi<VerifyOverviewResponse>(
-      "/v1/verify/overview",
-      "sms:read",
+    const overview = verifyOverviewResponse.parse(
+      await dashboardApi("/v1/verify/overview", "sms:read"),
     );
     return NextResponse.json({
       channels: CHANNELS,
@@ -52,16 +56,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   if (!hasTrustedOrigin(request)) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "auth_error",
-          code: "invalid_origin",
-          message: "Request rejected.",
-        },
-      },
-      { status: 403 },
-    );
+    return bffForbidden("invalid_origin", "Request rejected.");
   }
   try {
     const raw = (await request.json()) as { action?: unknown };
@@ -70,22 +65,16 @@ export async function POST(request: Request) {
       const { msisdn, channel } = startVerificationRequest.parse(raw);
       // V1 is SMS-only. No mock success for other channels — an honest structured error.
       if (channel !== "sms") {
-        return NextResponse.json(
-          {
-            error: {
-              type: "invalid_request_error",
-              code: "channel_not_available",
-              message:
-                "Only the SMS channel is live. Voice/WhatsApp/Email arrive as Verify fallbacks later.",
-            },
-          },
-          { status: 400 },
+        return bffInvalidRequest(
+          "channel_not_available",
+          "Only the SMS channel is live. Voice/WhatsApp/Email arrive as Verify fallbacks later.",
         );
       }
-      const started = await dashboardApi<VerifyStartResponse>(
-        "/v1/verify",
-        "sms:send",
-        { method: "POST", body: JSON.stringify({ to: msisdn }) },
+      const started = verifyStartResponse.parse(
+        await dashboardApi("/v1/verify", "sms:send", {
+          method: "POST",
+          body: JSON.stringify({ to: msisdn }),
+        }),
       );
       const verification: Verification = {
         id: started.id,
@@ -105,10 +94,11 @@ export async function POST(request: Request) {
 
     if (raw.action === "check") {
       const { id, code } = checkVerificationRequest.parse(raw);
-      const checked = await dashboardApi<VerifyCheckResponse>(
-        "/v1/verify/check",
-        "sms:send",
-        { method: "POST", body: JSON.stringify({ id, code }) },
+      const checked = verifyCheckResponse.parse(
+        await dashboardApi("/v1/verify/check", "sms:send", {
+          method: "POST",
+          body: JSON.stringify({ id, code }),
+        }),
       );
       const verification: Verification = {
         id: checked.id,
@@ -126,16 +116,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ channels });
     }
 
-    return NextResponse.json(
-      {
-        error: {
-          type: "invalid_request_error",
-          code: "unknown_action",
-          message: "Unknown Verify action.",
-        },
-      },
-      { status: 400 },
-    );
+    return bffInvalidRequest("unknown_action", "Unknown Verify action.");
   } catch (error) {
     return errorResponse(error);
   }
@@ -144,14 +125,5 @@ export async function POST(request: Request) {
 function errorResponse(error: unknown) {
   return error instanceof BffError
     ? NextResponse.json(error.payload, { status: error.status })
-    : NextResponse.json(
-        {
-          error: {
-            type: "api_error",
-            code: "bff_error",
-            message: "Request failed.",
-          },
-        },
-        { status: 500 },
-      );
+    : bffFailure("bff_error", "Request failed.");
 }

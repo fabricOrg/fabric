@@ -1,5 +1,7 @@
+import { messageDetailResponse } from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
+import { bffFailure } from "@/lib/server/bff-error";
 
 export async function GET(
   _request: Request,
@@ -8,7 +10,9 @@ export async function GET(
   try {
     const { id } = await context.params;
     return NextResponse.json(
-      await dashboardApi(`/v1/sms/${encodeURIComponent(id)}`, "sms:read"),
+      messageDetailResponse.parse(
+        await dashboardApi(`/v1/sms/${encodeURIComponent(id)}`, "sms:read"),
+      ),
     );
   } catch (error) {
     return errorResponse(error);
@@ -18,14 +22,5 @@ export async function GET(
 function errorResponse(error: unknown) {
   return error instanceof BffError
     ? NextResponse.json(error.payload, { status: error.status })
-    : NextResponse.json(
-        {
-          error: {
-            type: "api_error",
-            code: "bff_error",
-            message: "Request failed.",
-          },
-        },
-        { status: 500 },
-      );
+    : bffFailure("bff_error", "Request failed.");
 }

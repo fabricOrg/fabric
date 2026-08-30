@@ -1,5 +1,6 @@
 import "server-only";
-import { NextResponse } from "next/server";
+import type { NextResponse } from "next/server";
+import { bffForbidden } from "./bff-error";
 
 /**
  * CSRF defense for state-changing BFF routes (IDENTITY-SSO.md §9): the sealed session cookie is
@@ -24,14 +25,5 @@ export function hasTrustedOrigin(request: Request): boolean {
  */
 export function requireTrustedOrigin(request: Request): NextResponse | null {
   if (hasTrustedOrigin(request)) return null;
-  return NextResponse.json(
-    {
-      error: {
-        type: "auth_error",
-        code: "invalid_origin",
-        message: "Request rejected.",
-      },
-    },
-    { status: 403 },
-  );
+  return bffForbidden("invalid_origin", "Request rejected.");
 }

@@ -5,37 +5,29 @@ import {
 } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffInvalidRequest,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 import { listTenants, TenantApiError } from "@/lib/server/tenants-client";
 
 /** Keyset page of tenants for the "Load more" control (a read — no origin/CSRF gate). */
 export async function GET(request: NextRequest) {
   if (!(await readAdminSessionWithRefresh())) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "auth_error",
-          code: "invalid_session",
-          message: "Staff sign-in required.",
-        },
-      },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   }
   const cursor = request.nextUrl.searchParams.get("cursor") ?? undefined;
   try {
     return NextResponse.json(await listTenants(cursor ? { cursor } : {}));
   } catch (error) {
     const status = error instanceof TenantApiError ? error.status : 502;
-    return NextResponse.json(
-      {
-        error: {
-          type: "api_error",
-          code: "tenants_unavailable",
-          message: "Tenant service is unavailable right now.",
-        },
-      },
-      { status },
+    return bffFailure(
+      "tenants_unavailable",
+      "Tenant service is unavailable right now.",
+      status,
     );
   }
 }
@@ -60,35 +52,19 @@ const DATA_REGION: Record<string, string> = {
   "ke-nairobi": "eu-west-1",
 };
 
-function fail(message: string, status = 422) {
-  return NextResponse.json(
-    { error: { type: "validation_error", code: "invalid_request", message } },
-    { status },
-  );
-}
-
 export async function POST(request: NextRequest) {
   const denied = requireTrustedOrigin(request);
   if (denied) return denied;
   // Staff-session gated — this triggers a real WorkOS org create + invite; never reachable without
   // an authenticated staff session (the page guard alone doesn't protect this directly-hittable route).
   if (!(await readAdminSessionWithRefresh())) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "auth_error",
-          code: "invalid_session",
-          message: "Staff sign-in required.",
-        },
-      },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   }
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return fail("Malformed request body.", 400);
+    return bffInvalidRequest("invalid_request", "Malformed request body.");
   }
 
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -98,18 +74,28 @@ export async function POST(request: NextRequest) {
   const adminEmail =
     typeof body.adminEmail === "string" ? body.adminEmail.trim() : "";
 
-  if (name.length < 2) return fail("Business name is required.");
+  if (name.length < 2)
+    return bffUnprocessable("invalid_request", "Business name is required.");
   if (!/^[a-z0-9-]{2,}$/.test(slug))
-    return fail("Slug must be lower-case letters, numbers and dashes.");
-  if (!REGIONS.has(region)) return fail("Choose a valid region.");
-  if (!PLANS.has(plan)) return fail("Choose a valid plan.");
-  if (!EMAIL.test(adminEmail)) return fail("Enter a valid admin email.");
+    return bffUnprocessable(
+      "invalid_request",
+      "Slug must be lower-case letters, numbers and dashes.",
+    );
+  if (!REGIONS.has(region))
+    return bffUnprocessable("invalid_request", "Choose a valid region.");
+  if (!PLANS.has(plan))
+    return bffUnprocessable("invalid_request", "Choose a valid plan.");
+  if (!EMAIL.test(adminEmail))
+    return bffUnprocessable("invalid_request", "Enter a valid admin email.");
 
   const dataRegion = DATA_REGION[region] ?? "eu-west-1";
   const apiBaseUrl = process.env.API_BASE_URL;
   const bffToken = process.env.BFF_INTERNAL_TOKEN;
   if (!apiBaseUrl || !bffToken) {
-    return fail("Provisioning isn't configured for this environment.", 500);
+    return bffFailure(
+      "invalid_request",
+      "Provisioning isn't configured for this environment.",
+    );
   }
 
   // Delegate to the staff-guarded api endpoint (external write: WorkOS org create + invite).
@@ -136,6 +122,10 @@ export async function POST(request: NextRequest) {
       provisionTenantResponseSchema.parse(unwrapEnvelope(payload));
     return NextResponse.json(provisioned, { status: 201 });
   } catch {
-    return fail("Provisioning service is unavailable. Try again shortly.", 502);
+    return bffFailure(
+      "invalid_request",
+      "Provisioning service is unavailable. Try again shortly.",
+      502,
+    );
   }
 }

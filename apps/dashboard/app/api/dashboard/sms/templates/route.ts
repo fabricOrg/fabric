@@ -1,18 +1,22 @@
 import {
   createSmsTemplateRequest,
-  type ListSmsTemplatesResponse,
-  type SmsTemplate,
+  listSmsTemplatesResponse,
+  smsTemplate,
 } from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+} from "@/lib/server/bff-error";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
 export async function GET() {
   try {
     return NextResponse.json(
-      await dashboardApi<ListSmsTemplatesResponse>(
-        "/v1/sms/templates",
-        "sms:read",
+      listSmsTemplatesResponse.parse(
+        await dashboardApi("/v1/sms/templates", "sms:read"),
       ),
     );
   } catch (error) {
@@ -26,10 +30,12 @@ export async function POST(request: Request) {
   if (!parsed.success) return invalidTemplate();
   try {
     return NextResponse.json(
-      await dashboardApi<SmsTemplate>("/v1/sms/templates", "sms:send", {
-        method: "POST",
-        body: JSON.stringify(parsed.data),
-      }),
+      smsTemplate.parse(
+        await dashboardApi("/v1/sms/templates", "sms:send", {
+          method: "POST",
+          body: JSON.stringify(parsed.data),
+        }),
+      ),
       { status: 201 },
     );
   } catch (error) {
@@ -38,29 +44,18 @@ export async function POST(request: Request) {
 }
 
 function rejectedOrigin() {
-  return NextResponse.json(
-    { error: { code: "invalid_origin", message: "Request rejected." } },
-    { status: 403 },
-  );
+  return bffForbidden("invalid_origin", "Request rejected.");
 }
 
 function invalidTemplate() {
-  return NextResponse.json(
-    {
-      error: {
-        code: "invalid_sms_template",
-        message: "The SMS template is invalid.",
-      },
-    },
-    { status: 400 },
+  return bffInvalidRequest(
+    "invalid_sms_template",
+    "The SMS template is invalid.",
   );
 }
 
 function respond(error: unknown) {
   return error instanceof BffError
     ? NextResponse.json(error.payload, { status: error.status })
-    : NextResponse.json(
-        { error: { code: "bff_error", message: "Request failed." } },
-        { status: 500 },
-      );
+    : bffFailure("bff_error", "Request failed.");
 }

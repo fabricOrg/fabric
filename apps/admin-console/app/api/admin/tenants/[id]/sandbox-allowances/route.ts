@@ -2,6 +2,12 @@ import { updateSandboxAllowancePolicySchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { sandboxAllowanceIssueMessage } from "@/lib/sandbox-allowance-message";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   getSandboxAllowancePolicy,
@@ -9,16 +15,13 @@ import {
   updateSandboxAllowancePolicy,
 } from "@/lib/server/tenants-client";
 
-function fail(code: string, message: string, status: number) {
-  return NextResponse.json({ error: { code, message } }, { status });
-}
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   try {
     return NextResponse.json(
       await getSandboxAllowancePolicy((await params).id),
@@ -35,12 +38,12 @@ export async function PATCH(
   const denied = requireTrustedOrigin(request);
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can change sandbox allowances.",
-      403,
     );
   }
   const parsed = updateSandboxAllowancePolicySchema.safeParse(
@@ -49,10 +52,9 @@ export async function PATCH(
   if (!parsed.success) {
     // Names the field that failed. The line this replaced described the limits generically, so a
     // missing THIRD limit produced advice about the two the operator had already got right.
-    return fail(
+    return bffUnprocessable(
       "invalid_request",
       sandboxAllowanceIssueMessage(parsed.error),
-      422,
     );
   }
   try {
@@ -70,5 +72,5 @@ export async function PATCH(
 function respond(error: unknown) {
   return error instanceof TenantApiError
     ? NextResponse.json(error.payload, { status: error.status })
-    : fail("tenant_unavailable", "Tenant service unavailable.", 502);
+    : bffFailure("tenant_unavailable", "Tenant service unavailable.", 502);
 }

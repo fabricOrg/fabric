@@ -1,6 +1,12 @@
 import { updateMemberRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   removeTenantMember,
@@ -9,34 +15,21 @@ import {
 } from "@/lib/server/tenant-members-client";
 
 /** Staff manage one tenant member: PATCH role, DELETE (soft-remove). staff:write only. */
-function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-) {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
 
 function errorResponse(error: unknown) {
   return error instanceof TenantMemberApiError
     ? NextResponse.json(error.payload, { status: error.status })
-    : fail(
-        "members_unavailable",
-        "Member service is unavailable.",
-        502,
-        "api_error",
-      );
+    : bffFailure("members_unavailable", "Member service is unavailable.", 502);
 }
 
 async function authorize() {
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can manage members.",
-      403,
     );
   }
   return null;
@@ -53,12 +46,7 @@ export async function PATCH(
   const { id, userId } = await params;
   const parsed = updateMemberRequestSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return fail(
-      "invalid_role",
-      "Provide a valid role.",
-      422,
-      "validation_error",
-    );
+    return bffUnprocessable("invalid_role", "Provide a valid role.");
   }
   try {
     return NextResponse.json(

@@ -8,6 +8,11 @@ import {
   readDashboardSession,
   refreshDashboardSession,
 } from "@/lib/server/auth";
+import {
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+} from "@/lib/server/bff-error";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
 function backend(): { baseUrl: string; bffToken: string } {
@@ -26,15 +31,10 @@ async function sessionOr401() {
   return session;
 }
 
-const denied = (code: string, message: string, status: number) =>
-  NextResponse.json(
-    { error: { type: "auth_error", code, message } },
-    { status },
-  );
-
 export async function GET() {
   const session = await sessionOr401();
-  if (!session) return denied("invalid_session", "Sign in to continue.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Sign in to continue.");
   const { baseUrl, bffToken } = backend();
   const response = await fetch(
     new URL("/internal/admin/proposals/go-live/status", baseUrl),
@@ -52,29 +52,23 @@ export async function GET() {
 
 export async function POST(request: Request) {
   if (!hasTrustedOrigin(request)) {
-    return denied("invalid_origin", "Request rejected.", 403);
+    return bffForbidden("invalid_origin", "Request rejected.");
   }
   const session = await sessionOr401();
-  if (!session) return denied("invalid_session", "Sign in to continue.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Sign in to continue.");
   // Going live is an org decision — owners/admins only, not members/developers.
   if (session.role !== "owner" && session.role !== "admin") {
-    return denied(
+    return bffForbidden(
       "insufficient_permission",
       "Only an owner or admin can request go-live.",
-      403,
     );
   }
   const parsed = goLiveRequestSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "invalid_request_error",
-          code: "invalid_go_live_request",
-          message: parsed.error.issues[0]?.message ?? "The request is invalid.",
-        },
-      },
-      { status: 400 },
+    return bffInvalidRequest(
+      "invalid_go_live_request",
+      parsed.error.issues[0]?.message ?? "The request is invalid.",
     );
   }
   const { baseUrl, bffToken } = backend();
