@@ -1,6 +1,12 @@
 import "server-only";
 
-import type { ErasureResult, SubjectSummary } from "@app/contracts";
+import {
+  type ErasureResult,
+  erasureResultSchema,
+  type SubjectSummary,
+  subjectSummarySchema,
+} from "@app/contracts";
+import { API_EXTERNAL_WRITE_TIMEOUT_MS, apiFetch } from "./api-fetch";
 import { unwrapEnvelope } from "./response-envelope";
 
 /**
@@ -42,11 +48,11 @@ export async function lookupSubject(
     baseUrl,
   );
   url.searchParams.set("msisdn", msisdn);
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     cache: "no-store",
     headers: { "x-bff-token": bffToken },
   });
-  return (await parse(response)) as SubjectSummary;
+  return subjectSummarySchema.parse(await parse(response));
 }
 
 /** IRREVERSIBLE. Destroys the subject's key; no backup brings the data back. */
@@ -56,7 +62,10 @@ export async function eraseSubject(
   actorEmail: string,
 ): Promise<ErasureResult> {
   const { baseUrl, bffToken } = config();
-  const response = await fetch(
+  // Crypto-shredding walks every table that holds the subject. It is irreversible and cannot be
+  // confirmed after the fact, so it gets the long budget rather than a deadline that reports a
+  // failure for an erasure that actually happened.
+  const response = await apiFetch(
     new URL(`/internal/admin/privacy/tenants/${tenantId}/erasures`, baseUrl),
     {
       method: "POST",
@@ -68,6 +77,7 @@ export async function eraseSubject(
       },
       body: JSON.stringify(body),
     },
+    API_EXTERNAL_WRITE_TIMEOUT_MS,
   );
-  return (await parse(response)) as ErasureResult;
+  return erasureResultSchema.parse(await parse(response));
 }

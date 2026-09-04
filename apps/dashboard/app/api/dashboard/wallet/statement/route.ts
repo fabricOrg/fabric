@@ -11,6 +11,18 @@ export async function GET(request: Request) {
   try {
     const upstream = await dashboardApiRaw(upstreamPath, "wallet:read");
     const body = await upstream.text();
+    // Only a SUCCESS is an attachment. A failure body (an error envelope, including apiFetch's
+    // upstream_timeout) forwarded with a csv disposition is saved by the browser as
+    // `fabric-statement.csv` containing JSON — the reader believes they have a statement.
+    if (!upstream.ok) {
+      return new NextResponse(body, {
+        status: upstream.status,
+        headers: {
+          "content-type":
+            upstream.headers.get("content-type") ?? "application/json",
+        },
+      });
+    }
     return new NextResponse(body, {
       status: upstream.status,
       headers: {

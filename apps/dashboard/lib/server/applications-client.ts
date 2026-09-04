@@ -17,20 +17,16 @@ import { dashboardApi } from "./api-client";
  * contract at the boundary (a shape crossing a boundary is validated, not trusted).
  */
 export async function listApplications(): Promise<ListApplicationsResponse> {
-  const payload = await dashboardApi<unknown>(
-    "/v1/applications",
-    "applications:read",
-  );
+  const payload = await dashboardApi("/v1/applications", "applications:read");
   return listApplicationsResponseSchema.parse(payload);
 }
 
 export async function createApplication(
   request: CreateApplicationRequest,
 ): Promise<ApplicationDto> {
-  const payload = await dashboardApi<unknown>(
-    "/v1/applications",
-    "applications:write",
-    { method: "POST", body: JSON.stringify(request) },
-  );
+  const payload = await dashboardApi("/v1/applications", "applications:write", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
   return applicationDtoSchema.parse(payload);
 }

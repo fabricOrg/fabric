@@ -4,6 +4,7 @@ import {
   type ListAuditResponse,
   listAuditResponseSchema,
 } from "@app/contracts";
+import { apiFetch } from "./api-fetch";
 import { unwrapEnvelope } from "./response-envelope";
 
 /** Audit log read via the api's BffToken-guarded GET /internal/admin/audit. */
@@ -28,7 +29,7 @@ export async function listAudit(
   if (opts.limit !== undefined)
     url.searchParams.set("limit", String(opts.limit));
   if (opts.cursor) url.searchParams.set("cursor", opts.cursor);
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     cache: "no-store",
     headers: { "x-bff-token": bffToken },
   });

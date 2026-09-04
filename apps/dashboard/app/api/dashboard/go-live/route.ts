@@ -4,6 +4,7 @@
 
 import { goLiveRequestSchema, unwrapEnvelope } from "@app/contracts";
 import { NextResponse } from "next/server";
+import { apiFetch } from "@/lib/server/api-fetch";
 import {
   readDashboardSession,
   refreshDashboardSession,
@@ -36,7 +37,7 @@ export async function GET() {
   if (!session)
     return bffUnauthorized("invalid_session", "Sign in to continue.");
   const { baseUrl, bffToken } = backend();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL("/internal/admin/proposals/go-live/status", baseUrl),
     {
       cache: "no-store",
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
     );
   }
   const { baseUrl, bffToken } = backend();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL("/internal/admin/proposals/go-live", baseUrl),
     {
       method: "POST",

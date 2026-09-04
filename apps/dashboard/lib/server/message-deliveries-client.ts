@@ -23,7 +23,7 @@ export async function listMessageDeliveries(
   const query = new URLSearchParams({ environment_id: environmentId });
   if (page.limit) query.set("limit", String(page.limit));
   if (page.cursor) query.set("cursor", page.cursor);
-  const payload = await dashboardApi<unknown>(
+  const payload = await dashboardApi(
     `/v1/message-deliveries?${query.toString()}`,
     "sms:read",
   );
@@ -36,7 +36,7 @@ export async function retrieveMessageDeliveryWebhooks(
   environmentId: string,
 ): Promise<MessageDeliveryWebhooksResponse> {
   const query = `application_id=${encodeURIComponent(applicationId)}&environment_id=${encodeURIComponent(environmentId)}`;
-  const payload = await dashboardApi<unknown>(
+  const payload = await dashboardApi(
     `/v1/message-deliveries/${encodeURIComponent(deliveryId)}/webhooks?${query}`,
     "sms:read",
   );
@@ -49,7 +49,7 @@ export async function retrieveMessageDelivery(
   environmentId: string,
 ): Promise<RetrieveManagedMessageResponse> {
   const query = `application_id=${encodeURIComponent(applicationId)}&environment_id=${encodeURIComponent(environmentId)}`;
-  const payload = await dashboardApi<unknown>(
+  const payload = await dashboardApi(
     `/v1/message-deliveries/${encodeURIComponent(deliveryId)}?${query}`,
     "sms:read",
   );

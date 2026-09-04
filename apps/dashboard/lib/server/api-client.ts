@@ -1,7 +1,12 @@
 import "server-only";
 
-import { mintTenantTokenResponseSchema, unwrapEnvelope } from "@app/contracts";
+import {
+  apiContextResponse,
+  mintTenantTokenResponseSchema,
+  unwrapEnvelope,
+} from "@app/contracts";
 import type { AppSession } from "@app/fe-auth";
+import { API_EXPORT_TIMEOUT_MS, apiFetch } from "./api-fetch";
 import { readDashboardSession, refreshDashboardSession } from "./auth";
 
 export class BffError extends Error {
@@ -45,7 +50,7 @@ function cacheTenantToken(
 
 async function mintTenantToken(tenantId: string): Promise<string> {
   const { baseUrl, bffToken } = apiConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL("/internal/identity/tenant-token", baseUrl),
     {
       method: "POST",
@@ -79,14 +84,14 @@ async function tenantToken(tenantId: string): Promise<string> {
   return mint;
 }
 
-async function apiRequest<T>(
+async function apiRequest(
   path: string,
   tenantId: string,
   init: RequestInit = {},
-): Promise<T> {
+): Promise<unknown> {
   const { baseUrl } = apiConfiguration();
   const request = async (token: string): Promise<Response> =>
-    fetch(new URL(path, baseUrl), {
+    apiFetch(new URL(path, baseUrl), {
       ...init,
       cache: "no-store",
       headers: {
@@ -115,7 +120,7 @@ async function apiRequest<T>(
   // The API wraps every JSON success in `{ data, request_id }` (contracts/envelope.ts). Unwrapping
   // HERE keeps all ~24 client modules untouched — the envelope is a transport concern, not
   // something every caller should destructure. Errors keep their own envelope and are thrown above.
-  return unwrapEnvelope(payload) as T;
+  return unwrapEnvelope(payload);
 }
 
 function requirePermission(session: AppSession, permission: string): void {
@@ -133,11 +138,9 @@ function requirePermission(session: AppSession, permission: string): void {
 /** Development-login sanity check: the configured tenant must exist + be active + be reachable
  *  with a freshly minted tenant token. */
 export async function verifyConfiguredTenant(expectedTenantId: string) {
-  const context = await apiRequest<{
-    tenant_id: string;
-    scopes: string[];
-    request_id: string;
-  }>("/v1/context", expectedTenantId);
+  const context = apiContextResponse.parse(
+    await apiRequest("/v1/context", expectedTenantId),
+  );
   if (context.tenant_id !== expectedTenantId) {
     throw new Error(
       "The minted tenant token does not resolve to the configured development tenant.",
@@ -165,27 +168,38 @@ export async function dashboardApiRaw(
   }
   requirePermission(session, permission);
   const { baseUrl } = apiConfiguration();
-  let response = await fetch(new URL(path, baseUrl), {
-    cache: "no-store",
-    headers: { authorization: `Bearer ${await tenantToken(session.orgId)}` },
-  });
+  // The caller streams this response body itself (the statement CSV), and the deadline covers the
+  // whole exchange, drain included — so an export gets the long budget rather than aborting a
+  // download that was making progress.
+  let response = await apiFetch(
+    new URL(path, baseUrl),
+    {
+      cache: "no-store",
+      headers: { authorization: `Bearer ${await tenantToken(session.orgId)}` },
+    },
+    API_EXPORT_TIMEOUT_MS,
+  );
   if (response.status === 401) {
     tenantTokens.delete(session.orgId);
-    response = await fetch(new URL(path, baseUrl), {
-      cache: "no-store",
-      headers: {
-        authorization: `Bearer ${await tenantToken(session.orgId)}`,
+    response = await apiFetch(
+      new URL(path, baseUrl),
+      {
+        cache: "no-store",
+        headers: {
+          authorization: `Bearer ${await tenantToken(session.orgId)}`,
+        },
       },
-    });
+      API_EXPORT_TIMEOUT_MS,
+    );
   }
   return response;
 }
 
-export async function dashboardApi<T>(
+export async function dashboardApi(
   path: string,
   permission: string | readonly string[],
   init?: RequestInit,
-): Promise<T> {
+): Promise<unknown> {
   // Expired access token? Try a silent refresh (swaps the refresh token, re-seals the cookie) before
   // giving up — otherwise an idle tab's next BFF call dead-ends at 401 mid-session.
   const session =
@@ -202,5 +216,5 @@ export async function dashboardApi<T>(
   const required = Array.isArray(permission) ? permission : [permission];
   for (const item of required) requirePermission(session, item);
   // The tenant id comes from the resolved session — never from the client request.
-  return apiRequest<T>(path, session.orgId, init);
+  return apiRequest(path, session.orgId, init);
 }

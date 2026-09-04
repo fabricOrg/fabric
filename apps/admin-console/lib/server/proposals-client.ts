@@ -8,6 +8,7 @@ import {
   type ProposalDto,
   proposalDtoSchema,
 } from "@app/contracts";
+import { apiFetch } from "./api-fetch";
 import { unwrapEnvelope } from "./response-envelope";
 
 /** Maker-checker control plane via the api's BffToken-guarded /internal/admin/proposals. */
@@ -39,10 +40,13 @@ function actorHeaders(actor: { email: string; staffId: string }) {
 
 export async function listProposals(): Promise<ListProposalsResponse> {
   const { baseUrl, bffToken } = config();
-  const response = await fetch(new URL("/internal/admin/proposals", baseUrl), {
-    cache: "no-store",
-    headers: { "x-bff-token": bffToken },
-  });
+  const response = await apiFetch(
+    new URL("/internal/admin/proposals", baseUrl),
+    {
+      cache: "no-store",
+      headers: { "x-bff-token": bffToken },
+    },
+  );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new ProposalApiError(response.status, payload);
   return listProposalsResponseSchema.parse(unwrapEnvelope(payload));
@@ -53,12 +57,15 @@ export async function createProposal(
   actor: { email: string; staffId: string },
 ): Promise<ProposalDto> {
   const { baseUrl, bffToken } = config();
-  const response = await fetch(new URL("/internal/admin/proposals", baseUrl), {
-    method: "POST",
-    cache: "no-store",
-    headers: { "x-bff-token": bffToken, ...actorHeaders(actor) },
-    body: JSON.stringify(request),
-  });
+  const response = await apiFetch(
+    new URL("/internal/admin/proposals", baseUrl),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: { "x-bff-token": bffToken, ...actorHeaders(actor) },
+      body: JSON.stringify(request),
+    },
+  );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new ProposalApiError(response.status, payload);
   return proposalDtoSchema.parse(unwrapEnvelope(payload));
@@ -70,7 +77,7 @@ export async function decideProposal(
   actor: { email: string; staffId: string },
 ): Promise<ProposalDto> {
   const { baseUrl, bffToken } = config();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/admin/proposals/${id}/decide`, baseUrl),
     {
       method: "POST",

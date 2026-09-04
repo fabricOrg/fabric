@@ -4,6 +4,10 @@ import {
   unwrapEnvelope,
 } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
+import {
+  API_EXTERNAL_WRITE_TIMEOUT_MS,
+  apiFetch,
+} from "@/lib/server/api-fetch";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import {
   bffFailure,
@@ -98,9 +102,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Delegate to the staff-guarded api endpoint (external write: WorkOS org create + invite).
+  // Delegate to the staff-guarded api endpoint (external write: WorkOS org create + invite). The
+  // longest write in this console and the least idempotent, so it takes the external-write budget:
+  // a deadline that fires here leaves an organization created and an invitation sent.
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       new URL("/internal/admin/tenants", apiBaseUrl),
       {
         method: "POST",
@@ -111,6 +117,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({ name, slug, plan, adminEmail, dataRegion }),
       },
+      API_EXTERNAL_WRITE_TIMEOUT_MS,
     );
     const payload = (await response.json()) as unknown;
     if (!response.ok)

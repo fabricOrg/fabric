@@ -8,6 +8,7 @@ import {
   unwrapEnvelope,
 } from "@app/contracts";
 import { BffError } from "./api-client";
+import { apiFetch } from "./api-fetch";
 
 /**
  * Dashboard email surface via the api's BffToken-guarded /internal/tenants/:id/emails — the workspace
@@ -24,7 +25,7 @@ function backend() {
 
 async function request(tenantId: string, path: string): Promise<unknown> {
   const { baseUrl, bffToken } = backend();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/tenants/${tenantId}${path}`, baseUrl),
     { cache: "no-store", headers: { "x-bff-token": bffToken } },
   );

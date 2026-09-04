@@ -8,12 +8,15 @@ import {
   staffDtoSchema,
   type UpdateStaffRequest,
 } from "@app/contracts";
+import { API_EXTERNAL_WRITE_TIMEOUT_MS, apiFetch } from "./api-fetch";
 import { unwrapEnvelope } from "./response-envelope";
 
 /**
  * Staff management via the api's BffToken-guarded /internal/admin/staff. Staff aren't org-scoped, so
- * an invite is purely an allowlist upsert (no WorkOS call) — the person signs in with any matching
- * WorkOS identity. Callers must have already verified a staff-admin session (staff:write).
+ * an invite is an allowlist upsert plus an ORG-LESS WorkOS invitation, sent best-effort by the API
+ * (`StaffService.invite`) so a net-new operator gets an onboarding email; the allowlist row remains
+ * the source of truth for authz. Callers must have already verified a staff-admin session
+ * (staff:write).
  */
 export class StaffApiError extends Error {
   constructor(
@@ -39,7 +42,7 @@ export async function listStaff(
   const { baseUrl, bffToken } = backendConfiguration();
   const url = new URL("/internal/admin/staff", baseUrl);
   if (opts.cursor) url.searchParams.set("cursor", opts.cursor);
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     cache: "no-store",
     headers: { "x-bff-token": bffToken },
   });
@@ -52,12 +55,18 @@ export async function inviteStaff(
   request: InviteStaffRequest,
 ): Promise<StaffDto> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(new URL("/internal/admin/staff", baseUrl), {
-    method: "POST",
-    cache: "no-store",
-    headers: { "content-type": "application/json", "x-bff-token": bffToken },
-    body: JSON.stringify(request),
-  });
+  // The allowlist upsert is idempotent, but the org-less WorkOS invitation that follows it is not:
+  // a deadline firing on a slow WorkOS makes the operator retry and the invitee get a second email.
+  const response = await apiFetch(
+    new URL("/internal/admin/staff", baseUrl),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: { "content-type": "application/json", "x-bff-token": bffToken },
+      body: JSON.stringify(request),
+    },
+    API_EXTERNAL_WRITE_TIMEOUT_MS,
+  );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new StaffApiError(response.status, payload);
   return staffDtoSchema.parse(unwrapEnvelope(payload));
@@ -68,7 +77,7 @@ export async function updateStaff(
   patch: UpdateStaffRequest,
 ): Promise<StaffDto> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/admin/staff/${id}`, baseUrl),
     {
       method: "PATCH",
@@ -84,7 +93,7 @@ export async function updateStaff(
 
 export async function removeStaff(id: string): Promise<void> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/admin/staff/${id}`, baseUrl),
     {
       method: "DELETE",

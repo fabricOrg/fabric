@@ -12,6 +12,7 @@ import {
   providerCostRateDtoSchema,
   type UpsertPriceBookRequest,
 } from "@app/contracts";
+import { apiFetch } from "./api-fetch";
 import { unwrapEnvelope } from "./response-envelope";
 
 /** Price-book control plane via the api's BffToken-guarded /internal/admin/price-books (ADR-0010). */
@@ -49,7 +50,7 @@ function actorHeaders(actor: Actor, bffToken: string): HeadersInit {
 
 export async function listPriceBooks(): Promise<ListPriceBooksResponse> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL("/internal/admin/price-books", baseUrl),
     {
       cache: "no-store",
@@ -66,7 +67,7 @@ export async function createPriceBook(
   actor: Actor,
 ): Promise<PriceBookDto> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL("/internal/admin/price-books", baseUrl),
     {
       method: "POST",
@@ -86,7 +87,7 @@ export async function updatePriceBook(
   actor: Actor,
 ): Promise<PriceBookDto> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/admin/price-books/${encodeURIComponent(id)}`, baseUrl),
     {
       method: "PUT",
@@ -106,7 +107,7 @@ export async function assignPriceBook(
   actor: Actor,
 ): Promise<void> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(
       `/internal/admin/price-books/assignments/${encodeURIComponent(accountId)}`,
       baseUrl,
@@ -126,7 +127,7 @@ export async function assignPriceBook(
 
 export async function listProviderCostRates(): Promise<ProviderCostRateDto[]> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL("/internal/admin/price-books/provider-costs", baseUrl),
     {
       cache: "no-store",
@@ -144,7 +145,7 @@ export async function publishProviderCostRate(
   actor: Actor,
 ): Promise<ProviderCostRateDto> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL("/internal/admin/price-books/provider-costs", baseUrl),
     {
       method: "POST",

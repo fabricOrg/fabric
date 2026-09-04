@@ -19,6 +19,7 @@ import {
   type PublishCommercialOfferVersionRequest,
   type RetireCommercialOfferVersionRequest,
 } from "@app/contracts";
+import { apiFetch } from "./api-fetch";
 import { unwrapEnvelope } from "./response-envelope";
 
 /**
@@ -56,7 +57,7 @@ async function request<T>(
   parse: (payload: unknown) => T,
 ): Promise<T> {
   const { baseUrl, bffToken } = backend();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/admin/commercial-offers${path}`, baseUrl),
     {
       method: init.method,

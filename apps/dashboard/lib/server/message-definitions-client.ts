@@ -27,7 +27,7 @@ export async function listMessageDefinitions(
   const query = applicationId
     ? `?applicationId=${encodeURIComponent(applicationId)}`
     : "";
-  const payload = await dashboardApi<unknown>(
+  const payload = await dashboardApi(
     `/v1/message-definitions${query}`,
     "applications:read",
   );
@@ -38,7 +38,7 @@ export async function addMessageDefinitionVersion(
   id: string,
   request: AddMessageDefinitionVersionRequest,
 ): Promise<MessageDefinitionState> {
-  const payload = await dashboardApi<unknown>(
+  const payload = await dashboardApi(
     `/v1/message-definitions/${id}/versions`,
     "applications:read",
     { method: "POST", body: JSON.stringify(request) },
@@ -49,7 +49,7 @@ export async function addMessageDefinitionVersion(
 export async function createMessageDefinition(
   request: CreateMessageDefinitionRequest,
 ): Promise<MessageDefinitionState> {
-  const payload = await dashboardApi<unknown>(
+  const payload = await dashboardApi(
     "/v1/message-definitions",
     "applications:read",
     { method: "POST", body: JSON.stringify(request) },
@@ -61,7 +61,7 @@ export async function publishMessageDefinition(
   id: string,
   request: PublishMessageDefinitionRequest,
 ): Promise<MessageDefinitionState> {
-  const payload = await dashboardApi<unknown>(
+  const payload = await dashboardApi(
     `/v1/message-definitions/${id}/publish`,
     "applications:read",
     { method: "POST", body: JSON.stringify(request) },
@@ -70,7 +70,7 @@ export async function publishMessageDefinition(
 }
 
 export async function archiveMessageDefinition(id: string): Promise<void> {
-  await dashboardApi<unknown>(
+  await dashboardApi(
     `/v1/message-definitions/${id}/archive`,
     "applications:read",
     { method: "POST", body: "{}" },
@@ -80,7 +80,7 @@ export async function archiveMessageDefinition(id: string): Promise<void> {
 export async function previewMessage(
   request: PreviewMessageRequest,
 ): Promise<PreviewMessageResponse> {
-  const payload = await dashboardApi<unknown>(
+  const payload = await dashboardApi(
     "/v1/messages/preview",
     "applications:read",
     { method: "POST", body: JSON.stringify(request) },

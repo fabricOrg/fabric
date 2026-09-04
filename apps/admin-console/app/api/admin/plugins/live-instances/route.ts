@@ -3,6 +3,10 @@ import {
   unwrapEnvelope,
 } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
+import {
+  API_EXTERNAL_WRITE_TIMEOUT_MS,
+  apiFetch,
+} from "@/lib/server/api-fetch";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import {
   bffFailure,
@@ -52,7 +56,7 @@ export async function POST(request: NextRequest) {
     return bffFailure("registry_unavailable", "Registry is unavailable.", 502);
   }
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       new URL("/internal/plugins/live-instances", baseUrl),
       {
         method: "POST",
@@ -60,6 +64,7 @@ export async function POST(request: NextRequest) {
         headers: { "content-type": "application/json", "x-bff-token": token },
         body: JSON.stringify(parsed.data),
       },
+      API_EXTERNAL_WRITE_TIMEOUT_MS,
     );
     // Unwrap before proxying: the browser destructures these fields directly, and forwarding the
     // envelope makes every one of them undefined. The credentials dialog then reports
