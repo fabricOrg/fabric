@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@app/contracts": "workspace:*",
-    "@workos-inc/node": "^10.9.0"
+    "@workos-inc/node": "^10.13.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.5"
