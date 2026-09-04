@@ -5,11 +5,13 @@ import type {
   RealmConfig,
   RefreshOutcome,
 } from "./types.js";
+import { isUpstreamUnavailable } from "./upstream-error.js";
 import { secretsEqual, workos } from "./workos-internal.js";
 
 export * from "./credentials.js";
 export * from "./staff-credentials.js";
 export * from "./types.js";
+export * from "./upstream-error.js";
 export * from "./user-session.js";
 
 export function buildAuthorizationUrl(
@@ -57,7 +59,12 @@ export function readSession(
   sealedCookie: string | undefined,
 ): Promise<AppSession | null> {
   if (!sealedCookie) return Promise.resolve(null);
-  return authenticateAndResolve(cfg, sealedCookie).catch(() => null);
+  // A REFUSAL becomes null; an OUTAGE is rethrown. Blanket-catching both told every caller the user
+  // was signed out whenever the API stalled — see UpstreamUnavailableError.
+  return authenticateAndResolve(cfg, sealedCookie).catch((error: unknown) => {
+    if (isUpstreamUnavailable(error)) throw error;
+    return null;
+  });
 }
 
 /**

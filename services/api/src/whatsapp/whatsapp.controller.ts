@@ -98,7 +98,11 @@ export class WhatsappController {
       await this.idempotency.release(tenant.tenantId, idempotencyKey);
       throw error;
     }
-    await this.idempotency.complete(tenant.tenantId, idempotencyKey, response);
+    await this.idempotency.completeOrLog(
+      tenant.tenantId,
+      idempotencyKey,
+      response,
+    );
     return response;
   }
 

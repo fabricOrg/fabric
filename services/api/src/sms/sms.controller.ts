@@ -116,7 +116,7 @@ export class SmsController {
     }
     // Completion failure is uncertainty after acceptance: keep the pending claim so a retry cannot
     // create a second message merely because response persistence failed.
-    await this.idempotency.complete(tenant.id, idempotencyKey, response);
+    await this.idempotency.completeOrLog(tenant.id, idempotencyKey, response);
     return response;
   }
 

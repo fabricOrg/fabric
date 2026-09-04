@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { type AppDb, apiIdempotencyKeys, type TenantId } from "@app/db";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { APP_DB } from "../db/db.module.js";
 import { apiError, invalidRequest } from "../http/api-error.js";
@@ -33,6 +33,8 @@ export type IdempotencyBegin =
 
 @Injectable()
 export class IdempotencyService {
+  private readonly logger = new Logger(IdempotencyService.name);
+
   constructor(@Inject(APP_DB) private readonly db: AppDb) {}
 
   /** Canonical body fingerprint — proves "same key, same request" on replay. */
@@ -116,6 +118,33 @@ export class IdempotencyService {
           ),
         );
     });
+  }
+
+  /**
+   * Complete the key WITHOUT letting a persistence failure destroy an accepted side effect.
+   *
+   * The side effect has already happened and been billed by the time this runs, so the caller is
+   * owed its response. Letting the UPDATE's rejection propagate answered a bare 500 — outside the
+   * error envelope, with no stable code — and the caller never learned the id of a message it paid
+   * for. Worse, the row stays `pending` until it expires, so every retry on that key gets 409
+   * `idempotency_in_flight` saying "retry shortly" for the full 24-hour TTL, and a client that
+   * concludes the key is poisoned and rotates to a fresh one sends a SECOND message.
+   *
+   * Keeping the pending claim is still correct — it is what stops a retry creating a duplicate. What
+   * changes is that the caller is told what happened to the first one.
+   */
+  async completeOrLog(
+    tenantId: string,
+    key: string,
+    response: unknown,
+  ): Promise<void> {
+    try {
+      await this.complete(tenantId, key, response);
+    } catch (error) {
+      this.logger.error(
+        `Idempotency completion failed for key ${key}; the side effect succeeded and the claim stays pending until it expires. ${String(error)}`,
+      );
+    }
   }
 
   /**
