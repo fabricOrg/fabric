@@ -35,6 +35,7 @@ export const PUBLIC_MANAGED_BINDINGS: RouteBindings = {
     visibility: "public",
     security: ["secretKey", "tenantToken"],
     request: sendManagedMessageRequest,
+    idempotency: "required",
     response: sendManagedMessageResponse,
     successStatus: 202,
     errorStatuses: [402, 409],

@@ -49,7 +49,7 @@ export class IdempotencyService {
     key: string,
     fingerprint: string,
   ): Promise<IdempotencyBegin> {
-    if (key.length === 0 || key.length > MAX_KEY_LENGTH) {
+    if (key.trim().length === 0 || key.length > MAX_KEY_LENGTH) {
       throw invalidRequest(
         "invalid_idempotency_key",
         `\`Idempotency-Key\` must be 1-${MAX_KEY_LENGTH} characters.`,

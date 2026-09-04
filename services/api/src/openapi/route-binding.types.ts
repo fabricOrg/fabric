@@ -54,6 +54,8 @@ export interface RouteBinding {
   readonly request?: ZodType;
   /** Query-string contract. Also `io: "input"`. */
   readonly query?: ZodType;
+  /** Whether this operation accepts or requires the durable Idempotency-Key request header. */
+  readonly idempotency?: "optional" | "required";
   /**
    * Success response contract. Serialised with `io: "output"` — the POST-transform shape, which is
    * what a caller actually receives. The asymmetry with `request` is the whole reason these are two

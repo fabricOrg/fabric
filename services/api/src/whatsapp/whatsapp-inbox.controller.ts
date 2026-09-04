@@ -133,8 +133,9 @@ export class WhatsappInboxController {
     if (claim.kind === "replay") {
       return whatsappSendResponse.parse(claim.response);
     }
+    let response: WhatsappSendResponse;
     try {
-      const response = await this.whatsapp
+      response = await this.whatsapp
         .send(
           {
             tenantId: normalizedTenantId,
@@ -149,16 +150,16 @@ export class WhatsappInboxController {
             "The wallet balance can't cover this WhatsApp message.",
           ),
         );
-      await this.idempotency.complete(
-        normalizedTenantId,
-        idempotencyKey,
-        response,
-      );
-      return response;
     } catch (error) {
       await this.idempotency.release(normalizedTenantId, idempotencyKey);
       throw error;
     }
+    await this.idempotency.complete(
+      normalizedTenantId,
+      idempotencyKey,
+      response,
+    );
+    return response;
   }
 
   private async resolveEnvironment(

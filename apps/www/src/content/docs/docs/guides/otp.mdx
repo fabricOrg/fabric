@@ -12,13 +12,20 @@ compare codes yourself.
 1. **Start a verification**
 
    ```ts
-   const started = await fabric.verify.start({ to: "+233201234567" });
-   // { id, status, to, channel: "sms", expiresIn, debugCode? }
+   const started = await fabric.verify.start(
+     { to: "+233201234567" },
+     { idempotencyKey: verificationAttemptId },
+   );
+   // { id, status, to, channel: "sms", expiresIn, expiresAt, debugCode? }
    ```
 
-   Persist `started.data.id` against the user's session. `expiresIn` tells you how long the code is
-   valid. In sandbox, `debugCode` returns the code so you can test without a handset — it is never
-   present on a live verification.
+   Persist `started.data.id` against the user's session. Use absolute `expiresAt` for the deadline;
+   unlike the convenience `expiresIn` duration, it stays exact after a replay. In sandbox,
+   `debugCode` returns the code so you can test without a handset — it is never present on a live
+   verification.
+
+   Reuse the same stable key when retrying one logical attempt. Fabric replays the original
+   verification reference instead of sending and charging for a second code.
 
 2. **Check the submitted code**
 

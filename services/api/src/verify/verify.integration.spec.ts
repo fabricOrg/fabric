@@ -73,6 +73,7 @@ async function seedTenant(id: string, plan: string, rawKey: string) {
 
 async function cleanTenant(id: string) {
   for (const table of [
+    "api_idempotency_keys",
     "senders",
     "verifications",
     "ledger_entries",
@@ -86,13 +87,19 @@ async function cleanTenant(id: string) {
   await owner.unsafe("DELETE FROM accounts WHERE id = $1", [id]);
 }
 
-async function post(rawKey: string, url: string, payload: unknown) {
+async function post(
+  rawKey: string,
+  url: string,
+  payload: unknown,
+  idempotencyKey?: string,
+) {
   return app.inject({
     method: "POST",
     url,
     headers: {
       authorization: `Bearer ${rawKey}`,
       "content-type": "application/json",
+      ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
     },
     payload: payload as Record<string, unknown>,
   });
@@ -137,13 +144,21 @@ afterAll(async () => {
 
 describe("Verify V1 (golden path core)", () => {
   it("start → metered OTP SMS (sandbox allowance, virtual phone) → wrong codes bounded → verify → idempotent re-check", async () => {
-    const started = await post(SANDBOX_KEY, "/v1/verify", { to: PHONE });
+    const startKey = `verify-start-${SUFFIX}`;
+    const started = await post(
+      SANDBOX_KEY,
+      "/v1/verify",
+      { to: PHONE },
+      startKey,
+    );
     expectStatus(started, 201);
     const startBody = unwrapEnvelope(started.json()) as {
       id: string;
       status: string;
       debug_code?: string;
       to: string;
+      expires_at: string;
+      expires_in: number;
     };
     expect(startBody.status).toBe("pending");
     // Assert the EXACT mask, not a substring probe. The previous assertion searched for "227189" — a
@@ -152,6 +167,53 @@ describe("Verify V1 (golden path core)", () => {
     expect(startBody.to).toBe(`+23354•••${SUFFIX.slice(-3)}1`);
     // Sandbox quickstart affordance: the OTP is visible without a real phone.
     expect(startBody.debug_code).toMatch(/^\d{6}$/);
+
+    // AGE the stored claim before replaying. Two POSTs milliseconds apart cannot tell a recomputed
+    // countdown from a verbatim one — with the response body's own `expires_at` pushed back to 30
+    // seconds out, a verbatim replay would still answer 300 and the assertions below would fail.
+    // The instant comes from THIS process, not the database: postgres `now()` can sit seconds away
+    // from the API's clock, and the assertion below measures the gap between them.
+    const agedExpiry = new Date(Date.now() + 30_000).toISOString();
+    await owner.unsafe(
+      `UPDATE api_idempotency_keys
+          SET response = jsonb_set(response, '{expires_at}', to_jsonb($3::text))
+        WHERE tenant_id = $1 AND key = $2`,
+      [SANDBOX_TENANT, startKey, agedExpiry],
+    );
+    const replayed = await post(
+      SANDBOX_KEY,
+      "/v1/verify",
+      { to: PHONE },
+      startKey,
+    );
+    expectStatus(replayed, 201);
+    const replayBody = unwrapEnvelope(replayed.json()) as {
+      id: string;
+      debug_code?: string;
+      expires_at: string;
+      expires_in: number;
+    };
+    expect(replayBody.id).toBe(startBody.id);
+    expect(replayBody.debug_code).toBeUndefined();
+    // The absolute expiry is stored and replayed as-is; the RELATIVE one is recomputed against it,
+    // so a replay can never hand back a countdown longer than the code has left. Replaying the
+    // stored payload verbatim is what made `expires_in` outlive the code.
+    expect(replayBody.expires_in).toBeGreaterThan(0);
+    expect(replayBody.expires_in).toBeLessThanOrEqual(30);
+    expect(
+      Math.abs(
+        Date.parse(replayBody.expires_at) -
+          (Date.now() + replayBody.expires_in * 1000),
+      ),
+    ).toBeLessThan(2_000);
+
+    const [dedupe] = (await owner.unsafe(
+      `SELECT
+         (SELECT count(*)::int FROM verifications WHERE tenant_id = $1) AS verifications,
+         (SELECT count(*)::int FROM messages WHERE tenant_id = $1) AS messages`,
+      [SANDBOX_TENANT],
+    )) as Array<{ verifications: number; messages: number }>;
+    expect(dedupe).toEqual({ verifications: 1, messages: 1 });
 
     // The OTP rode the real send pipeline: a message exists, pinned to the SANDBOX provider, and it
     // was ACCOUNTED FOR. A sandbox tenant is pinned to the virtual phone (ADR-0002 F3) — an OTP for a
@@ -202,7 +264,21 @@ describe("Verify V1 (golden path core)", () => {
   });
 
   it("throttles an immediate resend to the same number", async () => {
-    const res = await post(SANDBOX_KEY, "/v1/verify", { to: PHONE });
+    const throttlePhone = `+23354${SUFFIX}9`;
+    const started = await post(SANDBOX_KEY, "/v1/verify", {
+      to: throttlePhone,
+    });
+    expectStatus(started, 201);
+    const { id } = unwrapEnvelope(started.json()) as { id: string };
+    // A cloud-backed SMS acceptance can itself exceed the 30-second resend window. Pin the
+    // persisted start time to now so this case tests the throttle boundary, not database latency.
+    await owner.unsafe(
+      "UPDATE verifications SET created_at = now() WHERE tenant_id = $1 AND id = $2",
+      [SANDBOX_TENANT, id],
+    );
+    const res = await post(SANDBOX_KEY, "/v1/verify", {
+      to: throttlePhone,
+    });
     expectStatus(res, 400);
     expect(
       (unwrapEnvelope(res.json()) as { error: { code: string } }).error.code,
