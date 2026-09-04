@@ -108,6 +108,13 @@ export async function createWorkspaceForUser(input: {
     },
   );
   if (!response.ok) {
+    // An OUTAGE is not a refusal. Null here means "the gates said no", and the route turns it into a
+    // 403 telling the operator to try later — which for a 5xx is both the wrong class and dangerous
+    // advice: this write is not idempotent and carries no reference key, so if the deadline fired
+    // after the tenant row landed, "try again" produces a second workspace.
+    if (response.status >= 500) {
+      throw new UpstreamUnavailableError(response.status);
+    }
     if (response.status !== 403) {
       console.error(
         `Workspace creation failed with status ${response.status}.`,

@@ -171,6 +171,7 @@ export const PUBLIC_MESSAGING_BINDINGS: RouteBindings = {
     tags: ["Verify"],
     visibility: "public",
     security: ["secretKey", "tenantToken"],
+    successStatus: 201,
     request: verifyStartRequest,
     idempotency: "optional",
     errorStatuses: [402, 409, 429],

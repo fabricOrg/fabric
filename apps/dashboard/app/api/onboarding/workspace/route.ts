@@ -1,3 +1,4 @@
+import { isUpstreamUnavailable } from "@app/fe-auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -5,6 +6,7 @@ import {
   refreshDashboardUserSession,
 } from "@/lib/server/auth";
 import {
+  bffFailure,
   bffForbidden,
   bffInvalidRequest,
   bffUnauthorized,
@@ -40,12 +42,27 @@ export async function POST(request: Request) {
       "Give your workspace a name (up to 120 characters).",
     );
   }
-  const created = await createWorkspaceForUser({
-    externalUserId: session.externalUserId,
-    email: session.email,
-    emailVerified: session.emailVerified,
-    workspaceName: parsed.data.workspace_name,
-  });
+  let created: Awaited<ReturnType<typeof createWorkspaceForUser>>;
+  try {
+    created = await createWorkspaceForUser({
+      externalUserId: session.externalUserId,
+      email: session.email,
+      emailVerified: session.emailVerified,
+      workspaceName: parsed.data.workspace_name,
+    });
+  } catch (error) {
+    // Reachable since the BFF gained deadlines. Deliberately NOT "try again": the write is not
+    // idempotent, so if the timeout fired after the tenant row landed the workspace already exists
+    // and a retry makes a second one. Reloading is the safe instruction.
+    if (isUpstreamUnavailable(error)) {
+      return bffFailure(
+        "upstream_timeout",
+        "We couldn't confirm whether your workspace was created. Reload before trying again — it may already exist.",
+        504,
+      );
+    }
+    throw error;
+  }
   if (!created) {
     return bffForbidden(
       "workspace_creation_refused",

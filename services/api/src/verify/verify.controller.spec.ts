@@ -39,10 +39,21 @@ function controllerWith(input?: {
   const verify = {
     start: vi.fn(input?.start ?? (async () => STARTED)),
   };
+  const complete = vi.fn(input?.complete ?? (async () => undefined));
   const idempotency = {
     fingerprint: vi.fn(() => "fingerprint"),
     begin: vi.fn(input?.begin ?? (async () => ({ kind: "new" as const }))),
-    complete: vi.fn(input?.complete ?? (async () => undefined)),
+    complete,
+    // Mirrors the real service: delegates to complete() and swallows its failure, because the side
+    // effect has already happened and the caller is owed its response. A double that rethrew would
+    // let the controller pass a test the production path fails.
+    completeOrLog: vi.fn(async (...args: unknown[]) => {
+      try {
+        await (complete as (...a: unknown[]) => Promise<void>)(...args);
+      } catch {
+        /* logged by the real service; the pending claim is what protects the retry */
+      }
+    }),
     release: vi.fn(async () => undefined),
   };
   return {
@@ -148,7 +159,10 @@ describe("VerifyController idempotency", () => {
     expect(idempotency.release).toHaveBeenCalledWith(TENANT_ID, "attempt-1");
   });
 
-  it("keeps the claim pending when response persistence fails after acceptance", async () => {
+  // Two properties at once, and the second was previously sacrificed for the first. The claim must
+  // stay pending so a retry cannot start a second verification — but the OTP has already been sent
+  // by this point, so the caller is owed the id. Rejecting here lost it and answered a bare 500.
+  it("still answers the caller when response persistence fails after acceptance", async () => {
     const failure = new Error("idempotency store unavailable");
     const { controller, idempotency, verify } = controllerWith({
       complete: async () => {
@@ -156,9 +170,13 @@ describe("VerifyController idempotency", () => {
       },
     });
 
-    await expect(
-      controller.start(request(), { to: "+233545227189" }, "attempt-1"),
-    ).rejects.toBe(failure);
+    const response = await controller.start(
+      request(),
+      { to: "+233545227189" },
+      "attempt-1",
+    );
+
+    expect(response.id).toBe(STARTED.id);
     expect(verify.start).toHaveBeenCalledOnce();
     expect(idempotency.release).not.toHaveBeenCalled();
   });

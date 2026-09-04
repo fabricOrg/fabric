@@ -154,7 +154,7 @@ export class WhatsappInboxController {
       await this.idempotency.release(normalizedTenantId, idempotencyKey);
       throw error;
     }
-    await this.idempotency.complete(
+    await this.idempotency.completeOrLog(
       normalizedTenantId,
       idempotencyKey,
       response,

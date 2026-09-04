@@ -82,7 +82,7 @@ export class VerifyController {
     // Never persist the sandbox debug code. A replay can recover the verification reference and
     // expiry; the code remains visible only in the virtual phone/original one-time response.
     const { debug_code: _debugCode, ...replayableResponse } = response;
-    await this.idempotency.complete(
+    await this.idempotency.completeOrLog(
       tenant.id,
       idempotencyKey,
       replayableResponse,

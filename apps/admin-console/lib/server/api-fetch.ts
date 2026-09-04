@@ -35,12 +35,11 @@ function timedOut(timeoutMs: number): Response {
  * carrying the status the classifier already inspects, which lands in its transient branch and keeps
  * the cookie.
  */
-export class UpstreamUnavailableError extends Error {
-  constructor(readonly status: number) {
-    super(`The API answered ${status} and could not resolve the session.`);
-    this.name = "UpstreamUnavailableError";
-  }
-}
+/**
+ * Re-exported from @app/fe-auth, where it must live: `readUserSession`/`readSession` are in that
+ * package and rethrow it, so one class identity has to span the boundary.
+ */
+export { UpstreamUnavailableError } from "@app/fe-auth";
 
 export async function apiFetch(
   input: Parameters<typeof fetch>[0],
