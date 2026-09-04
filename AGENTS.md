@@ -11,9 +11,11 @@ identity for Ghana / Nigeria (West Africa). Region `eu-west-1` (af-south-1 unava
 
 ## 1. What this is (locked architecture — do not relitigate)
 
-- **Modular monolith**, not microservices. One NestJS API (`services/api`, Fastify adapter), three
-  Next.js App-Router frontends (`apps/dashboard` :3100 customer, `apps/dev-portal` :3200 developer,
-  `apps/admin-console` :3300 staff). Shared packages under `packages/@app/*`.
+- **Modular monolith**, not microservices. One NestJS API (`services/api`, Fastify adapter), two
+  Next.js App-Router frontends (`apps/dashboard` :3100 customer + developer surfaces,
+  `apps/admin-console` :3300 staff), and one Astro public/docs app (`apps/www` :3400).
+  The former `apps/dev-portal` was retired in PI-6 and merged into the dashboard. Shared packages
+  live under `packages/*` and retain their `@app/*` package names.
 - **pnpm 11 + Turbo** workspace. Node 22. React 19, Tailwind v4, shadcn (new-york).
 - **Postgres tenancy via row-level security (RLS)**, FORCE on tenant tables. The runtime role
   (`app_runtime`) is NON-superuser and cannot bypass RLS. Every tenant-scoped query runs inside
@@ -84,11 +86,12 @@ no secret in logs/prose, respect RLS + the redlines below.
 - **Session resolution** (`services/api/src/identity`): invite-only. A user + membership must
   pre-exist (provisioned by email); `resolve*` only **binds** the WorkOS subject on first login and
   activates the invite. No membership → denied. Never JIT-create access.
-- **Roles.** Customer membership: `owner | admin | member | developer`. `developer` is least-privilege
-  (API keys + logs + wallet-read; NOT sms:send or org management) and is what clears the dev-portal
-  gate. Staff (`staff_users`, no tenant / no RLS): `operator | admin`. Permissions come from a
-  role→permissions map in the API, not the IdP.
-- **Invite flow.** Customer/member/developer → dashboard Team → WorkOS org invitation + `invited`
+- **Roles.** Customer governance roles are `owner | admin | member`; `developer_access` independently
+  opens the dashboard's developer surfaces. Legacy `developer` rows normalize to `member` for
+  display but receive only API-key, request-log, application-read, and wallet-read permissions
+  (never send or org-management permissions). Staff (`staff_users`, no tenant / no RLS):
+  `operator | admin`. Permissions come from the shared local role/access map, never the IdP.
+- **Invite flow.** Customer members → dashboard Team → WorkOS org invitation + `invited`
   membership. Staff → admin-console Staff → allowlist row + **org-less** WorkOS invitation
   (best-effort). Genesis (first operator) only: `packages/db/cloud-seed.ts` via an ECS run-task.
 - **Auth redirects must resolve against the PUBLIC base URL** (`<APP>_BASE_URL`), never
