@@ -39,3 +39,9 @@ overrides:
   # Note this drags next@16's pinned 8.4.31 across a MINOR boundary, which is why this bump needs a
   # real `next build` and not just a typecheck — it is the CSS pipeline for both dashboards.
   postcss: ^8.5.23
+  # GHSA-c96f-x56v-gq3h (HIGH) — HTTP/2 route matching can be abused for CPU exhaustion.
+  # Nest's Fastify adapter is pinned to 9.6.0, so retain the major and take the patched release.
+  find-my-way: ^9.6.1
+  # GHSA-2v37-7h3g-55p8 (HIGH) — zero-size custom generators can loop indefinitely. Every
+  # PostCSS consumer accepts this patch within nanoid 3.x.
+  nanoid: ^3.3.18
