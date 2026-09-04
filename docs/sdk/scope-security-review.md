@@ -50,7 +50,7 @@ satisfied the gate and could author, publish, and archive message definitions fo
   with a NULL application_id (the escalation vector)"; the guard specs now assert the flag's value on
   both paths.
 
-### F2 — Managed-delivery reads use the same applicationId proxy (LOW) — noted, not changed
+### F2 — Managed-delivery reads used the same applicationId proxy (LOW) — FIXED
 
 `managed-messages.controller.ts` (`list`, `readScope`) branches on `request.tenant?.applicationId` to
 pick between "scoped key reads its own env" and "tenant token names the env explicitly". A null-app
@@ -59,9 +59,9 @@ requires `sms:read`, so a null-app key gains no management authority — at most
 deliveries in a caller-named environment within its own tenant rather than being pinned to its own
 env. Read-only, same-tenant, requires a valid scope.
 
-Not changed in this pass: migrating these read paths to `isSessionToken` is correct for consistency
-but touches read semantics (the env-selection model) and deserves its own change with its own tests,
-rather than being bundled into the authority-escalation fix. Recorded here so it is not lost.
+The read paths now branch on `isSessionToken`. Runtime keys always go through the exact app/env scope
+gate, so a legacy key with null scope fails closed instead of accepting caller-selected environment
+parameters. The controller regression suite covers that legacy-key shape.
 
 ### Scope catalog — no issues found
 
@@ -76,5 +76,4 @@ already enforced the user's membership permissions before minting it.
 1. **Land the never-shipped NOT-NULL migration on `api_keys.application_id`** (with a preceding audit
    for existing null rows), as defence-in-depth behind F1. The guard fix removes the exploit; the
    constraint removes the anomalous data shape entirely.
-2. **Migrate the F2 read paths to `isSessionToken`** for consistency, with tests.
-3. Re-run this review when SDK-007/008 add management scopes or a second channel.
+2. Re-run this review when SDK-008 adds management scopes or another channel.

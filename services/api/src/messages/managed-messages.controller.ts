@@ -86,10 +86,10 @@ export class ManagedMessagesController {
         : undefined;
     const page = parseUuidPageQuery(query);
     // Two read authorities: an application-environment sk_* key lists its own environment
-    // (messages:read); the dashboard's minted tenant token (applicationId === null, ADR-0003)
-    // is a management read — it names the environment explicitly and carries sms:read, since
-    // membership permissions have no messages:* scope.
-    if (request.tenant?.applicationId) {
+    // (messages:read); the dashboard's minted tenant token is a management read and names the
+    // environment explicitly. Credential kind is authoritative: a legacy key with null app scope
+    // must never be mistaken for a dashboard session.
+    if (!request.tenant?.isSessionToken) {
       const tenant = scopedTenant(request, "messages:read");
       const result = await this.messages.list({
         tenantId: tenant.id,
@@ -151,14 +151,14 @@ export class ManagedMessagesController {
 
 /**
  * Dual read authority: an sk_* key reads its own app/env (messages:read); the dashboard's tenant
- * token (no application scope, ADR-0003) names both explicitly and carries sms:read.
+ * token names both explicitly and carries sms:read. Branch on `isSessionToken`, never null app scope.
  */
 function readScope(
   request: AuthedRequest,
   applicationId?: string,
   environmentId?: string,
 ): { tenantId: string; applicationId: string; environmentId: string } {
-  if (request.tenant?.applicationId) {
+  if (!request.tenant?.isSessionToken) {
     const tenant = scopedTenant(request, "messages:read");
     return {
       tenantId: tenant.id,
