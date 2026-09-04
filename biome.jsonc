@@ -69,7 +69,10 @@
       // generator owns these bytes; regenerate with `pnpm openapi:generate`.
       "!docs/api/openapi.json",
       "!docs/api/openapi.internal.json",
-      "!packages/sdk/openapi.json"
+      "!packages/sdk/openapi.json",
+      // Same shape: emitted by docs/cost/cost_model.py, whose json.dump disagrees with Biome's
+      // formatter on wrapping. Formatting it only holds until the next model run.
+      "!docs/cost/model.json"
     ]
   },
   "overrides": [
