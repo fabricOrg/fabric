@@ -33,7 +33,10 @@
 // ============================================================================================
 
 import type { SqlExecutor } from "./ledger-invariant.js";
-import { measureTokenCoverage } from "./token-reconciliation-coverage.js";
+import {
+  canReadTokenTables,
+  measureTokenCoverage,
+} from "./token-reconciliation-coverage.js";
 import {
   findAllocationTrailDiscrepancies,
   findDeferredRevenueDiscrepancies,
@@ -133,6 +136,28 @@ export async function checkTokenReconciliation(
         pendingHolds: 0,
         allocations: 0,
         blind: false,
+      },
+      missingTables,
+    };
+  }
+
+  // Capability BEFORE any scan. The four comparisons below read the same FORCE-RLS token tables as
+  // the coverage probe, so a caller without SELECT on them raises `42501 permission denied` here —
+  // and this runs inside the scheduled money-correctness transaction, where a throw aborts the
+  // ledger invariant pass too. Report blindness; do not discover it by crashing.
+  if (!(await canReadTokenTables(db))) {
+    return {
+      ok: false,
+      entitlement: [],
+      deferredRevenue: [],
+      allocationTrail: [],
+      unsupportedLotCurrencies: [],
+      coverage: {
+        lots: 0,
+        counters: 0,
+        pendingHolds: 0,
+        allocations: 0,
+        blind: true,
       },
       missingTables,
     };

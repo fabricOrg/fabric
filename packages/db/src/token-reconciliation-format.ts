@@ -17,7 +17,7 @@ export function formatTokenReconciliation(
   }
   if (r.coverage.blind) {
     lines.push(
-      "✗ token reconciliation is BLIND: this caller is neither superuser nor a member of app_provisioner, so RLS hides every token table from it — any result would be meaningless",
+      "✗ token reconciliation is BLIND: this caller is neither superuser nor a member of app_provisioner, so every token table is either hidden from it by RLS or closed to it by grant — any result would be meaningless",
     );
   }
   for (const c of r.unsupportedLotCurrencies) {
