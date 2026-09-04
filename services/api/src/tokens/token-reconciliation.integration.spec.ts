@@ -228,8 +228,15 @@ describeDb("prepaid credit reconciliation (COM-010)", () => {
 
     // Reproduce the DEPLOYED role exactly. `db:assert` used to run every gate as
     // DATABASE_URL_OWNER, which is a superuser locally but the non-superuser `app_migrator` in the
-    // cloud — and every token table is FORCE RLS with a policy naming app_provisioner only. Under
-    // that role the comparison scans zero rows, finds zero discrepancies, and would report success.
+    // cloud — and every token table is FORCE RLS with a policy naming app_provisioner only, granted
+    // to app_runtime and app_provisioner alone.
+    //
+    // app_migrator is blind either way, but WHICH way depends on who owns the tables, and that is
+    // environment-dependent (`drizzle-kit migrate` leaves them owned by the connecting role). Owning
+    // them, it holds implicit privilege and RLS filters every scan to zero rows — zero discrepancies,
+    // reported as success. Not owning them, the scan raises `42501 permission denied` instead, which
+    // used to escape as an exception and abort the caller's whole transaction. Both must land on
+    // `blind`, so this assertion holds under either ownership rather than only the local one.
     const blindSql = postgres(superUrl ?? "", { max: 1 });
     try {
       await blindSql`SET ROLE app_migrator`;
