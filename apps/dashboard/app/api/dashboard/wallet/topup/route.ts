@@ -4,6 +4,7 @@ import {
 } from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
+import { API_EXTERNAL_WRITE_TIMEOUT_MS } from "@/lib/server/api-fetch";
 import {
   readDashboardSession,
   refreshDashboardSession,
@@ -43,10 +44,15 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(
       initiateTopUpResponseSchema.parse(
-        await dashboardApi("/v1/wallet/topup", "wallet:read", {
-          method: "POST",
-          body: JSON.stringify(input),
-        }),
+        await dashboardApi(
+          "/v1/wallet/topup",
+          "wallet:read",
+          { method: "POST", body: JSON.stringify(input) },
+          // Initialises a Paystack checkout and mints a transaction reference. Not idempotent and
+          // carries no Idempotency-Key, so a deadline that fires on a cold upstream after the
+          // reference exists invites a retry that starts a SECOND charge.
+          API_EXTERNAL_WRITE_TIMEOUT_MS,
+        ),
       ),
     );
   } catch (error) {

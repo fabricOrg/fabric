@@ -6,7 +6,11 @@ import {
   unwrapEnvelope,
 } from "@app/contracts";
 import type { AppSession } from "@app/fe-auth";
-import { API_EXPORT_TIMEOUT_MS, apiFetch } from "./api-fetch";
+import {
+  API_EXPORT_TIMEOUT_MS,
+  API_REQUEST_TIMEOUT_MS,
+  apiFetch,
+} from "./api-fetch";
 import { readDashboardSession, refreshDashboardSession } from "./auth";
 
 export class BffError extends Error {
@@ -88,20 +92,30 @@ async function apiRequest(
   path: string,
   tenantId: string,
   init: RequestInit = {},
+  timeoutMs: number = API_REQUEST_TIMEOUT_MS,
 ): Promise<unknown> {
   const { baseUrl } = apiConfiguration();
+  // ONE budget for the whole request, not one per fetch. The 401 path below re-issues, and a
+  // per-fetch deadline gave the retry a fresh one — so a call advertised as bounded at 15s could
+  // occupy a worker for 30. Composed into apiFetch's own deadline, which keeps the 504 behaviour.
+  const budget = AbortSignal.timeout(timeoutMs);
   const request = async (token: string): Promise<Response> =>
-    apiFetch(new URL(path, baseUrl), {
-      ...init,
-      cache: "no-store",
-      headers: {
-        authorization: `Bearer ${token}`,
-        // Only declare a JSON body when there IS one: a DELETE (no body) with content-type
-        // application/json trips Fastify's empty-body parser → 400 (FST_ERR_CTP_EMPTY_JSON_BODY).
-        ...(init.body ? { "content-type": "application/json" } : {}),
-        ...init.headers,
+    apiFetch(
+      new URL(path, baseUrl),
+      {
+        ...init,
+        cache: "no-store",
+        signal: init.signal ? AbortSignal.any([init.signal, budget]) : budget,
+        headers: {
+          authorization: `Bearer ${token}`,
+          // Only declare a JSON body when there IS one: a DELETE (no body) with content-type
+          // application/json trips Fastify's empty-body parser → 400 (FST_ERR_CTP_EMPTY_JSON_BODY).
+          ...(init.body ? { "content-type": "application/json" } : {}),
+          ...init.headers,
+        },
       },
-    });
+      timeoutMs,
+    );
 
   let response = await request(await tenantToken(tenantId));
   // A 401 can mean the cached token just expired (or the signing secret rotated) — mint a
@@ -199,6 +213,7 @@ export async function dashboardApi(
   path: string,
   permission: string | readonly string[],
   init?: RequestInit,
+  timeoutMs?: number,
 ): Promise<unknown> {
   // Expired access token? Try a silent refresh (swaps the refresh token, re-seals the cookie) before
   // giving up — otherwise an idle tab's next BFF call dead-ends at 401 mid-session.
@@ -216,5 +231,5 @@ export async function dashboardApi(
   const required = Array.isArray(permission) ? permission : [permission];
   for (const item of required) requirePermission(session, item);
   // The tenant id comes from the resolved session — never from the client request.
-  return apiRequest(path, session.orgId, init);
+  return apiRequest(path, session.orgId, init, timeoutMs);
 }

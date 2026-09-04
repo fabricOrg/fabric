@@ -29,6 +29,7 @@ import {
 } from "../http/api-error.js";
 import { parsePageQuery } from "../http/cursor.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
+import { replayOrConflict } from "../idempotency/replay-parse.js";
 import { MessagingInsightsService } from "./messaging-insights.service.js";
 import { SmsService } from "./sms.service.js";
 
@@ -89,13 +90,19 @@ export class SmsController {
 
     // Keyed path: claim the key BEFORE the money moves. Same key + same body → replay the stored
     // response (no second charge); reused/in-flight keys 409 inside begin().
-    const fingerprint = this.idempotency.fingerprint({
-      to: input.to,
-      sender_id: input.senderId,
-      body: input.body,
-      currency: input.currency,
-      class: input.messageClass,
-    });
+    const fingerprint = this.idempotency.fingerprint(
+      {
+        to: input.to,
+        sender_id: input.senderId,
+        body: input.body,
+        currency: input.currency,
+        class: input.messageClass,
+      },
+      {
+        route: "POST /v1/sms/messages",
+        environmentId: tenant.environmentId,
+      },
+    );
     const claim = await this.idempotency.begin(
       tenant.id,
       idempotencyKey,
@@ -104,7 +111,7 @@ export class SmsController {
     if (claim.kind === "replay") {
       // Parsed, not cast: the stored payload crossed a persistence boundary (a jsonb row an earlier
       // release, or a hand edit, may have written in a different shape).
-      return sendSmsApiResponse.parse(claim.response);
+      return replayOrConflict(sendSmsApiResponse, claim.response);
     }
     let response: SendSmsApiResponse;
     try {

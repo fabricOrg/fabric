@@ -3,6 +3,7 @@ import {
   baselinePermissions,
   effectivePermissions,
   membershipPermissions,
+  scopesExceedingPermissions,
 } from "./permissions.js";
 
 describe("membership permission baselines", () => {
@@ -105,5 +106,34 @@ describe("effectivePermissions", () => {
         override: [],
       }),
     ).toEqual([]);
+  });
+});
+
+describe("scopesExceedingPermissions", () => {
+  // The escalation this closes: `api_keys:write` is deliberately held by roles that cannot send,
+  // so minting a key with `sms:send` turned "may manage keys" into "may spend the wallet".
+  it("refuses a sending scope the caller does not hold", () => {
+    const legacyDeveloper = baselinePermissions("developer", false);
+    expect(legacyDeveloper).toContain("api_keys:write");
+    expect(legacyDeveloper).not.toContain("sms:send");
+    expect(
+      scopesExceedingPermissions(
+        ["sms:send", "api_keys:read"],
+        legacyDeveloper,
+      ),
+    ).toEqual(["sms:send"]);
+  });
+
+  it("allows scopes the caller does hold", () => {
+    const member = baselinePermissions("member", false);
+    expect(
+      scopesExceedingPermissions(["sms:send", "messages:read"], member),
+    ).toEqual([]);
+  });
+
+  // Refusing what cannot be evaluated would break key creation rather than secure it, so a scope
+  // with no membership counterpart passes. Only provable excess is refused.
+  it("does not clamp a scope with no membership counterpart", () => {
+    expect(scopesExceedingPermissions(["definitions:read"], [])).toEqual([]);
   });
 });

@@ -1,4 +1,7 @@
-import { createApiKeyRequest } from "@app/contracts";
+import {
+  createApiKeyRequest,
+  scopesExceedingPermissions,
+} from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError } from "@/lib/server/api-client";
 import { createApiKey } from "@/lib/server/api-keys-client";
@@ -46,6 +49,21 @@ export async function POST(request: Request) {
           ? "An application is required."
           : (parsed.error?.issues[0]?.message ??
               "Enter a name, environment, and at least one scope."),
+      );
+    }
+    // A key inherits the authority of the person minting it — it must not be a way to acquire more.
+    // `api_keys:write` is deliberately held by roles that cannot send (the legacy `developer` is
+    // exactly that), so without this a caller who may manage keys could mint one carrying
+    // `sms:send` and spend the wallet. The API cannot make this call: a tenant token presents
+    // wildcard scopes to it by design, and the membership permissions exist only here.
+    const excessive = scopesExceedingPermissions(
+      parsed.data.scopes,
+      session.permissions,
+    );
+    if (excessive.length > 0) {
+      return bffForbidden(
+        "scopes_exceed_permissions",
+        `You can't grant a key more access than you have: ${excessive.join(", ")}.`,
       );
     }
     // Keys are scoped to an application-environment (ADR-0004); the id comes from the app-detail page.

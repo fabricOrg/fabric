@@ -37,9 +37,36 @@ export class IdempotencyService {
 
   constructor(@Inject(APP_DB) private readonly db: AppDb) {}
 
-  /** Canonical body fingerprint — proves "same key, same request" on replay. */
-  fingerprint(body: unknown): string {
-    return createHash("sha256").update(JSON.stringify(body)).digest("hex");
+  /**
+   * Canonical fingerprint — proves "same key, same request" on replay.
+   *
+   * Uniqueness in the store is (tenant_id, key), so cross-TENANT replay is impossible by
+   * construction. Cross-ENVIRONMENT replay inside one tenant was not: hashing the body alone meant a
+   * sandbox key and a live key presenting the same key and the same body matched byte for byte, and
+   * the second caller was handed the FIRST one's stored response. A developer who runs a request
+   * with a sandbox key and then re-fires the saved request with a live key got a 2xx naming a
+   * sandbox resource, with nothing sent and no error — the failure is silent, which is what makes it
+   * worth closing.
+   *
+   * The route is folded in for the same reason one step down: two endpoints that happen to take the
+   * same body shape must not satisfy each other's replay.
+   *
+   * Scoping the hash rather than the unique index keeps this a code change: a mismatch already
+   * raises `idempotency_key_reused`, which is the correct answer for both cases.
+   */
+  fingerprint(
+    body: unknown,
+    scope: { route: string; environmentId: string | null },
+  ): string {
+    return createHash("sha256")
+      .update(
+        JSON.stringify({
+          route: scope.route,
+          environmentId: scope.environmentId,
+          body,
+        }),
+      )
+      .digest("hex");
   }
 
   /**
