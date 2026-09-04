@@ -82,6 +82,7 @@ export class WebhooksController {
       endpoints: await this.webhooks.list(
         tenant.id,
         typeof applicationId === "string" ? applicationId : undefined,
+        tenant.environmentId ?? undefined,
       ),
       request_id: newRequestId(),
     };
@@ -94,7 +95,11 @@ export class WebhooksController {
     @Param("id") id: string,
   ): Promise<void> {
     const tenant = requireScope(req.tenant, "api_keys:write");
-    await this.webhooks.disable(tenant.id, id);
+    await this.webhooks.disable(
+      tenant.id,
+      id,
+      tenant.environmentId ?? undefined,
+    );
   }
 
   @Get(":id/deliveries")
@@ -120,6 +125,7 @@ export class WebhooksController {
         id,
         parsedState.success ? parsedState.data : undefined,
         page,
+        tenant.environmentId ?? undefined,
       )),
       request_id: newRequestId(),
     };
@@ -138,6 +144,7 @@ export class WebhooksController {
         id,
         deliveryId,
         tenant.keyId,
+        tenant.environmentId ?? undefined,
       ),
       request_id: newRequestId(),
     };

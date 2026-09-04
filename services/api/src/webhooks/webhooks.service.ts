@@ -9,6 +9,7 @@ import {
   type AppDb,
   type ApplicationId,
   applications,
+  type EnvironmentId,
   environments,
   outboxEvents,
   type TenantId,
@@ -24,6 +25,7 @@ import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import type { PageInput } from "../http/cursor.js";
 import { listEndpointDeliveries } from "./webhook-delivery-reads.js";
+import { disableWebhookEndpoint } from "./webhook-disable.js";
 import { emptyHealth, toDeliveryDto, toEndpointDto } from "./webhook-dto.js";
 import { webhookEnvScope } from "./webhook-env-scope.js";
 import { resolveWebhookTarget } from "./webhook-url-policy.js";
@@ -78,6 +80,16 @@ export class WebhooksService {
         )
         .limit(1);
       if (!env) {
+        if (opts.environmentId && opts.applicationId) {
+          // Both were given and nothing matched, so the environment exists and the application is
+          // simply not the one it belongs to. Saying "environment no longer exists" here sent the
+          // caller after a problem they do not have.
+          throw invalidRequest(
+            "application_environment_mismatch",
+            "That application is not the one this key's environment belongs to.",
+            "application_id",
+          );
+        }
         if (opts.environmentId) {
           throw notFound(
             "environment_not_found",
@@ -124,6 +136,7 @@ export class WebhooksService {
   async list(
     tenantId: string,
     applicationId?: string,
+    environmentId?: string,
   ): Promise<WebhookEndpointDto[]> {
     const rows = await this.db.withTenantDrizzle(tenantId, (tx) =>
       tx
@@ -149,16 +162,25 @@ export class WebhooksService {
           environments,
           eq(environments.id, webhookEndpoints.environmentId),
         )
+        // Both narrowings apply when both are given. Letting the environment scope REPLACE an
+        // explicit application_id made the response contradict the query: a caller asking for
+        // application B got application A's endpoints back because the key's environment matched.
         .where(
-          applicationId
-            ? and(
-                eq(webhookEndpoints.tenantId, tenantId as TenantId),
-                eq(
+          and(
+            eq(webhookEndpoints.tenantId, tenantId as TenantId),
+            environmentId
+              ? eq(
+                  webhookEndpoints.environmentId,
+                  environmentId as EnvironmentId,
+                )
+              : undefined,
+            applicationId
+              ? eq(
                   webhookEndpoints.applicationId,
                   applicationId as ApplicationId,
-                ),
-              )
-            : eq(webhookEndpoints.tenantId, tenantId as TenantId),
+                )
+              : undefined,
+          ),
         )
         .orderBy(asc(webhookEndpoints.createdAt)),
     );
@@ -178,43 +200,24 @@ export class WebhooksService {
     endpointId: string,
     state: "pending" | "delivering" | "delivered" | "dead" | undefined,
     page: PageInput,
+    environmentId?: string,
   ): Promise<{ deliveries: WebhookDeliveryDto[]; next_cursor: string | null }> {
-    return listEndpointDeliveries(this.db, tenantId, endpointId, state, page);
+    return listEndpointDeliveries(
+      this.db,
+      tenantId,
+      endpointId,
+      state,
+      page,
+      environmentId,
+    );
   }
 
-  async disable(tenantId: string, id: string): Promise<void> {
-    const disabled = await this.db.withTenantDrizzle(tenantId, async (tx) => {
-      const rows = await tx
-        .update(webhookEndpoints)
-        .set({ status: "disabled", updatedAt: new Date() })
-        .where(
-          and(
-            eq(webhookEndpoints.tenantId, tenantId as TenantId),
-            eq(webhookEndpoints.id, id),
-          ),
-        )
-        .returning({ id: webhookEndpoints.id });
-      if (rows.length === 0) return rows;
-      await tx.execute(sql`
-        UPDATE webhook_deliveries
-        SET state = 'dead', lease_token = NULL, lease_expires_at = NULL,
-            last_error_category = 'endpoint_disabled', updated_at = now()
-        WHERE endpoint_id = ${id}::uuid AND state IN ('pending', 'delivering')
-      `);
-      await tx.execute(sql`
-        UPDATE outbox_events o SET delivered_at = now(), updated_at = now()
-        WHERE o.delivered_at IS NULL
-          AND EXISTS (SELECT 1 FROM webhook_deliveries d WHERE d.event_id = o.id)
-          AND NOT EXISTS (
-            SELECT 1 FROM webhook_deliveries d
-            WHERE d.event_id = o.id AND d.state IN ('pending', 'delivering')
-          )
-      `);
-      return rows;
-    });
-    if (disabled.length === 0) {
-      throw notFound("webhook_not_found", "No webhook endpoint with that id.");
-    }
+  async disable(
+    tenantId: string,
+    id: string,
+    environmentId?: string,
+  ): Promise<void> {
+    await disableWebhookEndpoint(this.db, tenantId, id, environmentId);
   }
 
   async replay(
@@ -222,6 +225,7 @@ export class WebhooksService {
     endpointId: string,
     deliveryId: string,
     actorKeyId: string,
+    environmentId?: string,
   ): Promise<WebhookDeliveryDto> {
     const replayed = await this.db.withTenantDrizzle(tenantId, async (tx) => {
       const [row] = await tx
@@ -240,9 +244,16 @@ export class WebhooksService {
             eq(webhookDeliveries.endpointId, endpointId),
             eq(webhookDeliveries.id, deliveryId),
             eq(webhookDeliveries.state, "dead"),
+            environmentId
+              ? eq(
+                  webhookDeliveries.environmentId,
+                  environmentId as EnvironmentId,
+                )
+              : undefined,
             sql`EXISTS (
               SELECT 1 FROM webhook_endpoints e
               WHERE e.id = ${endpointId}::uuid AND e.status = 'active'
+                ${environmentId ? sql`AND e.environment_id = ${environmentId}::uuid` : sql``}
             )`,
           ),
         )

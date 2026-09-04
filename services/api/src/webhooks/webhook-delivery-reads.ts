@@ -1,6 +1,7 @@
 import type { WebhookDeliveryDto } from "@app/contracts";
 import {
   type AppDb,
+  type EnvironmentId,
   outboxEvents,
   type TenantId,
   webhookDeliveries,
@@ -16,6 +17,7 @@ export async function listEndpointDeliveries(
   endpointId: string,
   state: "pending" | "delivering" | "delivered" | "dead" | undefined,
   page: PageInput,
+  environmentId?: string,
 ): Promise<{ deliveries: WebhookDeliveryDto[]; next_cursor: string | null }> {
   return db.withTenantDrizzle(tenantId, async (tx) => {
     // The cursor timestamp travels as µs-precise text (cursorTs) — a JS Date would truncate to
@@ -32,6 +34,12 @@ export async function listEndpointDeliveries(
         and(
           eq(webhookDeliveries.tenantId, tenantId as TenantId),
           eq(webhookDeliveries.endpointId, endpointId),
+          environmentId
+            ? eq(
+                webhookDeliveries.environmentId,
+                environmentId as EnvironmentId,
+              )
+            : undefined,
           state ? eq(webhookDeliveries.state, state) : undefined,
           page.before
             ? or(
