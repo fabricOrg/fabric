@@ -1,8 +1,17 @@
 import { z } from "zod";
 
 export const SUPPORTED_MANIFEST_VERSION = 1;
-export const CLI_CONTRACT_VERSION = 1;
+export const CLI_CONTRACT_VERSION = 2;
 export const SDK_CONTRACT_VERSION = 1;
+
+const stableKeySegment = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
+const stableKey = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(new RegExp(`^${stableKeySegment}(?:\\.${stableKeySegment})*$`))
+  .refine((key) => key.split(".").length <= 8)
+  .refine((key) => !key.startsWith("fabric."));
 
 export type FieldSchema = {
   type: "string" | "number" | "integer" | "boolean" | "object" | "array";
@@ -55,9 +64,9 @@ const manifestSchema = z
     definitions: z.array(
       z
         .object({
-          key: z.string().regex(/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/),
+          key: stableKey,
           version: z.number().int().positive(),
-          channels: z.array(z.enum(["sms", "email"])).min(1),
+          channels: z.array(z.enum(["sms", "email", "whatsapp"])).min(1),
           default_locale: z.string(),
           locales: z.array(z.string()).min(1),
           data_schema: fieldSchema,

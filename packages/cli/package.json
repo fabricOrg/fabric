@@ -1,6 +1,6 @@
 {
   "name": "@fabric-messaging/cli",
-  "version": "0.1.0-beta.6",
+  "version": "0.1.0-beta.8",
   "description": "Contract generation CLI for Fabric managed messaging",
   "license": "MIT",
   "type": "module",
@@ -15,7 +15,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "repository": {
     "type": "git",
@@ -32,7 +32,8 @@
     "test": "vitest run",
     "pack:check": "pnpm pack --dry-run",
     "packed:smoke": "node scripts/packed-smoke.mjs",
-    "release:check": "pnpm typecheck && pnpm test && pnpm build && pnpm packed:smoke && pnpm pack:check"
+    "metadata:check": "node ../../scripts/release/assert-package-metadata.mjs .",
+    "release:check": "pnpm metadata:check && pnpm typecheck && pnpm test && pnpm build && pnpm packed:smoke && pnpm pack:check"
   },
   "dependencies": {
     "zod": "^4.4.3"

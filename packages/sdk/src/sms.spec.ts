@@ -20,6 +20,7 @@ describe("sms retrieval", () => {
           cost: { minor: "3", currency: "GHS" },
           to: "+233545227189",
           provider: "sandbox",
+          backing: "sandbox_allowance",
           delivery_mode: "virtual",
           created_at: "2026-07-24T10:00:00.000Z",
           sender_id: "FABRIC",

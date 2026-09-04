@@ -5,64 +5,46 @@ import type {
   UngeneratedCatalog,
 } from "./catalog.js";
 import { parseMessageDelivery } from "./message-delivery.js";
+import {
+  iterateMessageDeliveries,
+  listMessageDeliveries,
+  listMessageDeliveryWebhooks,
+} from "./message-delivery-reads.js";
+import type {
+  PreviewMessageOptions,
+  SendMessageOptions,
+} from "./message-options.js";
+
+export type {
+  PreviewMessageOptions,
+  SendMessageOptions,
+} from "./message-options.js";
+
 import type { Transport } from "./transport.js";
 import type {
   EmailPreview,
   FabricResponse,
-  IdempotentWriteOptions,
+  ListParams,
   MessageDelivery,
+  MessageDeliverySummary,
+  MessageDeliveryWebhookStatus,
   MessagePreview,
+  Page,
   RequestOptions,
   SmsPreview,
   WhatsappPreview,
 } from "./types.js";
 import {
+  ApiShapeError,
   booleanField,
   enumField,
+  nullableStringField,
   numberField,
   record,
   requireNonEmpty,
   requireRecipient,
   stringField,
 } from "./validation.js";
-
-export interface PreviewMessageOptions extends RequestOptions {
-  /** Variables for the definition's schema; validated server-side, rendered without side effects. */
-  readonly data?: Record<string, unknown>;
-  /** Pricing currency (ISO-4217). Defaults to the workspace currency server-side. */
-  readonly currency?: string;
-  /** Optional E.164 recipient for sender, consent, and quiet-hour eligibility checks. */
-  readonly to?: string;
-  /** Optional released locale; the definition's default is used when omitted. */
-  readonly locale?: string;
-  /**
-   * Optional assertion of the definition's channel. With a generated catalog this is narrowed to the
-   * key's released channel, so a mismatched literal fails to compile; the server rejects a mismatch.
-   */
-  readonly channel?: "sms" | "email" | "whatsapp";
-}
-
-export interface SendMessageOptions extends IdempotentWriteOptions {
-  /** Recipient: an E.164 number for an SMS definition, or an email address for an Email one. */
-  readonly to: string;
-  /** Variables for the definition's schema; a validation failure fails the send before any charge. */
-  readonly data?: Record<string, unknown>;
-  /** Optional released locale; the definition's default is used when omitted. */
-  readonly locale?: string;
-  /**
-   * Optional assertion of the definition's channel. With a generated catalog this is narrowed to the
-   * key's released channel, so a mismatched literal fails to compile; the server rejects a mismatch.
-   */
-  readonly channel?: "sms" | "email" | "whatsapp";
-  /** Pricing currency (ISO-4217). Defaults to GHS server-side. */
-  readonly currency?: string;
-  /** Caller correlation id surfaced on the delivery. */
-  readonly reference?: string;
-  /** Flat key/value annotations stored on the delivery (max 4KB serialized). */
-  readonly metadata?: Readonly<Record<string, string | number | boolean>>;
-  /** Fail closed (before any send or charge) if the rendered message would cost more than this. */
-  readonly maxCost?: { readonly minor: string; readonly currency: string };
-}
 
 /**
  * Managed messages. `preview` renders a released definition by stable key through the same engine a
@@ -135,6 +117,7 @@ export class MessagesResource<
         ...(options.metadata ? { metadata: options.metadata } : {}),
         ...(options.maxCost ? { limits: { max_cost: options.maxCost } } : {}),
       },
+      retryableWrite: true,
       options: {
         idempotencyKey: options.idempotencyKey,
         ...(options.signal ? { signal: options.signal } : {}),
@@ -163,11 +146,35 @@ export class MessagesResource<
       data: parseMessageDelivery(record(response.data.delivery)),
     };
   }
+
+  async listDeliveries(
+    params?: ListParams,
+    options?: RequestOptions,
+  ): Promise<FabricResponse<Page<MessageDeliverySummary>>> {
+    return listMessageDeliveries(this.transport, params, options);
+  }
+
+  /** Walk all managed deliveries page by page. */
+  async *iterateDeliveries(
+    params?: Pick<ListParams, "limit">,
+    options?: RequestOptions,
+  ): AsyncGenerator<MessageDeliverySummary, void, undefined> {
+    yield* iterateMessageDeliveries(this.transport, params, options);
+  }
+
+  async listDeliveryWebhooks(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<FabricResponse<ReadonlyArray<MessageDeliveryWebhookStatus>>> {
+    return listMessageDeliveryWebhooks(this.transport, id, options);
+  }
 }
 
 function parsePreview(data: Record<string, unknown>): MessagePreview {
-  const rawBlockers = Array.isArray(data.blockers) ? data.blockers : [];
-  const rawWarnings = Array.isArray(data.warnings) ? data.warnings : [];
+  if (!Array.isArray(data.blockers)) throw new ApiShapeError("blockers");
+  if (!Array.isArray(data.warnings)) throw new ApiShapeError("warnings");
+  const rawBlockers = data.blockers;
+  const rawWarnings = data.warnings;
   const sender = record(data.sender);
   const previewValue = data.preview;
   const emailPreviewValue = data.email_preview;
@@ -241,7 +248,9 @@ function parseSmsPreview(data: Record<string, unknown>): SmsPreview {
 }
 
 function parseWhatsappPreview(data: Record<string, unknown>): WhatsappPreview {
-  const rawParameters = Array.isArray(data.parameters) ? data.parameters : [];
+  if (!Array.isArray(data.parameters))
+    throw new ApiShapeError("whatsapp_preview.parameters");
+  const rawParameters = data.parameters;
   return {
     templateName: stringField(
       data.template_name,
@@ -268,8 +277,8 @@ function parseWhatsappPreview(data: Record<string, unknown>): WhatsappPreview {
 function parseEmailPreview(data: Record<string, unknown>): EmailPreview {
   return {
     subject: stringField(data.subject, "email_preview.subject"),
-    text: typeof data.text === "string" ? data.text : null,
-    html: typeof data.html === "string" ? data.html : null,
+    text: nullableStringField(data.text, "email_preview.text"),
+    html: nullableStringField(data.html, "email_preview.html"),
     sizeBytes: numberField(data.size_bytes, "email_preview.size_bytes"),
     costMinor: stringField(data.cost_minor, "email_preview.cost_minor"),
     currency: stringField(data.currency, "email_preview.currency"),

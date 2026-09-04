@@ -54,6 +54,7 @@ export class EmailResource {
         ...(params.html ? { html: params.html } : {}),
         ...(params.replyTo ? { reply_to: params.replyTo } : {}),
       },
+      retryableWrite: options?.idempotencyKey !== undefined,
       ...(options ? { options } : {}),
     });
     return {
@@ -133,7 +134,7 @@ function parseEmail(value: Record<string, unknown>): EmailMessage {
     subject: stringField(value.subject, "subject"),
     provider: stringField(value.provider, "provider"),
     createdAt: stringField(value.created_at, "created_at"),
-    errorCode: typeof value.error_code === "string" ? value.error_code : null,
+    errorCode: nullableStringField(value.error_code, "error_code"),
   };
 }
 

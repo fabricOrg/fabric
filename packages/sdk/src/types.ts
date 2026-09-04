@@ -54,7 +54,7 @@ export interface SendSmsParams {
   readonly to: string;
   readonly senderId: string;
   readonly body: string;
-  readonly currency?: string;
+  readonly currency?: Money["currency"];
   readonly class?: "transactional" | "promotional";
 }
 
@@ -89,6 +89,7 @@ export interface SentWhatsAppMessage {
   readonly templateName: string | null;
   readonly templateLanguage: string | null;
   readonly templateCategory: WhatsAppTemplateCategory | null;
+  readonly cost: Money;
   readonly createdAt: string;
   readonly errorCode: string | null;
 }
@@ -116,6 +117,7 @@ export interface SmsBatch {
 export interface MessageSummary extends SentSms {
   readonly to: string;
   readonly provider: string;
+  readonly backing: "wallet" | "tokens" | "sandbox_allowance";
   readonly deliveryMode: "live" | "virtual";
   readonly createdAt: string;
 }
@@ -236,6 +238,26 @@ export interface MessageDelivery {
   readonly attempts: ReadonlyArray<MessageDeliveryAttempt>;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+/** A managed delivery list row; recipient and attempts are intentionally omitted by the API. */
+export type MessageDeliverySummary = Omit<
+  MessageDelivery,
+  "recipient" | "attempts"
+>;
+
+/** Webhook fan-out state for an event emitted by one managed delivery. */
+export interface MessageDeliveryWebhookStatus {
+  readonly eventId: string;
+  readonly eventType: string;
+  readonly endpointId: string;
+  readonly endpointUrl: string;
+  readonly state: "pending" | "delivering" | "delivered" | "dead";
+  readonly attempts: number;
+  readonly lastHttpStatus: number | null;
+  readonly lastErrorCategory: string | null;
+  readonly deliveredAt: string | null;
+  readonly createdAt: string;
 }
 
 export type {

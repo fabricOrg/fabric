@@ -5,7 +5,8 @@ import { stableKey, variableSchema } from "./message-definitions.js";
 
 export const DEFINITION_CATALOG_MANIFEST_VERSION = 1 as const;
 export const DEFINITION_CATALOG_SDK_CONTRACT_VERSION = 1 as const;
-export const DEFINITION_CATALOG_CLI_CONTRACT_VERSION = 1 as const;
+// v2 adds the already-live WhatsApp channel and aligns stable-key parsing with this contract.
+export const DEFINITION_CATALOG_CLI_CONTRACT_VERSION = 2 as const;
 
 export const definitionCatalogEntry = z.object({
   key: stableKey,

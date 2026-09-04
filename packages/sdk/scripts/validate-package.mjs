@@ -18,6 +18,7 @@ try {
     `fabric-messaging-sdk-${releaseVersion}.tgz`,
   );
   const consumer = join(temporaryDirectory, "consumer.mjs");
+  const commonJsConsumer = join(temporaryDirectory, "consumer.cjs");
   await writeFile(
     join(temporaryDirectory, "package.json"),
     JSON.stringify({ private: true }),
@@ -57,6 +58,20 @@ try {
     ].join("\n"),
   );
   run(process.execPath, [consumer], { cwd: temporaryDirectory });
+  // Frameworks commonly enable the `development` export condition. The published package must
+  // never resolve that condition to workspace-only source files excluded from the tarball.
+  run(process.execPath, ["--conditions=development", consumer], {
+    cwd: temporaryDirectory,
+  });
+  await writeFile(
+    commonJsConsumer,
+    [
+      'const { Fabric } = require("@fabric-messaging/sdk");',
+      'if (new Fabric({ apiKey: "sk_test_package_smoke" }).environment !== "sandbox") throw new Error("bad CommonJS import");',
+      'console.log("Installed package CommonJS smoke passed.");',
+    ].join("\n"),
+  );
+  run(process.execPath, [commonJsConsumer], { cwd: temporaryDirectory });
 } finally {
   await rm(temporaryDirectory, { recursive: true, force: true });
 }

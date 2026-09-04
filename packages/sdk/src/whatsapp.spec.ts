@@ -17,6 +17,7 @@ const message = {
   template_name: "order_update",
   template_language: "en",
   template_category: "utility",
+  cost: { minor: "12", currency: "GHS" },
   created_at: "2026-07-24T10:00:00.000Z",
   error_code: null,
 } as const;
@@ -129,6 +130,7 @@ describe("whatsapp resource", () => {
       templateName: "order_update",
       templateLanguage: "en",
       templateCategory: "utility",
+      cost: { minor: "12", currency: "GHS" },
       createdAt: "2026-07-24T10:00:00.000Z",
       errorCode: null,
     });

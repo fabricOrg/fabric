@@ -39,12 +39,18 @@ describe("canonical contract parity", () => {
       to: "+23354•••7189",
       channel: "sms",
       expires_in: 300,
+      expires_at: "2026-08-30T07:05:00.000Z",
       debug_code: "123456",
     });
     await expect(
       clientReturning(started).verify.start({ to: "+233545227189" }),
     ).resolves.toMatchObject({
-      data: { status: "pending", expiresIn: 300, debugCode: "123456" },
+      data: {
+        status: "pending",
+        expiresIn: 300,
+        expiresAt: "2026-08-30T07:05:00.000Z",
+        debugCode: "123456",
+      },
     });
     const checked = verifyCheckResponse.parse({
       id: "2ccb4b9f-384e-4f4e-8983-ff12555223d0",
