@@ -1065,6 +1065,13 @@
       "when": 1786320542000,
       "tag": "0151_provider_cost_source_required",
       "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1786320602000,
+      "tag": "0152_message_definition_version_immutability",
+      "breakpoints": true
     }
   ]
 }

@@ -127,6 +127,35 @@ export async function checkSecurityLayerApplied(
     );
   }
 
+  // 3b. Published definition versions are durable release evidence. A live-derived Neon audit caught
+  // UPDATE + DELETE grants despite 0076's intended REVOKE, so assert effective privileges rather
+  // than trusting a journal entry that runs only once.
+  for (const roleName of [RUNTIME_ROLE, "app_provisioner"]) {
+    const rewrite = await db.query(`
+      SELECT p AS priv
+      FROM unnest(ARRAY['UPDATE','DELETE','TRUNCATE']) AS p
+      WHERE has_table_privilege('${roleName}', 'message_definition_versions', p)
+    `);
+    for (const row of rewrite.rows) {
+      violations.push(
+        `'${roleName}' holds ${String(row.priv)} on message_definition_versions — published content must be immutable`,
+      );
+    }
+    // Assert the POSITIVE half too. A revoke that went too far (an `ALTER DEFAULT PRIVILEGES` sweep,
+    // a REVOKE ALL) would leave this check green while definition publishing 500s in production —
+    // the same shape of blind spot as a document that byte-compares against its own broken self.
+    const required = await db.query(`
+      SELECT p AS priv
+      FROM unnest(ARRAY['SELECT','INSERT']) AS p
+      WHERE NOT has_table_privilege('${roleName}', 'message_definition_versions', p)
+    `);
+    for (const row of required.rows) {
+      violations.push(
+        `'${roleName}' LACKS ${String(row.priv)} on message_definition_versions — publishing and reading released content would fail`,
+      );
+    }
+  }
+
   // 4. (B4/L2) ZERO SECURITY DEFINER functions in public — the (B-policy) invariant: no privileged
   // RLS-bypass path. Any prosecdef function not on the (empty) allowlist is a rogue bypass.
   const defs = await db.query(
