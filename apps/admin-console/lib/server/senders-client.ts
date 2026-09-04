@@ -6,9 +6,7 @@ import {
   type DecideSenderRequest,
   type ListAdminSendersResponse,
   listAdminSendersResponseSchema,
-  type SenderDto,
   type SetSenderCarrierStatusRequest,
-  senderDtoSchema,
 } from "@app/contracts";
 import { unwrapEnvelope } from "./response-envelope";
 
@@ -46,7 +44,7 @@ export async function decideSender(
   id: string,
   request: DecideSenderRequest,
   actor: { email: string; staffId: string },
-): Promise<SenderDto> {
+): Promise<AdminSenderDto> {
   const { baseUrl, bffToken } = config();
   const response = await fetch(
     new URL(`/internal/admin/senders/${id}/decide`, baseUrl),
@@ -64,7 +62,7 @@ export async function decideSender(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new SenderApiError(response.status, payload);
-  return senderDtoSchema.parse(unwrapEnvelope(payload));
+  return adminSenderDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 /**
