@@ -69,6 +69,22 @@ export const DEVELOPER_ACCESS_BASELINE: readonly MembershipPermission[] = [
   "request_logs:read",
 ];
 
+/**
+ * Compatibility baseline for rows that still carry the retired `developer` governance role.
+ *
+ * Unlike the modern developer-access add-on, that legacy role was the person's COMPLETE authority,
+ * so it replaces the member baseline rather than adding to it: API keys, request logs, wallet-read
+ * and applications-read, and nothing else. That is deliberately narrower than `member` in both
+ * directions — no `*:send`, and also no message reads (`sms:read`, `email:read`, `whatsapp:read`,
+ * `messages:read`) and no `definitions:write`, matching how CLAUDE.md §4 describes the role.
+ * `permissions.spec.ts` pins both halves; widening it silently is the failure mode to avoid.
+ */
+const LEGACY_DEVELOPER_BASELINE: readonly MembershipPermission[] = [
+  "wallet:read",
+  "applications:read",
+  ...DEVELOPER_ACCESS_BASELINE,
+];
+
 function normalizeRole(role: string): GovernanceRole {
   if (role === "owner" || role === "admin") return role;
   return "member"; // member + legacy `developer`
@@ -79,6 +95,7 @@ export function baselinePermissions(
   role: string,
   developerAccess: boolean,
 ): MembershipPermission[] {
+  if (role === "developer") return [...LEGACY_DEVELOPER_BASELINE];
   const governanceRole = normalizeRole(role);
   const base = ROLE_PERMISSION_BASELINE[governanceRole];
   // The developer lane is read-only for managed definitions by default. An admin can explicitly
