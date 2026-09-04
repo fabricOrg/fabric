@@ -27,11 +27,18 @@ export type VerifyStartRequest = z.infer<typeof verifyStartRequest>;
 
 export const verifyStartResponse = z.object({
   id: z.string().uuid(),
+  /** The status AT START. An idempotent replay returns the stored value, so a code that has since
+   *  lapsed or been verified still reads `pending` here — retrieve the verification for the live
+   *  status, or read `expires_in` / `expires_at`, which ARE recomputed on replay. */
   status: verificationStatus,
   /** Masked recipient, e.g. "+23354•••7189" — the raw number is never echoed. */
   to: z.string(),
   channel: z.literal("sms"),
-  expires_in: z.number().int().positive(),
+  /** Seconds left AT THE TIME OF THIS RESPONSE — recomputed on an idempotent replay, and 0 once
+   *  the code has lapsed. Drive a countdown from `expires_at` if you cache the response. */
+  expires_in: z.number().int().nonnegative(),
+  /** Absolute expiry remains truthful when an idempotent start response is replayed later. */
+  expires_at: z.string(),
   /** SANDBOX TENANTS ONLY: the OTP, so the quickstart works without a real phone. Never set on
    *  live tenants. */
   debug_code: z.string().optional(),

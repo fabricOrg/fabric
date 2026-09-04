@@ -7,6 +7,12 @@ import {
   refreshDashboardSession,
 } from "@/lib/server/auth";
 import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
+import {
   createMessageDefinition,
   listMessageDefinitions,
 } from "@/lib/server/message-definitions-client";
@@ -17,24 +23,22 @@ export async function GET(request: Request) {
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session) {
-    return authError("invalid_session", "Sign in again to continue.", 401);
+    return bffUnauthorized("invalid_session", "Sign in again to continue.");
   }
   try {
     const applicationId = new URL(request.url).searchParams.get(
       "applicationId",
     );
     if (!applicationId) {
-      return authError(
+      return bffUnprocessable(
         "application_required",
         "Choose an application before listing definitions.",
-        422,
       );
     }
     if (!(await ownsApplication(applicationId))) {
-      return authError(
+      return bffForbidden(
         "application_not_accessible",
         "The selected application is not available.",
-        403,
       );
     }
     return NextResponse.json(await listMessageDefinitions(applicationId));
@@ -46,18 +50,17 @@ export async function GET(request: Request) {
 /** Create a draft definition. Owner/admin only (authoring/publishing is not the developer lane). */
 export async function POST(request: Request) {
   if (!hasTrustedOrigin(request)) {
-    return authError("invalid_origin", "Request rejected.", 403);
+    return bffForbidden("invalid_origin", "Request rejected.");
   }
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session) {
-    return authError("invalid_session", "Sign in again to continue.", 401);
+    return bffUnauthorized("invalid_session", "Sign in again to continue.");
   }
   if (!session.permissions.includes("definitions:write")) {
-    return authError(
+    return bffForbidden(
       "insufficient_permission",
       "You do not have permission to author message definitions.",
-      403,
     );
   }
   try {
@@ -65,29 +68,21 @@ export async function POST(request: Request) {
       await request.json(),
     );
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: {
-            type: "validation_error",
-            code: "invalid_request",
-            message: parsed.error.issues[0]?.message ?? "Invalid definition.",
-          },
-        },
-        { status: 422 },
+      return bffUnprocessable(
+        "invalid_request",
+        parsed.error.issues[0]?.message ?? "Invalid definition.",
       );
     }
     if (!parsed.data.application_id) {
-      return authError(
+      return bffUnprocessable(
         "application_required",
         "Choose the application that owns this definition.",
-        422,
       );
     }
     if (!(await ownsApplication(parsed.data.application_id))) {
-      return authError(
+      return bffForbidden(
         "application_not_accessible",
         "The selected application is not available.",
-        403,
       );
     }
     return NextResponse.json(await createMessageDefinition(parsed.data), {
@@ -103,24 +98,8 @@ async function ownsApplication(applicationId: string): Promise<boolean> {
   return applications.some((application) => application.id === applicationId);
 }
 
-function authError(code: string, message: string, status: number) {
-  return NextResponse.json(
-    { error: { type: "auth_error", code, message } },
-    { status },
-  );
-}
-
 function fromBffError(error: unknown) {
   return error instanceof BffError
     ? NextResponse.json(error.payload, { status: error.status })
-    : NextResponse.json(
-        {
-          error: {
-            type: "api_error",
-            code: "bff_error",
-            message: "Request failed.",
-          },
-        },
-        { status: 500 },
-      );
+    : bffFailure("bff_error", "Request failed.");
 }

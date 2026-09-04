@@ -25,10 +25,11 @@ describe("sender IDs resource", () => {
       .fn<typeof globalThis.fetch>()
       .mockResolvedValue(json({ ...wireSender, request_id: "req_s1" }, 201));
     const client = new Fabric({ apiKey: "sk_test_example", fetch });
-    const response = await client.senderIds.create(
-      { senderId: "FABRIC", country: "GH", useCase: "Order updates" },
-      { idempotencyKey: "sender-1" },
-    );
+    const response = await client.senderIds.create({
+      senderId: "FABRIC",
+      country: "GH",
+      useCase: "Order updates",
+    });
     expect(String(fetch.mock.calls[0]?.[0])).toContain("/v1/senders");
     expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
       sender_id: "FABRIC",

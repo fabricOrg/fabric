@@ -294,4 +294,86 @@ describe("MessagesResource", () => {
     expect(result.data.attempts).toHaveLength(1);
     expect(result.data.status).toBe("delivered");
   });
+
+  it("lists and iterates managed deliveries without inventing omitted PII", async () => {
+    const summary = (({
+      recipient: _recipient,
+      attempts: _attempts,
+      ...rest
+    }) => rest)(canonicalDelivery);
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            deliveries: [summary],
+            next_cursor: "next-page",
+            request_id: "req_list_1",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            deliveries: [],
+            next_cursor: null,
+            request_id: "req_list_2",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    const resource = new MessagesResource(
+      new Transport({
+        apiKey: "sk_test_example",
+        baseUrl: "https://api.example.test",
+        timeout: 1_000,
+        maxRetries: 0,
+        fetch,
+        sdkVersion: "0.0.0-test",
+      }),
+    );
+
+    const rows = [];
+    for await (const delivery of resource.iterateDeliveries({ limit: 10 })) {
+      rows.push(delivery);
+    }
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).not.toHaveProperty("recipient");
+    expect(rows[0]).not.toHaveProperty("attempts");
+    expect(String(fetch.mock.calls[1]?.[0])).toContain("cursor=next-page");
+  });
+
+  it("lists webhook fan-out status for a managed delivery", async () => {
+    const { resource, fetch } = resourceReturning({
+      webhooks: [
+        {
+          event_id: "28e92396-d73e-4aca-9fc7-c086873a0df7",
+          event_type: "message.delivered",
+          endpoint_id: "70d83bdb-f6e3-48c1-82eb-c67cfffb1580",
+          endpoint_url: "https://hooks.example.test/fabric",
+          state: "delivered",
+          attempts: 1,
+          last_http_status: 204,
+          last_error_category: null,
+          delivered_at: "2026-07-17T12:00:02.000Z",
+          created_at: "2026-07-17T12:00:01.000Z",
+        },
+      ],
+      request_id: "req_hooks",
+    });
+
+    const result = await resource.listDeliveryWebhooks(canonicalDelivery.id);
+
+    expect(String(fetch.mock.calls[0]?.[0])).toContain(
+      `/v1/message-deliveries/${canonicalDelivery.id}/webhooks`,
+    );
+    expect(result.data[0]).toMatchObject({
+      eventType: "message.delivered",
+      endpointUrl: "https://hooks.example.test/fabric",
+      state: "delivered",
+      lastHttpStatus: 204,
+    });
+  });
 });

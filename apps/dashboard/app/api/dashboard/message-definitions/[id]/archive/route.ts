@@ -4,6 +4,11 @@ import {
   readDashboardSession,
   refreshDashboardSession,
 } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+} from "@/lib/server/bff-error";
 import { archiveMessageDefinition } from "@/lib/server/message-definitions-client";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
@@ -13,18 +18,17 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   if (!hasTrustedOrigin(request)) {
-    return authError("invalid_origin", "Request rejected.", 403);
+    return bffForbidden("invalid_origin", "Request rejected.");
   }
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session) {
-    return authError("invalid_session", "Sign in again to continue.", 401);
+    return bffUnauthorized("invalid_session", "Sign in again to continue.");
   }
   if (!session.permissions.includes("definitions:write")) {
-    return authError(
+    return bffForbidden(
       "insufficient_permission",
       "You do not have permission to archive message definitions.",
-      403,
     );
   }
   try {
@@ -34,22 +38,6 @@ export async function POST(
   } catch (error) {
     return error instanceof BffError
       ? NextResponse.json(error.payload, { status: error.status })
-      : NextResponse.json(
-          {
-            error: {
-              type: "api_error",
-              code: "bff_error",
-              message: "Request failed.",
-            },
-          },
-          { status: 500 },
-        );
+      : bffFailure("bff_error", "Request failed.");
   }
-}
-
-function authError(code: string, message: string, status: number) {
-  return NextResponse.json(
-    { error: { type: "auth_error", code, message } },
-    { status },
-  );
 }

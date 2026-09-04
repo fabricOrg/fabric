@@ -1,6 +1,6 @@
 "use client";
 
-import { type Currency, currency as currencySchema } from "@app/contracts";
+import type { Currency } from "@app/contracts";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Dialog,
@@ -12,15 +12,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@app/ui/components/ui/dialog";
-import { Field, FieldLabel } from "@app/ui/components/ui/field";
-import { Input } from "@app/ui/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@app/ui/components/ui/select";
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@app/ui/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@app/ui/components/ui/input-group";
 import { useForm } from "@tanstack/react-form";
 import { Loader2, Plus } from "lucide-react";
 import { useId, useState } from "react";
@@ -29,8 +31,6 @@ import { z } from "zod";
 import { formatMoney, parseAmountToMinor } from "@/lib/money";
 
 type Phase = "form" | "review" | "processing";
-
-const CURRENCIES = currencySchema.options;
 
 /** All supported currencies are 2-decimal, so a fixed yardstick validates the amount identically. */
 const schema = z.object({
@@ -43,17 +43,16 @@ const schema = z.object({
 /**
  * Top-up flow: enter amount → initiate a real Paystack charge (BFF) → redirect to hosted checkout.
  * The wallet credits asynchronously via the /webhooks/paystack callback on charge.success. Amount is
- * parsed to exact minor units (bigint string math, never float). Currency + phase stay local state;
- * only the validated amount lives in the form.
+ * parsed to exact minor units (bigint string math, never float). Only the validated amount lives in
+ * the form; the phase is local state.
+ *
+ * `currency` is the workspace's billing currency and is NOT a choice. It used to be a three-option
+ * select, and the API rejects every value but this one with `billing_currency_mismatch` — so the
+ * control could only produce a refusal. Shown, not offered.
  */
-export function TopUpDialog({
-  defaultCurrency = "GHS",
-}: {
-  defaultCurrency?: Currency;
-}) {
+export function TopUpDialog({ currency }: { currency: Currency }) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("form");
-  const [currency, setCurrency] = useState<Currency>(defaultCurrency);
   const amountId = useId();
 
   const form = useForm({
@@ -98,7 +97,6 @@ export function TopUpDialog({
 
   function reset() {
     setPhase("form");
-    setCurrency(defaultCurrency);
     form.reset();
   }
 
@@ -137,23 +135,13 @@ export function TopUpDialog({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={amountId}>Amount</FieldLabel>
-                    <div className="flex gap-2">
-                      <Select
-                        value={currency}
-                        onValueChange={(v) => setCurrency(v as Currency)}
-                      >
-                        <SelectTrigger className="w-28" aria-label="Currency">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CURRENCIES.map((c) => (
-                            <SelectItem key={c} value={c}>
-                              {c}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
+                    <InputGroup>
+                      <InputGroupAddon>
+                        <InputGroupText className="font-mono">
+                          {currency}
+                        </InputGroupText>
+                      </InputGroupAddon>
+                      <InputGroupInput
                         id={amountId}
                         inputMode="decimal"
                         placeholder="0.00"
@@ -162,7 +150,10 @@ export function TopUpDialog({
                         onBlur={field.handleBlur}
                         className="font-mono tabular-nums"
                       />
-                    </div>
+                    </InputGroup>
+                    <FieldDescription>
+                      Your workspace is billed in {currency}.
+                    </FieldDescription>
                   </Field>
                 )}
               </form.Field>

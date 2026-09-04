@@ -1,6 +1,7 @@
 import { overviewResponse } from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
+import { bffFailure } from "@/lib/server/bff-error";
 
 export async function GET() {
   try {
@@ -12,15 +13,6 @@ export async function GET() {
     if (error instanceof BffError) {
       return NextResponse.json(error.payload, { status: error.status });
     }
-    return NextResponse.json(
-      {
-        error: {
-          type: "api_error",
-          code: "bff_error",
-          message: "Request failed.",
-        },
-      },
-      { status: 500 },
-    );
+    return bffFailure("bff_error", "Request failed.");
   }
 }

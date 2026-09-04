@@ -34,7 +34,7 @@ export const membershipPermissions = [
 export const membershipPermission = z.enum(membershipPermissions);
 export type MembershipPermission = (typeof membershipPermissions)[number];
 
-/** The governance roles that carry a permission baseline (legacy `developer` maps to `member`). */
+/** The governance roles that carry a permission baseline. Legacy `developer` has its own. */
 export type GovernanceRole = "owner" | "admin" | "member";
 
 const FULL: readonly MembershipPermission[] = membershipPermissions;
@@ -69,9 +69,32 @@ export const DEVELOPER_ACCESS_BASELINE: readonly MembershipPermission[] = [
   "request_logs:read",
 ];
 
+/**
+ * Compatibility baseline for rows that still carry the retired `developer` governance role.
+ *
+ * Unlike the modern developer-access add-on, that legacy role was the person's COMPLETE authority,
+ * so it replaces the member baseline rather than adding to it: API keys, request logs, wallet-read
+ * and applications-read, and nothing else.
+ *
+ * It is NOT uniformly narrower than `member`, and saying so would be wrong: `member` holds no
+ * `api_keys:*` at all, so this role is wider on that axis by design — issuing keys is the whole
+ * point of it. What it drops is every `*:send`, the message reads and `definitions:write`.
+ *
+ * That asymmetry has a consequence worth stating where someone will read it: key creation does not
+ * currently clamp requested scopes to the actor's own permissions, so `api_keys:write` is an
+ * indirect route back to a sending credential. Denying `sms:send` here does not, on its own, deny
+ * the ability to send. The clamp belongs in the key-creation path, not in this table.
+ * `permissions.spec.ts` pins the set; widening it silently is the failure mode to avoid.
+ */
+const LEGACY_DEVELOPER_BASELINE: readonly MembershipPermission[] = [
+  "wallet:read",
+  "applications:read",
+  ...DEVELOPER_ACCESS_BASELINE,
+];
+
 function normalizeRole(role: string): GovernanceRole {
   if (role === "owner" || role === "admin") return role;
-  return "member"; // member + legacy `developer`
+  return "member"; // `developer` is handled before this is reached — see baselinePermissions
 }
 
 /** Baseline permissions for a role + developer-access flag (used when there is no per-user override). */
@@ -79,6 +102,7 @@ export function baselinePermissions(
   role: string,
   developerAccess: boolean,
 ): MembershipPermission[] {
+  if (role === "developer") return [...LEGACY_DEVELOPER_BASELINE];
   const governanceRole = normalizeRole(role);
   const base = ROLE_PERMISSION_BASELINE[governanceRole];
   // The developer lane is read-only for managed definitions by default. An admin can explicitly

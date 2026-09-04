@@ -26,6 +26,7 @@ import {
 } from "../api-keys/api-key.guard.js";
 import { invalidRequest, newRequestId } from "../http/api-error.js";
 import { parsePageQuery } from "../http/cursor.js";
+import { webhookCallerEnvironment } from "./webhook-caller-scope.js";
 import { WebhooksService } from "./webhooks.service.js";
 
 interface AuthedRequest {
@@ -60,14 +61,16 @@ export class WebhooksController {
       );
     }
     // ADR-0004: an endpoint is registered into an application-environment (from the app-detail page).
+    // An sk_* key already resolves to its application-environment — bind the webhook there instead
+    // of guessing the workspace's "default" app (which 500'd for any renamed application). Called
+    // before the spread so a legacy key is refused rather than binding to nothing.
+    const callerEnvironmentId = webhookCallerEnvironment(tenant);
     const created = await this.webhooks.create(tenant.id, parsed.data, {
       ...(typeof b.application_id === "string"
         ? { applicationId: b.application_id }
         : {}),
       ...(b.env === "live" || b.env === "sandbox" ? { envType: b.env } : {}),
-      // An sk_* key already resolves to its application-environment — bind the webhook there instead
-      // of guessing the workspace's "default" app (which 500'd for any renamed application).
-      ...(tenant.environmentId ? { environmentId: tenant.environmentId } : {}),
+      ...(callerEnvironmentId ? { environmentId: callerEnvironmentId } : {}),
     });
     return { ...created, request_id: newRequestId() };
   }
@@ -82,6 +85,7 @@ export class WebhooksController {
       endpoints: await this.webhooks.list(
         tenant.id,
         typeof applicationId === "string" ? applicationId : undefined,
+        webhookCallerEnvironment(tenant),
       ),
       request_id: newRequestId(),
     };
@@ -94,7 +98,11 @@ export class WebhooksController {
     @Param("id") id: string,
   ): Promise<void> {
     const tenant = requireScope(req.tenant, "api_keys:write");
-    await this.webhooks.disable(tenant.id, id);
+    await this.webhooks.disable(
+      tenant.id,
+      id,
+      webhookCallerEnvironment(tenant),
+    );
   }
 
   @Get(":id/deliveries")
@@ -120,6 +128,7 @@ export class WebhooksController {
         id,
         parsedState.success ? parsedState.data : undefined,
         page,
+        webhookCallerEnvironment(tenant),
       )),
       request_id: newRequestId(),
     };
@@ -138,6 +147,7 @@ export class WebhooksController {
         id,
         deliveryId,
         tenant.keyId,
+        webhookCallerEnvironment(tenant),
       ),
       request_id: newRequestId(),
     };

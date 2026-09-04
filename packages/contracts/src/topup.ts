@@ -50,5 +50,15 @@ export type UpdateAutoTopupRequest = AutoTopupConfig;
 export const autoTopupResponseSchema = z.object({
   config: autoTopupConfigSchema.nullable(), // null = never configured
   has_card: z.boolean(), // a reusable card is on file (required to enable)
+  /**
+   * The workspace's billing currency, so a caller can tell an ARMED config from a DEAD one.
+   *
+   * The cron refuses to charge a config whose currency is not this value (`chargeableCurrency`) and
+   * only writes a log line, so `config.enabled === true` on its own says nothing about whether the
+   * top-up will ever fire. Reported rather than derived into a boolean: a caller that can see both
+   * currencies can say which one to correct, and the first customer-visible symptom of getting this
+   * wrong is a failed send.
+   */
+  billing_currency: currency,
 });
 export type AutoTopupResponse = z.infer<typeof autoTopupResponseSchema>;

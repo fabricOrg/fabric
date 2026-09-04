@@ -26,7 +26,15 @@ export function webhookEnvScope(opts: {
   envType: "sandbox" | "live";
 }): SQL | undefined {
   if (opts.environmentId) {
-    return eq(environments.id, opts.environmentId as EnvironmentId);
+    // Both narrowings apply when both are present. Letting the environment REPLACE a caller-named
+    // application is the same defect `list` carried: the write would bind to the key's environment
+    // while silently ignoring the application the caller asked for.
+    return and(
+      eq(environments.id, opts.environmentId as EnvironmentId),
+      opts.applicationId
+        ? eq(applications.id, opts.applicationId as ApplicationId)
+        : undefined,
+    );
   }
   if (opts.applicationId) {
     return and(

@@ -17,7 +17,7 @@ export async function listRequestLogs(
 ): Promise<ListRequestLogsResponse> {
   const params = new URLSearchParams({ applicationId, env: envType });
   if (cursor) params.set("cursor", cursor);
-  const payload = await dashboardApi<unknown>(
+  const payload = await dashboardApi(
     `/v1/logs?${params.toString()}`,
     "request_logs:read",
   );

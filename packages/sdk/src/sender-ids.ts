@@ -1,11 +1,7 @@
 import type { Transport } from "./transport.js";
-import type {
-  FabricResponse,
-  RequestOptions,
-  SenderId,
-  WriteOptions,
-} from "./types.js";
+import type { FabricResponse, RequestOptions, SenderId } from "./types.js";
 import {
+  ApiShapeError,
   enumField,
   record,
   requireNonEmpty,
@@ -24,7 +20,7 @@ export class SenderIdsResource {
 
   async create(
     params: CreateSenderIdParams,
-    options?: WriteOptions,
+    options?: RequestOptions,
   ): Promise<FabricResponse<SenderId>> {
     requireNonEmpty(params.senderId, "senderId");
     requireNonEmpty(params.useCase, "useCase");
@@ -51,7 +47,7 @@ export class SenderIdsResource {
       ...(options ? { options } : {}),
     });
     if (!Array.isArray(response.data.senders))
-      throw new TypeError("Fabric returned an invalid sender ID list.");
+      throw new ApiShapeError("senders");
     return {
       ...response,
       data: response.data.senders.map((item) => parseSender(record(item))),

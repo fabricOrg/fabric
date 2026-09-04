@@ -8,6 +8,7 @@ import {
   memberDtoSchema,
   type UpdateMemberRequest,
 } from "@app/contracts";
+import { API_EXTERNAL_WRITE_TIMEOUT_MS, apiFetch } from "./api-fetch";
 import { unwrapEnvelope } from "./response-envelope";
 
 /**
@@ -38,7 +39,7 @@ export async function listTenantMembers(
   tenantId: string,
 ): Promise<ListMembersResponse> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/tenants/${tenantId}/members`, baseUrl),
     { cache: "no-store", headers: { "x-bff-token": bffToken } },
   );
@@ -52,7 +53,9 @@ export async function inviteTenantMember(
   request: InviteMemberRequest,
 ): Promise<MemberDto> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  // Sends a WorkOS organization invitation, which is not idempotent: a premature deadline makes the
+  // operator retry and the invitee receive a second accept link.
+  const response = await apiFetch(
     new URL(`/internal/tenants/${tenantId}/members`, baseUrl),
     {
       method: "POST",
@@ -60,6 +63,7 @@ export async function inviteTenantMember(
       headers: { "content-type": "application/json", "x-bff-token": bffToken },
       body: JSON.stringify(request),
     },
+    API_EXTERNAL_WRITE_TIMEOUT_MS,
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new TenantMemberApiError(response.status, payload);
@@ -72,7 +76,7 @@ export async function updateTenantMemberRole(
   request: UpdateMemberRequest,
 ): Promise<MemberDto> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/tenants/${tenantId}/members/${userId}`, baseUrl),
     {
       method: "PATCH",
@@ -91,7 +95,7 @@ export async function removeTenantMember(
   userId: string,
 ): Promise<void> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/tenants/${tenantId}/members/${userId}`, baseUrl),
     {
       method: "DELETE",

@@ -22,7 +22,7 @@ export async function listWebhooks(
   const path = applicationId
     ? `/v1/webhooks?applicationId=${encodeURIComponent(applicationId)}`
     : "/v1/webhooks";
-  const payload = await dashboardApi<unknown>(path, "api_keys:read");
+  const payload = await dashboardApi(path, "api_keys:read");
   return listWebhookEndpointsResponseSchema.parse(payload).endpoints;
 }
 
@@ -33,19 +33,15 @@ export async function createWebhook(request: {
   env: "sandbox" | "live";
 }): Promise<CreateWebhookEndpointResponse> {
   const { applicationId, env, ...rest } = request;
-  const payload = await dashboardApi<unknown>(
-    "/v1/webhooks",
-    "api_keys:write",
-    {
-      method: "POST",
-      body: JSON.stringify({ ...rest, application_id: applicationId, env }),
-    },
-  );
+  const payload = await dashboardApi("/v1/webhooks", "api_keys:write", {
+    method: "POST",
+    body: JSON.stringify({ ...rest, application_id: applicationId, env }),
+  });
   return createWebhookEndpointResponseSchema.parse(payload);
 }
 
 export async function deleteWebhook(id: string): Promise<void> {
-  await dashboardApi<unknown>(
+  await dashboardApi(
     `/v1/webhooks/${encodeURIComponent(id)}`,
     "api_keys:write",
     { method: "DELETE" },
@@ -57,7 +53,7 @@ export async function listWebhookDeliveries(
   state?: "pending" | "delivering" | "delivered" | "dead",
 ): Promise<WebhookDeliveryDto[]> {
   const query = state ? `?state=${state}` : "";
-  const payload = await dashboardApi<unknown>(
+  const payload = await dashboardApi(
     `/v1/webhooks/${encodeURIComponent(endpointId)}/deliveries${query}`,
     "api_keys:read",
   );
@@ -68,7 +64,7 @@ export async function replayWebhookDelivery(
   endpointId: string,
   deliveryId: string,
 ): Promise<WebhookDeliveryDto> {
-  const payload = await dashboardApi<unknown>(
+  const payload = await dashboardApi(
     `/v1/webhooks/${encodeURIComponent(endpointId)}/deliveries/${encodeURIComponent(deliveryId)}/replay`,
     "api_keys:write",
     { method: "POST" },

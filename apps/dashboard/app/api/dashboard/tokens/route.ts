@@ -1,5 +1,7 @@
+import { tokenBalancesResponseSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
+import { bffFailure } from "@/lib/server/bff-error";
 
 /**
  * Prepaid credit balances for the CLIENT. The wallet page reads these server-side, but the send
@@ -8,7 +10,11 @@ import { BffError, dashboardApi } from "@/lib/server/api-client";
  */
 export async function GET(_request: NextRequest) {
   try {
-    return NextResponse.json(await dashboardApi("/v1/tokens", "wallet:read"));
+    return NextResponse.json(
+      tokenBalancesResponseSchema.parse(
+        await dashboardApi("/v1/tokens", "wallet:read"),
+      ),
+    );
   } catch (error) {
     return errorResponse(error);
   }
@@ -17,14 +23,5 @@ export async function GET(_request: NextRequest) {
 function errorResponse(error: unknown) {
   return error instanceof BffError
     ? NextResponse.json(error.payload, { status: error.status })
-    : NextResponse.json(
-        {
-          error: {
-            type: "api_error",
-            code: "bff_error",
-            message: "Request failed.",
-          },
-        },
-        { status: 500 },
-      );
+    : bffFailure("bff_error", "Request failed.");
 }

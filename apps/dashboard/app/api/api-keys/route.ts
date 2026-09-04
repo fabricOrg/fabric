@@ -6,6 +6,12 @@ import {
   readDashboardSession,
   refreshDashboardSession,
 } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
 /**
@@ -15,18 +21,17 @@ import { hasTrustedOrigin } from "@/lib/server/origin";
  */
 export async function POST(request: Request) {
   if (!hasTrustedOrigin(request)) {
-    return unauthorized("invalid_origin", "Request rejected.", 403);
+    return bffForbidden("invalid_origin", "Request rejected.");
   }
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session) {
-    return unauthorized("invalid_session", "Sign in again to continue.", 401);
+    return bffUnauthorized("invalid_session", "Sign in again to continue.");
   }
   if (!session.permissions.includes("api_keys:write")) {
-    return unauthorized(
+    return bffForbidden(
       "insufficient_permission",
       "You don't have permission to create API keys.",
-      403,
     );
   }
   try {
@@ -35,18 +40,12 @@ export async function POST(request: Request) {
       typeof raw?.application_id === "string" ? raw.application_id : null;
     const parsed = createApiKeyRequest.safeParse(raw);
     if (!parsed.success || !applicationId) {
-      return NextResponse.json(
-        {
-          error: {
-            type: "validation_error",
-            code: "invalid_request",
-            message: !applicationId
-              ? "An application is required."
-              : (parsed.error?.issues[0]?.message ??
-                "Enter a name, environment, and at least one scope."),
-          },
-        },
-        { status: 422 },
+      return bffUnprocessable(
+        "invalid_request",
+        !applicationId
+          ? "An application is required."
+          : (parsed.error?.issues[0]?.message ??
+              "Enter a name, environment, and at least one scope."),
       );
     }
     // Keys are scoped to an application-environment (ADR-0004); the id comes from the app-detail page.
@@ -63,22 +62,6 @@ export async function POST(request: Request) {
   } catch (error) {
     return error instanceof BffError
       ? NextResponse.json(error.payload, { status: error.status })
-      : NextResponse.json(
-          {
-            error: {
-              type: "api_error",
-              code: "bff_error",
-              message: "Request failed.",
-            },
-          },
-          { status: 500 },
-        );
+      : bffFailure("bff_error", "Request failed.");
   }
-}
-
-function unauthorized(code: string, message: string, status: number) {
-  return NextResponse.json(
-    { error: { type: "auth_error", code, message } },
-    { status },
-  );
 }

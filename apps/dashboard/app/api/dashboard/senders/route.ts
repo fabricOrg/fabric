@@ -3,9 +3,14 @@
 // this screen shows is exactly what can send. Shapes map @app/contracts snake_case → the UI's
 // camelCase SenderId.
 
-import type { ListSendersResponse, SenderDto } from "@app/contracts";
+import {
+  listSendersResponseSchema,
+  type SenderDto,
+  senderDtoSchema,
+} from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
+import { bffFailure, bffForbidden } from "@/lib/server/bff-error";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
 interface SenderId {
@@ -34,9 +39,8 @@ function toUi(dto: SenderDto): SenderId {
 
 export async function GET() {
   try {
-    const response = await dashboardApi<ListSendersResponse>(
-      "/v1/senders",
-      "sms:read",
+    const response = listSendersResponseSchema.parse(
+      await dashboardApi("/v1/senders", "sms:read"),
     );
     return NextResponse.json({ senders: response.senders.map(toUi) });
   } catch (error) {
@@ -46,16 +50,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   if (!hasTrustedOrigin(request)) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "auth_error",
-          code: "invalid_origin",
-          message: "Request rejected.",
-        },
-      },
-      { status: 403 },
-    );
+    return bffForbidden("invalid_origin", "Request rejected.");
   }
   try {
     const input = (await request.json()) as {
@@ -64,15 +59,17 @@ export async function POST(request: Request) {
       type?: unknown;
       useCase?: unknown;
     };
-    const created = await dashboardApi<SenderDto>("/v1/senders", "sms:send", {
-      method: "POST",
-      body: JSON.stringify({
-        sender_id: typeof input.senderId === "string" ? input.senderId : "",
-        country: input.country,
-        type: input.type ?? "alphanumeric",
-        use_case: typeof input.useCase === "string" ? input.useCase : "",
+    const created = senderDtoSchema.parse(
+      await dashboardApi("/v1/senders", "sms:send", {
+        method: "POST",
+        body: JSON.stringify({
+          sender_id: typeof input.senderId === "string" ? input.senderId : "",
+          country: input.country,
+          type: input.type ?? "alphanumeric",
+          use_case: typeof input.useCase === "string" ? input.useCase : "",
+        }),
       }),
-    });
+    );
     return NextResponse.json({ sender: toUi(created) }, { status: 201 });
   } catch (error) {
     return errorResponse(error);
@@ -82,14 +79,5 @@ export async function POST(request: Request) {
 function errorResponse(error: unknown) {
   return error instanceof BffError
     ? NextResponse.json(error.payload, { status: error.status })
-    : NextResponse.json(
-        {
-          error: {
-            type: "api_error",
-            code: "bff_error",
-            message: "Request failed.",
-          },
-        },
-        { status: 500 },
-      );
+    : bffFailure("bff_error", "Request failed.");
 }

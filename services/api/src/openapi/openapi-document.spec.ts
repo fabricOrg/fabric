@@ -241,6 +241,46 @@ describe("schema derivation", () => {
 });
 
 describe("document shape", () => {
+  it("documents required and optional Idempotency-Key headers explicitly", () => {
+    const routes = [
+      route("POST", "/v1/required"),
+      route("POST", "/v1/optional"),
+    ];
+    const doc = buildOpenApiDocument(
+      routes,
+      {
+        "POST /v1/required": {
+          ...binding,
+          idempotency: "required",
+        },
+        "POST /v1/optional": {
+          ...binding,
+          idempotency: "optional",
+        },
+      },
+      { ...OPTIONS },
+    );
+    const header = (path: string) => {
+      const op = operation(doc, path, "post") as {
+        parameters?: Array<{
+          name: string;
+          in: string;
+          required: boolean;
+          schema: { minLength: number; maxLength: number };
+        }>;
+      };
+      return op.parameters?.find(
+        (parameter) =>
+          parameter.in === "header" && parameter.name === "Idempotency-Key",
+      );
+    };
+    expect(header("/v1/required")).toMatchObject({
+      required: true,
+      schema: { minLength: 1, maxLength: 255 },
+    });
+    expect(header("/v1/optional")).toMatchObject({ required: false });
+  });
+
   it("carries the configured server url rather than a hardcoded host", () => {
     const doc = buildOpenApiDocument(
       [route("GET", "/v1/thing")],

@@ -34,11 +34,9 @@ describe("webhook endpoint management", () => {
     const client = new Fabric({ apiKey: "sk_test_example", fetch });
     const response = await client.webhooks.create({
       url: "https://merchant.example/webhooks/fabric",
-      environment: "sandbox",
     });
     expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
       url: "https://merchant.example/webhooks/fabric",
-      env: "sandbox",
     });
     expect(response.data.secret).toBe("whsec_once");
     expect(response.data.status).toBe("active");

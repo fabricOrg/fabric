@@ -10,6 +10,7 @@ import {
   type UpdateSandboxAllowancePolicy,
   type UpdateTenantStatusRequest,
 } from "@app/contracts";
+import { apiFetch } from "./api-fetch";
 import { unwrapEnvelope } from "./response-envelope";
 
 /**
@@ -29,7 +30,7 @@ export async function getSandboxAllowancePolicy(
   tenantId: string,
 ): Promise<SandboxAllowancePolicy> {
   const { baseUrl, bffToken } = connection();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/admin/tenants/${tenantId}/sandbox-allowances`, baseUrl),
     {
       cache: "no-store",
@@ -47,7 +48,7 @@ export async function updateSandboxAllowancePolicy(
   actor: { email: string; staffId: string },
 ): Promise<SandboxAllowancePolicy> {
   const { baseUrl, bffToken } = connection();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/admin/tenants/${tenantId}/sandbox-allowances`, baseUrl),
     {
       method: "PATCH",
@@ -85,7 +86,7 @@ export async function listTenants(
   }
   const url = new URL("/internal/admin/tenants", baseUrl);
   if (opts.cursor) url.searchParams.set("cursor", opts.cursor);
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     cache: "no-store",
     headers: { "x-bff-token": bffToken },
   });
@@ -104,7 +105,7 @@ export async function updateTenantStatus(
   if (!baseUrl || !bffToken) {
     throw new Error("API_BASE_URL and BFF_INTERNAL_TOKEN are required.");
   }
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/admin/tenants/${tenantId}`, baseUrl),
     {
       method: "PATCH",

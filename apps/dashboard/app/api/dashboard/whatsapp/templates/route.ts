@@ -4,6 +4,11 @@ import {
   readDashboardSession,
   refreshDashboardSession,
 } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+} from "@/lib/server/bff-error";
 import { listWhatsappTemplates } from "@/lib/server/whatsapp-client";
 
 /**
@@ -17,20 +22,12 @@ export async function GET() {
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session) {
-    return NextResponse.json(
-      { error: { code: "invalid_session", message: "Sign in again." } },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Sign in again.");
   }
   if (!session.permissions.includes("whatsapp:send")) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "insufficient_permission",
-          message: "You don't have access to send WhatsApp messages.",
-        },
-      },
-      { status: 403 },
+    return bffForbidden(
+      "insufficient_permission",
+      "You don't have access to send WhatsApp messages.",
     );
   }
   try {
@@ -41,14 +38,10 @@ export async function GET() {
     if (error instanceof BffError) {
       return NextResponse.json(error.payload, { status: error.status });
     }
-    return NextResponse.json(
-      {
-        error: {
-          code: "whatsapp_templates_unavailable",
-          message: "WhatsApp templates could not be loaded.",
-        },
-      },
-      { status: 502 },
+    return bffFailure(
+      "whatsapp_templates_unavailable",
+      "WhatsApp templates could not be loaded.",
+      502,
     );
   }
 }

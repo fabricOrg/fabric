@@ -4,6 +4,7 @@ import {
   readAdminSessionWithRefresh,
   readImpersonationClaim,
 } from "@/lib/server/auth";
+import { bffUnauthorized } from "@/lib/server/bff-error";
 import { recordImpersonationStop } from "@/lib/server/impersonation-client";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 
@@ -13,16 +14,7 @@ export async function POST(request: Request) {
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
   if (!session) {
-    return NextResponse.json(
-      {
-        error: {
-          type: "auth_error",
-          code: "invalid_session",
-          message: "Staff sign-in required.",
-        },
-      },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   }
 
   const claim = await readImpersonationClaim();

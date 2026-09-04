@@ -1,20 +1,18 @@
 import { upsertPriceBookRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffInvalidRequest,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   PriceBookApiError,
   updatePriceBook,
 } from "@/lib/server/price-book-client";
-
-function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-) {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
 
 /** Update a price book (replaces its rate set). staff:write only; audited. */
 export async function PUT(
@@ -24,12 +22,12 @@ export async function PUT(
   const denied = requireTrustedOrigin(request);
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can edit pricing.",
-      403,
     );
   }
   const { id } = await params;
@@ -37,19 +35,17 @@ export async function PUT(
   try {
     body = await request.json();
   } catch {
-    return fail("invalid_request", "Malformed body.", 400, "validation_error");
+    return bffInvalidRequest("invalid_request", "Malformed body.");
   }
   const parsed = upsertPriceBookRequestSchema.safeParse(body);
   if (!parsed.success) {
     // Forward the ACTUAL issue. The generic line named three things the operator had already filled
     // in, which is worse than silence: the real failure is usually the publish rule (a published
     // currency needs both SMS and email), and the form's own enable-check does not model it.
-    return fail(
+    return bffUnprocessable(
       "invalid_request",
       parsed.error.issues[0]?.message ??
         "Provide a name, mode, and at least one rate.",
-      422,
-      "validation_error",
     );
   }
   try {
@@ -61,11 +57,10 @@ export async function PUT(
   } catch (error) {
     return error instanceof PriceBookApiError
       ? NextResponse.json(error.payload, { status: error.status })
-      : fail(
+      : bffFailure(
           "pricing_unavailable",
           "Pricing service is unavailable.",
           502,
-          "api_error",
         );
   }
 }

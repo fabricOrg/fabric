@@ -24,12 +24,15 @@ import { OpenApiModule } from "./openapi/openapi.module.js";
 import { OverviewModule } from "./overview/overview.module.js";
 import { PaymentsModule } from "./payments/payments.module.js";
 import { PluginsModule } from "./plugins/plugins.module.js";
+import { PricingModule } from "./pricing/pricing.module.js";
 import { PrivacyModule } from "./privacy/privacy.module.js";
 import { ProposalsModule } from "./proposals/proposals.module.js";
 import { RequestLogsModule } from "./request-logs/request-logs.module.js";
+import { SandboxAllowanceModule } from "./sandbox-allowance/sandbox-allowance.module.js";
 import { SendersModule } from "./senders/senders.module.js";
 import { SmsModule } from "./sms/sms.module.js";
 import { SmsTemplatesModule } from "./sms-templates/sms-templates.module.js";
+import { TokensModule } from "./tokens/tokens.module.js";
 import { VerifyModule } from "./verify/verify.module.js";
 import { WalletModule } from "./wallet/wallet.module.js";
 import { WebhooksModule } from "./webhooks/webhooks.module.js";
@@ -60,6 +63,7 @@ import { WhatsappModule } from "./whatsapp/whatsapp.module.js";
     MembersModule,
     PaymentsModule,
     PluginsModule,
+    PricingModule,
     ProposalsModule,
     ApiKeysModule,
     ApplicationsModule,
@@ -67,6 +71,7 @@ import { WhatsappModule } from "./whatsapp/whatsapp.module.js";
     MessagesModule,
     OverviewModule,
     RequestLogsModule,
+    SandboxAllowanceModule,
     ConsentModule,
     SendersModule,
     // COMPLIANCE §6: the staff DSR surface. Registered here, not only via SmsModule — erasure is a
@@ -74,6 +79,7 @@ import { WhatsappModule } from "./whatsapp/whatsapp.module.js";
     PrivacyModule,
     SmsModule,
     SmsTemplatesModule,
+    TokensModule,
     VerifyModule,
     WalletModule,
     WebhooksModule,

@@ -33,6 +33,8 @@ test-results/
 playwright-report/
 .api-*.log
 .dashboard-*.log
+# release/verification transcripts written to the repo root by a gate run (.rc4.log, .rc5-int.log …)
+.rc*.log
 
 # docker-compose local overrides (per-machine port remaps etc.) — auto-loaded, never shared
 docker-compose.override.yml

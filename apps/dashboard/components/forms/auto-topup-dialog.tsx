@@ -1,10 +1,11 @@
 "use client";
 
+import type { AutoTopupResponse, Currency } from "@app/contracts";
 import {
-  type AutoTopupResponse,
-  type Currency,
-  currency as currencySchema,
-} from "@app/contracts";
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@app/ui/components/ui/alert";
 import { Button } from "@app/ui/components/ui/button";
 import {
   Dialog,
@@ -23,14 +24,13 @@ import {
 } from "@app/ui/components/ui/field";
 import { Input } from "@app/ui/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@app/ui/components/ui/select";
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@app/ui/components/ui/input-group";
 import { useForm } from "@tanstack/react-form";
-import { Settings2 } from "lucide-react";
+import { Settings2, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
@@ -60,24 +60,31 @@ const schema = z.object({
  * Configure auto top-up: when the balance falls to/below the threshold, Fabric charges the saved card
  * for the top-up amount (the credit lands via the Paystack webhook, same idempotent path as a manual
  * top-up). Enabling REQUIRES a reusable card on file — the API rejects it otherwise, so we gate the
- * trigger on `hasCard`. Amounts are parsed to exact minor units (bigint), never float. Currency stays
- * local state (it drives the copy); the two amounts live in the form.
+ * trigger on `hasCard`. Amounts are parsed to exact minor units (bigint), never float; the two
+ * amounts live in the form.
+ *
+ * The currency is the workspace's billing currency and is NOT editable. It was a three-option select,
+ * which produced the worse of the two failures this component had: the cron SKIPS a config whose
+ * currency is not the billing one and only writes a log line, so choosing one of the other two saved
+ * cleanly and then never charged. A stored mismatch is now stated rather than left to be inferred
+ * from a green badge — and saving corrects it, which is why the mismatch does not disable the form.
  */
 export function AutoTopupDialog({
   config,
   hasCard,
-  defaultCurrency = "GHS",
+  billingCurrency,
 }: {
   config: AutoTopupResponse["config"];
   hasCard: boolean;
-  defaultCurrency?: Currency;
+  billingCurrency: Currency;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [currency, setCurrency] = useState<Currency>(
-    (config?.currency as Currency | undefined) ?? defaultCurrency,
-  );
+  const currency = billingCurrency;
+  const storedCurrency = config?.currency;
+  const mismatched =
+    storedCurrency !== undefined && storedCurrency !== billingCurrency;
   const thresholdId = useId();
   const topUpId = useId();
 
@@ -158,29 +165,38 @@ export function AutoTopupDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 py-2">
+          {mismatched && (
+            <Alert variant="destructive">
+              <TriangleAlert />
+              <AlertTitle>
+                {enabled
+                  ? "This auto top-up is not charging"
+                  : "Saved in the wrong currency"}
+              </AlertTitle>
+              <AlertDescription>
+                It is saved in {storedCurrency}, and this workspace is billed in{" "}
+                {billingCurrency}. A charge can only be raised in{" "}
+                {billingCurrency}, so
+                {enabled
+                  ? " the scheduled top-up is skipped every time it comes due."
+                  : " it would be skipped if you turned it on."}{" "}
+                Saving below moves it to {billingCurrency}.
+              </AlertDescription>
+            </Alert>
+          )}
           <form.Field name="threshold">
             {(field) => (
               <Field>
                 <FieldLabel htmlFor={thresholdId}>
                   When balance drops to
                 </FieldLabel>
-                <div className="flex gap-2">
-                  <Select
-                    value={currency}
-                    onValueChange={(v) => setCurrency(v as Currency)}
-                  >
-                    <SelectTrigger className="w-28" aria-label="Currency">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {currencySchema.options.map((c) => (
-                        <SelectItem key={c} value={c}>
-                          {c}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
+                <InputGroup>
+                  <InputGroupAddon>
+                    <InputGroupText className="font-mono">
+                      {currency}
+                    </InputGroupText>
+                  </InputGroupAddon>
+                  <InputGroupInput
                     id={thresholdId}
                     inputMode="decimal"
                     placeholder="0.00"
@@ -189,7 +205,7 @@ export function AutoTopupDialog({
                     onBlur={field.handleBlur}
                     className="font-mono tabular-nums"
                   />
-                </div>
+                </InputGroup>
                 <FieldDescription>
                   The trigger balance — set it high enough to cover in-flight
                   sends.

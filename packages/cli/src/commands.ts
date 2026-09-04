@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { generateCatalog } from "./generate.js";
 import { parseManifest } from "./manifest.js";
 
-const DEFAULT_BASE_URL = "https://d2umm5b2x22zvp.cloudfront.net";
+const DEFAULT_BASE_URL = "https://fabric-jezz.onrender.com";
 
 export interface DefinitionCommandOptions {
   readonly apiKey: string;

@@ -39,12 +39,18 @@ describe("canonical contract parity", () => {
       to: "+23354•••7189",
       channel: "sms",
       expires_in: 300,
+      expires_at: "2026-08-30T07:05:00.000Z",
       debug_code: "123456",
     });
     await expect(
       clientReturning(started).verify.start({ to: "+233545227189" }),
     ).resolves.toMatchObject({
-      data: { status: "pending", expiresIn: 300, debugCode: "123456" },
+      data: {
+        status: "pending",
+        expiresIn: 300,
+        expiresAt: "2026-08-30T07:05:00.000Z",
+        debugCode: "123456",
+      },
     });
     const checked = verifyCheckResponse.parse({
       id: "2ccb4b9f-384e-4f4e-8983-ff12555223d0",
@@ -60,6 +66,7 @@ describe("canonical contract parity", () => {
 
   it("maps canonical wallet responses without losing exact minor units", async () => {
     const payload = walletSnapshot.parse({
+      billing_currency: "GHS",
       balances: [{ balance: { minor: "120403", currency: "GHS" } }],
       ledger: [
         {
@@ -77,7 +84,12 @@ describe("canonical contract parity", () => {
       clientReturning(payload).wallet.retrieve(),
     ).resolves.toMatchObject({
       requestId: "req_wallet",
-      data: { balances: [{ balance: { minor: "120403", currency: "GHS" } }] },
+      data: {
+        // The currency a charge may be raised in, which is NOT inferable from `balances` — they are
+        // ledger accounts, and a workspace whose billing currency changed still holds the old one.
+        billingCurrency: "GHS",
+        balances: [{ balance: { minor: "120403", currency: "GHS" } }],
+      },
     });
   });
 

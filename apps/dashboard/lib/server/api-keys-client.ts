@@ -21,7 +21,7 @@ export async function listApiKeys(applicationId?: string): Promise<ApiKey[]> {
   const path = applicationId
     ? `/v1/api-keys?applicationId=${encodeURIComponent(applicationId)}`
     : "/v1/api-keys";
-  const payload = await dashboardApi<unknown>(path, "api_keys:read");
+  const payload = await dashboardApi(path, "api_keys:read");
   // The API returns an envelope now, not a bare array (§11 breaking change) — unwrap after parsing
   // so callers keep the ApiKey[] they expect.
   return listApiKeysResponse.parse(payload).keys;
@@ -36,23 +36,19 @@ export async function createApiKey(
   },
 ): Promise<CreateApiKeyResult> {
   const { applicationId, expiresInDays, ...rest } = request;
-  const payload = await dashboardApi<unknown>(
-    "/v1/api-keys",
-    "api_keys:write",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        ...rest,
-        application_id: applicationId,
-        ...(expiresInDays ? { expires_in_days: expiresInDays } : {}),
-      }),
-    },
-  );
+  const payload = await dashboardApi("/v1/api-keys", "api_keys:write", {
+    method: "POST",
+    body: JSON.stringify({
+      ...rest,
+      application_id: applicationId,
+      ...(expiresInDays ? { expires_in_days: expiresInDays } : {}),
+    }),
+  });
   return createApiKeyResultSchema.parse(payload);
 }
 
 export async function revokeApiKey(id: string): Promise<void> {
-  await dashboardApi<unknown>(
+  await dashboardApi(
     `/v1/api-keys/${encodeURIComponent(id)}`,
     "api_keys:write",
     { method: "DELETE" },

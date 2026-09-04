@@ -42,5 +42,12 @@ export async function enforceRestrictedPrivileges(sql: Sql): Promise<void> {
     -- entirely and prepareRoles() grants that role nothing, so its REVOKE already survives.
     REVOKE UPDATE, DELETE, TRUNCATE ON audit_events FROM app_provisioner;
     GRANT SELECT, INSERT ON audit_events TO app_provisioner;
+
+    -- Definition versions are release evidence. prepareRoles() broadly re-grants provisioner DML
+    -- before every deployment, so the journaled REVOKE in 0152 must be restored every time too.
+    REVOKE UPDATE, DELETE, TRUNCATE
+      ON message_definition_versions
+      FROM app_runtime, app_provisioner;
+    GRANT SELECT, INSERT ON message_definition_versions TO app_runtime, app_provisioner;
   `);
 }

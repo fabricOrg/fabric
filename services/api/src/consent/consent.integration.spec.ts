@@ -198,7 +198,7 @@ describe("consent / DND enforcement (E10-S5)", () => {
 
   it("removal restores delivery; the list reflects it", async () => {
     const removed = await optOuts("DELETE", `/${optOutId}`);
-    expect(removed.statusCode).toBe(200);
+    expect(removed.statusCode).toBe(204);
     const list = await optOuts("GET");
     expect(
       (unwrapEnvelope(list.json()) as { opt_outs: unknown[] }).opt_outs,

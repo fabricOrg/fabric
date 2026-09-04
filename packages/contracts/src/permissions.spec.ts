@@ -37,10 +37,36 @@ describe("membership permission baselines", () => {
     );
   });
 
-  it("legacy developer role is read-only for definitions", () => {
+  it("keeps the legacy developer role least-privilege", () => {
     const legacy = baselinePermissions("developer", true);
+    expect(new Set(legacy)).toEqual(
+      new Set([
+        "wallet:read",
+        "applications:read",
+        "api_keys:read",
+        "api_keys:write",
+        "request_logs:read",
+      ]),
+    );
+    expect(legacy).not.toContain("sms:send");
+    expect(legacy).not.toContain("email:send");
+    expect(legacy).not.toContain("whatsapp:send");
+    expect(legacy).not.toContain("messages:send");
+    // Narrower than `member` on the READ side too, which is the half that reads like an accident
+    // unless it is pinned: CLAUDE.md §4 scopes this role to API keys, logs and wallet-read.
+    expect(legacy).not.toContain("sms:read");
+    expect(legacy).not.toContain("email:read");
+    expect(legacy).not.toContain("whatsapp:read");
+    expect(legacy).not.toContain("messages:read");
     expect(legacy).not.toContain("definitions:write");
-    expect(legacy).toContain("api_keys:read");
+  });
+
+  it("ignores the developer-access flag for the legacy developer role", () => {
+    // The legacy role IS the person's whole authority, so the add-on flag cannot widen or narrow
+    // it. Both callers coerce the flag today; the function must not depend on their doing so.
+    expect(new Set(baselinePermissions("developer", false))).toEqual(
+      new Set(baselinePermissions("developer", true)),
+    );
   });
 });
 

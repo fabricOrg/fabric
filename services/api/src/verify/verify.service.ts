@@ -106,6 +106,7 @@ export class VerifyService {
       to: maskMsisdn(request.to),
       channel: "sms",
       expires_in: CODE_TTL_SECONDS,
+      expires_at: expiresAt.toISOString(),
       ...(sandbox ? { debug_code: code } : {}),
     };
   }

@@ -7,8 +7,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["**/*.integration.spec.ts"],
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    // A remote Neon branch can take more than 30 seconds for transaction-heavy API cases.
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
     fileParallelism: false,
   },
 });

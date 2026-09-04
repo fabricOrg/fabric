@@ -1,6 +1,12 @@
 import { unwrapEnvelope } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
+import { apiFetch } from "@/lib/server/api-fetch";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffInvalidRequest,
+  bffUnauthorized,
+} from "@/lib/server/bff-error";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 
 /**
@@ -10,42 +16,19 @@ import { requireTrustedOrigin } from "@/lib/server/origin";
  * the admin origin, so the page guard is NOT enough; every handler verifies the session itself.
  */
 function unauthorized() {
-  return NextResponse.json(
-    {
-      error: {
-        type: "auth_error",
-        code: "invalid_session",
-        message: "Staff sign-in required.",
-      },
-    },
-    { status: 401 },
-  );
+  return bffUnauthorized("invalid_session", "Staff sign-in required.");
 }
 
 function unavailable() {
-  return NextResponse.json(
-    {
-      error: {
-        type: "api_error",
-        code: "registry_unavailable",
-        message: "Plugin registry is unavailable.",
-      },
-    },
-    { status: 502 },
+  return bffFailure(
+    "registry_unavailable",
+    "Plugin registry is unavailable.",
+    502,
   );
 }
 
 function badBody() {
-  return NextResponse.json(
-    {
-      error: {
-        type: "validation_error",
-        code: "invalid_request",
-        message: "Malformed body.",
-      },
-    },
-    { status: 400 },
-  );
+  return bffInvalidRequest("invalid_request", "Malformed body.");
 }
 
 // The api registry DTO has no market region; the UI treats it as optional.
@@ -66,7 +49,7 @@ export async function GET() {
   if (!(await readAdminSessionWithRefresh())) return unauthorized();
   try {
     const { baseUrl, token } = apiConfig();
-    const res = await fetch(new URL("/internal/plugins", baseUrl), {
+    const res = await apiFetch(new URL("/internal/plugins", baseUrl), {
       cache: "no-store",
       headers: { "x-bff-token": token },
     });
@@ -94,7 +77,7 @@ export async function POST(request: NextRequest) {
   }
   try {
     const { baseUrl, token } = apiConfig();
-    const res = await fetch(new URL("/internal/plugins", baseUrl), {
+    const res = await apiFetch(new URL("/internal/plugins", baseUrl), {
       method: "POST",
       cache: "no-store",
       headers: { "content-type": "application/json", "x-bff-token": token },

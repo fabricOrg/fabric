@@ -5,7 +5,7 @@
 // test:integration.
 // ============================================================================================
 
-import { unwrapEnvelope } from "@app/contracts";
+import { adminSenderDtoSchema, unwrapEnvelope } from "@app/contracts";
 import { createAppDb, createProvisioningDb } from "@app/db";
 import { credit } from "@app/wallet";
 import { NestFactory } from "@nestjs/core";
@@ -30,6 +30,8 @@ if (!SUPER_URL || !APP_URL || !PROVISIONER_URL) {
 }
 process.env.DATABASE_URL_APP = APP_URL;
 process.env.REDIS_QUEUE_URL = "";
+const BFF_TOKEN = "senders-admin-bff-token";
+process.env.BFF_INTERNAL_TOKEN = BFF_TOKEN;
 
 const LIVE_TENANT = "abcdabcd-4444-4444-8444-00000000e104";
 const SANDBOX_TENANT = "abcdabcd-5555-4555-8555-00000000e104";
@@ -83,6 +85,21 @@ async function post(rawKey: string, url: string, payload: unknown) {
     headers: {
       authorization: `Bearer ${rawKey}`,
       "content-type": "application/json",
+    },
+    payload: payload as Record<string, unknown>,
+  });
+}
+
+/** The staff surface: BffTokenGuard + the actor headers the admin-console BFF attests with. */
+async function postAdmin(url: string, payload: unknown) {
+  return app.inject({
+    method: "POST",
+    url,
+    headers: {
+      "x-bff-token": BFF_TOKEN,
+      "content-type": "application/json",
+      "x-actor-email": "ops@fabric.test",
+      "x-actor-staff-id": "abcdabcd-9999-4999-8999-00000000e104",
     },
     payload: payload as Record<string, unknown>,
   });
@@ -197,6 +214,40 @@ describe("sender-id enforcement (E10-S4)", () => {
     expect(
       (unwrapEnvelope(dup.json()) as { error: { code: string } }).error.code,
     ).toBe("sender_already_registered");
+  });
+
+  // Over HTTP on purpose. Calling `service.decide` directly — which every assertion above does —
+  // skips the guards, the pipes and the response-validation interceptor, so the route published the
+  // ADMIN dto while the service returned the narrow customer one and nothing failed for months.
+  // CLAUDE.md §12: an endpoint is proven by a 2xx from the real route under strict validation.
+  it("POST decide answers with the admin dto its route binding publishes", async () => {
+    const registered = await post(LIVE_KEY, "/v1/senders", {
+      sender_id: "ACMEHTTP",
+      country: "NG",
+      use_case: "Proving the decide route matches its published contract.",
+    });
+    expect(registered.statusCode).toBe(201);
+    const { id } = unwrapEnvelope(registered.json()) as { id: string };
+
+    const carrier = await postAdmin(
+      `/internal/admin/senders/${id}/carrier-status`,
+      { carrier_status: "approved", carrier_ref: "ARK-HTTP-1" },
+    );
+    expect(carrier.statusCode).toBe(201);
+
+    const decided = await postAdmin(`/internal/admin/senders/${id}/decide`, {
+      status: "active",
+    });
+    // A 500 here is the response-validation interceptor refusing a payload that does not match the
+    // published schema — the failure this test exists to catch.
+    expect(decided.statusCode).toBe(201);
+
+    const body = adminSenderDtoSchema.parse(unwrapEnvelope(decided.json()));
+    expect(body.status).toBe("active");
+    expect(body.tenant_id).toBe(LIVE_TENANT);
+    expect(body.carrier_status).toBe("approved");
+    expect(body.carrier_ref).toBe("ARK-HTTP-1");
+    expect(body.carrier_decided_at).toBeTruthy();
   });
 
   it("SANDBOX tenants skip the gate entirely (fake provider, quickstart sender works)", async () => {

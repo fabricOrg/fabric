@@ -11,6 +11,7 @@ import {
   whatsappTemplateListResponse,
 } from "@app/contracts";
 import { BffError } from "./api-client";
+import { apiFetch } from "./api-fetch";
 
 /**
  * Dashboard WhatsApp surface via the api's BffToken-guarded /internal/tenants/:id/whatsapp. The
@@ -32,7 +33,7 @@ async function request(
   init: RequestInit = {},
 ): Promise<unknown> {
   const { baseUrl, bffToken } = backend();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/tenants/${tenantId}${path}`, baseUrl),
     {
       ...init,

@@ -4,6 +4,11 @@ import {
   readDashboardSession,
   refreshDashboardSession,
 } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+} from "@/lib/server/bff-error";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 import { replayWebhookDelivery } from "@/lib/server/webhooks-client";
 
@@ -12,26 +17,20 @@ export async function POST(
   { params }: { params: Promise<{ id: string; deliveryId: string }> },
 ) {
   if (!hasTrustedOrigin(request)) {
-    return NextResponse.json(
-      { error: { code: "invalid_origin" } },
-      { status: 403 },
-    );
+    return bffForbidden("invalid_origin", "Request rejected.");
   }
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session) {
-    return NextResponse.json(
-      { error: { code: "invalid_session" } },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Sign in to continue.");
   }
   if (
     (session.role !== "owner" && session.role !== "admin") ||
     !session.permissions.includes("api_keys:write")
   ) {
-    return NextResponse.json(
-      { error: { code: "insufficient_permission" } },
-      { status: 403 },
+    return bffForbidden(
+      "insufficient_permission",
+      "Only owners and admins with webhook access can replay a delivery.",
     );
   }
   try {
@@ -42,6 +41,6 @@ export async function POST(
   } catch (error) {
     return error instanceof BffError
       ? NextResponse.json(error.payload, { status: error.status })
-      : NextResponse.json({ error: { code: "bff_error" } }, { status: 500 });
+      : bffFailure("bff_error", "The delivery could not be replayed.");
   }
 }

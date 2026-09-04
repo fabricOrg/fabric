@@ -104,7 +104,22 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         # No NODE_AUTH_TOKEN: trusted publishing mints short-lived credentials from the OIDC id-token.
         # --provenance attaches a signed build-provenance attestation. publishConfig.access is "public".
-        # --tag beta: both packages are 0.1.0-beta.x prereleases; npm 11 requires an explicit dist-tag
-        # for prereleases so a beta never becomes `latest`. Switch to `latest` (or derive from the
-        # version) when a stable 1.0 ships.
-        run: npm publish --provenance --access public --tag beta
+        #
+        # --tag latest, deliberately, and the previous comment here was wrong about why. It claimed
+        # `--tag beta` keeps a prerelease from becoming `latest`. npm pins `latest` on a package's
+        # FIRST publish whatever tag is passed, so both packages have pointed `latest` at a
+        # prerelease from the beginning and no publish since moved it:
+        #
+        #   sdk  latest=0.1.0-beta.7  beta=0.1.0-beta.7
+        #   cli  latest=0.1.0-beta.1  beta=0.1.0-beta.6   <- five versions behind
+        #
+        # `latest` is what a plain `npm install` resolves, so the effect was that every consumer got
+        # a build nobody intended to ship — for the SDK, one whose default endpoint no longer
+        # resolves in DNS. Moving `latest` after the fact needs `npm dist-tag`, which OIDC trusted
+        # publishing does not mint credentials for, so it cannot be a follow-up step here without
+        # reintroducing a long-lived token.
+        #
+        # Since `latest` already points at a prerelease for both packages and there is no stable
+        # release to protect, pointing it at the NEWEST prerelease is strictly better than leaving it
+        # on the oldest. Revisit when 1.0 ships and `latest` should track stable only.
+        run: npm publish --provenance --access public --tag latest

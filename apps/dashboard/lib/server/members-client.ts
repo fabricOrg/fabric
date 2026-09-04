@@ -11,6 +11,7 @@ import {
   unwrapEnvelope,
 } from "@app/contracts";
 import { BffError } from "./api-client";
+import { API_EXTERNAL_WRITE_TIMEOUT_MS, apiFetch } from "./api-fetch";
 
 /**
  * Team-member management via the api's BffToken-guarded `/internal/tenants/:id/members`. The tenant
@@ -30,7 +31,7 @@ export async function listMembers(
   tenantId: string,
 ): Promise<ListMembersResponse> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/tenants/${tenantId}/members`, baseUrl),
     { cache: "no-store", headers: { "x-bff-token": bffToken } },
   );
@@ -39,13 +40,18 @@ export async function listMembers(
   return listMembersResponseSchema.parse(unwrapEnvelope(payload));
 }
 
+/**
+ * Sends a WorkOS organization invitation, which is not idempotent — the same endpoint the admin
+ * console calls, and it takes the same external-write budget for the same reason: a premature
+ * deadline makes the owner retry and the invitee receive a second accept link.
+ */
 export async function inviteMember(
   tenantId: string,
   request: InviteMemberRequest,
   actorEmail: string | null,
 ): Promise<MemberDto> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/tenants/${tenantId}/members`, baseUrl),
     {
       method: "POST",
@@ -57,6 +63,7 @@ export async function inviteMember(
       },
       body: JSON.stringify(request),
     },
+    API_EXTERNAL_WRITE_TIMEOUT_MS,
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new BffError(response.status, payload);
@@ -70,7 +77,7 @@ export async function updateMemberRole(
   actorEmail: string | null,
 ): Promise<MemberDto> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/tenants/${tenantId}/members/${userId}`, baseUrl),
     {
       method: "PATCH",
@@ -95,7 +102,7 @@ export async function setMemberPermissions(
   actorEmail: string | null,
 ): Promise<MemberDto> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(
       `/internal/tenants/${tenantId}/members/${userId}/permissions`,
       baseUrl,
@@ -122,7 +129,7 @@ export async function removeMember(
   actorEmail: string | null,
 ): Promise<void> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/tenants/${tenantId}/members/${userId}`, baseUrl),
     {
       method: "DELETE",

@@ -5,6 +5,7 @@ import type {
   UserRefreshOutcome,
   UserSession,
 } from "./types.js";
+import { isUpstreamUnavailable } from "./upstream-error.js";
 import { secretsEqual, workos } from "./workos-internal.js";
 
 /**
@@ -34,7 +35,14 @@ export function readUserSession(
   sealedCookie: string | undefined,
 ): Promise<UserSession | null> {
   if (!sealedCookie) return Promise.resolve(null);
-  return authenticateAndResolveUser(cfg, sealedCookie).catch(() => null);
+  // A REFUSAL becomes null; an OUTAGE is rethrown. Blanket-catching both told every caller the user
+  // was signed out whenever the API stalled — see UpstreamUnavailableError.
+  return authenticateAndResolveUser(cfg, sealedCookie).catch(
+    (error: unknown) => {
+      if (isUpstreamUnavailable(error)) throw error;
+      return null;
+    },
+  );
 }
 
 // Single-flight refresh de-duplication — same rationale as the org-scoped path: refresh tokens

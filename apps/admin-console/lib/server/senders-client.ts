@@ -6,10 +6,9 @@ import {
   type DecideSenderRequest,
   type ListAdminSendersResponse,
   listAdminSendersResponseSchema,
-  type SenderDto,
   type SetSenderCarrierStatusRequest,
-  senderDtoSchema,
 } from "@app/contracts";
+import { apiFetch } from "./api-fetch";
 import { unwrapEnvelope } from "./response-envelope";
 
 /** Sender-ID review queue via the api's BffToken-guarded /internal/admin/senders (E10). */
@@ -33,7 +32,7 @@ function config() {
 
 export async function listSenderQueue(): Promise<ListAdminSendersResponse> {
   const { baseUrl, bffToken } = config();
-  const response = await fetch(new URL("/internal/admin/senders", baseUrl), {
+  const response = await apiFetch(new URL("/internal/admin/senders", baseUrl), {
     cache: "no-store",
     headers: { "x-bff-token": bffToken },
   });
@@ -46,9 +45,9 @@ export async function decideSender(
   id: string,
   request: DecideSenderRequest,
   actor: { email: string; staffId: string },
-): Promise<SenderDto> {
+): Promise<AdminSenderDto> {
   const { baseUrl, bffToken } = config();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/admin/senders/${id}/decide`, baseUrl),
     {
       method: "POST",
@@ -64,7 +63,7 @@ export async function decideSender(
   );
   const payload = (await response.json()) as unknown;
   if (!response.ok) throw new SenderApiError(response.status, payload);
-  return senderDtoSchema.parse(unwrapEnvelope(payload));
+  return adminSenderDtoSchema.parse(unwrapEnvelope(payload));
 }
 
 /**
@@ -78,7 +77,7 @@ export async function setSenderCarrierStatus(
   actor: { email: string; staffId: string },
 ): Promise<AdminSenderDto> {
   const { baseUrl, bffToken } = config();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/admin/senders/${id}/carrier-status`, baseUrl),
     {
       method: "POST",

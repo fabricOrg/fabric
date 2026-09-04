@@ -46,6 +46,7 @@ describeDb("durable endpoint-specific webhook delivery", () => {
   let port = 0;
   let applicationId = "";
   let environmentId = "";
+  let liveEnvironmentId = "";
   let failingStatus = 500;
   const received: Array<{ path: string; signature: string; body: string }> = [];
 
@@ -70,12 +71,17 @@ describeDb("durable endpoint-specific webhook delivery", () => {
         status: "active",
       })
       .returning();
-    await provisioning.db.insert(environments).values({
-      tenantId,
-      applicationId: app.id,
-      type: "live",
-      status: "active",
-    });
+    const [live] = await provisioning.db
+      .insert(environments)
+      .values({
+        tenantId,
+        applicationId: app.id,
+        type: "live",
+        status: "active",
+      })
+      .returning();
+    if (!live) throw new Error("live environment seed failed");
+    liveEnvironmentId = live.id;
     const sandbox = sandboxRows[0];
     if (!sandbox) throw new Error("sandbox environment seed failed");
     environmentId = sandbox.id;
@@ -135,6 +141,54 @@ describeDb("durable endpoint-specific webhook delivery", () => {
         throw new Error("domain write failed");
       }),
     ).rejects.toThrow("domain write failed");
+  });
+
+  it("confines runtime-key webhook management to the key's exact environment", async () => {
+    const liveEndpoint = await webhooks.create(
+      tenantId,
+      { url: `http://127.0.0.1:${port}/live` },
+      { environmentId: liveEnvironmentId },
+    );
+    expect(
+      (await webhooks.list(tenantId, undefined, environmentId)).map(
+        (endpoint) => endpoint.id,
+      ),
+    ).not.toContain(liveEndpoint.id);
+    expect(
+      (await webhooks.list(tenantId, undefined, liveEnvironmentId)).map(
+        (endpoint) => endpoint.id,
+      ),
+    ).toContain(liveEndpoint.id);
+    await expect(
+      webhooks.disable(tenantId, liveEndpoint.id, environmentId),
+    ).rejects.toMatchObject({
+      response: { error: { code: "webhook_not_found" } },
+    });
+    await webhooks.disable(tenantId, liveEndpoint.id, liveEnvironmentId);
+  });
+
+  it("applies an application filter and the key's environment scope together", async () => {
+    // The environment scope must NARROW the application filter, never replace it. When it replaced
+    // it, asking for a different application returned this one's endpoints: the response answered
+    // a question the caller had not asked.
+    const endpoint = await webhooks.create(
+      tenantId,
+      { url: `http://127.0.0.1:${port}/scoped` },
+      { applicationId, environmentId },
+    );
+    expect(
+      (await webhooks.list(tenantId, applicationId, environmentId)).map(
+        (row) => row.id,
+      ),
+    ).toContain(endpoint.id);
+    expect(
+      await webhooks.list(
+        tenantId,
+        "00000000-0000-4000-8000-0000000000ff",
+        environmentId,
+      ),
+    ).toEqual([]);
+    await webhooks.disable(tenantId, endpoint.id, environmentId);
   });
 
   it("signs events and retries only the failed endpoint", async () => {

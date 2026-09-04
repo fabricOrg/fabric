@@ -5,6 +5,7 @@ import {
   resolveStaffSessionResponseSchema,
 } from "@app/contracts";
 import type { AppSession, WorkOSSessionClaims } from "@app/fe-auth";
+import { apiFetch, UpstreamUnavailableError } from "./api-fetch";
 import { unwrapEnvelope } from "./response-envelope";
 
 /**
@@ -26,7 +27,7 @@ export async function resolveStaffSession(
   claims: WorkOSSessionClaims,
 ): Promise<AppSession | null> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL("/internal/identity/staff-session", baseUrl),
     {
       method: "POST",
@@ -45,6 +46,11 @@ export async function resolveStaffSession(
     },
   );
   if (!response.ok) {
+    // A 5xx — including apiFetch's synthetic 504 — means the API could not ANSWER, which is not the
+    // same as an identity being refused. Returning null here would classify a stall as terminal and
+    // delete the session cookie; throwing keeps it in the transient branch.
+    if (response.status >= 500)
+      throw new UpstreamUnavailableError(response.status);
     // 403 = not on the allowlist (expected); anything else is a real fault worth logging.
     if (response.status !== 403) {
       console.error(`Staff resolution failed with status ${response.status}.`);

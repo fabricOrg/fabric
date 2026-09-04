@@ -79,4 +79,22 @@ describe("ManagedMessagesController pagination", () => {
     });
     expect(messages.list).not.toHaveBeenCalled();
   });
+
+  it("does not treat a legacy runtime key with null app scope as a tenant session", async () => {
+    const { controller, messages } = controllerWith();
+    const legacyKey = request();
+    legacyKey.tenant = {
+      ...legacyKey.tenant,
+      scopes: ["messages:read", "sms:read"],
+      applicationId: null,
+      environmentId: null,
+      isSessionToken: false,
+    };
+    await expect(
+      controller.list(legacyKey, { environment_id: ENVIRONMENT_ID }),
+    ).rejects.toMatchObject({
+      response: { error: { code: "scoped_api_key_required" } },
+    });
+    expect(messages.list).not.toHaveBeenCalled();
+  });
 });

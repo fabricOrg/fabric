@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Inject,
   Param,
   Post,
@@ -51,9 +52,9 @@ export class ConsentController {
   }
 
   @Delete(":id")
+  @HttpCode(204)
   async remove(@Req() req: AuthedRequest, @Param("id") id: string) {
     const tenant = requireScope(req.tenant, "sms:send");
     await this.consent.remove(tenant.id, id);
-    return { removed: true };
   }
 }

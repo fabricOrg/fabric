@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ApiKeysModule } from "../api-keys/api-keys.module.js";
+import { IdempotencyModule } from "../idempotency/idempotency.module.js";
 import { SmsModule } from "../sms/sms.module.js";
 import { VerifyController } from "./verify.controller.js";
 import { VerifyService } from "./verify.service.js";
@@ -9,7 +10,7 @@ import { VerifyService } from "./verify.service.js";
  * pipeline (billing, sandbox pinning, kill-switches inherited) and ApiKeysModule's guard.
  */
 @Module({
-  imports: [ApiKeysModule, SmsModule],
+  imports: [ApiKeysModule, IdempotencyModule, SmsModule],
   controllers: [VerifyController],
   providers: [VerifyService],
 })

@@ -3,6 +3,7 @@ import {
   type WhatsappMessageResponse,
   type WhatsappSendResponse,
   whatsappSendRequest,
+  whatsappSendResponse,
 } from "@app/contracts";
 import {
   Body,
@@ -86,20 +87,23 @@ export class WhatsappController {
       fingerprint,
     );
     if (claim.kind === "replay") {
-      return claim.response as WhatsappSendResponse;
+      // Parsed, not cast: the stored payload crossed a persistence boundary (a jsonb row an earlier
+      // release, or a hand edit, may have written in a different shape).
+      return whatsappSendResponse.parse(claim.response);
     }
+    let response: WhatsappSendResponse;
     try {
-      const response = await execute();
-      await this.idempotency.complete(
-        tenant.tenantId,
-        idempotencyKey,
-        response,
-      );
-      return response;
+      response = await execute();
     } catch (error) {
       await this.idempotency.release(tenant.tenantId, idempotencyKey);
       throw error;
     }
+    await this.idempotency.completeOrLog(
+      tenant.tenantId,
+      idempotencyKey,
+      response,
+    );
+    return response;
   }
 
   @Get()

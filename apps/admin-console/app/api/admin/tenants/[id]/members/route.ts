@@ -1,6 +1,12 @@
 import { inviteMemberRequestSchema } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+  bffUnprocessable,
+} from "@/lib/server/bff-error";
 import { requireTrustedOrigin } from "@/lib/server/origin";
 import {
   inviteTenantMember,
@@ -13,24 +19,11 @@ import {
  * The tenant id is the staff-chosen path param (staff are trusted platform operators, unlike the
  * customer dashboard where the tenant is the session's own org).
  */
-function fail(
-  code: string,
-  message: string,
-  status: number,
-  type = "auth_error",
-) {
-  return NextResponse.json({ error: { type, code, message } }, { status });
-}
 
 function errorResponse(error: unknown) {
   return error instanceof TenantMemberApiError
     ? NextResponse.json(error.payload, { status: error.status })
-    : fail(
-        "members_unavailable",
-        "Member service is unavailable.",
-        502,
-        "api_error",
-      );
+    : bffFailure("members_unavailable", "Member service is unavailable.", 502);
 }
 
 export async function GET(
@@ -38,7 +31,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   const { id } = await params;
   try {
     return NextResponse.json(await listTenantMembers(id));
@@ -54,23 +48,18 @@ export async function POST(
   const denied = requireTrustedOrigin(request);
   if (denied) return denied;
   const session = await readAdminSessionWithRefresh();
-  if (!session) return fail("invalid_session", "Staff sign-in required.", 401);
+  if (!session)
+    return bffUnauthorized("invalid_session", "Staff sign-in required.");
   if (!session.permissions.includes("staff:write")) {
-    return fail(
+    return bffForbidden(
       "insufficient_permission",
       "Only staff admins can manage members.",
-      403,
     );
   }
   const { id } = await params;
   const parsed = inviteMemberRequestSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return fail(
-      "invalid_request",
-      "Enter a valid email and role.",
-      422,
-      "validation_error",
-    );
+    return bffUnprocessable("invalid_request", "Enter a valid email and role.");
   }
   try {
     return NextResponse.json(await inviteTenantMember(id, parsed.data), {

@@ -8,14 +8,12 @@ import {
   WORKOS_COOKIE,
   workosAuthConfigured,
 } from "@/lib/server/auth";
+import { bffForbidden } from "@/lib/server/bff-error";
 import { hasTrustedOrigin } from "@/lib/server/origin";
 
 export async function POST(request: NextRequest) {
   if (!hasTrustedOrigin(request)) {
-    return NextResponse.json(
-      { error: "Untrusted request origin." },
-      { status: 403 },
-    );
+    return bffForbidden("invalid_origin", "Untrusted request origin.");
   }
   const sealedCookie = request.cookies.get(WORKOS_COOKIE)?.value;
   const logout =

@@ -5,6 +5,7 @@ import {
   publicPricingResponseSchema,
   unwrapEnvelope,
 } from "@app/contracts";
+import { apiFetch } from "./api-fetch";
 
 export class PublicPricingApiError extends Error {
   constructor(
@@ -27,10 +28,13 @@ function backendConfiguration() {
 /** Server-only fetch of the narrow published snapshot. No browser receives the BFF secret. */
 export async function getPublicPricing(): Promise<PublicPricingResponse> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(new URL("/internal/public/pricing", baseUrl), {
-    cache: "no-store",
-    headers: { "x-bff-token": bffToken },
-  });
+  const response = await apiFetch(
+    new URL("/internal/public/pricing", baseUrl),
+    {
+      cache: "no-store",
+      headers: { "x-bff-token": bffToken },
+    },
+  );
   const payload = (await response.json()) as unknown;
   if (!response.ok) {
     throw new PublicPricingApiError(response.status, payload);

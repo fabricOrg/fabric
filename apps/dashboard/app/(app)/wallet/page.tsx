@@ -1,9 +1,5 @@
-import type { LedgerEntry, WalletBalance } from "@app/contracts";
-import {
-  currency as currencySchema,
-  parseApiError,
-  toMoney,
-} from "@app/contracts";
+import type { Currency, LedgerEntry, WalletBalance } from "@app/contracts";
+import { parseApiError, toMoney } from "@app/contracts";
 import { DEFAULT_RATES, rateSegments } from "@app/domain";
 import {
   Alert,
@@ -155,6 +151,7 @@ export default async function WalletPage({
       : null;
   let balances: readonly WalletBalance[];
   let ledger: readonly LedgerEntry[];
+  let billingCurrency: Currency;
   // Best-effort: a missing saved card just shows the Paystack fallback, never blocks the page.
   const savedMethod = await getSavedPaymentMethod()
     .then((r) => r.method)
@@ -168,6 +165,7 @@ export default async function WalletPage({
     const snapshot = await getWalletSnapshot();
     balances = snapshot.balances;
     ledger = snapshot.ledger;
+    billingCurrency = snapshot.billing_currency;
   } catch (payload) {
     const err = parseApiError(payload);
     // One state, not two. `commercialSection` is ITSELF an ErrorState when the catalog read fails, and
@@ -224,28 +222,11 @@ export default async function WalletPage({
           entry.type === "topup" && entry.reference === paymentReference,
       )
     : false;
-  // Derived, never assumed. This feeds TopUpDialog's defaultCurrency, which seeds the POST body that
-  // reaches Paystack — so a wrong guess CHARGES in the wrong currency on a workspace's first top-up,
-  // and credits a balance no package can be bought with (the catalog is filtered to billing_currency).
-  // The catalog is already server-filtered to accounts.billing_currency, so its offers carry the real
-  // value; token balances carry it too. "GHS" survives only as a last resort when every read is empty.
-  const catalogCurrency =
-    catalogResult.status === "fulfilled"
-      ? catalogResult.value.offers[0]?.currency
-      : undefined;
-  // tokenBalanceDto types currency as a bare string, so it is narrowed through the contract's own
-  // schema rather than cast — an unrecognised value must fall through, not become the charged currency.
-  const tokenCurrencyRaw =
-    tokenBalancesResult.status === "fulfilled"
-      ? tokenBalancesResult.value.balances[0]?.currency
-      : undefined;
-  const tokenCurrency = currencySchema.safeParse(tokenCurrencyRaw).data;
-  // Catalog FIRST. It is the only source tied to accounts.billing_currency (token-catalog.service.ts
-  // filters offers by it). The wallet balance is not "primary" at all — customer-reads orders ledger
-  // accounts ALPHABETICALLY by currency, so balances[0] is whichever sorts first, and a workspace that
-  // ever acquires a stray GHS account would pin every later top-up to GHS.
-  const primaryCurrency =
-    catalogCurrency ?? balances[0]?.balance.currency ?? tokenCurrency ?? "GHS";
+  // Reported by the API, not inferred here. This feeds the top-up dialogs, which seed the POST body
+  // that reaches Paystack — so a wrong value CHARGES in the wrong currency and credits a balance
+  // nothing can spend. It replaces a four-deep guess (catalog offer → balances[0] → token balance →
+  // "GHS"): every one of those sources is empty on a workspace that has never been funded, which is
+  // exactly the first top-up, and `balances[0]` is only ever alphabetical.
   const primaryBalance = balances[0]?.balance;
   const tokenBalances =
     tokenBalancesResult.status === "fulfilled"
@@ -263,18 +244,25 @@ export default async function WalletPage({
               `${BigInt(balance.available).toLocaleString("en")} ${balance.channel}`,
           )
           .join(" · ");
+  // The ledger can hold entries in more than one currency — a workspace whose billing currency
+  // changed keeps its old ledger accounts — and both the total and the chart below carry a SINGLE
+  // currency label. Summing across currencies would print one number that is true of neither, so
+  // both read only the currency they claim to be in.
+  const billedLedger = ledger.filter(
+    (e) => e.amount.currency === billingCurrency,
+  );
   // "This month" spend = Σ|sms_charge| (exact bigint minor units, never float).
-  const monthSpendMinor = ledger
+  const monthSpendMinor = billedLedger
     .filter((e) => e.type === "sms_charge")
     .reduce((sum, e) => {
       const m = BigInt(e.amount.minor);
       return sum + (m < 0n ? -m : m);
     }, 0n);
-  const monthSpend = toMoney(monthSpendMinor, primaryCurrency);
+  const monthSpend = toMoney(monthSpendMinor, billingCurrency);
 
   // Running-balance series (chronological) for the trend chart. Number is display-only — the exact
   // money stays in bigint minor units on `runningBalance`.
-  const balancePoints = [...ledger]
+  const balancePoints = [...billedLedger]
     .sort(
       (a, b) =>
         new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
@@ -291,7 +279,7 @@ export default async function WalletPage({
           // The "Alerts" button that used to sit here had no handler and no href. It was only ever
           // rendered for a funded wallet; removing the empty branch would have shipped a dead control
           // into the first-run view.
-          <TopUpDialog defaultCurrency={primaryCurrency} />
+          <TopUpDialog currency={billingCurrency} />
         }
       />
 
@@ -403,14 +391,14 @@ export default async function WalletPage({
               icon={<Wallet />}
               title="No funds yet"
               description="Top up your wallet to start sending. You're charged per delivered segment — no monthly fees."
-              action={<TopUpDialog defaultCurrency={primaryCurrency} />}
+              action={<TopUpDialog currency={billingCurrency} />}
             />
           ) : (
             <>
               <div className="grid gap-4 md:grid-cols-3">
                 {balances.map((b) => {
                   const runway = messageRunway(b);
-                  const isPrimary = b.balance.currency === primaryCurrency;
+                  const isPrimary = b.balance.currency === billingCurrency;
                   return (
                     <Card key={b.balance.currency} className="flex flex-col">
                       <CardHeader>
@@ -462,7 +450,7 @@ export default async function WalletPage({
                 })}
                 <BalanceTrend
                   points={balancePoints}
-                  currency={primaryCurrency}
+                  currency={billingCurrency}
                 />
               </div>
 
@@ -476,7 +464,26 @@ export default async function WalletPage({
                   </CardHeader>
                   <CardContent className="flex items-center justify-between gap-2">
                     <div className="flex flex-col gap-1.5">
-                      {autoTopup.config?.enabled ? (
+                      {/* A config saved in another currency is never charged — the cron skips it and
+                          writes a log line nobody reads — so "On" would be a false statement here,
+                          and the first customer-visible symptom is a failed send. */}
+                      {autoTopup.config?.enabled &&
+                      autoTopup.config.currency !== billingCurrency ? (
+                        <>
+                          <Badge
+                            variant="outline"
+                            className="w-fit gap-1 border-transparent bg-destructive/12 text-destructive"
+                          >
+                            <TriangleAlert />
+                            Not charging
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            Saved in {autoTopup.config.currency}; this workspace
+                            is billed in {billingCurrency}. Open it to correct
+                            the currency.
+                          </span>
+                        </>
+                      ) : autoTopup.config?.enabled ? (
                         <>
                           <Badge
                             variant="outline"
@@ -519,7 +526,7 @@ export default async function WalletPage({
                     <AutoTopupDialog
                       config={autoTopup.config}
                       hasCard={autoTopup.has_card}
-                      defaultCurrency={primaryCurrency}
+                      billingCurrency={billingCurrency}
                     />
                   </CardContent>
                 </Card>

@@ -4,6 +4,11 @@ import {
   readDashboardSession,
   refreshDashboardSession,
 } from "@/lib/server/auth";
+import {
+  bffFailure,
+  bffForbidden,
+  bffUnauthorized,
+} from "@/lib/server/bff-error";
 import { listWebhookDeliveries } from "@/lib/server/webhooks-client";
 
 export async function GET(
@@ -13,15 +18,12 @@ export async function GET(
   const session =
     (await readDashboardSession()) ?? (await refreshDashboardSession());
   if (!session) {
-    return NextResponse.json(
-      { error: { code: "invalid_session" } },
-      { status: 401 },
-    );
+    return bffUnauthorized("invalid_session", "Sign in to continue.");
   }
   if (!session.permissions.includes("api_keys:read")) {
-    return NextResponse.json(
-      { error: { code: "insufficient_permission" } },
-      { status: 403 },
+    return bffForbidden(
+      "insufficient_permission",
+      "Your role cannot read webhook deliveries.",
     );
   }
   try {
@@ -40,6 +42,6 @@ export async function GET(
   } catch (error) {
     return error instanceof BffError
       ? NextResponse.json(error.payload, { status: error.status })
-      : NextResponse.json({ error: { code: "bff_error" } }, { status: 500 });
+      : bffFailure("bff_error", "Webhook deliveries could not be loaded.");
   }
 }
