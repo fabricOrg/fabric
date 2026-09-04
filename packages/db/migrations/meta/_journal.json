@@ -1072,6 +1072,13 @@
       "when": 1786320602000,
       "tag": "0152_message_definition_version_immutability",
       "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "7",
+      "when": 1786320662000,
+      "tag": "0153_provider_vendor_slug_shape",
+      "breakpoints": true
     }
   ]
 }

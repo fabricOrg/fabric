@@ -25,6 +25,7 @@ import {
 import { invalidRequest, newRequestId } from "../http/api-error.js";
 import { parsePageQuery } from "../http/cursor.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
+import { replayOrConflict } from "../idempotency/replay-parse.js";
 import { EmailService } from "./email.service.js";
 
 interface AuthedRequest {
@@ -60,10 +61,16 @@ export class EmailController {
     const execute = () => this.email.send(tenant, parsed.data);
     if (idempotencyKey === undefined) return execute();
 
-    const fingerprint = this.idempotency.fingerprint({
-      channel: "email",
-      ...parsed.data,
-    });
+    const fingerprint = this.idempotency.fingerprint(
+      {
+        channel: "email",
+        ...parsed.data,
+      },
+      {
+        route: "POST /v1/email/messages",
+        environmentId: tenant.environmentId,
+      },
+    );
     const claim = await this.idempotency.begin(
       tenant.tenantId,
       idempotencyKey,
@@ -72,7 +79,7 @@ export class EmailController {
     if (claim.kind === "replay") {
       // Parsed, not cast: the stored payload crossed a persistence boundary (a jsonb row an earlier
       // release, or a hand edit, may have written in a different shape).
-      return sendEmailApiResponse.parse(claim.response);
+      return replayOrConflict(sendEmailApiResponse, claim.response);
     }
     let response: SendEmailApiResponse;
     try {

@@ -27,6 +27,7 @@ import {
 import { parseUuidPageQuery } from "../http/cursor.js";
 import { parseMessageStatusGroup } from "../http/message-status-filter.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
+import { replayOrConflict } from "../idempotency/replay-parse.js";
 import { BffTokenGuard } from "../identity/bff-token.guard.js";
 import { WhatsappService } from "./whatsapp.service.js";
 import { listApprovedTemplates } from "./whatsapp-template-reads.js";
@@ -121,17 +122,23 @@ export class WhatsappInboxController {
       normalizedTenantId,
       environmentType(env),
     );
-    const fingerprint = this.idempotency.fingerprint({
-      channel: "whatsapp",
-      ...parsed.data,
-    });
+    const fingerprint = this.idempotency.fingerprint(
+      {
+        channel: "whatsapp",
+        ...parsed.data,
+      },
+      {
+        route: "POST /v1/whatsapp/inbox/messages",
+        environmentId: environment.environmentId,
+      },
+    );
     const claim = await this.idempotency.begin(
       normalizedTenantId,
       idempotencyKey,
       fingerprint,
     );
     if (claim.kind === "replay") {
-      return whatsappSendResponse.parse(claim.response);
+      return replayOrConflict(whatsappSendResponse, claim.response);
     }
     let response: WhatsappSendResponse;
     try {
