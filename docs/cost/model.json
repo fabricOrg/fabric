@@ -1,0 +1,406 @@
+{
+ "hours_per_month": 730,
+ "rates": {
+  "fargate_vcpu_hr": 0.04048,
+  "fargate_gb_hr": 0.004445,
+  "fargate_arm_vcpu_hr": 0.03238,
+  "fargate_arm_gb_hr": 0.00356,
+  "rds_t4g_small": 0.035,
+  "rds_t4g_medium": 0.069,
+  "rds_t4g_large": 0.138,
+  "rds_gp3_gb_mo_multiaz": 0.254,
+  "rds_gp3_gb_mo_singleaz": 0.127,
+  "rds_proxy_vcpu_hr": 0.018,
+  "ec_t4g_small": 0.034,
+  "ec_t4g_medium": 0.068,
+  "ec_backup_gb_mo": 0.085,
+  "nat_hr": 0.048,
+  "nat_gb": 0.048,
+  "eip_hr": 0.005,
+  "xaz_gb_roundtrip": 0.02,
+  "vpce_hr_per_az": 0.011,
+  "apigw_http_per_req": 1e-06,
+  "cf_req_per_10k": 0.012,
+  "cf_gb_eu": 0.085,
+  "cf_free_requests": 10000000,
+  "cf_free_gb": 1024,
+  "waf_acl_mo": 5.0,
+  "waf_rule_mo": 1.0,
+  "waf_per_req": 6e-07,
+  "alb_hr": 0.0225,
+  "alb_lcu_hr": 0.008,
+  "cwl_ingest_gb": 0.57,
+  "cwl_store_gb_mo": 0.03,
+  "cw_alarm_mo": 0.1,
+  "cw_metric_mo": 0.3,
+  "secret_mo": 0.4,
+  "secret_per_10k_calls": 0.05,
+  "kms_key_mo": 1.0,
+  "kms_per_10k_req": 0.03,
+  "r53_zone_mo": 0.5,
+  "r53_per_m_queries": 0.4,
+  "cloudmap_resource_mo": 0.1,
+  "cloudmap_api_per_m": 1.0,
+  "dto_gb": 0.09,
+  "ecr_gb_mo": 0.1,
+  "s3_gb_mo": 0.023,
+  "grafana_pro_mo": 19.0,
+  "sentry_team_mo": 26.0,
+  "arkesel_ghs_per_sms": 0.0219,
+  "ghs_per_usd": 11.27
+ },
+ "confidence": {
+  "A": [
+   "fargate_vcpu_hr",
+   "fargate_gb_hr",
+   "fargate_arm_vcpu_hr",
+   "fargate_arm_gb_hr",
+   "rds_t4g_small",
+   "rds_t4g_medium",
+   "rds_t4g_large",
+   "rds_gp3_gb_mo_multiaz",
+   "rds_gp3_gb_mo_singleaz",
+   "cf_req_per_10k",
+   "waf_acl_mo",
+   "waf_rule_mo",
+   "waf_per_req",
+   "secret_mo",
+   "secret_per_10k_calls",
+   "kms_key_mo",
+   "kms_per_10k_req",
+   "cloudmap_resource_mo",
+   "ecr_gb_mo"
+  ],
+  "B": [
+   "eip_hr",
+   "vpce_hr_per_az",
+   "r53_per_m_queries",
+   "apigw_http_per_req"
+  ],
+  "C": [
+   "rds_proxy_vcpu_hr",
+   "ec_t4g_small",
+   "ec_t4g_medium",
+   "ec_backup_gb_mo",
+   "nat_hr",
+   "nat_gb",
+   "xaz_gb_roundtrip",
+   "cf_gb_eu",
+   "alb_hr",
+   "alb_lcu_hr",
+   "cwl_ingest_gb",
+   "cwl_store_gb_mo",
+   "cw_alarm_mo",
+   "cw_metric_mo",
+   "r53_zone_mo",
+   "s3_gb_mo",
+   "cloudmap_api_per_m",
+   "dto_gb"
+  ]
+ },
+ "vendor_fixed": {
+  "WorkOS (User Management, <1M MAU)": 0.0,
+  "Grafana Cloud Pro": 19.0,
+  "Sentry Team": 26.0,
+  "Infisical (local dev, Free tier)": 0.0,
+  "Paystack (no platform fee)": 0.0,
+  "Arkesel (no platform fee)": 0.0
+ },
+ "scenarios": [
+  {
+   "name": "Soft launch",
+   "tenants": 10,
+   "sms": 50000,
+   "edge_requests": 800000,
+   "dto_gb": 40,
+   "tasks": [
+    [
+     "api",
+     1,
+     1.0,
+     2.0
+    ],
+    [
+     "worker",
+     1,
+     0.5,
+     1.0
+    ],
+    [
+     "dashboard",
+     1,
+     0.5,
+     1.0
+    ],
+    [
+     "admin-console",
+     1,
+     0.5,
+     1.0
+    ]
+   ],
+   "rds_class": "rds_t4g_small",
+   "rds_storage_gb": 50,
+   "rds_proxy": false,
+   "cache_class": "ec_t4g_small",
+   "cache_nodes": 2,
+   "nat_gateways": 2,
+   "log_ingest_gb": 8,
+   "lines": {
+    "Fargate compute (steady state)": 90.1,
+    "Fargate compute (deploy + migration overhead)": 0.36,
+    "RDS PostgreSQL instance (Multi-AZ)": 51.1,
+    "RDS gp3 storage (Multi-AZ)": 12.7,
+    "RDS backup storage": 0.0,
+    "RDS enhanced monitoring (CloudWatch)": 0.6,
+    "ElastiCache Redis nodes": 49.64,
+    "ElastiCache snapshot storage": 0.51,
+    "NAT Gateway (hourly)": 70.08,
+    "NAT Gateway (data processed)": 1.79,
+    "Elastic IPs": 7.3,
+    "Cross-AZ data transfer": 0.25,
+    "Data transfer out to internet (beyond 100 GB free)": 0.0,
+    "API Gateway HTTP API requests": 0.8,
+    "CloudFront requests": 0.0,
+    "CloudFront data transfer out": 0.0,
+    "AWS WAF (1 web ACL + 4 rules)": 9.0,
+    "AWS WAF (requests inspected)": 0.48,
+    "CloudWatch Logs ingestion": 4.56,
+    "CloudWatch Logs storage (90-day retention)": 0.72,
+    "CloudWatch alarms": 1.6,
+    "CloudWatch custom metrics": 1.2,
+    "Container Insights (standard, billed as custom metrics)": 12.0,
+    "Secrets Manager": 7.61,
+    "KMS customer-managed keys": 1.12,
+    "Route 53 (1 public + 1 private zone)": 1.32,
+    "Cloud Map registered resources": 0.4,
+    "Cloud Map discovery API calls": 0.35,
+    "ECR image storage": 2.4,
+    "S3 (state, static assets, DSR exports)": 0.73,
+    "SNS alarm notifications": 0.0,
+    "CloudTrail (first management trail)": 0.0
+   },
+   "aws": 328.7200000000001,
+   "vendor_fixed": 45.0,
+   "vendor_variable": {
+    "Arkesel SMS credit (GHS 1095)": 97.1606033717835
+   },
+   "vendor_var_total": 97.1606033717835,
+   "total": 470.8806033717836,
+   "annual": 5650.567240461403,
+   "aws_per_tenant": 32.87200000000001,
+   "usd_per_sms": 0.009417612067435672
+  },
+  {
+   "name": "Modest launch (recommended)",
+   "tenants": 25,
+   "sms": 300000,
+   "edge_requests": 3500000,
+   "dto_gb": 150,
+   "tasks": [
+    [
+     "api",
+     2,
+     1.0,
+     2.0
+    ],
+    [
+     "worker",
+     1,
+     0.5,
+     1.0
+    ],
+    [
+     "dashboard",
+     1,
+     0.5,
+     1.0
+    ],
+    [
+     "admin-console",
+     1,
+     0.5,
+     1.0
+    ]
+   ],
+   "rds_class": "rds_t4g_medium",
+   "rds_storage_gb": 100,
+   "rds_proxy": true,
+   "cache_class": "ec_t4g_medium",
+   "cache_nodes": 4,
+   "nat_gateways": 3,
+   "log_ingest_gb": 25,
+   "lines": {
+    "Fargate compute (steady state)": 126.14,
+    "Fargate compute (deploy + migration overhead)": 0.59,
+    "RDS PostgreSQL instance (Multi-AZ)": 100.74,
+    "RDS gp3 storage (Multi-AZ)": 25.4,
+    "RDS backup storage": 0.0,
+    "RDS Proxy": 26.28,
+    "RDS enhanced monitoring (CloudWatch)": 0.6,
+    "ElastiCache Redis nodes": 198.56,
+    "ElastiCache snapshot storage": 0.51,
+    "NAT Gateway (hourly)": 105.12,
+    "NAT Gateway (data processed)": 3.24,
+    "Elastic IPs": 10.95,
+    "Cross-AZ data transfer": 1.07,
+    "Data transfer out to internet (beyond 100 GB free)": 0.0,
+    "API Gateway HTTP API requests": 3.5,
+    "CloudFront requests": 0.0,
+    "CloudFront data transfer out": 0.0,
+    "AWS WAF (1 web ACL + 4 rules)": 9.0,
+    "AWS WAF (requests inspected)": 2.1,
+    "CloudWatch Logs ingestion": 14.25,
+    "CloudWatch Logs storage (90-day retention)": 2.25,
+    "CloudWatch alarms": 1.6,
+    "CloudWatch custom metrics": 1.2,
+    "Container Insights (standard, billed as custom metrics)": 16.5,
+    "Secrets Manager": 7.62,
+    "KMS customer-managed keys": 2.3,
+    "Route 53 (1 public + 1 private zone)": 2.4,
+    "Cloud Map registered resources": 0.5,
+    "Cloud Map discovery API calls": 0.44,
+    "ECR image storage": 2.4,
+    "S3 (state, static assets, DSR exports)": 1.07,
+    "SNS alarm notifications": 0.0,
+    "CloudTrail (first management trail)": 0.0
+   },
+   "aws": 666.3300000000003,
+   "vendor_fixed": 45.0,
+   "vendor_variable": {
+    "Arkesel SMS credit (GHS 6570)": 582.963620230701
+   },
+   "vendor_var_total": 582.963620230701,
+   "total": 1294.2936202307014,
+   "annual": 15531.523442768417,
+   "aws_per_tenant": 26.653200000000012,
+   "usd_per_sms": 0.0043143120674356715
+  },
+  {
+   "name": "12-month growth",
+   "tenants": 75,
+   "sms": 1500000,
+   "edge_requests": 15000000,
+   "dto_gb": 700,
+   "tasks": [
+    [
+     "api",
+     4,
+     1.0,
+     2.0
+    ],
+    [
+     "worker",
+     2,
+     0.5,
+     1.0
+    ],
+    [
+     "dashboard",
+     2,
+     0.5,
+     1.0
+    ],
+    [
+     "admin-console",
+     1,
+     0.5,
+     1.0
+    ]
+   ],
+   "rds_class": "rds_t4g_large",
+   "rds_storage_gb": 250,
+   "rds_proxy": true,
+   "cache_class": "ec_t4g_medium",
+   "cache_nodes": 4,
+   "nat_gateways": 3,
+   "log_ingest_gb": 90,
+   "lines": {
+    "Fargate compute (steady state)": 234.26,
+    "Fargate compute (deploy + migration overhead)": 0.74,
+    "RDS PostgreSQL instance (Multi-AZ)": 201.48,
+    "RDS gp3 storage (Multi-AZ)": 63.5,
+    "RDS backup storage": 0.0,
+    "RDS Proxy": 26.28,
+    "RDS enhanced monitoring (CloudWatch)": 0.6,
+    "ElastiCache Redis nodes": 198.56,
+    "ElastiCache snapshot storage": 0.51,
+    "NAT Gateway (hourly)": 105.12,
+    "NAT Gateway (data processed)": 6.86,
+    "Elastic IPs": 10.95,
+    "Cross-AZ data transfer": 4.6,
+    "Data transfer out to internet (beyond 100 GB free)": 3.87,
+    "API Gateway HTTP API requests": 15.0,
+    "CloudFront requests": 6.0,
+    "CloudFront data transfer out": 0.0,
+    "AWS WAF (1 web ACL + 4 rules)": 9.0,
+    "AWS WAF (requests inspected)": 9.0,
+    "CloudWatch Logs ingestion": 51.3,
+    "CloudWatch Logs storage (90-day retention)": 8.1,
+    "CloudWatch alarms": 2.0,
+    "CloudWatch custom metrics": 3.6,
+    "Container Insights (standard, billed as custom metrics)": 25.5,
+    "Secrets Manager": 8.83,
+    "KMS customer-managed keys": 2.9,
+    "Route 53 (1 public + 1 private zone)": 7.0,
+    "Cloud Map registered resources": 0.9,
+    "Cloud Map discovery API calls": 0.79,
+    "ECR image storage": 3.0,
+    "S3 (state, static assets, DSR exports)": 2.8,
+    "SNS alarm notifications": 0.0,
+    "CloudTrail (first management trail)": 0.0
+   },
+   "aws": 1013.0500000000001,
+   "vendor_fixed": 45.0,
+   "vendor_variable": {
+    "Arkesel SMS credit (GHS 32850)": 2914.818101153505
+   },
+   "vendor_var_total": 2914.818101153505,
+   "total": 3972.868101153505,
+   "annual": 47674.41721384206,
+   "aws_per_tenant": 13.507333333333333,
+   "usd_per_sms": 0.0026485787341023366
+  }
+ ],
+ "levers": [
+  {
+   "lever": "Right-size Redis: queue tier stays 2-node Multi-AZ, cache tier drops to one smaller node",
+   "saving": 74.46000000000001
+  },
+  {
+   "lever": "Rebuild images for ARM and run Fargate on Graviton",
+   "saving": 25.217850000000013
+  },
+  {
+   "lever": "Consolidate NAT Gateways from 3 to 1 and release 2 Elastic IPs (upper bound: some egress becomes billable cross-AZ traffic)",
+   "saving": 77.38
+  },
+  {
+   "lever": "Add the free S3 gateway VPC endpoint so ECR layer pulls bypass NAT",
+   "saving": 1.536
+  },
+  {
+   "lever": "Enable CloudFront caching on dashboard static assets (~40% of requests stop reaching the origin)",
+   "saving": 1.8280000000000003
+  },
+  {
+   "lever": "Cut CloudWatch log retention 90 to 30 days and move app logs to the Infrequent Access class",
+   "saving": 8.625
+  },
+  {
+   "lever": "Turn Container Insights off and rely on Grafana Cloud, which is already paid for and carries the same signals",
+   "saving": 16.5
+  },
+  {
+   "lever": "1-year no-upfront Reserved Instances on RDS (-34%) and on the right-sized ElastiCache nodes (-32%)",
+   "saving": 73.9636
+  },
+  {
+   "lever": "1-year no-upfront Compute Savings Plan on the Graviton Fargate baseline (-20%)",
+   "saving": 20.1845
+  }
+ ],
+ "lever_total": 299.69495000000006,
+ "aws_after_levers": 366.6350500000002,
+ "total_after_levers": 994.5986702307013
+}
