@@ -131,7 +131,7 @@ export class SendersService {
     id: string,
     request: DecideSenderRequest,
     actor: Actor,
-  ): Promise<SenderDto> {
+  ): Promise<AdminSenderDto> {
     const [current] = await this.provisioning.db
       .select()
       .from(senders)
@@ -177,7 +177,9 @@ export class SendersService {
       reason: request.reason ?? null,
       metadata: { tenant_id: current.tenantId },
     });
-    return toDto(updated);
+    // Staff surface: the admin shape, like its siblings. The console updates the queue row in place
+    // from this response, and the narrow customer DTO drops the carrier columns that row shows.
+    return toAdminDto(updated);
   }
 
   /**
