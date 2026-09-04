@@ -57,6 +57,7 @@ export class SmsResource {
         currency: params.currency ?? "GHS",
         class: params.class ?? "transactional",
       },
+      retryableWrite: options?.idempotencyKey !== undefined,
       ...(options ? { options } : {}),
     });
     return { ...response, data: sentSms(response.data) };
@@ -89,6 +90,7 @@ export class SmsResource {
           };
         }),
       },
+      retryableWrite: true,
       options,
     });
     return { ...response, data: smsBatch(response.data) };
@@ -183,9 +185,9 @@ function smsBatch(data: Record<string, unknown>): SmsBatch {
       const item = record(value);
       return {
         clientReference: stringField(item.client_reference, "client_reference"),
-        messageId: typeof item.message_id === "string" ? item.message_id : null,
+        messageId: nullableStringField(item.message_id, "message_id"),
         status: enumField(item.status, MESSAGE_STATUSES, "status"),
-        errorCode: typeof item.error_code === "string" ? item.error_code : null,
+        errorCode: nullableStringField(item.error_code, "error_code"),
       };
     }),
   };
@@ -214,6 +216,11 @@ function messageSummary(data: Record<string, unknown>): MessageSummary {
     ...sentSms(data),
     to: stringField(data.to, "to"),
     provider: stringField(data.provider, "provider"),
+    backing: enumField(
+      data.backing,
+      ["wallet", "tokens", "sandbox_allowance"] as const,
+      "backing",
+    ),
     deliveryMode: enumField(
       data.delivery_mode ?? "live",
       ["live", "virtual"] as const,
@@ -224,16 +231,15 @@ function messageSummary(data: Record<string, unknown>): MessageSummary {
 }
 
 function messageDetail(data: Record<string, unknown>): MessageDetail {
-  const timeline = Array.isArray(data.timeline)
-    ? data.timeline.map((entry) => {
-        const item = record(entry);
-        return {
-          status: enumField(item.status, MESSAGE_STATUSES, "timeline.status"),
-          at: stringField(item.at, "timeline.at"),
-          ...(typeof item.note === "string" ? { note: item.note } : {}),
-        };
-      })
-    : [];
+  if (!Array.isArray(data.timeline)) throw new ApiShapeError("timeline");
+  const timeline = data.timeline.map((entry) => {
+    const item = record(entry);
+    return {
+      status: enumField(item.status, MESSAGE_STATUSES, "timeline.status"),
+      at: stringField(item.at, "timeline.at"),
+      ...(typeof item.note === "string" ? { note: item.note } : {}),
+    };
+  });
   return {
     ...messageSummary(data),
     senderId: stringField(data.sender_id, "sender_id"),

@@ -61,4 +61,35 @@ describe("catalog generator", () => {
       }),
     ).toThrow(/Upgrade @fabric-messaging\/sdk/);
   });
+
+  it("accepts WhatsApp definitions and the canonical hyphenated stable-key grammar", () => {
+    const base = manifest();
+    const definition = base.definitions[0];
+    if (!definition) throw new Error("fixture has no definition");
+    const parsed = parseManifest({
+      ...base,
+      definitions: [
+        {
+          ...definition,
+          key: "order.follow-up",
+          channels: ["whatsapp"],
+        },
+      ],
+    });
+    expect(generateCatalog(parsed)).toContain('readonly channels: "whatsapp"');
+  });
+
+  it("rejects keys that the API stable-key contract rejects", () => {
+    const base = manifest();
+    const definition = base.definitions[0];
+    if (!definition) throw new Error("fixture has no definition");
+    for (const key of ["order_followup", "fabric.internal"]) {
+      expect(() =>
+        parseManifest({
+          ...base,
+          definitions: [{ ...definition, key }],
+        }),
+      ).toThrow(/invalid definition catalog/);
+    }
+  });
 });

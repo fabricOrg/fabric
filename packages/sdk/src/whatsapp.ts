@@ -55,12 +55,13 @@ export class WhatsAppResource {
         variables: params.variables ?? [],
         currency: params.currency ?? "GHS",
       },
+      retryableWrite: true,
       options,
     });
     return { ...response, data: whatsappMessage(response.data) };
   }
 
-  async get(
+  async retrieve(
     id: string,
     options?: RequestOptions,
   ): Promise<FabricResponse<SentWhatsAppMessage>> {
@@ -74,6 +75,14 @@ export class WhatsAppResource {
       ...response,
       data: whatsappMessage(record(response.data.message)),
     };
+  }
+
+  /** @deprecated Use {@link retrieve}; retained for beta compatibility. */
+  async get(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<FabricResponse<SentWhatsAppMessage>> {
+    return this.retrieve(id, options);
   }
 
   async list(
@@ -101,6 +110,25 @@ export class WhatsAppResource {
       },
     };
   }
+
+  async *iterate(
+    params?: Pick<ListParams, "limit">,
+    options?: RequestOptions,
+  ): AsyncGenerator<SentWhatsAppMessage, void, undefined> {
+    let cursor: string | undefined;
+    do {
+      const page = await this.list(
+        {
+          ...(params?.limit ? { limit: params.limit } : {}),
+          ...(cursor ? { cursor } : {}),
+        },
+        options,
+      );
+      yield* page.data.items;
+      const next = page.data.nextCursor ?? undefined;
+      cursor = next === cursor ? undefined : next;
+    } while (cursor);
+  }
 }
 
 function whatsappMessage(data: Record<string, unknown>): SentWhatsAppMessage {
@@ -119,8 +147,20 @@ function whatsappMessage(data: Record<string, unknown>): SentWhatsAppMessage {
       data.template_category,
       "template_category",
     ),
+    cost: money(record(data.cost)),
     createdAt: stringField(data.created_at, "created_at"),
     errorCode: nullableStringField(data.error_code, "error_code"),
+  };
+}
+
+function money(data: Record<string, unknown>): SentWhatsAppMessage["cost"] {
+  return {
+    minor: stringField(data.minor, "cost.minor"),
+    currency: enumField(
+      data.currency,
+      ["GHS", "NGN", "USD"] as const,
+      "cost.currency",
+    ),
   };
 }
 

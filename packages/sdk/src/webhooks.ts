@@ -8,9 +8,9 @@ import type {
   RequestOptions,
   WebhookDelivery,
   WebhookEndpoint,
-  WriteOptions,
 } from "./types.js";
 import {
+  ApiShapeError,
   nullableStringField,
   pageQueryString,
   record,
@@ -23,8 +23,6 @@ import { parseDelivery, parseEndpoint } from "./webhook-parsers.js";
 export interface CreateWebhookParams {
   readonly url: string;
   readonly description?: string;
-  readonly applicationId?: string;
-  readonly environment?: "sandbox" | "live";
 }
 export interface CreatedWebhookEndpoint extends WebhookEndpoint {
   readonly secret: string;
@@ -44,7 +42,7 @@ export class WebhooksResource {
 
   async create(
     params: CreateWebhookParams,
-    options?: WriteOptions,
+    options?: RequestOptions,
   ): Promise<FabricResponse<CreatedWebhookEndpoint>> {
     requireNonEmpty(params.url, "url");
     const response = await this.transport.request<Record<string, unknown>>({
@@ -53,10 +51,6 @@ export class WebhooksResource {
       body: {
         url: params.url,
         ...(params.description ? { description: params.description } : {}),
-        ...(params.applicationId
-          ? { application_id: params.applicationId }
-          : {}),
-        ...(params.environment ? { env: params.environment } : {}),
       },
       ...(options ? { options } : {}),
     });
@@ -70,19 +64,15 @@ export class WebhooksResource {
   }
 
   async list(
-    applicationId?: string,
     options?: RequestOptions,
   ): Promise<FabricResponse<ReadonlyArray<WebhookEndpoint>>> {
-    const query = applicationId
-      ? `?applicationId=${encodeURIComponent(applicationId)}`
-      : "";
     const response = await this.transport.request<Record<string, unknown>>({
       method: "GET",
-      path: `/v1/webhooks${query}`,
+      path: "/v1/webhooks",
       ...(options ? { options } : {}),
     });
     if (!Array.isArray(response.data.endpoints))
-      throw new TypeError("Fabric returned an invalid webhook list.");
+      throw new ApiShapeError("endpoints");
     return {
       ...response,
       data: response.data.endpoints.map((item) => parseEndpoint(record(item))),
@@ -95,7 +85,7 @@ export class WebhooksResource {
    */
   async remove(
     id: string,
-    options?: WriteOptions,
+    options?: RequestOptions,
   ): Promise<FabricResponse<void>> {
     requireNonEmpty(id, "id");
     return this.transport.request<void>({
@@ -108,7 +98,7 @@ export class WebhooksResource {
   /** Alias of {@link remove} — the API disables rather than hard-deletes, so both are the same call. */
   async disable(
     id: string,
-    options?: WriteOptions,
+    options?: RequestOptions,
   ): Promise<FabricResponse<void>> {
     return this.remove(id, options);
   }
@@ -129,7 +119,7 @@ export class WebhooksResource {
       ...(options ? { options } : {}),
     });
     if (!Array.isArray(response.data.deliveries)) {
-      throw new TypeError("Fabric returned an invalid webhook delivery list.");
+      throw new ApiShapeError("deliveries");
     }
     return {
       ...response,
@@ -168,7 +158,7 @@ export class WebhooksResource {
   async replayDelivery(
     endpointId: string,
     deliveryId: string,
-    options?: WriteOptions,
+    options?: RequestOptions,
   ): Promise<FabricResponse<WebhookDelivery>> {
     requireNonEmpty(endpointId, "endpointId");
     requireNonEmpty(deliveryId, "deliveryId");

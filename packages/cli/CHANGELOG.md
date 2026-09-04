@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-beta.8
+
+- Manifest contract version 2. `channels` accepts `whatsapp`, which the platform has sent since the
+  channel went live, and definition keys are parsed with the SAME rule the API enforces
+  (`packages/contracts`): dot-separated lowercase segments with hyphens, at most eight of them, and
+  no reserved `fabric.` prefix. The previous local regex accepted underscores the API rejects, so a
+  manifest could pass `fabric definitions generate` and then fail on publish.
+- Version-aligned with `@fabric-messaging/sdk@0.1.0-beta.8` per the policy below. There is no CLI
+  `0.1.0-beta.7`: that release carried SDK changes only.
+
 ## 0.1.0-beta.6
 
 - Version-aligned with `@fabric-messaging/sdk` — the CLI's generated catalog imports

@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+## 0.1.0-beta.8
+
+- Verify start now accepts a durable `Idempotency-Key`, returns an absolute `expiresAt`, and safely
+  retries only when the caller supplies a key. Replaying a sandbox start never re-exposes the OTP.
+- Package exports now resolve the built artifact under ESM, CommonJS `require()`, and custom
+  `development` conditions. The previous development export referenced unpublished source files.
+  The supported Node floor moves to **22.12**, the release where `require()` of an ESM package is
+  unflagged — below it the `require` condition would resolve and then throw `ERR_REQUIRE_ESM`.
+- Automatic retries are limited to reads and writes whose API endpoints implement durable
+  idempotency. Unsafe POST operations are never retried merely because an option contains a key.
+- Managed delivery reads, pagination, webhook delivery states, and WhatsApp events now parse the
+  complete public API response instead of rejecting or narrowing valid server data.
+- Webhook endpoint and sender-management operations now preserve environment scope and expose the
+  stable structured errors needed by server-side consumers. Listing endpoints applies an
+  `applicationId` filter and the key's environment scope together, instead of letting the
+  environment scope replace an explicit application filter.
+- `verify.start()` returns `expiresIn` as the seconds remaining **at the time of that response**,
+  recomputed on an idempotent replay and 0 once the code has lapsed. A replay used to repeat the
+  original 300, so a countdown driven from it outlived the code. `expiresAt` is unchanged.
+
 ## 0.1.0-beta.7
 
 - **Fixed:** `webhooks.verify()` rejected **every live inbound webhook**. `InboundMessageWebhookData`'s
@@ -32,8 +54,8 @@
 - **Breaking:** the SMS read wire fields are now snake_case (`created_at`, `delivery_mode`,
   `sender_id`, `failure_reason`), matching every other resource. The SDK's TypeScript surface is
   unchanged (still camelCase) — only raw-JSON consumers of those two endpoints are affected.
-- Decision: the package stays ESM-only. Node >= 22 (the supported floor) can `require()` ESM
-  natively, so a separate CommonJS build adds weight without adding reach.
+- The package ships one ESM artifact. Node >= 22.12 (the supported floor) can load it through both
+  `import` and `require()`, so a duplicate CommonJS build is unnecessary.
 - Added `InsufficientFundsError` — a 402 now surfaces as a dedicated typed error instead of the
   base `ApiError`, matching the documented `insufficient_funds` failure.
 - Documented that `webhooks.remove`/`webhooks.disable` are the same soft-delete call (the API
@@ -80,7 +102,7 @@
 `fabric-messaging@0.1.0-beta.1` and `0.1.0-beta.2` are deprecated. Install
 `@fabric-messaging/sdk@beta` instead.
 
-Cursor pagination landed in 0.1.0-beta.6. CommonJS is intentionally not included: Node >= 22 can
-`require()` ESM natively. Email landed in beta.4 and batch sending in beta.4 as well (it never got its
-own entry). Neither beta.4 nor beta.5 reached the registry, so 0.1.0-beta.6 is the first published
-version carrying them.
+Cursor pagination landed in 0.1.0-beta.6. The package exposes its ESM artifact to both `import` and
+Node 22.12+ `require()` consumers rather than building duplicate module formats. Email landed in
+beta.4 and batch sending in beta.4 as well (it never got its own entry). Neither beta.4 nor beta.5
+reached the registry, so 0.1.0-beta.6 is the first published version carrying them.

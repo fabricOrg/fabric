@@ -1,6 +1,6 @@
 {
   "name": "@fabric-messaging/sdk",
-  "version": "0.1.0-beta.7",
+  "version": "0.1.0-beta.8",
   "description": "Official TypeScript SDK for the Fabric communications platform",
   "license": "MIT",
   "type": "module",
@@ -15,13 +15,14 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "exports": {
     ".": {
-      "development": "./src/index.ts",
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./openapi.json": "./openapi.json"
   },
@@ -54,7 +55,8 @@
     "lint": "biome check src scripts",
     "test": "vitest run",
     "pack:check": "pnpm pack --dry-run",
-    "release:check": "pnpm openapi:check && pnpm lint && pnpm typecheck && pnpm examples:typecheck && pnpm test && pnpm build && pnpm pack:check && pnpm artifact:check"
+    "metadata:check": "node ../../scripts/release/assert-package-metadata.mjs .",
+    "release:check": "pnpm metadata:check && pnpm openapi:check && pnpm lint && pnpm typecheck && pnpm examples:typecheck && pnpm test && pnpm build && pnpm pack:check && pnpm artifact:check"
   },
   "devDependencies": {
     "@app/contracts": "workspace:*",

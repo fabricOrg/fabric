@@ -13,8 +13,9 @@ export const KNOWN_WEBHOOK_EVENT_TYPES = [
 export type KnownWebhookEventType = (typeof KNOWN_WEBHOOK_EVENT_TYPES)[number];
 
 interface WebhookEventBase<TData> {
-  readonly id?: string;
-  readonly createdAt?: string;
+  /** Stable delivery identity. Persist under a unique constraint before applying side effects. */
+  readonly id: string;
+  readonly createdAt: string;
   readonly data: TData;
 }
 
@@ -80,10 +81,8 @@ export function parseWebhookEvent(value: unknown): WebhookEvent {
   const event = webhookRecord(value);
   const originalType = typeof event.type === "string" ? event.type : "unknown";
   const envelope = {
-    ...(typeof event.id === "string" ? { id: event.id } : {}),
-    ...(typeof event.created_at === "string"
-      ? { createdAt: event.created_at }
-      : {}),
+    id: webhookString(event.id, "id"),
+    createdAt: webhookString(event.created_at, "created_at"),
   };
   if (!isKnownEventType(originalType)) {
     return {

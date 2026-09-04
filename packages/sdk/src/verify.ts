@@ -1,5 +1,5 @@
 import type { Transport } from "./transport.js";
-import type { FabricResponse, WriteOptions } from "./types.js";
+import type { FabricResponse, RequestOptions, WriteOptions } from "./types.js";
 import {
   enumField,
   numberField,
@@ -24,7 +24,10 @@ export interface StartedVerification {
   readonly status: "pending" | "verified" | "failed" | "expired";
   readonly to: string;
   readonly channel: "sms";
+  /** Seconds left at the time of THIS response — recomputed on an idempotent replay, 0 once lapsed. */
   readonly expiresIn: number;
+  /** Absolute server expiry. Drive a countdown from this if you cache or replay the response. */
+  readonly expiresAt: string;
   readonly debugCode?: string;
 }
 export interface CheckVerificationParams {
@@ -52,6 +55,7 @@ export class VerifyResource {
         to: params.to,
         ...(params.senderId ? { sender_id: params.senderId } : {}),
       },
+      retryableWrite: options?.idempotencyKey !== undefined,
       ...(options ? { options } : {}),
     });
     return {
@@ -66,6 +70,7 @@ export class VerifyResource {
         to: stringField(response.data.to, "to"),
         channel: enumField(response.data.channel, ["sms"] as const, "channel"),
         expiresIn: numberField(response.data.expires_in, "expires_in"),
+        expiresAt: stringField(response.data.expires_at, "expires_at"),
         ...(typeof response.data.debug_code === "string"
           ? { debugCode: response.data.debug_code }
           : {}),
@@ -75,7 +80,7 @@ export class VerifyResource {
 
   async check(
     params: CheckVerificationParams,
-    options?: WriteOptions,
+    options?: RequestOptions,
   ): Promise<FabricResponse<CheckedVerification>> {
     requireNonEmpty(params.id, "id");
     requireNonEmpty(params.code, "code");

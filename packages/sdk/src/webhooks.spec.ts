@@ -14,6 +14,7 @@ const timestamp = Math.floor(now.getTime() / 1000);
 const payload = JSON.stringify({
   id: "evt_1",
   type: "message.delivered",
+  created_at: "2026-07-12T11:59:59.000Z",
   data: { message_id: "msg_1", status: "delivered" },
 });
 
@@ -48,6 +49,7 @@ describe("webhook verification", () => {
     expect(event).toEqual({
       id: "evt_1",
       type: "message.delivered",
+      createdAt: "2026-07-12T11:59:59.000Z",
       data: { messageId: "msg_1", status: "delivered" },
     });
   });
@@ -69,7 +71,12 @@ describe("webhook verification", () => {
   });
 
   it("accepts unknown future event types", () => {
-    const body = JSON.stringify({ type: "future.created", data: { value: 1 } });
+    const body = JSON.stringify({
+      id: "evt_future",
+      type: "future.created",
+      created_at: "2026-07-12T11:59:59.000Z",
+      data: { value: 1 },
+    });
     expect(
       webhooks.verify({
         payload: body,
@@ -82,7 +89,9 @@ describe("webhook verification", () => {
 
   it("maps canonical inbound event data", () => {
     const body = JSON.stringify({
+      id: "evt_inbound",
       type: "message.inbound",
+      created_at: "2026-07-12T11:59:59.000Z",
       data: { id: "inbound_1", channel: "sms" },
     });
     expect(
@@ -105,7 +114,9 @@ describe("webhook verification", () => {
     // "sms", which is real (the sandbox Virtual Phone emits it) but was the ONLY inbound case, so a
     // green suite said nothing about the live path.
     const body = JSON.stringify({
+      id: "evt_inbound_wa",
       type: "message.inbound",
+      created_at: "2026-07-12T11:59:59.000Z",
       data: { id: "inbound_wa", channel: "whatsapp" },
     });
     expect(
@@ -125,7 +136,9 @@ describe("webhook verification", () => {
     // This one never threw — it silently omitted `channel`, so a handler branching on
     // `data.channel === "whatsapp"` never fired and had nothing to debug.
     const body = JSON.stringify({
+      id: "evt_delivered_wa",
       type: "message.delivered",
+      created_at: "2026-07-12T11:59:59.000Z",
       data: { message_id: "msg_wa", channel: "whatsapp", status: "delivered" },
     });
     expect(
@@ -143,8 +156,26 @@ describe("webhook verification", () => {
 
   it("rejects a signed known event whose data violates the SDK contract", () => {
     const body = JSON.stringify({
+      id: "evt_invalid",
       type: "message.delivered",
+      created_at: "2026-07-12T11:59:59.000Z",
       data: { status: "delivered" },
+    });
+    expect(() =>
+      webhooks.verify({
+        payload: body,
+        signature: signature(body),
+        secret,
+        now,
+      }),
+    ).toThrow(WebhookVerificationError);
+  });
+
+  it("rejects a signed event without the stable identity required for deduplication", () => {
+    const body = JSON.stringify({
+      type: "message.delivered",
+      created_at: "2026-07-12T11:59:59.000Z",
+      data: { message_id: "msg_1", status: "delivered" },
     });
     expect(() =>
       webhooks.verify({

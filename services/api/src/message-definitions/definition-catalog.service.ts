@@ -112,8 +112,8 @@ function toEntry(row: {
   return {
     key: row.key,
     version: row.version,
-    // The drizzle column types as string; parse through the enum to narrow (the DB CHECK already
-    // constrains it to sms|email, so this never throws in practice).
+    // The drizzle column types as string; parse through the shared enum so catalog generation stays
+    // aligned as channels are added.
     channels: [messageChannel.parse(row.channel)],
     default_locale: row.defaultLocale,
     locales: [row.defaultLocale, ...Object.keys(content.locales)].sort(),

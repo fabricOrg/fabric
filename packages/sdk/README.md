@@ -2,8 +2,9 @@
 
 The official server-side TypeScript client for sending and inspecting messages with Fabric.
 
-> Public prerelease: `0.1.0-beta.6`. Install the explicit `beta` channel until 1.0 is ready.
-> The package is ESM-only by design — Node.js 22+ (the supported floor) can `require()` it natively.
+> Public prerelease: `0.1.0-beta.8`. Install the explicit `beta` channel until 1.0 is ready.
+> The package is ESM-only by design — Node.js 22.12+ (the supported floor) can `require()` it
+> natively, so there is no separate CommonJS build.
 
 ## Install
 
@@ -55,8 +56,8 @@ for await (const summary of fabric.sms.iterate({ limit: 100 })) {
 ```
 
 Message, email, and webhook-delivery lists are cursor-paginated (`limit` 1–100, default 50). Treat
-`nextCursor` as opaque: pass it back exactly as returned. `email.iterate` and
-`webhooks.iterateDeliveries` follow the same pattern.
+`nextCursor` as opaque: pass it back exactly as returned. `email.iterate`,
+`messages.iterateDeliveries`, and `webhooks.iterateDeliveries` follow the same pattern.
 
 ## Send a sandbox Email
 
@@ -113,6 +114,8 @@ if (first) {
 
 Webhook delivery is at least once. Persist event IDs under a unique constraint before applying side
 effects; timeout-after-accept and manual replay can legitimately deliver the same event again.
+The verified event always contains `id` and `createdAt`; missing envelope identity is rejected even
+when the signature itself is valid.
 
 ## Handle errors
 
@@ -151,10 +154,12 @@ keys in client bundles, logs, commits, screenshots, or support tickets.
 
 ## Supported resources
 
-- `fabric.messages.send`, `preview`, `retrieveDelivery` (managed, template-key messages)
+- `fabric.messages.send`, `preview`, `retrieveDelivery`, `listDeliveries`, `iterateDeliveries`,
+  `listDeliveryWebhooks` (managed, template-key messages)
 - `fabric.sms.send`, `retrieve`, `list`, `iterate`
 - `fabric.sms.sendBatch`, `retrieveBatch`
 - `fabric.email.send`, `retrieve`, `list`, `iterate`
+- `fabric.whatsapp.send`, `retrieve`, `list`, `iterate`
 - `fabric.senderIds.create`, `list` (bounded — sender IDs are few; not paginated)
 - `fabric.verify.start`, `check`
 - `fabric.wallet.retrieve`

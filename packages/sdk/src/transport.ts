@@ -7,14 +7,11 @@ import {
   RateLimitError,
   TimeoutError,
   UserAbortedError,
+  ValidationError,
 } from "./errors.js";
+import { validateTransportOptions } from "./transport-options.js";
 import type { FabricResponse, WriteOptions } from "./types.js";
 
-const PROTECTED_HEADERS = new Set([
-  "authorization",
-  "idempotency-key",
-  "user-agent",
-]);
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 /**
  * Codes a backoff cannot clear, despite arriving on a normally-retryable status.
@@ -47,27 +44,21 @@ interface RequestInput {
   readonly path: string;
   readonly body?: unknown;
   readonly options?: WriteOptions;
+  /** The endpoint durably honors Idempotency-Key, so replaying this write is safe. */
+  readonly retryableWrite?: boolean;
 }
 
 export class Transport {
   constructor(private readonly config: TransportConfig) {}
 
   async request<T>(input: RequestInput): Promise<FabricResponse<T>> {
-    this.validateHeaders(input.options?.headers);
-    const canRetry =
-      input.method === "GET" || input.options?.idempotencyKey !== undefined;
+    validateTransportOptions(input.options);
+    const canRetry = input.method === "GET" || input.retryableWrite === true;
     let retryCount = 0;
     while (true) {
       let retryDelay: number | undefined;
       try {
-        const response = await this.attempt<T>(input, retryCount);
-        if (
-          !RETRYABLE_STATUSES.has(response.statusCode) ||
-          !canRetry ||
-          retryCount >= this.config.maxRetries
-        ) {
-          return response;
-        }
+        return await this.attempt<T>(input, retryCount, canRetry);
       } catch (error) {
         if (!this.shouldRetryError(error, canRetry, retryCount)) throw error;
         retryDelay =
@@ -95,8 +86,20 @@ export class Transport {
   private async attempt<T>(
     input: RequestInput,
     retryCount: number,
+    retrySafe: boolean,
   ): Promise<FabricResponse<T>> {
     const timeout = input.options?.timeout ?? this.config.timeout;
+    const headers = new Headers(input.options?.headers);
+    headers.set("authorization", `Bearer ${this.config.apiKey}`);
+    headers.set("user-agent", `fabric-node/${this.config.sdkVersion}`);
+    if (input.body !== undefined)
+      headers.set("content-type", "application/json");
+    if (input.options?.idempotencyKey)
+      headers.set("idempotency-key", input.options.idempotencyKey);
+    const body =
+      input.body === undefined ? undefined : serializeBody(input.body);
+    // Build caller-controlled headers/body before starting the attempt timer. A local validation
+    // failure must neither consume network timeout budget nor leave a scheduled timer behind.
     const timeoutController = new AbortController();
     const timer = setTimeout(
       () => timeoutController.abort("sdk-timeout"),
@@ -106,13 +109,6 @@ export class Transport {
       timeoutController.signal,
       ...(input.options?.signal ? [input.options.signal] : []),
     ]);
-    const headers = new Headers(input.options?.headers);
-    headers.set("authorization", `Bearer ${this.config.apiKey}`);
-    headers.set("user-agent", `fabric-node/${this.config.sdkVersion}`);
-    if (input.body !== undefined)
-      headers.set("content-type", "application/json");
-    if (input.options?.idempotencyKey)
-      headers.set("idempotency-key", input.options.idempotencyKey);
     this.log("request", {
       method: input.method,
       path: input.path,
@@ -125,15 +121,14 @@ export class Transport {
           method: input.method,
           headers,
           signal,
-          ...(input.body !== undefined
-            ? { body: JSON.stringify(input.body) }
-            : {}),
+          ...(body !== undefined ? { body } : {}),
         },
       );
       const requestId = response.headers.get("x-request-id") ?? undefined;
       const payload =
         response.status === 204 ? undefined : await parseBody(response);
-      if (!response.ok) throw mapApiError(response, payload, requestId);
+      if (!response.ok)
+        throw mapApiError(response, payload, requestId, retrySafe);
       this.log("response", {
         method: input.method,
         path: input.path,
@@ -162,12 +157,12 @@ export class Transport {
       if (timeoutController.signal.aborted) {
         throw new TimeoutError(
           `The request exceeded the ${timeout}ms timeout.`,
-          { code: "request_timeout", retryable: true, cause: error },
+          { code: "request_timeout", retryable: retrySafe, cause: error },
         );
       }
       throw new ConnectionError(
         "Fabric could not be reached. Check your network connection and retry.",
-        { code: "connection_error", retryable: true, cause: error },
+        { code: "connection_error", retryable: retrySafe, cause: error },
       );
     } finally {
       clearTimeout(timer);
@@ -185,18 +180,6 @@ export class Transport {
       error instanceof FabricError &&
       error.retryable
     );
-  }
-
-  private validateHeaders(
-    headers: Readonly<Record<string, string>> | undefined,
-  ): void {
-    for (const name of Object.keys(headers ?? {})) {
-      if (PROTECTED_HEADERS.has(name.toLowerCase())) {
-        throw new TypeError(
-          `The protected header \`${name}\` cannot be overridden.`,
-        );
-      }
-    }
   }
 
   private log(
@@ -223,10 +206,24 @@ async function parseBody(response: Response): Promise<unknown> {
   }
 }
 
+function serializeBody(value: unknown): string {
+  try {
+    const serialized = JSON.stringify(value);
+    if (serialized !== undefined) return serialized;
+    throw new TypeError("JSON.stringify returned undefined");
+  } catch (cause) {
+    throw new ValidationError(
+      "The request body cannot be serialized as JSON.",
+      { code: "invalid_request_body", cause },
+    );
+  }
+}
+
 function mapApiError(
   response: Response,
   payload: unknown,
   requestId?: string,
+  retrySafe = true,
 ): ApiError {
   const envelope =
     typeof payload === "object" && payload !== null
@@ -249,7 +246,9 @@ function mapApiError(
     ...(resolvedRequestId ? { requestId: resolvedRequestId } : {}),
     details: body,
     retryable:
-      RETRYABLE_STATUSES.has(response.status) && !NON_RETRYABLE_CODES.has(code),
+      retrySafe &&
+      RETRYABLE_STATUSES.has(response.status) &&
+      !NON_RETRYABLE_CODES.has(code),
     ...(retryAfter !== undefined ? { retryAfter } : {}),
   });
 }
