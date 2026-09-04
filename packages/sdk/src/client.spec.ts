@@ -49,6 +49,10 @@ describe("Fabric client", () => {
     );
     expect(new Fabric({ apiKey: "sk_live_example" }).environment).toBe("live");
     expect(() => new Fabric({ apiKey: "secret" })).toThrow(/sk_test_/);
+    expect(() => new Fabric({ apiKey: "sk_test_" })).toThrow(/sk_test_/);
+    expect(() => Reflect.construct(Fabric, [{ apiKey: undefined }])).toThrow(
+      /non-empty Fabric secret key/,
+    );
   });
 
   it("validates SMS input before the network call", async () => {
@@ -68,7 +72,7 @@ describe("Fabric client", () => {
       );
     await new Fabric({ apiKey: "sk_test_example", fetch }).sms.list();
     expect(String(fetch.mock.calls[0]?.[0])).toBe(
-      "https://d2umm5b2x22zvp.cloudfront.net/v1/messages",
+      "https://fabric-jezz.onrender.com/v1/messages",
     );
   });
 
@@ -160,8 +164,58 @@ describe("Fabric client", () => {
         senderId: "Fabric",
         body: "Hello",
       }),
-    ).rejects.toThrow("Unavailable");
+    ).rejects.toMatchObject({ message: "Unavailable", retryable: false });
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries Verify start only when a durable idempotency key is supplied", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(
+        json({ error: { code: "upstream", message: "Unavailable" } }, 503),
+      );
+    const client = new Fabric({
+      apiKey: "sk_test_example",
+      fetch,
+      maxRetries: 2,
+    });
+    await expect(
+      client.verify.start(
+        { to: "+233545227189" },
+        { idempotencyKey: "verify-start-1" },
+      ),
+    ).rejects.toMatchObject({ retryable: true });
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("rejects invalid per-request execution options before the network call", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    const client = new Fabric({ apiKey: "sk_test_example", fetch });
+    await expect(
+      client.sms.send(
+        { to: "+233545227189", senderId: "Fabric", body: "Hello" },
+        { idempotencyKey: "" },
+      ),
+    ).rejects.toThrow(/idempotencyKey/);
+    await expect(
+      client.sms.list(undefined, { timeout: Number.NaN }),
+    ).rejects.toThrow(/timeout/);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("reports an unserializable request body as validation, not a network failure", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    const request = new Fabric({
+      apiKey: "sk_test_example",
+      fetch,
+    }).messages.preview("order.created", { data: cyclic });
+    await expect(request).rejects.toMatchObject({
+      code: "invalid_request_body",
+      retryable: false,
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("retries transient reads and idempotency-protected writes", async () => {
@@ -179,6 +233,33 @@ describe("Fabric client", () => {
       maxRetries: 1,
     });
     const response = await client.sms.list();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(response.retryCount).toBe(1);
+  });
+
+  it("retries a write only when that endpoint durably honors idempotency", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        json({ error: { code: "upstream", message: "Unavailable" } }, 503),
+      )
+      .mockResolvedValueOnce(
+        json({
+          id: "msg_1",
+          status: "accepted",
+          encoding: "gsm7",
+          segments: 1,
+          cost: { minor: "5", currency: "GHS" },
+        }),
+      );
+    const response = await new Fabric({
+      apiKey: "sk_test_example",
+      fetch,
+      maxRetries: 1,
+    }).sms.send(
+      { to: "+233545227189", senderId: "Fabric", body: "Hello" },
+      { idempotencyKey: "safe-send" },
+    );
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(response.retryCount).toBe(1);
   });
