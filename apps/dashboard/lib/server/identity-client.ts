@@ -7,6 +7,7 @@ import {
   unwrapEnvelope,
 } from "@app/contracts";
 import type { UserSession, UserSessionClaims } from "@app/fe-auth";
+import { apiFetch, UpstreamUnavailableError } from "./api-fetch";
 
 function backendConfiguration() {
   const baseUrl = process.env.API_BASE_URL;
@@ -26,7 +27,7 @@ export async function resolveUserSessionV2(
   claims: UserSessionClaims,
 ): Promise<UserSession | null> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL("/internal/identity/session-v2", baseUrl),
     {
       method: "POST",
@@ -46,6 +47,11 @@ export async function resolveUserSessionV2(
     },
   );
   if (!response.ok) {
+    // A 5xx — including apiFetch's synthetic 504 — means the API could not ANSWER, which is not the
+    // same as an identity being refused. Returning null here would classify a stall as terminal and
+    // delete the session cookie; throwing keeps it in the transient branch.
+    if (response.status >= 500)
+      throw new UpstreamUnavailableError(response.status);
     if (response.status !== 403) {
       console.error(
         `User session resolution failed with status ${response.status}.`,
@@ -84,7 +90,7 @@ export async function createWorkspaceForUser(input: {
   workspaceName: string;
 }): Promise<CreateWorkspaceResponse | null> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL("/internal/identity/workspaces", baseUrl),
     {
       method: "POST",

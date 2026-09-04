@@ -7,6 +7,7 @@ import {
   listKillSwitchesResponseSchema,
   type ToggleKillSwitchRequest,
 } from "@app/contracts";
+import { apiFetch } from "./api-fetch";
 import { unwrapEnvelope } from "./response-envelope";
 
 /** Kill-switch control plane via the api's BffToken-guarded /internal/admin/kill-switches. */
@@ -30,7 +31,7 @@ function backendConfiguration() {
 
 export async function listKillSwitches(): Promise<ListKillSwitchesResponse> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL("/internal/admin/kill-switches", baseUrl),
     { cache: "no-store", headers: { "x-bff-token": bffToken } },
   );
@@ -45,7 +46,7 @@ export async function toggleKillSwitch(
   actor: { email: string; staffId: string },
 ): Promise<KillSwitchDto> {
   const { baseUrl, bffToken } = backendConfiguration();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(
       `/internal/admin/kill-switches/${encodeURIComponent(key)}`,
       baseUrl,

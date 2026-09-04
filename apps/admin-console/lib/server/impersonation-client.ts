@@ -1,5 +1,7 @@
 import "server-only";
 
+import { apiFetch } from "./api-fetch";
+
 /** Records the impersonation audit trail via the api (the cookie itself is set/cleared in the BFF). */
 function config() {
   const baseUrl = process.env.API_BASE_URL;
@@ -16,7 +18,7 @@ async function record(
   actor: { email: string; staffId: string },
 ): Promise<void> {
   const { baseUrl, bffToken } = config();
-  const response = await fetch(
+  const response = await apiFetch(
     new URL(`/internal/admin/impersonation/${action}`, baseUrl),
     {
       method: "POST",

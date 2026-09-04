@@ -1,5 +1,6 @@
 import { unwrapEnvelope } from "@app/contracts";
 import { type NextRequest, NextResponse } from "next/server";
+import { apiFetch } from "@/lib/server/api-fetch";
 import { readAdminSessionWithRefresh } from "@/lib/server/auth";
 import {
   bffFailure,
@@ -48,7 +49,7 @@ export async function GET() {
   if (!(await readAdminSessionWithRefresh())) return unauthorized();
   try {
     const { baseUrl, token } = apiConfig();
-    const res = await fetch(new URL("/internal/plugins", baseUrl), {
+    const res = await apiFetch(new URL("/internal/plugins", baseUrl), {
       cache: "no-store",
       headers: { "x-bff-token": token },
     });
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
   }
   try {
     const { baseUrl, token } = apiConfig();
-    const res = await fetch(new URL("/internal/plugins", baseUrl), {
+    const res = await apiFetch(new URL("/internal/plugins", baseUrl), {
       method: "POST",
       cache: "no-store",
       headers: { "content-type": "application/json", "x-bff-token": token },
