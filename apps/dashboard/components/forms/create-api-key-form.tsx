@@ -124,7 +124,12 @@ export function CreateApiKeyForm({
             env,
             scopes: value.scopes,
             application_id: applicationId,
-            expires_in_days: value.expiresInDays,
+            // The form says 0 means never; the contract says OMIT means never and rejects 0 with
+            // `.positive()`. Sending 0 failed every submit left on the default option, with zod's
+            // raw "Too small: expected number to be >0" as the entire message.
+            ...(value.expiresInDays > 0
+              ? { expires_in_days: value.expiresInDays }
+              : {}),
           }),
         });
         const payload = (await response.json().catch(() => null)) as

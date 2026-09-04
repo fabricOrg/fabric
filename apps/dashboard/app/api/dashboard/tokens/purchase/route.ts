@@ -4,6 +4,7 @@ import {
 } from "@app/contracts";
 import { NextResponse } from "next/server";
 import { BffError, dashboardApi } from "@/lib/server/api-client";
+import { API_EXTERNAL_WRITE_TIMEOUT_MS } from "@/lib/server/api-fetch";
 import {
   readDashboardSession,
   refreshDashboardSession,
@@ -57,10 +58,17 @@ export async function POST(request: Request) {
     }
     return NextResponse.json(
       purchaseCommercialOfferResponseSchema.parse(
-        await dashboardApi("/v1/tokens/purchase", "wallet:read", {
-          method: "POST",
-          body: JSON.stringify({ ...parsed.data, email: session.email }),
-        }),
+        await dashboardApi(
+          "/v1/tokens/purchase",
+          "wallet:read",
+          {
+            method: "POST",
+            body: JSON.stringify({ ...parsed.data, email: session.email }),
+          },
+          // Same as the wallet top-up: initialises a Paystack checkout, not idempotent, no
+          // Idempotency-Key. A short deadline here turns one purchase into two.
+          API_EXTERNAL_WRITE_TIMEOUT_MS,
+        ),
       ),
     );
   } catch (error) {

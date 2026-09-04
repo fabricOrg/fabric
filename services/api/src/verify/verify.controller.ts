@@ -9,7 +9,6 @@ import {
   Controller,
   Get,
   Headers,
-  HttpStatus,
   Inject,
   Post,
   Req,
@@ -20,8 +19,9 @@ import {
   type RequestTenant,
   requireScope,
 } from "../api-keys/api-key.guard.js";
-import { apiError, invalidRequest } from "../http/api-error.js";
+import { invalidRequest } from "../http/api-error.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
+import { replayOrConflict } from "../idempotency/replay-parse.js";
 import { VerifyService } from "./verify.service.js";
 
 interface AuthedRequest {
@@ -64,7 +64,10 @@ export class VerifyController {
       });
     if (idempotencyKey === undefined) return execute();
 
-    const fingerprint = this.idempotency.fingerprint(parsed.data);
+    const fingerprint = this.idempotency.fingerprint(parsed.data, {
+      route: "POST /v1/verify",
+      environmentId: tenant.environmentId,
+    });
     const claim = await this.idempotency.begin(
       tenant.id,
       idempotencyKey,
@@ -121,19 +124,9 @@ export class VerifyController {
  * an expiry would report `expired` for a code the caller has since verified. The contract says so.
  */
 function replayedStart(stored: unknown): VerifyStartResponse {
-  const parsed = verifyStartResponse.safeParse(stored);
-  if (!parsed.success) {
-    // A stored payload that no longer matches the contract (written by an earlier release, or by
-    // hand) must not escape as a raw ZodError — that crosses the boundary as an unbranchable 500.
-    throw apiError({
-      type: "api_error",
-      code: "idempotency_replay_unreadable",
-      message:
-        "The stored response for this Idempotency-Key cannot be replayed. Retry with a new key.",
-      status: HttpStatus.CONFLICT,
-    });
-  }
-  const response = parsed.data;
+  // Shared with the four send controllers: a stored payload that no longer matches the contract
+  // (written by an earlier release, or by hand) must not escape as a raw ZodError.
+  const response = replayOrConflict(verifyStartResponse, stored);
   const remainingMs = Date.parse(response.expires_at) - Date.now();
   return {
     ...response,

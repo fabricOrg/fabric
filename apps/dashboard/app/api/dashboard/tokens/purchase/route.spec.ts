@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { API_EXTERNAL_WRITE_TIMEOUT_MS } from "@/lib/server/api-fetch";
 
 const { dashboardApi, readSession, refreshSession } = vi.hoisted(() => ({
   dashboardApi: vi.fn(),
@@ -71,6 +72,10 @@ describe("commercial-offer purchase BFF", () => {
           email: "owner@example.com",
         }),
       }),
+      // The long budget, asserted rather than accepted as any number: this call initialises a
+      // Paystack checkout and is not idempotent, so a short deadline firing after the reference
+      // exists is what turns one purchase into two.
+      API_EXTERNAL_WRITE_TIMEOUT_MS,
     );
   });
 

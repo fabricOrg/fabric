@@ -29,6 +29,7 @@ import {
 } from "../http/api-error.js";
 import { parsePageQuery } from "../http/cursor.js";
 import { IdempotencyService } from "../idempotency/idempotency.service.js";
+import { replayOrConflict } from "../idempotency/replay-parse.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
 interface AuthedRequest {
@@ -77,10 +78,16 @@ export class WhatsappController {
             "The wallet balance can't cover this WhatsApp message.",
           ),
         );
-    const fingerprint = this.idempotency.fingerprint({
-      channel: "whatsapp",
-      ...parsed.data,
-    });
+    const fingerprint = this.idempotency.fingerprint(
+      {
+        channel: "whatsapp",
+        ...parsed.data,
+      },
+      {
+        route: "POST /v1/whatsapp/messages",
+        environmentId: tenant.environmentId,
+      },
+    );
     const claim = await this.idempotency.begin(
       tenant.tenantId,
       idempotencyKey,
@@ -89,7 +96,7 @@ export class WhatsappController {
     if (claim.kind === "replay") {
       // Parsed, not cast: the stored payload crossed a persistence boundary (a jsonb row an earlier
       // release, or a hand edit, may have written in a different shape).
-      return whatsappSendResponse.parse(claim.response);
+      return replayOrConflict(whatsappSendResponse, claim.response);
     }
     let response: WhatsappSendResponse;
     try {

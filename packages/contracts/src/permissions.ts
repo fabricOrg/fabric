@@ -142,3 +142,49 @@ export const updateMemberPermissionsRequestSchema = z.object({
 export type UpdateMemberPermissionsRequest = z.infer<
   typeof updateMemberPermissionsRequestSchema
 >;
+
+/**
+ * The membership permission a given API-key scope confers, where one exists.
+ *
+ * A key is issued BY a person and inherits their authority — it cannot be a way to acquire more of
+ * it. `api_keys:write` is held by roles that deliberately cannot send (the legacy `developer` is
+ * exactly that), so without this map "mint a key with `sms:send`" is an unguarded escalation from
+ * "may manage keys" to "may spend the wallet".
+ *
+ * Scopes absent from this map (`definitions:read`) have no membership counterpart and are not
+ * clamped — refusing what we cannot evaluate would break key creation for everyone rather than
+ * secure it. Only scopes we can PROVE the caller lacks are refused.
+ */
+const SCOPE_REQUIRES_PERMISSION: Readonly<
+  Record<string, MembershipPermission>
+> = {
+  "sms:send": "sms:send",
+  "sms:read": "sms:read",
+  "email:send": "email:send",
+  "email:read": "email:read",
+  "whatsapp:send": "whatsapp:send",
+  "wallet:read": "wallet:read",
+  "request_logs:read": "request_logs:read",
+  "api_keys:read": "api_keys:read",
+  "api_keys:write": "api_keys:write",
+  "messages:send": "messages:send",
+  "messages:read": "messages:read",
+};
+
+/**
+ * Which of `requested` the holder of `permissions` may NOT put on a key. Empty means allowed.
+ *
+ * Lives in contracts because the check belongs to the BFF: a tenant token presents `scopes: ["*"]`
+ * to the API by design (tenant containment only — see the API key guard), so the API cannot make
+ * this judgement. The membership permissions exist only on the session.
+ */
+export function scopesExceedingPermissions(
+  requested: readonly string[],
+  permissions: readonly string[],
+): string[] {
+  const held = new Set(permissions);
+  return requested.filter((scope) => {
+    const required = SCOPE_REQUIRES_PERMISSION[scope];
+    return required !== undefined && !held.has(required);
+  });
+}
