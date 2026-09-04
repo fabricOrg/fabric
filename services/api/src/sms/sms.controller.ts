@@ -4,7 +4,7 @@ import type {
   MessagingInsightsResponse,
   SendSmsApiResponse,
 } from "@app/contracts";
-import { sendSmsRequest } from "@app/contracts";
+import { sendSmsApiResponse, sendSmsRequest } from "@app/contracts";
 import {
   Body,
   Controller,
@@ -102,17 +102,22 @@ export class SmsController {
       fingerprint,
     );
     if (claim.kind === "replay") {
-      return claim.response as SendSmsApiResponse;
+      // Parsed, not cast: the stored payload crossed a persistence boundary (a jsonb row an earlier
+      // release, or a hand edit, may have written in a different shape).
+      return sendSmsApiResponse.parse(claim.response);
     }
+    let response: SendSmsApiResponse;
     try {
-      const response = await this.execute(input);
-      await this.idempotency.complete(tenant.id, idempotencyKey, response);
-      return response;
+      response = await this.execute(input);
     } catch (error) {
       // Failed request releases the key so the client may retry with it.
       await this.idempotency.release(tenant.id, idempotencyKey);
       throw error;
     }
+    // Completion failure is uncertainty after acceptance: keep the pending claim so a retry cannot
+    // create a second message merely because response persistence failed.
+    await this.idempotency.complete(tenant.id, idempotencyKey, response);
+    return response;
   }
 
   private async execute(input: {

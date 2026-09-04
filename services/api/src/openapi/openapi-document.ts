@@ -1,3 +1,4 @@
+import { idempotencyParameter } from "./idempotency-parameter.js";
 import {
   ALWAYS_POSSIBLE_ERRORS,
   errorEnvelopeSchema,
@@ -102,6 +103,9 @@ function operationFor(
       style: "form",
       explode: true,
     });
+  }
+  if (binding.idempotency) {
+    parameters.push(idempotencyParameter(binding.idempotency));
   }
 
   const successType = binding.successContentType ?? "application/json";
