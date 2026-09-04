@@ -43,12 +43,20 @@ export async function POST(request: Request) {
       typeof raw?.application_id === "string" ? raw.application_id : null;
     const parsed = createApiKeyRequest.safeParse(raw);
     if (!parsed.success || !applicationId) {
+      // Name the field. zod's own text is written for a developer reading a stack trace — "Too
+      // small: expected number to be >0" told an operator nothing about WHICH input to change, and
+      // an error that does not point at its cause is a dead end.
+      const issue = parsed.error?.issues[0];
+      const field = issue?.path
+        .filter((segment) => typeof segment !== "number")
+        .join(".");
       return bffUnprocessable(
         "invalid_request",
         !applicationId
           ? "An application is required."
-          : (parsed.error?.issues[0]?.message ??
-              "Enter a name, environment, and at least one scope."),
+          : issue
+            ? `${field ? `${field}: ` : ""}${issue.message}`
+            : "Enter a name, environment, and at least one scope.",
       );
     }
     // A key inherits the authority of the person minting it — it must not be a way to acquire more.
