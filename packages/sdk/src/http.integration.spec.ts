@@ -18,7 +18,6 @@ describe.sequential("real HTTP transport", () => {
   let mode: Mode;
   let attempts: number;
   let requests: IncomingMessage[];
-  let baseUrl: string;
   const server = createServer((request, response) => {
     requests.push(request);
     attempts += 1;
@@ -62,10 +61,12 @@ describe.sequential("real HTTP transport", () => {
       server.listen(0, "127.0.0.1", resolve),
     );
     const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    // The endpoint override lives in the environment now, not in FabricConfig.
+    process.env.FABRIC_BASE_URL = `http://127.0.0.1:${address.port}`;
   });
 
   afterEach(async () => {
+    delete process.env.FABRIC_BASE_URL;
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
       server.closeAllConnections();
@@ -73,7 +74,7 @@ describe.sequential("real HTTP transport", () => {
   });
 
   it("sends authentication, SDK identity, idempotency, and serialized input", async () => {
-    const client = new Fabric({ apiKey: "sk_test_http", baseUrl });
+    const client = new Fabric({ apiKey: "sk_test_http" });
     const result = await client.sms.send(
       { to: "+233545227189", senderId: "Fabric", body: "Hello" },
       { idempotencyKey: "order-123" },
@@ -89,7 +90,6 @@ describe.sequential("real HTTP transport", () => {
     mode = "retry";
     const result = await new Fabric({
       apiKey: "sk_test_http",
-      baseUrl,
       maxRetries: 1,
     }).sms.list();
     expect(attempts).toBe(2);
@@ -100,7 +100,6 @@ describe.sequential("real HTTP transport", () => {
     mode = "slow";
     const request = new Fabric({
       apiKey: "sk_test_http",
-      baseUrl,
       maxRetries: 0,
     }).sms.list(undefined, { timeout: 10 });
     await expect(request).rejects.toMatchObject({
@@ -114,7 +113,6 @@ describe.sequential("real HTTP transport", () => {
     const controller = new AbortController();
     const request = new Fabric({
       apiKey: "sk_test_http",
-      baseUrl,
       maxRetries: 0,
     }).sms.list(undefined, { signal: controller.signal });
     controller.abort();
@@ -124,7 +122,7 @@ describe.sequential("real HTTP transport", () => {
   it("fails closed when a successful response violates the public contract", async () => {
     mode = "malformed";
     await expect(
-      new Fabric({ apiKey: "sk_test_http", baseUrl }).sms.list(),
+      new Fabric({ apiKey: "sk_test_http" }).sms.list(),
     ).rejects.toBeInstanceOf(ResponseValidationError);
   });
 });

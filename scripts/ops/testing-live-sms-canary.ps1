@@ -10,7 +10,7 @@ param(
 
   [string]$Currency = "GHS",
 
-  [string]$ApiBaseUrl = "https://d2umm5b2x22zvp.cloudfront.net",
+  [string]$ApiBaseUrl = "https://fabric-jezz.onrender.com",
 
   [string]$Body = "Fabric testing live SMS canary",
 

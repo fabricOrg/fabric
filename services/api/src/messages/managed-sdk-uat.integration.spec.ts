@@ -84,13 +84,18 @@ describeDb("SDK-005 UAT — SDK send → typed webhook consumption", () => {
     await app.init();
     await app.listen({ port: 0, host: "127.0.0.1" });
     const apiUrl = await app.getUrl();
+    // The SDK reads its endpoint from the environment now; there is no `baseUrl` on FabricConfig.
+    process.env.FABRIC_BASE_URL = apiUrl.replace("[::1]", "127.0.0.1");
     fabric = new Fabric({
       apiKey: rawKey,
-      baseUrl: apiUrl.replace("[::1]", "127.0.0.1"),
+      // This tier deliberately crosses a remote real database. Keep the SDK's production default
+      // strict; give only this cloud-backed UAT enough time to observe the completed API response.
+      timeout: 120_000,
     });
   });
 
   afterAll(async () => {
+    delete process.env.FABRIC_BASE_URL;
     await app?.close();
     await new Promise<void>((resolve) => receiver.close(() => resolve()));
     await cleanManagedTenant(owner, tenantId);

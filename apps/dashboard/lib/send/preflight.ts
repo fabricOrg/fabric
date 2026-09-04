@@ -259,7 +259,7 @@ export function apiSnippets(input: {
   const from = input.from || "Fabric";
   const body = JSON.stringify(input.body || "Your message");
 
-  const curl = `curl https://d2umm5b2x22zvp.cloudfront.net/v1/sms/messages \\
+  const curl = `curl https://fabric-jezz.onrender.com/v1/sms/messages \\
   -H "Authorization: Bearer $FABRIC_API_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: notification-123-0" \\

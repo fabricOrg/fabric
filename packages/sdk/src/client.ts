@@ -1,3 +1,4 @@
+import packageJson from "../package.json" with { type: "json" };
 import type { DefinitionCatalog, UngeneratedCatalog } from "./catalog.js";
 import { EmailResource } from "./email.js";
 import { MessagesResource } from "./messages.js";
@@ -10,14 +11,25 @@ import { WalletResource } from "./wallet.js";
 import { WebhooksResource } from "./webhooks.js";
 import { WhatsAppResource } from "./whatsapp.js";
 
-const VERSION = "0.1.0-beta.6";
-// The SDK owns endpoint selection. Consumers only provide a key; `baseUrl` is reserved for
-// loopback development and private test deployments.
-const DEFAULT_BASE_URL = "https://d2umm5b2x22zvp.cloudfront.net";
+const VERSION = packageJson.version;
+/**
+ * The SDK owns endpoint selection: a consumer provides a key and nothing else, and the key prefix
+ * already decides test vs live. There is deliberately no `baseUrl` on `FabricConfig` — publishing a
+ * knob we tell people not to turn invited exactly the confusion it caused.
+ *
+ * The escape hatch for loopback development and private deployments is `FABRIC_BASE_URL`, which is
+ * the variable the CLI has always read (`packages/cli/src/bin.ts`). It is validated the same way a
+ * caller-supplied value was: HTTPS unless loopback, no credentials, no query or fragment.
+ */
+const DEFAULT_BASE_URL = "https://fabric-jezz.onrender.com";
+
+function resolveBaseUrl(): string {
+  const configured = globalThis.process?.env?.FABRIC_BASE_URL?.trim();
+  return normalizeBaseUrl(configured ? configured : DEFAULT_BASE_URL);
+}
 
 export interface FabricConfig {
   readonly apiKey: string;
-  readonly baseUrl?: string;
   readonly timeout?: number;
   readonly maxRetries?: number;
   readonly fetch?: typeof globalThis.fetch;
@@ -54,7 +66,7 @@ export class Fabric<Catalog extends DefinitionCatalog = UngeneratedCatalog> {
     }
     const transport = new Transport({
       apiKey: config.apiKey,
-      baseUrl: normalizeBaseUrl(config.baseUrl ?? DEFAULT_BASE_URL),
+      baseUrl: resolveBaseUrl(),
       timeout: config.timeout ?? 10_000,
       maxRetries: config.maxRetries ?? 2,
       fetch: config.fetch ?? globalThis.fetch,
@@ -75,18 +87,38 @@ export class Fabric<Catalog extends DefinitionCatalog = UngeneratedCatalog> {
 export { Fabric as MessagingClient };
 
 function environmentForKey(apiKey: string): FabricEnvironment {
-  if (apiKey.startsWith("sk_test_")) return "sandbox";
-  if (apiKey.startsWith("sk_live_")) return "live";
+  if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
+    throw new TypeError("`apiKey` must be a non-empty Fabric secret key.");
+  }
+  if (apiKey.startsWith("sk_test_") && apiKey.length > "sk_test_".length)
+    return "sandbox";
+  if (apiKey.startsWith("sk_live_") && apiKey.length > "sk_live_".length)
+    return "live";
   throw new TypeError(
     "`apiKey` must be a Fabric secret key beginning with `sk_test_` or `sk_live_`.",
   );
 }
 
 function normalizeBaseUrl(value: string): string {
-  const url = new URL(value);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new TypeError("`FABRIC_BASE_URL` must be an absolute URL.");
+  }
+  if (url.username || url.password) {
+    throw new TypeError(
+      "`FABRIC_BASE_URL` must not contain embedded credentials.",
+    );
+  }
+  if (url.search || url.hash) {
+    throw new TypeError(
+      "`FABRIC_BASE_URL` must not contain a query string or fragment.",
+    );
+  }
   if (url.protocol !== "https:" && !isLoopback(url)) {
     throw new TypeError(
-      "`baseUrl` must use HTTPS except for loopback development servers.",
+      "`FABRIC_BASE_URL` must use HTTPS except for loopback development servers.",
     );
   }
   return url.toString();

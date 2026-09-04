@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Fabric, InsufficientFundsError } from "./index.js";
 
 function json(
@@ -24,32 +24,46 @@ describe("client guards", () => {
     }
   });
 
-  it("rejects a non-HTTPS baseUrl unless it is loopback", () => {
-    expect(
-      () =>
-        new Fabric({
-          apiKey: "sk_test_example",
-          baseUrl: "http://api.example.com",
-        }),
-    ).toThrow(/HTTPS/);
-    expect(
-      () =>
-        new Fabric({ apiKey: "sk_test_example", baseUrl: "http://localhost" }),
-    ).not.toThrow();
-    expect(
-      () =>
-        new Fabric({
-          apiKey: "sk_test_example",
-          baseUrl: "http://127.0.0.1:4010",
-        }),
-    ).not.toThrow();
-    expect(
-      () =>
-        new Fabric({
-          apiKey: "sk_test_example",
-          baseUrl: "https://private.test.internal",
-        }),
-    ).not.toThrow();
+  // The endpoint override moved off `FabricConfig` and onto FABRIC_BASE_URL, so these guards now
+  // protect an operator's environment rather than a caller's argument. Same rules, same messages.
+  describe("FABRIC_BASE_URL", () => {
+    afterEach(() => {
+      delete process.env.FABRIC_BASE_URL;
+    });
+
+    function construct(value: string) {
+      process.env.FABRIC_BASE_URL = value;
+      return () => new Fabric({ apiKey: "sk_test_example" });
+    }
+
+    it("rejects a non-HTTPS endpoint unless it is loopback", () => {
+      expect(construct("http://api.example.com")).toThrow(/HTTPS/);
+      expect(construct("http://localhost")).not.toThrow();
+      expect(construct("http://127.0.0.1:4010")).not.toThrow();
+      expect(construct("https://private.test.internal")).not.toThrow();
+    });
+
+    it("rejects credentials, a query string and a fragment", () => {
+      expect(construct("https://user:password@api.example.com")).toThrow(
+        /embedded credentials/,
+      );
+      expect(construct("https://api.example.com?tenant=other")).toThrow(
+        /query string or fragment/,
+      );
+      expect(construct("https://api.example.com#frag")).toThrow(
+        /query string or fragment/,
+      );
+    });
+
+    it("rejects a value that is not an absolute URL", () => {
+      expect(construct("api.example.com")).toThrow(/absolute URL/);
+    });
+
+    // Whitespace-only is the shape a half-set shell variable takes. Treat it as unset and fall back
+    // to the default endpoint rather than throwing at construction.
+    it("treats a blank value as unset", () => {
+      expect(construct("   ")).not.toThrow();
+    });
   });
 
   it("rejects invalid retry and timeout configuration", () => {
