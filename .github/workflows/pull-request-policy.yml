@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 2
     env:
       PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+      PR_AUTHOR: ${{ github.event.pull_request.user.login }}
 
     steps:
       - uses: actions/checkout@v7
@@ -33,3 +35,9 @@ jobs:
 
       - name: Validate pull-request title
         run: node scripts/git/validate-commit-message.mjs "$PR_TITLE"
+
+      # CLAUDE.md §5 is a HARD gate, and it was still skipped twice — the rule and the template
+      # checkbox both existed, but `gh pr create --body-file` replaces the template, so nothing ever
+      # asked. This asks.
+      - name: Validate independent review
+        run: node scripts/git/validate-review-attestation.mjs

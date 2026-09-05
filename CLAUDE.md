@@ -142,7 +142,19 @@ is not finished — say so rather than merging.
 
 - **Independent means not the author.** Self-review inherits the framing that produced the bug, so it
   does not satisfy this gate. Green gates do not either: they catch mechanical defects, never
-  semantics. When delegates are unavailable, use a subagent — an outage is not a waiver.
+  semantics.
+- **Codex unavailable is not a waiver — it selects the fallback.** Quota exhausted, outage, rate
+  limited: the review moves to a SUBAGENT, with the same lenses and the same verification of its
+  findings. The order is codex → subagent → another person, and there is no fourth branch where the
+  review is skipped. This is written down because it was skipped anyway: the rule already existed in
+  this exact section and two PRs merged without it, so it is now MACHINE-CHECKED.
+- **The gate is enforced by CI, not by intention.** `Pull Request Policy` runs
+  `scripts/git/validate-review-attestation.mjs`, which fails the PR unless its body carries a
+  `Reviewed-by:` line naming someone other than the author. Promotions between environments are
+  exempt — they move already-reviewed commits and would otherwise train everyone to type something
+  meaningless four times a release. Passing a custom `--body-file` to `gh pr create` REPLACES the
+  template and hides its checklist; that is precisely how the gate was missed, and it no longer
+  helps, because the check reads the body rather than the template.
 - **Verify what the review claims.** A reviewer's finding is a hypothesis; confirm it against the code
   before acting, and confirm the fix by making the test fail without it. Reviewers also miss things,
   so a clean review is not proof either.
