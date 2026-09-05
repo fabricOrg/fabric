@@ -55,22 +55,14 @@ export class VerifyService {
     const salt = randomBytes(8).toString("hex");
     const expiresAt = new Date(Date.now() + CODE_TTL_SECONDS * 1000);
 
-    await this.db.withTenantDrizzle(tenantId, async (tx) => {
-      await tx.insert(verifications).values({
-        id,
-        tenantId: tenantId as never,
-        msisdnHash,
-        msisdnMasked: maskMsisdn(request.to),
-        codeHash: hashCode(code, id, salt),
-        codeSalt: salt,
-        expiresAt,
-      });
-    });
-
-    // The body: either the caller's chosen template or the built-in wording. `expires_minutes` is
-    // DERIVED from the same TTL that governs the stored expiry, so a template can state the lifetime
-    // without the two drifting — the built-in string below still hardcodes "5 minutes" beside a
-    // 300-second constant, which is the defect ADR-0017 removes for anyone who supplies a template.
+    // Resolve the body BEFORE the row exists. A template that cannot render is a 4xx the caller
+    // fixes in their editor, and it must cost them nothing — but the row is what arms the 30-second
+    // resend throttle and what the funnel counts as `sent`, so inserting first meant every rejected
+    // template locked the caller out of their own number for 30 seconds and left a `pending` row
+    // that later expired. That is the whole integration loop, penalised.
+    //
+    // `expires_minutes` is DERIVED from the same TTL that governs the stored expiry, so a template
+    // can state the lifetime without the two drifting.
     const expiresMinutes = Math.round(CODE_TTL_SECONDS / 60);
     const body = await resolveVerifyBody({
       db: this.db,
@@ -82,6 +74,18 @@ export class VerifyService {
         expires_minutes: expiresMinutes,
         expires_seconds: CODE_TTL_SECONDS,
       },
+    });
+
+    await this.db.withTenantDrizzle(tenantId, async (tx) => {
+      await tx.insert(verifications).values({
+        id,
+        tenantId: tenantId as never,
+        msisdnHash,
+        msisdnMasked: maskMsisdn(request.to),
+        codeHash: hashCode(code, id, salt),
+        codeSalt: salt,
+        expiresAt,
+      });
     });
 
     // OTP rides the normal send pipeline — billing, sandbox pinning, kill-switches inherited.

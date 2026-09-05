@@ -15,12 +15,38 @@ import { invalidRequest, notFound } from "../http/api-error.js";
 /** The token every verify template must carry, or the OTP is not in the message it is sent in. */
 const CODE_TOKEN = "code";
 
+/**
+ * What Fabric injects, with the types it actually injects.
+ *
+ * The types matter more than they look. `validatePayload` checks every property PRESENT in the data
+ * against its declaration, whether or not the template references it — so declaring these as
+ * strings while passing numbers made every templated request fail `expected_string` on
+ * `expires_minutes`, including templates that never mention it.
+ */
+export interface VerifyReservedValues {
+  readonly code: string;
+  readonly expires_minutes: number;
+  readonly expires_seconds: number;
+}
+
+// Keyed by the CONTRACT's tuple, so a name added there without a type here is a COMPILE error.
+// As a loose Record it was `... | undefined` under noUncheckedIndexedAccess, assigned into an
+// unknown-valued map — drift compiled and failed silently at runtime instead.
+const RESERVED_NODES: Record<
+  (typeof VERIFY_RESERVED_VARIABLES)[number],
+  { type: "string" | "integer" }
+> = {
+  code: { type: "string" },
+  expires_minutes: { type: "integer" },
+  expires_seconds: { type: "integer" },
+};
+
 export interface VerifyTemplateInput {
   readonly key: string;
   readonly locale?: string | undefined;
   readonly variables?: Record<string, string | number | boolean> | undefined;
   /** Injected by Fabric, never by the caller (ADR-0017 §1a). */
-  readonly reserved: Record<string, string | number>;
+  readonly reserved: VerifyReservedValues;
 }
 
 /**
@@ -88,11 +114,51 @@ export async function renderVerifyTemplate(
     );
   }
 
-  const content = released.content as SmsVariantContent;
-  const locale = input.locale ?? released.defaultLocale;
-  // A locale variant overrides only the body; an unknown locale falls back to the default rather
-  // than failing, because a missing translation must not stop an OTP going out.
-  const body = content.locales?.[locale]?.body ?? content.body;
+  return renderOtpBody({
+    content: released.content as SmsVariantContent,
+    schema: released.schema as VariableSchema,
+    defaultLocale: released.defaultLocale,
+    requestedLocale: input.locale,
+    variables: input.variables,
+    reserved: input.reserved,
+  });
+}
+
+/**
+ * The rendering rules, with no database in them — which is the only reason they can be tested at
+ * all. The blocker that shipped here (reserved values typed as strings while numbers were passed,
+ * failing every templated request) survived precisely because the logic was reachable only through
+ * a query.
+ */
+export function renderOtpBody(input: {
+  content: SmsVariantContent;
+  schema: VariableSchema;
+  defaultLocale: string;
+  requestedLocale?: string | undefined;
+  variables?: Record<string, string | number | boolean> | undefined;
+  reserved: VerifyReservedValues;
+}): string {
+  const { content, requestedLocale, defaultLocale } = input;
+
+  // Locale resolution matches message-preview.service.ts deliberately: a caller who ASKED for a
+  // locale we do not have is told so, rather than silently receiving another language. Falling back
+  // would make preview and send disagree on the same definition — preview answers
+  // `locale_not_supported` — and the only signal of the mismatch would be the SMS itself, in a
+  // language the recipient may not read.
+  let body: string;
+  if (requestedLocale === undefined || requestedLocale === defaultLocale) {
+    body = content.body;
+  } else {
+    const variant = content.locales?.[requestedLocale]?.body;
+    if (!variant) {
+      throw invalidRequest(
+        "locale_not_supported",
+        `This template has no ${requestedLocale} variant.`,
+        "locale",
+      );
+    }
+    body = variant;
+  }
 
   if ((content.class ?? "transactional") !== "transactional") {
     throw invalidRequest(
@@ -117,7 +183,7 @@ export async function renderVerifyTemplate(
   };
   const outcome = previewSms({
     template: body,
-    schema: withReservedDeclared(released.schema as VariableSchema),
+    schema: withReservedDeclared(input.schema),
     data,
     currency: "GHS",
   });
@@ -144,9 +210,13 @@ function withReservedDeclared(schema: VariableSchema): VariableSchema {
     ...(schema.type === "object" ? schema.properties : {}),
   };
   for (const name of VERIFY_RESERVED_VARIABLES) {
-    properties[name] = { type: "string" };
+    properties[name] = RESERVED_NODES[name];
   }
-  return { type: "object", properties } as VariableSchema;
+  // Spread the original FIRST so `required`, `additionalProperties` and anything else the author
+  // declared survive; only `properties` is replaced. Dropping `required` meant a definition whose
+  // author marked `merchant` mandatory rendered "Your  verification code is …" — an empty brand,
+  // billed and delivered — instead of refusing the request.
+  return { ...schema, type: "object", properties } as VariableSchema;
 }
 
 /**

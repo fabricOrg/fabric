@@ -121,7 +121,16 @@ function statusClause(
   }
   if (status === "delivered") return tx`AND m.status = 'delivered'`;
   if (status === "failed") {
-    return tx`AND m.status IN ('undelivered', 'failed', 'expired')`;
+    // `expired` is NOT a failure: no delivery report arrived within the TTL, and the message stays
+    // billed. Reporting it as failed told a customer their message failed while charging for it.
+    return tx`AND m.status IN ('undelivered', 'failed')`;
+  }
+  if (status === "unknown") return tx`AND m.status = 'expired'`;
+  // Exhaustive on purpose: a group with no clause here previously returned EVERY row unfiltered,
+  // which reads as a working filter and is not one.
+  if (status !== undefined) {
+    const unhandled: never = status;
+    throw new Error(`Unhandled message status group: ${String(unhandled)}`);
   }
   return tx``;
 }
