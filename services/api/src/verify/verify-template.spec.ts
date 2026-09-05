@@ -2,9 +2,9 @@ import { verifyStartRequest } from "@app/contracts";
 import { describe, expect, it } from "vitest";
 
 /**
- * The contract-level half of ADR-0017 §1a. The renderer's behaviour needs a database and is covered
- * by the integration tier; what is pinned here is the boundary rule that must hold before any of
- * that runs — a caller cannot supply the code.
+ * The contract-level half of ADR-0017 §1a. What is pinned here is the boundary rule that must hold before any of
+ * that runs — a caller cannot supply the code. The renderer's own rules are in
+ * verify-render.spec.ts.
  */
 describe("verify start request", () => {
   const base = { to: "+233545227189" };

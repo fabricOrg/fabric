@@ -51,7 +51,7 @@ export class WebhookTokenGuard implements CanActivate {
       // whether anything arrived at all is what an operator needs, and it is enough to tell
       // "wrong token" from "no token" from "wrong URL".
       this.logger.warn(
-        `Rejected webhook ingress: provider=${request.params?.provider ?? "unknown"} ` +
+        `Rejected webhook ingress: provider=${safeSlug(request.params?.provider)} ` +
           `method=${request.method ?? "?"} ` +
           `credential=${describePresented(presented, expected)}`,
       );
@@ -62,6 +62,20 @@ export class WebhookTokenGuard implements CanActivate {
     }
     return true;
   }
+}
+
+/**
+ * The provider path segment, safe to put in a log line.
+ *
+ * It is attacker-controlled and percent-decoded by the router, so interpolating it raw let an
+ * UNAUTHENTICATED caller inject newlines and forge log entries — including a convincing
+ * "credential=ok" line. Anything outside the slug alphabet is dropped, and the result is clamped so
+ * a long path cannot pad the log.
+ */
+function safeSlug(value: string | undefined): string {
+  if (typeof value !== "string" || value.length === 0) return "unknown";
+  const cleaned = value.replace(/[^a-zA-Z0-9._:-]/g, "");
+  return cleaned.length === 0 ? "unrecognised" : cleaned.slice(0, 40);
 }
 
 /**
@@ -95,8 +109,10 @@ function rawQueryToken(url: string | undefined): string | null {
     try {
       return decodeURIComponent(raw);
     } catch {
-      // A malformed percent-escape is not a token; fall through to the parsed value.
-      return raw;
+      // A malformed percent-escape is not a token. Return null rather than the undecoded value so
+      // the parsed-query fallback below still gets a turn — returning `raw` short-circuited the
+      // chain and made that fallback unreachable, which the comment claimed the opposite of.
+      return null;
     }
   }
   return null;

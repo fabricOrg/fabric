@@ -28,7 +28,7 @@ export async function ingestProviderDlr(input: {
     // here are why a callback pointed at `/webhooks/dlr/arkesel` instead of `/arkesel-sms` is
     // indistinguishable from a carrier that never called.
     logger.warn(
-      `DLR rejected: unknown provider '${input.providerSlug}' (known: ${input.live.provider.slug}, ${input.virtual.provider.slug})`,
+      `DLR rejected: unknown provider '${safeSlug(input.providerSlug)}' (known: ${input.live.provider.slug}, ${input.virtual.provider.slug})`,
     );
     throw notFound("unknown_provider", `no provider '${input.providerSlug}'`);
   }
@@ -41,7 +41,7 @@ export async function ingestProviderDlr(input: {
   }
   if (!deps.provider.verifyWebhook({ headers, rawBody }, deps.creds ?? {})) {
     logger.warn(
-      `DLR rejected: signature invalid for provider '${input.providerSlug}'`,
+      `DLR rejected: signature invalid for provider '${safeSlug(input.providerSlug)}'`,
     );
     throw unauthorized("invalid_signature", "DLR webhook signature invalid.");
   }
@@ -61,7 +61,7 @@ export async function ingestProviderDlr(input: {
     // the wrong environment. The provider_ref is vendor-issued, carries no PII, and is the only
     // handle an operator can correlate against the vendor's own dashboard — so it is logged.
     logger.warn(
-      `DLR rejected: no message for provider '${input.providerSlug}' ref=${dlr.providerRef}`,
+      `DLR rejected: no message for provider '${safeSlug(input.providerSlug)}' ref=${safeSlug(dlr.providerRef)}`,
     );
     throw notFound(
       "message_not_found",
@@ -69,4 +69,11 @@ export async function ingestProviderDlr(input: {
     );
   }
   return { status: await ingestDlr(deps, tenantId, input.body) };
+}
+
+/** Caller-controlled values are stripped to the slug alphabet before they reach a log line. */
+function safeSlug(value: string | undefined): string {
+  if (typeof value !== "string" || value.length === 0) return "unknown";
+  const cleaned = value.replace(/[^a-zA-Z0-9._:-]/g, "");
+  return cleaned.length === 0 ? "unrecognised" : cleaned.slice(0, 80);
 }
