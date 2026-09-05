@@ -12,6 +12,7 @@ import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import { SmsService } from "../sms/sms.service.js";
 import { verifyOverview } from "./verify-read.js";
+import { resolveVerifyBody } from "./verify-template.js";
 
 const CODE_TTL_SECONDS = 300;
 const RESEND_THROTTLE_MS = 30_000;
@@ -66,6 +67,23 @@ export class VerifyService {
       });
     });
 
+    // The body: either the caller's chosen template or the built-in wording. `expires_minutes` is
+    // DERIVED from the same TTL that governs the stored expiry, so a template can state the lifetime
+    // without the two drifting — the built-in string below still hardcodes "5 minutes" beside a
+    // 300-second constant, which is the defect ADR-0017 removes for anyone who supplies a template.
+    const expiresMinutes = Math.round(CODE_TTL_SECONDS / 60);
+    const body = await resolveVerifyBody({
+      db: this.db,
+      tenantId,
+      environmentId: routing.environmentId ?? null,
+      request,
+      reserved: {
+        code,
+        expires_minutes: expiresMinutes,
+        expires_seconds: CODE_TTL_SECONDS,
+      },
+    });
+
     // OTP rides the normal send pipeline — billing, sandbox pinning, kill-switches inherited.
     // A failed send (no funds, paused platform…) marks the verification failed and surfaces the
     // send's own structured error: never a pending verification whose code was never sent.
@@ -75,7 +93,7 @@ export class VerifyService {
         tenantId,
         to: request.to,
         senderId: request.sender_id ?? DEFAULT_SENDER,
-        body: `Your Fabric verification code is ${code}. It expires in 5 minutes.`,
+        body,
         currency: CURRENCY,
         environmentId: routing.environmentId ?? null,
         applicationId: routing.applicationId ?? null,
