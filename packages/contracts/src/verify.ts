@@ -17,12 +17,65 @@ const e164 = z
   .trim()
   .regex(/^\+[1-9]\d{7,14}$/, "must be E.164, e.g. +233545227189");
 
+/**
+ * Variables Fabric injects into the OTP template and a caller may NEVER supply (ADR-0017 §1a).
+ *
+ * `code` is the whole point of the primitive: the verification code is generated here, lives in the
+ * SMS body and nowhere else, and is never accepted from a caller. A caller who could set it would
+ * choose the OTP. `expires_minutes`/`expires_seconds` are derived from the same TTL that governs the
+ * stored expiry, so a caller-supplied value would let the message state a lifetime the server does
+ * not honour.
+ */
+export const VERIFY_RESERVED_VARIABLES = [
+  "code",
+  "expires_minutes",
+  "expires_seconds",
+] as const;
+
+/** Template variables are scalars: they are substituted into an SMS body, not traversed. */
+const verifyVariableValue = z.union([z.string(), z.number(), z.boolean()]);
+
 /** POST /v1/verify — start a verification (sends the OTP over SMS). */
-export const verifyStartRequest = z.object({
-  to: e164,
-  /** Sender id on the OTP SMS; defaults to the platform sender. */
-  sender_id: z.string().trim().min(1).max(11).optional(),
-});
+export const verifyStartRequest = z
+  .object({
+    to: e164,
+    /** Sender id on the OTP SMS; defaults to the platform sender. */
+    sender_id: z.string().trim().min(1).max(11).optional(),
+    /**
+     * Stable key of a released, verify-eligible SMS message definition to render instead of the
+     * built-in wording. Omit for the platform default. Selected per REQUEST, not per workspace, so
+     * one platform can send differently-branded codes for the merchants it resells to (ADR-0017 §1).
+     */
+    template: z.string().trim().min(1).max(200).optional(),
+    /**
+     * Caller-supplied values for the template's own variables — a merchant name, for instance.
+     * Validated against the definition's declared variable schema. Supplying a reserved name is
+     * REFUSED rather than ignored: silently dropping it would let a caller believe they had set the
+     * code.
+     */
+    variables: z.record(z.string(), verifyVariableValue).optional(),
+    /** Locale variant to render; falls back to the definition's default locale. */
+    locale: z
+      .string()
+      .regex(/^[a-z]{2,3}(?:-[A-Z]{2})?$/, "invalid_locale")
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (v) =>
+      !v.variables ||
+      !VERIFY_RESERVED_VARIABLES.some((name) =>
+        Object.hasOwn(v.variables ?? {}, name),
+      ),
+    {
+      message: `Fabric supplies these and they cannot be passed: ${VERIFY_RESERVED_VARIABLES.join(", ")}.`,
+      path: ["variables"],
+    },
+  )
+  .refine((v) => !v.variables || v.template !== undefined, {
+    message: "`variables` requires `template`.",
+    path: ["variables"],
+  });
 export type VerifyStartRequest = z.infer<typeof verifyStartRequest>;
 
 export const verifyStartResponse = z.object({

@@ -18,6 +18,24 @@ export const REDACTED_HEADER_PATHS = [
 ];
 
 /**
+ * The request target with any query string removed.
+ *
+ * pino-http's default `req` serializer logs `url` verbatim, query string included, and `redact`
+ * only reaches header PATHS — so a secret carried in the query is written to the log on the SUCCESS
+ * path, at info level, on every request. That is not hypothetical here: Arkesel delivery reports are
+ * unsigned GETs that cannot set headers, so the ingress token travels as `?token=`, and every
+ * callback would otherwise print `WEBHOOK_INGRESS_TOKEN` in full.
+ *
+ * The path is kept because it is what makes a log line useful; only the values are dropped. Named
+ * rather than blanked so a reader can tell "no query" from "query withheld".
+ */
+export function stripQueryString(url: string | undefined): string {
+  if (typeof url !== "string" || url.length === 0) return "";
+  const start = url.indexOf("?");
+  return start === -1 ? url : `${url.slice(0, start)}?[query-redacted]`;
+}
+
+/**
  * Request id: honor a well-formed inbound `x-request-id` (API Gateway / caller correlation),
  * otherwise mint our `req_…` id — the same shape the error envelope uses.
  */
@@ -51,6 +69,15 @@ export function loggerParams(): Params {
         return tenantId === undefined ? {} : { tenant_id: tenantId };
       },
       redact: { paths: REDACTED_HEADER_PATHS, censor: "[redacted]" },
+      // Mirrors pino-http's default req shape, minus the query string — see stripQueryString.
+      serializers: {
+        req: (req: IncomingMessage & { id?: unknown }) => ({
+          id: req.id,
+          method: req.method,
+          url: stripQueryString(req.url),
+          headers: req.headers,
+        }),
+      },
       // Health checks would otherwise dominate the log volume.
       autoLogging: {
         ignore: (req: IncomingMessage) => req.url === "/health",

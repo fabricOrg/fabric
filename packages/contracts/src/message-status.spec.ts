@@ -39,7 +39,10 @@ describe("message status groups", () => {
     expect(messageStatusGroupOf("delivered")).toBe("delivered");
     expect(messageStatusGroupOf("undelivered")).toBe("failed");
     expect(messageStatusGroupOf("failed")).toBe("failed");
-    expect(messageStatusGroupOf("expired")).toBe("failed");
+    // NOT "failed": expired means no delivery report arrived within the TTL, which describes our
+    // visibility and not the carrier's outcome. The sweeper leaves an accepted message BILLED, so
+    // grouping it as failed charged the customer and told them it failed.
+    expect(messageStatusGroupOf("expired")).toBe("unknown");
   });
 });
 

@@ -38,14 +38,33 @@ export function isTerminalMessageStatus(
   return (TERMINAL_MESSAGE_STATUSES as readonly string[]).includes(status);
 }
 
-export const messageStatusGroup = z.enum(["active", "delivered", "failed"]);
+export const messageStatusGroup = z.enum([
+  "active",
+  "delivered",
+  "failed",
+  "unknown",
+]);
 export type MessageStatusGroup = z.infer<typeof messageStatusGroup>;
 
-/** Dashboard grouping: terminal delivery failures must never appear as queued/in progress. */
+/**
+ * Dashboard grouping: terminal delivery failures must never appear as queued/in progress — and,
+ * equally, an outcome we never observed must not be reported as a failure.
+ *
+ * `expired` used to group as `failed`. It means "no final DLR arrived within the TTL", which is a
+ * statement about OUR visibility, not about the carrier's outcome. A message that reached
+ * `accepted` was acknowledged by the provider and stays BILLED by the sweeper — so grouping it as
+ * failed told a customer their message failed while charging them for it, and made a missing
+ * delivery-report callback look identical to genuine non-delivery. Every live message this platform
+ * has sent read as `failed` for exactly that reason.
+ *
+ * `unknown` keeps it out of both buckets, which is the honest answer: we sent it, we were billed for
+ * it, and we did not hear back.
+ */
 export function messageStatusGroupOf(
   status: MessageStatus,
 ): MessageStatusGroup {
   if (status === "delivered") return "delivered";
-  if (["undelivered", "failed", "expired"].includes(status)) return "failed";
+  if (status === "expired") return "unknown";
+  if (["undelivered", "failed"].includes(status)) return "failed";
   return "active";
 }

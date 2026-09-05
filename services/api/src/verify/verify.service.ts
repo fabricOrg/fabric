@@ -12,6 +12,7 @@ import { APP_DB } from "../db/db.module.js";
 import { invalidRequest, notFound } from "../http/api-error.js";
 import { SmsService } from "../sms/sms.service.js";
 import { verifyOverview } from "./verify-read.js";
+import { resolveVerifyBody } from "./verify-template.js";
 
 const CODE_TTL_SECONDS = 300;
 const RESEND_THROTTLE_MS = 30_000;
@@ -54,6 +55,27 @@ export class VerifyService {
     const salt = randomBytes(8).toString("hex");
     const expiresAt = new Date(Date.now() + CODE_TTL_SECONDS * 1000);
 
+    // Resolve the body BEFORE the row exists. A template that cannot render is a 4xx the caller
+    // fixes in their editor, and it must cost them nothing — but the row is what arms the 30-second
+    // resend throttle and what the funnel counts as `sent`, so inserting first meant every rejected
+    // template locked the caller out of their own number for 30 seconds and left a `pending` row
+    // that later expired. That is the whole integration loop, penalised.
+    //
+    // `expires_minutes` is DERIVED from the same TTL that governs the stored expiry, so a template
+    // can state the lifetime without the two drifting.
+    const expiresMinutes = Math.round(CODE_TTL_SECONDS / 60);
+    const body = await resolveVerifyBody({
+      db: this.db,
+      tenantId,
+      environmentId: routing.environmentId ?? null,
+      request,
+      reserved: {
+        code,
+        expires_minutes: expiresMinutes,
+        expires_seconds: CODE_TTL_SECONDS,
+      },
+    });
+
     await this.db.withTenantDrizzle(tenantId, async (tx) => {
       await tx.insert(verifications).values({
         id,
@@ -75,7 +97,7 @@ export class VerifyService {
         tenantId,
         to: request.to,
         senderId: request.sender_id ?? DEFAULT_SENDER,
-        body: `Your Fabric verification code is ${code}. It expires in 5 minutes.`,
+        body,
         currency: CURRENCY,
         environmentId: routing.environmentId ?? null,
         applicationId: routing.applicationId ?? null,

@@ -18,6 +18,21 @@ const VERIFICATION_STATUSES = [
 export interface StartVerificationParams {
   readonly to: string;
   readonly senderId?: string;
+  /**
+   * Stable key of a released, verify-eligible SMS message definition to render instead of the
+   * built-in wording. Chosen per call, so one platform can send differently-branded codes for the
+   * merchants it resells to. Requires an application-scoped key, which names the environment the
+   * definition is released in.
+   */
+  readonly template?: string;
+  /**
+   * Values for the template's own variables. `code`, `expiresMinutes` and `expiresSeconds` are
+   * supplied by Fabric and are REFUSED here — the verification code is generated server-side and
+   * never accepted from a caller.
+   */
+  readonly variables?: Readonly<Record<string, string | number | boolean>>;
+  /** Locale variant to render; falls back to the definition's default locale. */
+  readonly locale?: string;
 }
 export interface StartedVerification {
   readonly id: string;
@@ -54,6 +69,9 @@ export class VerifyResource {
       body: {
         to: params.to,
         ...(params.senderId ? { sender_id: params.senderId } : {}),
+        ...(params.template ? { template: params.template } : {}),
+        ...(params.variables ? { variables: params.variables } : {}),
+        ...(params.locale ? { locale: params.locale } : {}),
       },
       retryableWrite: options?.idempotencyKey !== undefined,
       ...(options ? { options } : {}),

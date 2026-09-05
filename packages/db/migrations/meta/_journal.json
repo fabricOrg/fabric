@@ -1079,6 +1079,13 @@
       "when": 1786320662000,
       "tag": "0153_provider_vendor_slug_shape",
       "breakpoints": true
+    },
+    {
+      "idx": 154,
+      "version": "7",
+      "when": 1786320722000,
+      "tag": "0154_validate_provider_vendor_slug",
+      "breakpoints": true
     }
   ]
 }

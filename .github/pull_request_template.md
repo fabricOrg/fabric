@@ -15,8 +15,15 @@
 
 ## Independent review (REQUIRED — CLAUDE.md §5)
 
-<!-- Who reviewed this, and what did they find? Self-review does not satisfy this gate, and neither
-     does a green pipeline. If findings were raised, say what you verified and what you changed. -->
+<!-- MACHINE-CHECKED. `Pull Request Policy` fails without a `Reviewed-by:` line naming someone other
+     than you. Replacing this template with a custom body does not skip it — that is exactly how the
+     gate was missed before.
+
+     Codex unavailable (quota, outage)? A SUBAGENT review is the required fallback, not a waiver.
+     Say what was found, what you verified against the code, and what you changed. A clean review is
+     a finding too — reviewers miss things, so record that it was clean rather than staying silent. -->
+
+Reviewed-by:
 
 - [ ] Reviewed by someone other than the author, and the findings were verified against the code.
 

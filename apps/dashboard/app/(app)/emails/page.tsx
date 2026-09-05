@@ -372,6 +372,11 @@ function EmailActivitySummary({
         <CompactSummaryRow label="In progress" value={stats.active} />
         <CompactSummaryRow label="Delivered" value={stats.delivered} />
         <CompactSummaryRow label="Failed" value={stats.failed} />
+        {/* Only shown when it happened. A permanent "No report: 0" row would be noise on the
+            overwhelming majority of workspaces, where every message resolves. */}
+        {stats.unknown > 0 ? (
+          <CompactSummaryRow label="No report" value={stats.unknown} />
+        ) : null}
       </CompactSummaryRows>
     </CompactSummary>
   );
@@ -386,12 +391,16 @@ function emailStats(messages: readonly EmailMessage[]) {
         stats.delivered += 1;
       } else if (group === "failed") {
         stats.failed += 1;
+      } else if (group === "unknown") {
+        // Sent and billed, no delivery report. Counting it as failed would assert an outcome we
+        // never saw; counting it as active would imply it is still moving. It is neither.
+        stats.unknown += 1;
       } else {
         stats.active += 1;
       }
       return stats;
     },
-    { active: 0, delivered: 0, failed: 0, total: 0 },
+    { active: 0, delivered: 0, failed: 0, unknown: 0, total: 0 },
   );
 }
 

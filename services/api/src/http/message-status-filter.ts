@@ -9,7 +9,9 @@ export function parseMessageStatusGroup(
   if (parsed.success) return parsed.data;
   throw invalidRequest(
     "invalid_status",
-    "status must be active, delivered, or failed.",
+    // Derived, not restated: the literal list went stale the moment `unknown` was added, and a
+    // caller was told a valid value was invalid.
+    `status must be one of: ${messageStatusGroup.options.join(", ")}.`,
     "status",
   );
 }
