@@ -1,9 +1,12 @@
 import type { AppDb } from "@app/db";
 import type { EngineDeps } from "@app/sms-engine";
 import { ingestDlr } from "@app/sms-engine";
+import { Logger } from "@nestjs/common";
 import { notFound, unauthorized } from "../http/api-error.js";
 
 type Row = Record<string, unknown>;
+
+const logger = new Logger("SmsDlrIngest");
 
 export async function ingestProviderDlr(input: {
   db: AppDb;
@@ -19,8 +22,16 @@ export async function ingestProviderDlr(input: {
       : input.providerSlug === input.virtual.provider.slug
         ? input.virtual
         : null;
-  if (!deps)
+  if (!deps) {
+    // The wrong-slug case, and the one a misconfigured callback URL actually hits: the token was
+    // right, so the caller is us, but the path names a provider no adapter answers to. Silent 404s
+    // here are why a callback pointed at `/webhooks/dlr/arkesel` instead of `/arkesel-sms` is
+    // indistinguishable from a carrier that never called.
+    logger.warn(
+      `DLR rejected: unknown provider '${input.providerSlug}' (known: ${input.live.provider.slug}, ${input.virtual.provider.slug})`,
+    );
     throw notFound("unknown_provider", `no provider '${input.providerSlug}'`);
+  }
 
   const rawBody =
     typeof input.body === "string" ? input.body : JSON.stringify(input.body);
@@ -29,6 +40,9 @@ export async function ingestProviderDlr(input: {
     headers[key] = Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
   }
   if (!deps.provider.verifyWebhook({ headers, rawBody }, deps.creds ?? {})) {
+    logger.warn(
+      `DLR rejected: signature invalid for provider '${input.providerSlug}'`,
+    );
     throw unauthorized("invalid_signature", "DLR webhook signature invalid.");
   }
 
@@ -43,6 +57,12 @@ export async function ingestProviderDlr(input: {
     },
   );
   if (!tenantId) {
+    // Authenticated, well-formed, and about a message we do not have. Usually a callback pointed at
+    // the wrong environment. The provider_ref is vendor-issued, carries no PII, and is the only
+    // handle an operator can correlate against the vendor's own dashboard — so it is logged.
+    logger.warn(
+      `DLR rejected: no message for provider '${input.providerSlug}' ref=${dlr.providerRef}`,
+    );
     throw notFound(
       "message_not_found",
       `no message for provider_ref ${dlr.providerRef}`,
