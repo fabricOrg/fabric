@@ -1,103 +1,140 @@
 # Fabric — session handoff
 
-_Snapshot: 2026-08-18. Point-in-time. **Verify against code and git before treating any of it as
+_Snapshot: 2026-09-05. Point-in-time. **Verify against code and git before treating any of it as
 fact** — `git fetch && git log HEAD..origin/dev` first, always. Companion to
 [CLAUDE.md](./CLAUDE.md) (how we build) and `docs/`. Superseded entries live in
 [docs/HANDOFF-ARCHIVE.md](./docs/HANDOFF-ARCHIVE.md)._
 
-> **Keep this file short.** It is a snapshot of the CURRENT state, not a log — it had grown to 2,800
-> lines of append-only history, which every session then paid to read. When you finish a milestone,
-> REPLACE the state below; move the old entry to the archive only if it carries reasoning a commit
-> message would lose. Git already records what happened.
+> **Keep this file short.** It is a snapshot of the CURRENT state, not a log. When you finish a
+> milestone, REPLACE the state below. Git already records what happened.
 
 ---
 
 ## Where things stand
 
-| ref | through | note |
-| --- | --- | --- |
-| `origin/dev` | #307, #309, #308 | the OpenAPI surface, the contract-coverage fix, this snapshot |
-| `origin/testing` | same | promoted 2026-08-18, **level with `dev`** |
+| ref | note |
+| --- | --- |
+| `origin/dev` | through the review-fix stack |
+| `origin/testing` | promoted 2026-09-05, level with `dev`, all six deploy jobs green |
 
-Deliberately no shas here: every one written in this table has been stale within the day, and a
-wrong sha is worse than none because it reads as checked. `git ls-remote --heads origin dev testing`
-is authoritative and takes a second.
+No shas in this table on purpose — every one written here has been stale within the day, and a wrong
+sha is worse than none because it reads as checked. `git ls-remote --heads origin dev testing` takes
+a second.
 
-**On reading a green deploy.** `Deploy testing (Vercel + Render)` is the real one — confirm all six
-of its jobs (Gate, Migrate, Render · api, and the three Vercel apps). The plain `Deploy` workflow
-ALSO reports success while skipping 7 of its 8 jobs; it is the gated AWS/ECS path and is never
-evidence. Counting it was this snapshot's own first mistake.
+### START HERE — the one task queued
 
-### Start here — confirm the deploy, then read Open work below (which is NOT empty)
+**Cut and publish `@fabric-messaging/sdk@0.1.0-beta.9`.** The SDK source gained Verify `template` /
+`variables` / `locale`, but the version was never bumped, so:
 
-`OPERATOR_TOKEN`, `WEBHOOK_INGRESS_TOKEN` and `OPENAPI_RESPONSE_VALIDATION` were all set on the
-Render service by hand on 2026-08-18. **The last one is worth confirming rather than assuming**, and
-one command does it — no session here has ever held Render's secrets, so it has never been verified
-from this side:
+- npm `latest` and `beta` are both `0.1.0-beta.8` for **sdk and cli**;
+- the published beta.8 does **not** contain the template surface;
+- the repo and the registry now claim the same version for DIFFERENT code, so `0.1.0-beta.8` no
+  longer identifies one artifact.
 
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' \
-  -H "authorization: Bearer sk_test_…" \
-  "https://fabric-jezz.onrender.com/v1/logs?limit=999"
+Publishing was deliberately deferred until the feature was proven end to end (it now is — see
+below). Bump, changelog, PR through the review gate, then
+`gh workflow run publish.yml --ref testing -f package=sdk`. **The publish workflow only runs from the
+`testing` branch** — the `testing` GitHub environment has a deployment-branch policy allowing that
+branch alone, which is why a `dev` dispatch fails instantly with no log.
+
+Publishing goes to `--tag latest` now (a plain `npm install` resolves `latest`; npm pins it on a
+package's FIRST publish whatever tag you pass, which is how the cli sat on beta.1 for five releases).
+Moving the `beta` tag afterwards needs `npm dist-tag`, which OIDC trusted publishing cannot do — that
+step needs a real token.
+
+### The six-week bug: fixed and deployed, NOT yet confirmed live
+
+Every live delivery report Arkesel ever sent was rejected 401. The ingress token travels in a query
+string, the parsed query is form-decoded, and `+` decodes to a SPACE — so a base64 secret containing
+`+` authenticated as a header and could never authenticate as a query param. Arkesel DLRs are
+unsigned GETs that set no headers, so the only path they can use was the broken one.
+
+Proven by two curls against the deployed API: same token, same URL, header **200**, query **401**.
+
+The fix reads the token from the RAW request target (percent-decoded, not form-decoded) and shipped
+2026-09-05. **Nobody has sent a live SMS since.** The next one should move past `accepted` for the
+first time. If it does not, the rejection logging deployed alongside now names the reason —
+`credential=absent|mismatched`, unknown provider slug, bad signature, or a `provider_ref` matching no
+message — instead of producing nothing, which is why this took six weeks to find.
+
+Callback URL shape (configured in Arkesel's own dashboard; they have no registration API):
+`https://fabric-jezz.onrender.com/webhooks/dlr/arkesel-sms?token=<WEBHOOK_INGRESS_TOKEN>` — the path
+segment must be the ADAPTER SLUG `arkesel-sms`, not `arkesel`.
+
+Two consequences worth knowing. `expired` is TERMINAL and the engine freezes terminal statuses, so
+every historical message stays wrong — including one delivered to a handset and read by a human,
+recorded as expired while still billed. And a DLR arriving after the 15-minute sweep can never
+correct the record.
+
+### LIVE SMS IS ARMED — a §7 posture change
+
+`accounts.settings.messaging.delivery_mode = "live"` for the seed tenant, and the `arkesel` plugin is
+`mode=live enabled=true is_default=true status=connected` with credentials present. **Every send from
+that workspace now bills and delivers for real** — GHS 0.40 a message. There is no further toggle.
+
+To test without spending, use a SANDBOX key: a sandbox environment is hard-pinned to the virtual
+phone in ROUTING (`virtual-phone.service.ts`), not in the UI, so it cannot reach a carrier whatever
+the account setting says.
+
+Delivery mode is decided by the ENVIRONMENT the key belongs to, or — for the dashboard, which uses a
+tenant token carrying none — by that account setting. It is never decided by the key's `sk_live_`
+prefix, which is exactly what made this confusing: a live key whose sends kept landing in the virtual
+phone.
+
+### Verify templates shipped and are PROVEN (ADR-0017)
+
+`POST /v1/verify` takes `template`, `variables` and `locale`. Proven against the deployed API rather
+than asserted — the rendered body, read back from the virtual phone:
+
+```
+'Convert: your code is 246735. Expires in 5 min.'   <- templated
+'Your Fabric verification code is 908916. …'        <- the built-in wording
 ```
 
-**400** means strict is live. **200** means it is not. `limit` is published as `maximum: 100`, so 999
-violates the contract: strict rejects it, `warn` only logs. (Sanity-check with `?limit=10`, which
-must be 200 either way — a 401 is the key, not the mode.) The discriminator was verified by booting
-the same build under each mode, not reasoned out.
+Fabric still generates the code: `code`, `expires_minutes` and `expires_seconds` are reserved, and a
+caller supplying one gets a **400**, confirmed live.
 
-Why it matters: `resolveValidationMode` degrades to `warn` when `NODE_ENV=production`, which Render
-sets for an unrelated reason (`PLUGIN_MASTER_KEY` derivation must not fall back to the dev key). In
-`warn`, `contracts:probe` against testing reports **"0 contract violations" having checked nothing**
-— and CLAUDE.md §12 cites strict validation as exactly what makes a 2xx count as proof. Nothing
-errors; the claim just becomes unfalsifiable.
+**The reproduction recipe, because two things about it are non-obvious:**
 
-A caveat worth carrying: `render.yaml` declares all three, but a blueprint is **believed** not to be
-retro-applied to an already-provisioned service — the `PUBLIC_CORS_ALLOWED_ORIGINS` episode is the
-only in-repo evidence, and it has not been tested directly. Treat it as the reason to check the
-dashboard, not as a settled fact.
+1. Authoring is dashboard-session only (`management_requires_session`) — an `sk_*` key cannot create
+   definitions. Use the tenant token; `services/api/scripts/probe-discover.ts` mints both.
+2. Create the definition with `application_id` set to the KEY's application. Without it the release
+   lands in the DEFAULT application's sandbox environment while the key is bound to its own, and the
+   send fails `verify_template_not_released` — accurate, but it does not hint at the cause. Every
+   integrator will hit this once; the copy is worth improving.
 
-Verified live after the promotion (§9 — the artefact, not the workflow's report):
+Still slice 1: the definition's SENDER BINDING is ignored, so a merchant-branded body still ships
+from `FABRIC` unless the caller passes `sender_id`. ADR-0017 §2's seeded `fabric.verify.otp` and the
+publish-time eligibility check (§3) are not built either — eligibility is enforced at render instead.
 
-| check | result |
-| --- | --- |
-| `GET /health` | 200 |
-| `GET /health/z` | **404** — the array-path alias is gone, so the new code is live |
-| `GET /docs` with no credential | **401** + `WWW-Authenticate: Basic` — 401 rather than 404 proves `OPERATOR_TOKEN` is set and the gate is fail-closed |
+### The review gate is machine-checked now
 
-### QA has an API reference (2026-08-18, #307)
+`Pull Request Policy` runs `scripts/git/validate-review-attestation.mjs` and fails any PR whose body
+lacks a `Reviewed-by:` line naming someone other than the author. Promotions are exempt.
 
-`https://fabric-jezz.onrender.com/docs` — HTTP Basic, **any username**, `OPERATOR_TOKEN` as the
-password. It serves the FULL document (`/internal/admin/*` included), which is why it is gated.
-Locally use `pnpm docs` instead: no token, no API, no database.
+It exists because the rule and the template checkbox BOTH already existed and two PRs merged without
+a review anyway — `gh pr create --body-file` replaces the template, so the checklist silently never
+appeared. Codex being unavailable SELECTS the fallback (a subagent); it does not waive the gate.
 
-The document is derived, not written: routes from decorator metadata, schemas from the zod contracts.
-`assertCoverage` fails the build on an unbound route, `assertRefsResolve` refuses to emit a document
-whose pointers do not resolve, and every JSON response is wrapped in `{ data, request_id }` by an
-interceptor so the runtime cannot drift from the spec. 140 routes bound; **133 of 133** endpoints
-that return a body carry a response contract, the other 7 being bodiless `204` deletes.
+Codex quota returns **2026-09-07**; until then reviews go to subagents. They earned their keep this
+session: two blockers (the Verify feature was 100% non-functional as first written), a live secret
+leak, and a half-done status change that returned every row unfiltered.
 
-That figure was "129/129" until #309, and the difference is the lesson rather than the arithmetic:
-the denominator had been computed from the endpoints that HAD schemas, so it could not report
-anything but complete. The four it hid were `GET /health`, `GET /health/readyz`, `GET /docs` and
-`GET /docs/openapi.json` — the endpoint the deploy pipeline polls as its proof a release is live,
-and the document describing every other contract, both among them.
+### Traps this session paid for
 
-`GET /health/readyz` now answers **503 `not_ready`** carrying the standard error envelope; it used to
-answer 503 with an ad-hoc `{ status, db }` object that appeared in no schema. Proven by pointing an
-instance at an unreachable database: `/health` stayed 200, so the dependency-free guarantee holds,
-and readyz returned the documented envelope.
-
-**What the independent review caught, since it is the pattern worth remembering:** the published
-customer artifact had **175 `$ref`s that resolved to nothing** — including the money field on
-`GET /v1/wallet` — and every gate was green, because `openapi:check` byte-compares and a
-*consistently* broken document passes forever. The fix was a check that did not exist, not a code
-change. Same shape as `GET /health/z`: a live route in neither artifact, invisible because
-`joinPath` rendered Nest's array path form as `""`.
-
-Promotion is a **real merge** (`git merge --no-ff origin/dev` — testing carries merge commits and
-this repo's git config is `ff = only`, so a plain `git merge dev` aborts with "Not possible to
-fast-forward").
+- **Querying as `app_provisioner` is BLIND on some tables.** `sms_templates` has only
+  `tenant_isolation → {public}` keyed on `app.tenant_id` and NO provisioner policy, so a query
+  returns zero rows and reads as an honest empty answer. `SET app.tenant_id = '<id>'` and re-run
+  before concluding anything is absent. `message_definitions` DOES have `provisioner_all USING true`,
+  so those zeros were real. Same class as the token-reconciliation blindness fixed in `0153`-era work.
+- **`req.url` reaches the logs with its query string.** pino's `redact` only covers header paths.
+  Fixed with a request serializer, but the shape recurs: anything secret in a query string is in the
+  logs unless something strips it.
+- **Windows is case-insensitive.** `.github/PULL_REQUEST_TEMPLATE.md` and `pull_request_template.md`
+  look like two files and are one; git tracks only the lowercase path.
+- **A `gh run watch` exit code of 0 does not mean success** — a CANCELLED run exits 0 too. Read
+  `--json conclusion`.
+- **`gh` cannot see MSYS `/tmp`.** Write `--body-file` content to a Windows path.
 
 ### WhatsApp SENDS, live, from testing (2026-08-13)
 
@@ -472,64 +509,59 @@ What that measurement established, before and after the promotion:
 
 ### Next up, in a fresh session
 
-**Three deferred fixes, all from reviews that found them but were not acted on in-session.**
+**1. Cut and publish sdk `0.1.0-beta.9`** — see START HERE. This is the only thing a waiting
+integrator is blocked on.
 
-1. **A permanently-skipping auto-top-up is invisible.** `chargeableCurrency` returns null and writes
-   `logger.error`; `getAutoTopup` still reports `enabled: true`, so the wallet renders a green "On"
-   badge with a stale currency and no admin-console surface exists for `auto_topup` at all. The first
-   customer-visible symptom is failed sends. Needs a field on `AutoTopupResponse` plus a warning
-   state — a money guard whose only signal is a log line is not shipped.
-2. **The currency selects should not offer what the server refuses.** `top-up-dialog.tsx` and
-   `auto-topup-dialog.tsx` list every currency; the API now rejects a mismatch with
-   `billing_currency_mismatch`, so the UX is "pick USD, get refused". Constraining the list needs
-   `billing_currency` on a customer-facing endpoint — today it exists only in admin contracts.
-3. **#287 merged without a fourth review.** It changed substantially after its third (the cron
-   restructure that stopped the currency rule abandoning the whole tick). Deliberate call, recorded
-   here rather than lost.
+**2. Confirm the DLR fix with ONE live send.** Everything about it is proven except the thing itself:
+the token now authenticates from a query string, but no live SMS has gone out since the deploy. One
+send, GHS 0.40, and the message should reach `delivered` instead of sitting `accepted` until the
+sweeper expires it. Read `messages.status` / `provider_ref` in the DB, not the dashboard — a live
+message never appears in the virtual phone, which is what made this confusing the first time.
 
-**Carried from the #290 review, unfixed and worth doing before customer onboarding:**
+**3. Carried from the independent review, verified but deliberately not fixed:**
 
-- **`tenantsForWaba`'s live-environment arm is deliberately UNSCOPED by WABA**, because `environments`
-  carries no `waba_id` — no more than `whatsapp_messages` did. Correct only while ONE shared WABA
-  exists. The day ADR-0016's per-tenant WABAs land, this hands WABA-B's template events to WABA-A's
-  tenants and writes the wrong catalog. It is commented as such in `whatsapp-waba-tenants.ts`; it
-  cannot ship past that point unchanged.
-- **The scheduler fetches the same shared Meta catalog once PER TENANT**, inside one transaction
-  holding an advisory lock, and the tenant set now scales with total live customers rather than
-  WhatsApp adoption. Fetch once, then upsert per tenant, and move the HTTP work outside the
-  transaction.
-- **The template-webhook fan-out is O(all live tenants), serially, inside a request Meta retries on
-  timeout.** Replace the loop with one set-based `UPDATE … WHERE tenant_id = ANY(...)`.
+- **The definition's sender binding is ignored by Verify.** A merchant-branded body still ships from
+  `FABRIC` unless the caller passes `sender_id`. Half of white-labelling, and the half a merchant
+  notices. `message-preview.service.ts` treats a missing binding as a publish invariant; Verify
+  neither reads nor requires it.
+- **Case-insensitive definition-key lookup with `limit(1)` and no `ORDER BY`** —
+  `verify-template.ts` and `message-preview.service.ts:106` both. Two keys differing only in case
+  resolve to whichever row Postgres returns first. Fix both together or neither.
+- **`verify_template_not_released` does not hint at the application mismatch** that actually causes
+  it (see the recipe above).
 
-**Carried from the UI reviews, unfixed:** BFF role refusals emit `{ error: { message } }` with no
-`type`/`code`, so envelope parsing fails and a `member` clicking Live gets "Something went wrong"
-instead of the real reason; the senders page renders a failed load as an EMPTY state with no retry;
-the sender row action sits off-screen on mobile at seven columns.
+**4. ADR-0017 slices 2–4** — a per application-environment default template, publish-time
+eligibility, and the dashboard surface. Slice 1 (per-request selection) is what shipped.
 
+### Convert's integration asks — audited against the code, 2026-09-05
 
+Their review of the SDK is in `docs/CONVERT-INTEGRATION-PLAN.md`. Four asks ALREADY SHIP and were
+simply undiscoverable, which is a documentation defect rather than a build:
 
-1. **Promote `dev` → `testing`.** `dev` is 2 ahead, one commit carrying `0150`. Same shape as #274:
-   `chore(ops): promote …`, a REAL merge not a squash, and watch `Deploy testing (Vercel + Render)`.
-2. **ADR-0016 Phase 1 — become a Tech Provider**, which is the prerequisite for the Solution Partner
-   tier and for Embedded Signup either way. The checklist and the measured state of Meta app
-   `1022581630670557` live in the ADR. None of it is code; all of it is account admin.
-3. **#23 — and the drift gate it silently disabled.** Diagnosed properly on 2026-08-10; the earlier
-   description in this file was wrong in both halves.
+- **Idempotency on plain send** — `POST /v1/sms/messages` honours `Idempotency-Key`
+  (`public-messaging.ts`, `idempotency: "optional"`), and beta.8's `retryableWrite` keys off it.
+- **Per-request `sender_id` on send** — not merely supported, it is REQUIRED on `sendSmsRequest`.
+- **Sender-ID registration over the API** — `POST /v1/senders` exists, and `rejection_reason` is on
+  the customer DTO. What is missing is a webhook when carrier status changes; there is no `sender.*`
+  event, so a caller must poll.
+- **Caller-supplied template variables** — `/v1/message-definitions` + managed send already do this
+  with locales and a variable schema. Verify was the one send path that did not, which ADR-0017 fixes.
 
-   - The journal has **NO duplicate idx** (150 entries, contiguous). The union scripts used during the
-     stack merges keyed by tag and re-derived ordering, which repaired that half as a side effect.
-   - The real failure is a **snapshot `prevId` collision**: `drizzle-kit generate` refuses with
-     *"[0135_snapshot.json, 0136_snapshot.json] are pointing to a parent snapshot … which is a
-     collision"*. Snapshots stop at `0136` while migrations run to `0149`.
-   - **Fix the gate FIRST, it is the more serious half.** `assert-drift.mjs:75` swallows a generate
-     failure — `} catch { /* a non-zero generate … is fine */ }` — and then concludes "no drift" because
-     no files changed. Generate currently errors and writes nothing, so **the gate has been reporting
-     success unconditionally**. It cannot tell "schema matches" from "generate is broken", and
-     `drizzle-kit` exits **0** on this error, so an exit-code check would not save it either. Every "no
-     drift" result since the collision appeared is unproven.
-   - Only then repair the chain, and re-run generate to confirm it actually emits nothing.
-4. **#14 — `WORKOS_ADMIN_CLIENT_ID` / `WORKOS_ADMIN_API_KEY` in Vercel**, then remove the last dashboard
-   redirect.
+Genuinely unbuilt, each its own decision:
+
+- **Sub-accounts (merchants) under a platform account** — their words, "the big one". Own sender id,
+  usage, consent/DND state and spend line, so a reseller's metering maps 1:1 onto our invoice instead
+  of being reconstructed from message tags. Same shape as ADR-0016's per-tenant WABAs; extend it
+  rather than inventing a parallel model.
+- **Delivery webhook carrying the actual charge.** `MessageWebhookData` carries status and no cost,
+  so a reseller billing on delivered can only estimate. Needs a decision on which price we assert
+  (charged vs list) and when.
+- **Number lookup** (validity and network before spending a message).
+- **Per-request channel and voice failover.** `voice` exists today only as an analytics enum with no
+  send path.
+- **Published live p95 for Ghanaian delivery.** We cannot answer honestly yet: live SMS has only just
+  started working end to end, so we hold no meaningful latency data and any figure would be sandbox
+  timings relabelled. Say so rather than publishing a guess.
 
 ### Waiting on you, not on code
 
