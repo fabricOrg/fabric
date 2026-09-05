@@ -14,6 +14,8 @@ interface WebhookRequest {
   query?: Record<string, string | string[] | undefined>;
   params?: Record<string, string | undefined>;
   method?: string;
+  /** Raw request target, query string included and undecoded (Fastify populates this). */
+  url?: string;
 }
 
 @Injectable()
@@ -26,10 +28,17 @@ export class WebhookTokenGuard implements CanActivate {
     const expected = this.config.get<string>("WEBHOOK_INGRESS_TOKEN") ?? "";
     const request = context.switchToHttp().getRequest<WebhookRequest>();
     // Prefer the header; fall back to a `?token=` query param for GET callbacks that can't set
-    // headers (e.g. Arkesel DLRs). The token is a shared ingress secret (not user data), and we
-    // fully control the callback URL, so carrying it in the query is safe + the standard pattern.
+    // headers (e.g. Arkesel DLRs).
+    //
+    // The query value is taken from the RAW url, not the parsed query object, because the parsed one
+    // is form-decoded: `+` becomes a SPACE. A base64 secret containing `+` therefore authenticated
+    // fine as a header and failed as a query param — silently, on every carrier delivery report,
+    // which is exactly how this went unnoticed. `decodeURIComponent` undoes percent-encoding (so an
+    // operator who correctly wrote `%2B` also works) while leaving a literal `+` alone, so both
+    // spellings of the same secret match.
     const presented =
       readSingleHeader(request.headers["x-webhook-token"]) ||
+      rawQueryToken(request.url) ||
       readSingleHeader(request.query?.token);
     if (!secretsMatch(presented, expected)) {
       // A rejected callback used to be SILENT, and silence is indistinguishable from a carrier that
@@ -65,4 +74,30 @@ function describePresented(presented: string | null, expected: string): string {
   if (expected.length === 0) return "server-misconfigured (no expected token)";
   if (presented === null || presented.length === 0) return "absent";
   return "mismatched";
+}
+
+/**
+ * The `token` query value exactly as it appeared on the wire, percent-decoded but NOT form-decoded.
+ *
+ * Deliberately hand-parsed rather than routed through `URLSearchParams`, whose `get()` applies the
+ * form decoding this exists to avoid.
+ */
+function rawQueryToken(url: string | undefined): string | null {
+  if (!url) return null;
+  const queryStart = url.indexOf("?");
+  if (queryStart === -1) return null;
+  for (const pair of url.slice(queryStart + 1).split("&")) {
+    const eq = pair.indexOf("=");
+    if (eq === -1) continue;
+    if (pair.slice(0, eq) !== "token") continue;
+    const raw = pair.slice(eq + 1);
+    if (raw.length === 0) return null;
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      // A malformed percent-escape is not a token; fall through to the parsed value.
+      return raw;
+    }
+  }
+  return null;
 }
