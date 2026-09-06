@@ -110,8 +110,16 @@ jobs:
         # FIRST publish whatever tag is passed, so both packages have pointed `latest` at a
         # prerelease from the beginning and no publish since moved it:
         #
-        #   sdk  latest=0.1.0-beta.7  beta=0.1.0-beta.7
-        #   cli  latest=0.1.0-beta.1  beta=0.1.0-beta.6   <- five versions behind
+        # Measured with `npm dist-tag ls` on 2026-09-06 — BOTH packages read:
+        #
+        #   sdk  latest=0.1.0-beta.8  beta=0.1.0-beta.8
+        #   cli  latest=0.1.0-beta.8  beta=0.1.0-beta.8
+        #
+        # An earlier revision of this comment recorded sdk beta=0.1.0-beta.7 and cli latest=beta.1.
+        # Do not reason from these numbers: a comment cannot track a registry, and this one was
+        # stale enough that two reviews built a wrong conclusion on it. Run `npm dist-tag ls`.
+        # What the numbers are here to show is the SHAPE: `latest` points at a prerelease, and a
+        # publish moves `latest` only.
         #
         # `latest` is what a plain `npm install` resolves, so the effect was that every consumer got
         # a build nobody intended to ship — for the SDK, one whose default endpoint no longer

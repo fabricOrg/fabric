@@ -37,6 +37,35 @@ compare codes yourself.
    ```
 </Steps>
 
+## Send your own wording
+
+By default the code arrives in Fabric's wording. To send your own, pass `template` — the stable key
+of a released SMS message definition — with any variables it declares:
+
+```ts
+await fabric.verify.start({
+  to: "+233201234567",
+  template: "merchant.otp",
+  variables: { merchant_name: "Jasper's Market" },
+  locale: "fr-FR",
+});
+```
+
+The template is chosen per call, not configured per workspace, so one integration can send
+differently-branded codes for each merchant it serves. Requires SDK `0.1.0-beta.9` or later.
+
+- **Use an application-scoped key.** The key names the environment the definition was released in. A
+  definition released into a different application's environment answers
+  `verify_template_not_released` — the single most common way this fails first time.
+- **`code`, `expires_minutes` and `expires_seconds` are Fabric's.** Your template renders them, but
+  passing one as a variable is a `400`: the code is generated server-side and never accepted from a
+  caller. Variable names reach the API exactly as your template declares them.
+- **The definition must be transactional and contain `{{code}}`.** Both are checked when the code is
+  rendered, before the message is accepted or the wallet is touched, so an ineligible template costs
+  nothing.
+
+Authoring definitions is a dashboard task — an `sk_*` key cannot create them.
+
 ## Do it safely
 
 - **Cap attempts.** Limit how many times a user may submit a code for one `id`, and how many codes a
