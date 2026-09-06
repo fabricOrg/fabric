@@ -36,7 +36,7 @@
     "release:check": "pnpm metadata:check && pnpm typecheck && pnpm test && pnpm build && pnpm packed:smoke && pnpm pack:check"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^25.9.5",
