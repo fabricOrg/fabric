@@ -23,24 +23,37 @@ a second.
 
 ### START HERE — the one task queued
 
-**Cut and publish `@fabric-messaging/sdk@0.1.0-beta.9`.** The SDK source gained Verify `template` /
-`variables` / `locale`, but the version was never bumped, so:
+**Publish `@fabric-messaging/sdk@0.1.0-beta.9`.** The cut is done and reviewed — **PR #324**, branch
+`chore/ops-sdk-beta-9`. What remains is mechanical and in this order: merge #324 into `dev`, promote
+`dev` → `testing` with a real `--no-ff` merge, then dispatch the publish workflow. It cannot be
+dispatched before the promotion, because the workflow only runs from `testing`.
 
-- npm `latest` and `beta` are both `0.1.0-beta.8` for **sdk and cli**;
-- the published beta.8 does **not** contain the template surface;
-- the repo and the registry now claim the same version for DIFFERENT code, so `0.1.0-beta.8` no
-  longer identifies one artifact.
+Why it was needed: the SDK source gained Verify `template` / `variables` / `locale`, but the version
+was never bumped, so npm `latest` and `beta` were both `0.1.0-beta.8` for **sdk and cli**, the
+published beta.8 did **not** contain the template surface, and `0.1.0-beta.8` had stopped identifying
+one artifact.
 
-Publishing was deliberately deferred until the feature was proven end to end (it now is — see
-below). Bump, changelog, PR through the review gate, then
+After the publish, confirm the tags rather than the workflow's green tick —
+`npm dist-tag ls @fabric-messaging/sdk` should read `latest=0.1.0-beta.9` and `beta=0.1.0-beta.8`.
+**The `beta` tag stays behind on purpose and cannot be moved from CI** (see below), so anyone still
+typing `@beta` gets the build without the feature; the README and changelog now say so.
+
+The dispatch, once `testing` carries it:
 `gh workflow run publish.yml --ref testing -f package=sdk`. **The publish workflow only runs from the
 `testing` branch** — the `testing` GitHub environment has a deployment-branch policy allowing that
-branch alone, which is why a `dev` dispatch fails instantly with no log.
+branch alone. A `dev` dispatch is not rejected outright: the `resolve` job runs and logs, and the
+`publish` job dies about two seconds later on the environment policy. Read the job list, not the
+run's conclusion.
 
-Publishing goes to `--tag latest` now (a plain `npm install` resolves `latest`; npm pins it on a
-package's FIRST publish whatever tag you pass, which is how the cli sat on beta.1 for five releases).
-Moving the `beta` tag afterwards needs `npm dist-tag`, which OIDC trusted publishing cannot do — that
-step needs a real token.
+Publishing goes to `--tag latest` now — a plain `npm install` resolves `latest`, and npm pins it on a
+package's FIRST publish whatever tag you pass, so `latest` has pointed at a prerelease here from the
+beginning. Moving the `beta` tag afterwards needs `npm dist-tag`, which OIDC trusted publishing
+cannot mint credentials for; that step needs a real token.
+
+**Measure the tags, never quote them from a comment.** `publish.yml` carried a record of them that
+went stale (`sdk beta=0.1.0-beta.7`, `cli latest=0.1.0-beta.1`) and two reviews reasoned from it to a
+wrong conclusion before `npm dist-tag ls` settled it. Corrected in #324, with a note not to trust the
+next copy either.
 
 ### The six-week bug: fixed and deployed, NOT yet confirmed live
 
@@ -87,8 +100,8 @@ phone.
 than asserted — the rendered body, read back from the virtual phone:
 
 ```
-'Convert: your code is 246735. Expires in 5 min.'   <- templated
-'Your Fabric verification code is 908916. …'        <- the built-in wording
+'Convert: your code is NNNNNN. Expires in 5 min.'   <- templated
+'Your Fabric verification code is NNNNNN. …'        <- the built-in wording
 ```
 
 Fabric still generates the code: `code`, `expires_minutes` and `expires_seconds` are reserved, and a
@@ -103,9 +116,14 @@ caller supplying one gets a **400**, confirmed live.
    send fails `verify_template_not_released` — accurate, but it does not hint at the cause. Every
    integrator will hit this once; the copy is worth improving.
 
-Still slice 1: the definition's SENDER BINDING is ignored, so a merchant-branded body still ships
-from `FABRIC` unless the caller passes `sender_id`. ADR-0017 §2's seeded `fabric.verify.otp` and the
-publish-time eligibility check (§3) are not built either — eligibility is enforced at render instead.
+Three gaps, all deliberate. The definition's SENDER BINDING is ignored, so a merchant-branded body
+still ships from `FABRIC` unless the caller passes `sender_id`. ADR-0017 §2's seeded
+`fabric.verify.otp` and the publish-time eligibility check (§3) are not built — eligibility is
+enforced at render instead. And **`locale` without `template` is accepted and silently ignored**:
+`variables` requires `template` through a contract refine (`packages/contracts/src/verify.ts:74-77`)
+and `locale` has no such guard, while `resolveVerifyBody` early-returns before reading it
+(`verify-template.ts:249`). Found by the review of the beta.9 SDK cut; left for its own diff because
+it is an API change, and it is the cheapest of the three to close.
 
 ### The review gate is machine-checked now
 
@@ -126,7 +144,8 @@ leak, and a half-done status change that returned every row unfiltered.
   `tenant_isolation → {public}` keyed on `app.tenant_id` and NO provisioner policy, so a query
   returns zero rows and reads as an honest empty answer. `SET app.tenant_id = '<id>'` and re-run
   before concluding anything is absent. `message_definitions` DOES have `provisioner_all USING true`,
-  so those zeros were real. Same class as the token-reconciliation blindness fixed in `0153`-era work.
+  so those zeros were real. Same class as the token-reconciliation blindness fixed in `0128` (the
+  hole itself was `0089`).
 - **`req.url` reaches the logs with its query string.** pino's `redact` only covers header paths.
   Fixed with a request serializer, but the shape recurs: anything secret in a query string is in the
   logs unless something strips it.
@@ -353,10 +372,14 @@ from `pnpm test:integration`. Two incidents came from this:
 Consider seeding local/testing workspaces as `plan = 'sandbox'` (forced virtual, `locked: true`) and
 flipping deliberately. Seed change only, no product code.
 
-**Live sends read `accepted` → `expired` even when they arrive**, because the Arkesel DLR callback is
-not configured. Money and credits are unaffected; only status. Route is
-`/webhooks/dlr/arkesel-sms`, guarded by `WEBHOOK_INGRESS_TOKEN` (header `x-webhook-token` or
-`?token=`, since Arkesel GETs with `?sms_id=..&status=..`).
+**Historical live sends read `accepted` → `expired` even though they arrived.** An earlier revision
+of this file blamed an unconfigured callback; that was wrong, and the real cause is the query-token
+bug at the top of this file — the callback WAS configured and every delivery report it sent was
+rejected 401. Money and credits were unaffected; only status. Route is `/webhooks/dlr/arkesel-sms`,
+guarded by `WEBHOOK_INGRESS_TOKEN` (header `x-webhook-token` or `?token=`, since Arkesel GETs with
+`?sms_id=..&status=..`). Fixed and deployed 2026-09-05; **still unconfirmed**, because no live SMS
+has gone out since. Every historical row stays wrong regardless: `expired` is terminal and the
+engine freezes terminal statuses.
 
 ---
 
@@ -524,14 +547,30 @@ message never appears in the virtual phone, which is what made this confusing th
   `FABRIC` unless the caller passes `sender_id`. Half of white-labelling, and the half a merchant
   notices. `message-preview.service.ts` treats a missing binding as a publish invariant; Verify
   neither reads nor requires it.
-- **Case-insensitive definition-key lookup with `limit(1)` and no `ORDER BY`** —
-  `verify-template.ts` and `message-preview.service.ts:106` both. Two keys differing only in case
-  resolve to whichever row Postgres returns first. Fix both together or neither.
+- ~~**Case-insensitive definition-key lookup with `limit(1)` and no `ORDER BY`**~~ — **RETRACTED.**
+  The code is where an earlier revision said it was (`verify-template.ts:98`,
+  `message-preview.service.ts:106`), but the consequence was invented, and an independent review
+  caught it. Two keys differing only in case CANNOT coexist:
+  `uniq_message_def_tenant_app_key (tenant_id, application_id, lower(key))` forbids it inside an
+  application, and `message_def_release_environment_containment_fk` pins an environment to one
+  application, so the release query can match at most one row. `limit(1)` without an `ORDER BY` is
+  safe here. Written down rather than deleted because this is the third grep-shaped claim this file
+  has carried — the schema refutes it in one read.
 - **`verify_template_not_released` does not hint at the application mismatch** that actually causes
   it (see the recipe above).
 
-**4. ADR-0017 slices 2–4** — a per application-environment default template, publish-time
-eligibility, and the dashboard surface. Slice 1 (per-request selection) is what shipped.
+**4. The rest of ADR-0017.** Read the ADR's numbering carefully before planning against it — it has
+BOTH a Decision §1–§4 and a Slices 1–4, they mean different things, and an earlier revision of this
+file conflated them. What shipped is **Decision §1** (per-request selection) with §1a's reserved
+variables, plus **slice 3** (`locale`) and the SDK half of slice 4. What remains:
+
+- **Slice 1** — seed `fabric.verify.otp` and render the built-in wording through it. Explicitly "no
+  new API surface", and the ADR says it ships "first and alone"; it is the one slice still entirely
+  unbuilt. Confirmed absent — the string appears in the ADR and nowhere in the code.
+- **Slice 2** — the `verify_settings` binding per `(tenant, application, environment)`, carrying
+  definition key, TTL, code length and default locale, with §3's publish-time invariants and the
+  archive/unpublish guard. Eligibility is enforced at RENDER today, not at publish.
+- **Slice 4, minus the SDK** — the dashboard configuration UI and the docs.
 
 ### Convert's integration asks — audited against the code, 2026-09-05
 
@@ -557,8 +596,8 @@ Genuinely unbuilt, each its own decision:
   so a reseller billing on delivered can only estimate. Needs a decision on which price we assert
   (charged vs list) and when.
 - **Number lookup** (validity and network before spending a message).
-- **Per-request channel and voice failover.** `voice` exists today only as an analytics enum with no
-  send path.
+- **Per-request channel and voice failover.** `voice` has no send path at all — it exists only as an
+  enum member, in `overviewChannel` and in the commercial-offer channel set.
 - **Published live p95 for Ghanaian delivery.** We cannot answer honestly yet: live SMS has only just
   started working end to end, so we hold no meaningful latency data and any figure would be sandbox
   timings relabelled. Say so rather than publishing a guess.
