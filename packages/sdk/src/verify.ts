@@ -28,8 +28,9 @@ export interface StartVerificationParams {
   /**
    * Values for the template's own variables, passed to the API verbatim — these are the names the
    * template author wrote, not SDK parameters, so they are NOT camelCased on the way out.
-   * `code`, `expires_minutes` and `expires_seconds` are supplied by Fabric and are REFUSED here:
-   * the verification code is generated server-side and never accepted from a caller.
+   * `code`, `expires_minutes` and `expires_seconds` are supplied by Fabric, and passing one is
+   * refused by the API with a 400 — the SDK does not check them, so the refusal costs a round
+   * trip. The verification code is generated server-side and never accepted from a caller.
    */
   readonly variables?: Readonly<Record<string, string | number | boolean>>;
   /** Locale variant to render; falls back to the definition's default locale. */

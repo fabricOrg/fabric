@@ -11,6 +11,8 @@ const releaseManifest = JSON.parse(
 );
 const releaseVersion = String(releaseManifest.version);
 
+await assertPlaygroundIsCurrent();
+
 try {
   run(pnpm, ["pack", "--pack-destination", temporaryDirectory]);
   const tarball = join(
@@ -74,6 +76,30 @@ try {
   run(process.execPath, [commonJsConsumer], { cwd: temporaryDirectory });
 } finally {
   await rm(temporaryDirectory, { recursive: true, force: true });
+}
+
+/**
+ * The playground vendors a packed SDK under a STABLE filename, so a stale tarball is invisible in a
+ * diff and in a directory listing alike — it went three releases out of date before anyone noticed,
+ * while `examples/sdk-playground` was still deployed as a demonstration of the SDK. `pnpm
+ * playground:refresh` is the fix and nothing forced it, so this asserts the result of running it
+ * rather than trusting a release checklist.
+ */
+async function assertPlaygroundIsCurrent() {
+  const lockPath = new URL(
+    "../../../examples/sdk-playground/package-lock.json",
+    import.meta.url,
+  );
+  const lock = JSON.parse(await readFile(lockPath, "utf8"));
+  const vendored =
+    lock.packages?.["node_modules/@fabric-messaging/sdk"]?.version;
+  if (vendored === releaseVersion) return;
+  throw new Error(
+    [
+      `examples/sdk-playground vendors SDK ${vendored ?? "an unrecorded version"}, but this release is ${releaseVersion}.`,
+      "Run `pnpm --filter @fabric-messaging/sdk playground:refresh` and commit vendor/fabric-messaging-sdk.tgz with the lockfile.",
+    ].join("\n"),
+  );
 }
 
 function run(command, args, options = {}) {

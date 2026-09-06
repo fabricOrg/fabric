@@ -63,7 +63,7 @@
   `POST /v1/sms/messages` since **0.1.0-beta.4**, but beta.4 and beta.5 were never published — so
   **0.1.0-beta.6 is the first published version that survives this change**. Anything on
   0.1.0-beta.3 or earlier sends to the removed path and will 404.
-  Install `@fabric-messaging/sdk@beta` or pin `>=0.1.0-beta.6`.
+  Pin `>=0.1.0-beta.6`.
   **0.1.0-beta.6 and earlier carry the webhook parser defects fixed above** — install 0.1.0-beta.7 or
   later before pointing a consumer at inbound webhooks. An earlier entry below says the old
   route "remains compatible"; that is no longer true.
@@ -123,7 +123,7 @@
 ## Legacy unscoped prereleases
 
 `fabric-messaging@0.1.0-beta.1` and `0.1.0-beta.2` are deprecated. Install
-`@fabric-messaging/sdk@beta` instead.
+`@fabric-messaging/sdk` instead.
 
 Cursor pagination landed in 0.1.0-beta.6. The package exposes its ESM artifact to both `import` and
 Node 22.12+ `require()` consumers rather than building duplicate module formats. Email landed in

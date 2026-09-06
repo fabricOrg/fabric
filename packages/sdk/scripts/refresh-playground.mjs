@@ -35,5 +35,12 @@ copyFileSync(
 );
 rmSync(path.join(vendor, packed));
 
-execSync("npm install", { cwd: playground, stdio: "inherit" });
+// Re-resolve the tarball BY SPEC, not with a bare `npm install`. The vendored filename is stable
+// by design, so npm sees a satisfied dependency, prints "up to date", and leaves the lockfile
+// pinned to the previous version with an integrity hash that no longer matches the file on disk —
+// a state that installs fine here and fails `npm ci` everywhere else.
+execSync("npm install file:vendor/fabric-messaging-sdk.tgz", {
+  cwd: playground,
+  stdio: "inherit",
+});
 console.log(`Playground vendor refreshed from ${packed}.`);
