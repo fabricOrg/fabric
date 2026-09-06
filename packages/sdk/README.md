@@ -2,14 +2,15 @@
 
 The official server-side TypeScript client for sending and inspecting messages with Fabric.
 
-> Public prerelease: `0.1.0-beta.8`. Install the explicit `beta` channel until 1.0 is ready.
+> Public prerelease: `0.1.0-beta.9`. Every release moves the `latest` tag, so a plain install gets
+> the newest build — the `beta` tag is frozen at an older prerelease and should not be used.
 > The package is ESM-only by design — Node.js 22.12+ (the supported floor) can `require()` it
 > natively, so there is no separate CommonJS build.
 
 ## Install
 
 ```bash
-pnpm add @fabric-messaging/sdk@beta
+pnpm add @fabric-messaging/sdk
 ```
 
 Requires Node.js 22 or newer and a Fabric secret key. Create a sandbox key in Dashboard →

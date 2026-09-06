@@ -1,6 +1,6 @@
 {
   "name": "@fabric-messaging/sdk",
-  "version": "0.1.0-beta.8",
+  "version": "0.1.0-beta.9",
   "description": "Official TypeScript SDK for the Fabric communications platform",
   "license": "MIT",
   "type": "module",
