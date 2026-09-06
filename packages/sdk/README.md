@@ -2,14 +2,15 @@
 
 The official server-side TypeScript client for sending and inspecting messages with Fabric.
 
-> Public prerelease: `0.1.0-beta.8`. Install the explicit `beta` channel until 1.0 is ready.
+> Public prerelease: `0.1.0-beta.9`. Every release moves the `latest` tag, so a plain install gets
+> the newest build — the `beta` tag is frozen at an older prerelease and should not be used.
 > The package is ESM-only by design — Node.js 22.12+ (the supported floor) can `require()` it
 > natively, so there is no separate CommonJS build.
 
 ## Install
 
 ```bash
-pnpm add @fabric-messaging/sdk@beta
+pnpm add @fabric-messaging/sdk
 ```
 
 Requires Node.js 22 or newer and a Fabric secret key. Create a sandbox key in Dashboard →
@@ -58,6 +59,37 @@ for await (const summary of fabric.sms.iterate({ limit: 100 })) {
 Message, email, and webhook-delivery lists are cursor-paginated (`limit` 1–100, default 50). Treat
 `nextCursor` as opaque: pass it back exactly as returned. `email.iterate`,
 `messages.iterateDeliveries`, and `webhooks.iterateDeliveries` follow the same pattern.
+
+## Send a verification code
+
+```ts
+const started = await fabric.verify.start({ to: "+233545227189" });
+const checked = await fabric.verify.check({ id: started.data.id, code: "123456" });
+```
+
+Fabric generates the code and sends its own wording. To send your own instead, pass `template` —
+the stable key of a released SMS message definition — plus any variables it declares:
+
+```ts
+await fabric.verify.start({
+  to: "+233545227189",
+  template: "merchant.otp",
+  variables: { merchant_name: "Jasper's Market" },
+  locale: "fr-FR",
+});
+```
+
+Chosen per call, so one integration can send differently-branded codes for each merchant it serves.
+A few constraints are worth knowing before you author one:
+
+- **The key must belong to an application**, because the key is what names the environment the
+  definition was released in. A definition released into a different application's environment
+  answers `verify_template_not_released`.
+- **`code`, `expires_minutes` and `expires_seconds` are ours.** Your template renders them, but
+  passing one as a variable is a 400 — the code is generated server-side and never accepted from a
+  caller. Variable names reach the API verbatim, so they are the names the template declares.
+- **The definition must be transactional and its body must contain `{{code}}`.** Both are checked
+  when the code is rendered, before any money moves, so an ineligible template costs nothing.
 
 ## Send a sandbox Email
 
